@@ -81,15 +81,10 @@
 
                 <div class="form-group">
                   <label for="organizationType">Organization Type <span class="req">*</span></label>
+                  <!-- Options come from /api/categories so they match the
+                       values other organizations are stored with. -->
                   <select id="organizationType" required>
                     <option value="">Select type</option>
-                    <option value="Nonprofit">Nonprofit</option>
-                    <option value="Small Business">Small Business</option>
-                    <option value="Startup">Startup</option>
-                    <option value="School">School</option>
-                    <option value="Community Organization">Community Organization</option>
-                    <option value="Service Provider">Service Provider</option>
-                    <option value="Other">Other</option>
                   </select>
                 </div>
 
@@ -114,31 +109,42 @@
                 <span class="card-hint">This drives your matches</span>
               </div>
 
+              <p class="trade-intro">
+                Pick from the same list on both sides. Matching compares what
+                you need against what other organizations offer &mdash; and
+                what you offer against what they need &mdash; so these choices
+                are what actually find your partners.
+              </p>
+
               <div class="trade-grid">
                 <div class="form-group trade-need">
-                  <label for="needs">
+                  <label>
                     <i class='bx bx-down-arrow-alt'></i>
                     What do you need? <span class="req">*</span>
                   </label>
+                  <!-- Category checkboxes are injected here from /api/categories
+                       so the vocabulary lives in one place on the server. -->
+                  <div class="category-picker" id="needsPicker" data-field="needs"></div>
+                  <span class="picker-count" data-for="needs">None selected</span>
                   <textarea
-                    id="needs"
-                    placeholder="Examples: sponsorships, marketing help, volunteers, event space, funding, outreach support"
-                    required
+                    id="needsNote"
+                    class="textarea-sm"
+                    placeholder="Anything more specific? (optional)"
                   ></textarea>
-                  <span class="char-count" data-for="needs">0 characters</span>
                 </div>
 
                 <div class="form-group trade-offer">
-                  <label for="offers">
+                  <label>
                     <i class='bx bx-up-arrow-alt'></i>
                     What can you offer? <span class="req">*</span>
                   </label>
+                  <div class="category-picker" id="offersPicker" data-field="offers"></div>
+                  <span class="picker-count" data-for="offers">None selected</span>
                   <textarea
-                    id="offers"
-                    placeholder="Examples: community access, youth audience, event visibility, technical expertise, volunteers"
-                    required
+                    id="offersNote"
+                    class="textarea-sm"
+                    placeholder="Anything more specific? (optional)"
                   ></textarea>
-                  <span class="char-count" data-for="offers">0 characters</span>
                 </div>
               </div>
             </div>
@@ -150,13 +156,20 @@
                 <span class="card-hint">Optional</span>
               </div>
 
-              <div class="form-group">
-                <label for="preferredPartnerTypes">Preferred Partner Types</label>
-                <input
-                  type="text"
-                  id="preferredPartnerTypes"
-                  placeholder="Examples: local businesses, sponsors, schools, nonprofits"
-                />
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="contactEmail">Contact email for partners</label>
+                  <input
+                    type="email"
+                    id="contactEmail"
+                    placeholder="Defaults to your login email"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="contactPhone">Contact phone</label>
+                  <input type="tel" id="contactPhone" placeholder="Optional" />
+                </div>
               </div>
 
               <div class="form-group">

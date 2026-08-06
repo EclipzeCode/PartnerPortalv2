@@ -794,3 +794,54 @@ body {
         gap: 1rem;
     }
 }
+/* --- Live connection cards ---------------------------------------------- */
+/* These were hardcoded placeholders; they are now the org's real top matches,
+   so they carry a score and a link through to the full result. */
+.connection-score {
+    display: inline-block;
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.1);
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+}
+
+.btn-connection {
+    margin-left: auto;
+    padding: 0.45rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    background: transparent;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-connection:hover {
+    background: var(--primary);
+    color: #fff;
+}
+
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-light);
+    padding: 2.5rem 1rem;
+    line-height: 1.6;
+}
+
+.empty-state .btn-primary {
+    display: inline-block;
+    text-decoration: none;
+    background: var(--primary);
+    color: #fff;
+    padding: 0.7rem 1.4rem;
+    border-radius: 8px;
+    font-weight: 600;
+}

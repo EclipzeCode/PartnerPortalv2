@@ -1,162 +1,108 @@
-// Toggle between Login and Register
+// Login / registration.
+//
+// Auth is a signed session cookie set by the server. Nothing about the user is
+// kept in localStorage any more -- the previous version stored a name string
+// that any page could invent, which was not authentication in any real sense.
+
 const container = document.getElementById('container');
 const registerBtn = document.querySelector('.toggle-right .hidden');
 const loginBtn = document.querySelector('.toggle-left .hidden');
 
-const showRegister = () => container.classList.add("active");
-const showLogin = () => container.classList.remove("active");
+const showRegister = () => container.classList.add('active');
+const showLogin = () => container.classList.remove('active');
 
-// Desktop: the sliding panel buttons.
 if (registerBtn) registerBtn.addEventListener('click', showRegister);
 if (loginBtn) loginBtn.addEventListener('click', showLogin);
 
-// Mobile: the panel is hidden, so these in-form links do the switching.
 const toSignUp = document.getElementById('toSignUp');
 const toSignIn = document.getElementById('toSignIn');
 if (toSignUp) toSignUp.addEventListener('click', showRegister);
 if (toSignIn) toSignIn.addEventListener('click', showLogin);
 
-// Register form submission
+// Where to land after signing in. An org that has not finished onboarding is
+// sent there first, because matches are meaningless without a profile.
+function destinationFor(organization) {
+    const params = new URLSearchParams(location.search);
+    const next = params.get('next');
+    if (!organization.onboarding_complete) return 'onboarding.html';
+    if (next && /^[a-z0-9_-]+\.html$/i.test(next)) return next;
+    return 'ppdashboard.html';
+}
+
+function setFieldState(input, message, ok) {
+    input.value = '';
+    input.placeholder = message;
+    input.classList.toggle('error', !ok);
+    input.classList.toggle('success', ok);
+}
+
+// --- Register ---------------------------------------------------------------
 document.querySelector('.sign-up form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const nameInput = document.getElementById('register-name');
     const emailInput = document.getElementById('register-email');
     const passwordInput = document.getElementById('register-password');
 
-    const name = nameInput.value;
-    const email = emailInput.value;
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
     const password = passwordInput.value;
 
-    // Basic validation
-    if (name === '') {
-        nameInput.placeholder = 'Please fill in your name.';
-        nameInput.value = ''; // Clear the current text
-        nameInput.classList.add('error');
-        return;
-    } else {
-        nameInput.classList.remove('error');
+    if (!name) return setFieldState(nameInput, 'Please fill in your organization name.', false);
+    if (!email) return setFieldState(emailInput, 'Please fill in your email.', false);
+    if (!password) return setFieldState(passwordInput, 'Please fill in your password.', false);
+    if (password.length < 8) {
+        return setFieldState(passwordInput, 'Password must be at least 8 characters.', false);
     }
 
-    if (email === '') {
-        emailInput.placeholder = 'Please fill in your email.';
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.add('error');
-        return;
-    } else {
-        emailInput.classList.remove('error');
-    }
+    nameInput.classList.remove('error');
+    emailInput.classList.remove('error');
+    passwordInput.classList.remove('error');
 
-    if (password === '') {
-        passwordInput.placeholder = 'Please fill in your password.';
-        passwordInput.value = ''; // Clear the current text
-        passwordInput.classList.add('error');
-        return;
-    } else {
-        passwordInput.classList.remove('error');
-    }
-
-    // API call to register user
     try {
-        const response = await fetch(`${window.API_BASE}/register`, {
+        const result = await window.api('/register', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password })
+            body: { name, email, password },
+            allowUnauthenticated: true
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            // The server explains what actually went wrong (e.g. duplicate
-            // email), so show that instead of a generic failure.
-            throw new Error(result.error || `Registration failed (${response.status})`);
-        }
-
-        emailInput.placeholder = result.message;
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.remove('error');
-        emailInput.classList.add('success');
-    }
-    catch (error) {
-        emailInput.placeholder = error.message;
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.remove('success');
-        emailInput.classList.add('error');
+        // Registering signs you in, so go straight to building the profile.
+        window.location.href = destinationFor(result.organization);
+    } catch (error) {
+        setFieldState(emailInput, error.message, false);
         console.error('Registration error:', error);
     }
 });
 
-// Login form submission
+// --- Login ------------------------------------------------------------------
 document.querySelector('.sign-in form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const emailInput = document.getElementById('login-email');
     const passwordInput = document.getElementById('login-password');
 
-    const email = emailInput.value;
+    const email = emailInput.value.trim();
     const password = passwordInput.value;
 
-    // Basic validation
-    if (email === '') {
-        emailInput.placeholder = 'Please fill in your email.';
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.add('error');
-        return;
-    } else {
-        emailInput.classList.remove('error');
-    }
+    if (!email) return setFieldState(emailInput, 'Please fill in your email.', false);
+    if (!password) return setFieldState(passwordInput, 'Please fill in your password.', false);
 
-    if (password === '') {
-        passwordInput.placeholder = 'Please fill in your password.';
-        passwordInput.value = ''; // Clear the current text
-        passwordInput.classList.add('error');
-        return;
-    } else {
-        passwordInput.classList.remove('error');
-    }
+    emailInput.classList.remove('error');
+    passwordInput.classList.remove('error');
 
-    // API call to login user
     try {
-        const response = await fetch(`${window.API_BASE}/login`, {
+        const result = await window.api('/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: { email, password },
+            allowUnauthenticated: true
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || result.error || 'Invalid credentials');
-        }
-
-        emailInput.placeholder = result.message;
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.remove('error');
-        emailInput.classList.add('success');
-
-        // Store the username in local storage. The server returns `name` on a
-        // successful login, so this no longer stores `undefined`.
-        localStorage.setItem('username', result.name);
-        localStorage.setItem('userEmail', result.email);
-
-        // Redirect to the search page after successful login
-        window.location.href = 'ppsearch.html';
-
+        window.location.href = destinationFor(result.organization);
     } catch (error) {
-        emailInput.placeholder = error.message;
-        emailInput.value = ''; // Clear the current text
-        emailInput.classList.remove('success');
-        emailInput.classList.add('error');
+        setFieldState(emailInput, error.message, false);
         console.error('Login error:', error);
     }
 });
 
-// Optional: Add CSS to highlight error fields
 const style = document.createElement('style');
 style.innerHTML = `
-    .error {
-        border: 1px solid red;
-    }
-    .success {
-        border: 1px solid green;
-    }
+    .error { border: 1px solid red; }
+    .success { border: 1px solid green; }
 `;
 document.head.appendChild(style);

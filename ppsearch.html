@@ -39,9 +39,6 @@
                     <input type="text" id="searchInput" placeholder="Search partners...">
                 </div>
                 <div class="action-buttons">
-                    <button id="add-btn" class="btn-action">
-                        <i class='bx bx-user-plus'></i> Add Partner
-                    </button>
                     <button id="filter-btn" class="btn-action">
                         <i class='bx bx-filter-alt'></i> Filters
                     </button>
@@ -64,53 +61,6 @@
         </div>
     </section>
 
-    <!-- Add Partner Modal -->
-    <div id="addPartnerModal" class="modal">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h2>Add New Partner</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="addPartnerForm">
-                    <div class="form-group">
-                        <label for="addName">Name</label>
-                        <input type="text" id="addName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addType">Type</label>
-                        <input type="text" id="addType" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addExpertise">Expertise</label>
-                        <input type="text" id="addExpertise" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addResources">Resources</label>
-                        <input type="text" id="addResources" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addEmail">Email</label>
-                        <input type="email" id="addEmail" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addPhone">Phone Number</label>
-                        <input type="tel" id="addPhone" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addLocation">Location</label>
-                        <input type="text" id="addLocation" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="addBio">Description</label>
-                        <textarea id="addBio" rows="4" required></textarea>
-                    </div>
-                    <button type="submit" class="btn-primary">Add Partner</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <!-- Filter Modal -->
     <div id="filterModal" class="modal">
         <div class="modal-container">
@@ -120,20 +70,18 @@
             </div>
             <div class="modal-body">
                 <form id="filterForm">
-                    <div class="form-group">
-                        <label for="typeInput">Organization Type</label>
-                        <input type="text" id="typeInput" placeholder="Enter type">
-                    </div>
-                    <div class="form-group">
-                        <label for="locationInput">Location</label>
-                        <input type="text" id="locationInput" placeholder="Enter location">
-                    </div>
-                    <div class="form-group">
-                        <label for="resourcesInput">Resources</label>
-                        <input type="text" id="resourcesInput" placeholder="Enter resources">
+                    <div class="form-group checkbox-row">
+                        <label class="checkbox-label" for="mutualOnlyInput">
+                            <input type="checkbox" id="mutualOnlyInput">
+                            <span>
+                                <strong>Two-way matches only</strong>
+                                <em>Organizations where you each have something
+                                the other needs</em>
+                            </span>
+                        </label>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn-primary">Apply Filters</button>
+                        <button type="submit" class="btn-primary">Apply</button>
                         <button type="button" id="clearFiltersBtn" class="btn-ghost">Clear</button>
                     </div>
                 </form>

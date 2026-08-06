@@ -1,164 +1,134 @@
-document.addEventListener('DOMContentLoaded', () => {
+// Partner matching results.
+//
+// Ranking happens on the server now (see matching.py) against the signed-in
+// org's stored profile, rather than in the browser against a localStorage
+// blob. The page renders what it is given and filters locally.
+
+document.addEventListener('DOMContentLoaded', async () => {
     const partnersGrid = document.getElementById('partnersGrid');
     const searchInput = document.getElementById('searchInput');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
     const pageIndicator = document.getElementById('pageIndicator');
 
-    const addBtn = document.getElementById('add-btn');
     const filterBtn = document.getElementById('filter-btn');
-    const addPartnerModal = document.getElementById('addPartnerModal');
+    const addBtn = document.getElementById('add-btn');
     const filterModal = document.getElementById('filterModal');
     const detailModal = document.getElementById('partnerDetailModal');
-    const addPartnerForm = document.getElementById('addPartnerForm');
     const filterForm = document.getElementById('filterForm');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
     const PAGE_SIZE = 9;
+    const esc = window.escapeHtml;
 
-    let allPartners = [];
-    let displayedPartners = [];
+    let allMatches = [];
+    let displayed = [];
     let currentPage = 1;
-    // Server-side filters from the filter modal, e.g. { Location: 'Austin' }.
-    let activeFilters = {};
+    let mutualOnly = false;
 
-    // Load onboarding profile
-    const userProfile = JSON.parse(localStorage.getItem('partnerPortalOnboardingProfile'));
+    // Adding a partner by hand is gone: organizations create themselves by
+    // registering and completing onboarding. Leaving a form that writes rows
+    // nobody owns would reintroduce exactly the orphaned-profile problem the
+    // organizations model was built to remove.
+    if (addBtn) addBtn.remove();
 
-    // Partner records are supplied by users, so any value interpolated into
-    // markup has to be escaped or a crafted name becomes stored XSS.
-    function escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    // --- Data ---------------------------------------------------------------
-    async function fetchPartners() {
-        // Only non-empty filters are sent; the API treats an absent parameter
-        // as "no constraint" but an empty one as LIKE '%%'.
-        const params = new URLSearchParams(
-            Object.entries(activeFilters).filter(([, v]) => v)
-        );
-        const query = params.toString() ? `?${params}` : '';
-
+    // --- Data -----------------------------------------------------------
+    async function loadMatches() {
+        partnersGrid.innerHTML = '<p class="empty-state">Finding your matches...</p>';
         try {
-            const res = await fetch(`${window.API_BASE}/api/partners${query}`);
-            if (!res.ok) throw new Error(`Server returned ${res.status}`);
-            allPartners = await res.json();
+            const data = await window.api(
+                `/api/matches${mutualOnly ? '?mutual=1' : ''}`
+            );
+            allMatches = data.matches || [];
         } catch (error) {
-            console.error('Could not load partners:', error);
-            allPartners = [];
+            if (error.status === 409 && error.data && error.data.needs_onboarding) {
+                partnersGrid.innerHTML =
+                    '<p class="empty-state">Tell us about your organization first — ' +
+                    'matches are built from what you need and what you offer.<br><br>' +
+                    '<a class="btn-primary" href="onboarding.html">Complete your profile</a></p>';
+                updatePagination(0);
+                return;
+            }
+            console.error('Could not load matches:', error);
             partnersGrid.innerHTML =
-                '<p class="empty-state">Could not load partners right now. ' +
-                'Please make sure the server is running and refresh.</p>';
+                `<p class="empty-state">${esc(error.message)}</p>`;
+            updatePagination(0);
             return;
         }
-
         applyView();
     }
 
-    // Ranks, then applies the search box text. Called after any change to the
-    // underlying data, the filters, or the search query.
     function applyView() {
-        const ranked = userProfile
-            ? rankPartners(userProfile, allPartners)
-            : [...allPartners];
-
         const q = (searchInput.value || '').toLowerCase().trim();
-        const norm = value => (value || '').toLowerCase();
+        const norm = (v) => (v || '').toLowerCase();
 
-        displayedPartners = q
-            ? ranked.filter(p =>
-                norm(p.Name).includes(q) ||
-                norm(p.OrganizationType).includes(q) ||
-                norm(p.Expertise).includes(q))
-            : ranked;
+        displayed = q
+            ? allMatches.filter((m) =>
+                norm(m.name).includes(q) ||
+                norm(m.organization_type).includes(q) ||
+                norm(m.location).includes(q) ||
+                (m.offers_labels || []).some((l) => norm(l).includes(q)) ||
+                (m.needs_labels || []).some((l) => norm(l).includes(q)))
+            : [...allMatches];
 
         currentPage = 1;
-        renderPartners();
+        render();
     }
 
-    // --- Matching -----------------------------------------------------------
-    function rankPartners(user, partners) {
-        return partners.map(p => {
-            const { score, reasons } = calculateScore(user, p);
-            return { ...p, matchScore: score, reasons };
-        }).sort((a, b) => b.matchScore - a.matchScore);
+    // --- Rendering ------------------------------------------------------
+    function render() {
+        partnersGrid.innerHTML = '';
+        const pages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
+        if (currentPage > pages) currentPage = pages;
+
+        if (displayed.length === 0) {
+            partnersGrid.innerHTML = mutualOnly
+                ? '<p class="empty-state">No two-way matches yet. Turn off the ' +
+                  'two-way filter to see one-directional matches.</p>'
+                : '<p class="empty-state">No matches yet. Adding more needs and ' +
+                  'offers to your profile widens the search.</p>';
+            updatePagination(pages);
+            return;
+        }
+
+        const start = (currentPage - 1) * PAGE_SIZE;
+        displayed.slice(start, start + PAGE_SIZE).forEach((m, offset) => {
+            const card = document.createElement('div');
+            card.className = 'partner-card' + (m.match_detail.mutual ? ' mutual' : '');
+            card.tabIndex = 0;
+            card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `View details for ${m.name}`);
+            card.dataset.index = String(start + offset);
+
+            const badge = m.match_detail.mutual
+                ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
+                : '';
+
+            const reasons = (m.reasons || [])
+                .map((r) => `<li>${esc(r)}</li>`).join('');
+
+            card.innerHTML = `
+                <div class="partner-score">${m.match_score}</div>
+                <div class="partner-content">
+                    ${badge}
+                    <h3>${esc(m.name)}</h3>
+                    <p><strong>Type:</strong> ${esc(m.organization_type)}</p>
+                    <p><strong>Location:</strong> ${esc(m.location)}</p>
+                    <p><strong>Offers:</strong> ${esc((m.offers_labels || []).join(', '))}</p>
+                    <div class="match-reasons">
+                        <strong>Why match:</strong>
+                        <ul>${reasons}</ul>
+                    </div>
+                </div>
+            `;
+            partnersGrid.appendChild(card);
+        });
+
+        updatePagination(pages);
     }
 
-    function calculateScore(user, partner) {
-        let score = 0;
-        let reasons = [];
-
-        const normalize = str => (str || "").toLowerCase();
-
-        const userNeeds = normalize(user.needs);
-        const userOffers = normalize(user.offers);
-
-        const pExpertise = normalize(partner.Expertise);
-        const pResources = normalize(partner.Resources);
-        const pBio = normalize(partner.Bio);
-        const pType = normalize(partner.OrganizationType);
-        const pLocation = normalize(partner.Location);
-
-        // 1. NEED -> PARTNER MATCH (most important)
-        if (userNeeds.includes(pExpertise) || pExpertise.includes(userNeeds)) {
-            score += 30;
-            reasons.push("Matches your needs");
-        }
-
-        if (userNeeds.includes(pResources) || pResources.includes(userNeeds)) {
-            score += 25;
-            reasons.push("Provides resources you need");
-        }
-
-        // 2. REVERSE MATCH (mutual benefit)
-        if (userOffers.includes(pExpertise) || pExpertise.includes(userOffers)) {
-            score += 15;
-            reasons.push("You can help them");
-        }
-
-        // 3. TYPE COMPATIBILITY
-        if (user.organization_type && partner.OrganizationType) {
-            if (user.organization_type.toLowerCase() !== pType) {
-                score += 10;
-                reasons.push("Complementary organization type");
-            }
-        }
-
-        // 4. LOCATION
-        if (user.location && partner.Location) {
-            if (normalize(user.location).includes(pLocation)) {
-                score += 10;
-                reasons.push("Same location");
-            }
-        }
-
-        // 5. BIO KEYWORD MATCH
-        if (pBio.includes(userNeeds)) {
-            score += 10;
-            reasons.push("Similar goals");
-        }
-
-        return {
-            score: Math.min(score, 100),
-            reasons
-        };
-    }
-
-    // --- Pagination ---------------------------------------------------------
-    function totalPages() {
-        return Math.max(1, Math.ceil(displayedPartners.length / PAGE_SIZE));
-    }
-
-    function updatePaginationControls() {
-        const pages = totalPages();
-        const count = displayedPartners.length;
-
+    function updatePagination(pages) {
+        const count = displayed.length;
         if (count === 0) {
             pageIndicator.textContent = 'No results';
         } else {
@@ -167,79 +137,18 @@ document.addEventListener('DOMContentLoaded', () => {
             pageIndicator.textContent =
                 `Page ${currentPage} of ${pages}  ·  ${first}-${last} of ${count}`;
         }
-
         prevBtn.disabled = currentPage <= 1;
         nextBtn.disabled = currentPage >= pages;
     }
 
     function goToPage(page) {
-        currentPage = Math.min(Math.max(1, page), totalPages());
-        renderPartners();
-        // Bring the top of the results back into view after a page change,
-        // otherwise you land mid-list on the new page.
+        const pages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
+        currentPage = Math.min(Math.max(1, page), pages);
+        render();
         partnersGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // --- Rendering ----------------------------------------------------------
-    function renderPartners() {
-        partnersGrid.innerHTML = "";
-
-        // A filter can shrink the list below the current page.
-        if (currentPage > totalPages()) currentPage = totalPages();
-
-        if (displayedPartners.length === 0) {
-            const filtered = Object.values(activeFilters).some(Boolean);
-            partnersGrid.innerHTML = filtered
-                ? '<p class="empty-state">No partners match those filters. ' +
-                  'Try clearing them from the Filters panel.</p>'
-                : '<p class="empty-state">No partners match your search yet.</p>';
-            updatePaginationControls();
-            return;
-        }
-
-        const start = (currentPage - 1) * PAGE_SIZE;
-        const pageItems = displayedPartners.slice(start, start + PAGE_SIZE);
-
-        pageItems.forEach((partner, offset) => {
-            const card = document.createElement('div');
-            card.className = 'partner-card';
-            // The card opens the detail modal, so it has to be reachable and
-            // operable without a mouse.
-            card.tabIndex = 0;
-            card.setAttribute('role', 'button');
-            card.setAttribute('aria-label', `View details for ${partner.Name || 'partner'}`);
-            // Index into displayedPartners, so the handler can find the record
-            // without depending on the row having an id column.
-            card.dataset.index = String(start + offset);
-
-            // `reasons` is generated by this file, not user input, but escape
-            // it anyway so the rule "everything interpolated is escaped" holds.
-            const reasonsHTML = partner.reasons
-                ? partner.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join("")
-                : "";
-
-            card.innerHTML = `
-                <div class="partner-score">${partner.matchScore || "--"}</div>
-                <div class="partner-content">
-                    <h3>${escapeHtml(partner.Name)}</h3>
-                    <p><strong>Type:</strong> ${escapeHtml(partner.OrganizationType)}</p>
-                    <p><strong>Expertise:</strong> ${escapeHtml(partner.Expertise)}</p>
-                    <p><strong>Resources:</strong> ${escapeHtml(partner.Resources)}</p>
-
-                    <div class="match-reasons">
-                        <strong>Why match:</strong>
-                        <ul>${reasonsHTML}</ul>
-                    </div>
-                </div>
-            `;
-
-            partnersGrid.appendChild(card);
-        });
-
-        updatePaginationControls();
-    }
-
-    // --- Modals -------------------------------------------------------------
+    // --- Modals ---------------------------------------------------------
     function openModal(modal) {
         if (!modal) return;
         modal.classList.add('active');
@@ -252,75 +161,53 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = 'auto';
     }
 
-    function closeAllModals() {
-        document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
-        document.body.style.overflow = 'auto';
-    }
-
-    // Each modal closes via its own × , a click on the backdrop, or Escape.
-    document.querySelectorAll('.modal').forEach(modal => {
-        const closeX = modal.querySelector('.close-modal');
-        if (closeX) closeX.addEventListener('click', () => closeModal(modal));
+    document.querySelectorAll('.modal').forEach((modal) => {
+        const x = modal.querySelector('.close-modal');
+        if (x) x.addEventListener('click', () => closeModal(modal));
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal(modal);
         });
     });
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeAllModals();
-    });
-
-    if (addBtn) addBtn.addEventListener('click', () => {
-        setFormMessage(addPartnerForm, '');
-        openModal(addPartnerModal);
+        if (e.key !== 'Escape') return;
+        document.querySelectorAll('.modal.active').forEach((m) => closeModal(m));
     });
 
     if (filterBtn) filterBtn.addEventListener('click', () => openModal(filterModal));
 
-    // --- Partner detail -----------------------------------------------------
-    function showPartnerDetail(partner) {
+    // --- Detail ---------------------------------------------------------
+    function showDetail(m) {
         const set = (id, value) => {
             const el = document.getElementById(id);
             if (el) el.textContent = value || '--';
         };
 
-        set('partnerDetailTitle', partner.Name);
-        set('partnerDetailType', partner.OrganizationType);
-        set('partnerDetailExpertise', partner.Expertise);
-        set('partnerDetailResources', partner.Resources);
-        set('partnerDetailBio', partner.Bio);
-        set('partnerDetailEmail', partner.Email);
-        set('partnerDetailPhone', partner.PhoneNumber);
-        set('partnerDetailLocation', partner.Location);
-        set('partnerDetailScore', partner.matchScore || '--');
+        set('partnerDetailTitle', m.name);
+        set('partnerDetailType', m.organization_type);
+        set('partnerDetailExpertise', (m.offers_labels || []).join(', '));
+        set('partnerDetailResources', (m.needs_labels || []).join(', '));
+        set('partnerDetailBio', m.description);
+        set('partnerDetailEmail', m.contact_email);
+        set('partnerDetailPhone', m.contact_phone);
+        set('partnerDetailLocation', m.location);
+        set('partnerDetailScore', m.match_score);
 
-        // There is no image asset in the repo, so the placeholder <img> would
-        // render as a broken icon. Show it only if it genuinely decoded --
-        // checking `complete` matters because a cached image fires `load`
-        // before this ever runs.
         const img = document.getElementById('partnerDetailImage');
         if (img) {
             const well = img.closest('.partner-image');
-            const apply = (loaded) => {
-                img.style.display = loaded ? '' : 'none';
-                // Collapse the fixed-height image well too, or hiding the img
-                // just leaves a blank 250px band.
-                if (well) well.classList.toggle('no-image', !loaded);
-            };
-            apply(img.complete && img.naturalWidth > 0);
-            if (!img.complete) {
-                img.addEventListener('load', () => apply(true), { once: true });
-            }
+            const loaded = img.complete && img.naturalWidth > 0;
+            img.style.display = loaded ? '' : 'none';
+            if (well) well.classList.toggle('no-image', !loaded);
         }
-
         openModal(detailModal);
     }
 
     partnersGrid.addEventListener('click', (e) => {
         const card = e.target.closest('.partner-card');
         if (!card) return;
-        const partner = displayedPartners[Number(card.dataset.index)];
-        if (partner) showPartnerDetail(partner);
+        const m = displayed[Number(card.dataset.index)];
+        if (m) showDetail(m);
     });
 
     partnersGrid.addEventListener('keydown', (e) => {
@@ -328,116 +215,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = e.target.closest('.partner-card');
         if (!card) return;
         e.preventDefault();
-        const partner = displayedPartners[Number(card.dataset.index)];
-        if (partner) showPartnerDetail(partner);
+        const m = displayed[Number(card.dataset.index)];
+        if (m) showDetail(m);
     });
 
-    // --- Filters ------------------------------------------------------------
-    function updateFilterButtonState() {
-        if (!filterBtn) return;
-        const count = Object.values(activeFilters).filter(Boolean).length;
-        filterBtn.innerHTML = count
-            ? `<i class='bx bx-filter-alt'></i> Filters (${count})`
-            : `<i class='bx bx-filter-alt'></i> Filters`;
-        filterBtn.classList.toggle('has-filters', count > 0);
-    }
-
+    // --- Filters --------------------------------------------------------
     if (filterForm) {
         filterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            activeFilters = {
-                OrganizationType: document.getElementById('typeInput').value.trim(),
-                Location: document.getElementById('locationInput').value.trim(),
-                Resources: document.getElementById('resourcesInput').value.trim()
-            };
-            updateFilterButtonState();
+            const box = document.getElementById('mutualOnlyInput');
+            mutualOnly = Boolean(box && box.checked);
+            filterBtn.classList.toggle('has-filters', mutualOnly);
+            filterBtn.innerHTML = mutualOnly
+                ? `<i class='bx bx-filter-alt'></i> Filters (1)`
+                : `<i class='bx bx-filter-alt'></i> Filters`;
             closeModal(filterModal);
-            await fetchPartners();
+            await loadMatches();
         });
     }
 
     if (clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', async () => {
             filterForm.reset();
-            activeFilters = {};
-            updateFilterButtonState();
+            mutualOnly = false;
+            filterBtn.classList.remove('has-filters');
+            filterBtn.innerHTML = `<i class='bx bx-filter-alt'></i> Filters`;
             closeModal(filterModal);
-            await fetchPartners();
+            await loadMatches();
         });
     }
 
-    // --- Add partner --------------------------------------------------------
-    // The form has no message element in the markup, so one is created on
-    // first use and reused after that.
-    function setFormMessage(form, text, kind = 'error') {
-        if (!form) return;
-        let box = form.querySelector('.form-message');
-        if (!box) {
-            box = document.createElement('p');
-            box.className = 'form-message';
-            form.prepend(box);
-        }
-        box.textContent = text;
-        box.classList.toggle('success', kind === 'success');
-        box.classList.toggle('hidden', !text);
-    }
-
-    if (addPartnerForm) {
-        addPartnerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const submitBtn = addPartnerForm.querySelector('button[type="submit"]');
-            const payload = {
-                name: document.getElementById('addName').value.trim(),
-                organization_type: document.getElementById('addType').value.trim(),
-                expertise: document.getElementById('addExpertise').value.trim(),
-                resources: document.getElementById('addResources').value.trim(),
-                email: document.getElementById('addEmail').value.trim(),
-                phone_number: document.getElementById('addPhone').value.trim(),
-                location: document.getElementById('addLocation').value.trim(),
-                bio: document.getElementById('addBio').value.trim()
-            };
-
-            setFormMessage(addPartnerForm, '');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Adding...';
-            }
-
-            try {
-                const res = await fetch(`${window.API_BASE}/api/partners/add`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (!res.ok) {
-                    throw new Error(result.error || `Could not add partner (${res.status})`);
-                }
-
-                addPartnerForm.reset();
-                closeModal(addPartnerModal);
-                // Show the new record straight away rather than making the
-                // user guess whether it saved.
-                await fetchPartners();
-            } catch (error) {
-                console.error('Add partner failed:', error);
-                setFormMessage(addPartnerForm, error.message);
-            } finally {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Add Partner';
-                }
-            }
-        });
-    }
-
-    // --- Wiring -------------------------------------------------------------
     prevBtn.addEventListener('click', () => goToPage(currentPage - 1));
     nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
-
     searchInput.addEventListener('input', applyView);
 
-    updateFilterButtonState();
-    fetchPartners();
+    await loadMatches();
 });
