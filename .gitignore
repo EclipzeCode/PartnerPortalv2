@@ -1,6 +1,10 @@
 # Environment / secrets
+# Ignore every .env variant (.env.local, .env.backup, .env.production, ...)
+# and re-admit only the committed template, so a stray copy of a real .env
+# can never be added by accident.
 .env
-.env.local
+.env.*
+!.env.example
 
 # Python
 venv/
