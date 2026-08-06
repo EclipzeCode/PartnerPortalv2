@@ -1,105 +1,112 @@
-# Partner Portal
+# PartnerPortal
 
-Welcome to Partner Portal, a web application designed to connect users with various types of business partners based on their needs.
+Most partnerships between small organizations fall apart because one side is
+doing a favour. PartnerPortal matches organizations on **both** what they need
+and what they can offer, so both sides walk in with something to gain — then
+gives them a way to write the exchange down and agree to it.
 
-## Features
+Built for nonprofits, community organizations, and small businesses that want
+to trade resources with each other.
 
-Onboarding: Describe what your organization needs and what it can offer.
+## How it works
 
-Matching: Partners are ranked against your onboarding profile, with a score and
-the reasons behind it shown on each card.
+1. **Onboarding** — an organization says what it needs and what it can offer,
+   choosing from a shared vocabulary of ~30 categories.
+2. **Matching** — every other organization is ranked by how well the two
+   profiles fit *in both directions*. An org that offers what you need **and**
+   needs what you offer is a two-way match and ranks far above one that only
+   satisfies one direction, because a one-sided match is just a request for a
+   favour.
+3. **Proposing** — open a match and propose a partnership. The terms start
+   pre-filled from the overlap that produced the match, and each side can only
+   commit to things it actually listed.
+4. **Confirming** — the receiving organization accepts or declines. Acceptance
+   generates a public summary page, shareable with a board or a funder without
+   anyone needing an account.
 
-Filter Partners: Filter by organization type, location, and available resources.
+## Stack
 
-Search: Search the current results by name, type, or expertise.
+- **Backend** — Python / Flask, SQLAlchemy, Alembic migrations
+- **Database** — PostgreSQL (Neon). Needs and offers are `text[]` columns with
+  GIN indexes, so finding candidate matches is an indexed `&&` overlap query
+  rather than a scan.
+- **Frontend** — vanilla HTML/CSS/JS, no build step. Served by Flask itself, so
+  the API is same-origin and there is no CORS layer.
+- **Auth** — signed session cookies (HttpOnly, SameSite=Lax), bcrypt passwords.
 
-Pagination: Navigate through the partner list nine at a time.
+## Running it locally
 
-Add Partner: Add a new partner record to the directory.
+Requires Python 3.11+ and a Postgres database. No local Postgres install is
+needed if you use a hosted one — `psycopg[binary]` bundles its own client
+library.
 
-Partner Details: Click any card for full details, including contact information.
+```bash
+python3 -m venv venv && source venv/bin/activate
+```
 
-Request a Demo: Contact form on the landing page for organizations that want in.
-
-## Technologies Used
-
-Frontend: HTML, CSS, JavaScript (ES6+), Fetch API
-
-Backend: Python (Flask), MySQL Database
-
-Additional Tools: bcrypt for password hashing, CORS for cross-origin resource sharing
-
-
-## Setup Instructions
-
-Clone the repository
-
-Install dependencies:
-
-Backend (Python/Flask):
 ```bash
 pip install -r requirements.txt
 ```
-Frontend (JavaScript/HTML/CSS): No additional setup required.
 
-Configuration:
+Copy `.env.example` to `.env` and fill in `DATABASE_URL` and `SECRET_KEY`.
+The app refuses to start without a database URL.
 
-Copy `.env.example` to `.env` and fill in your database credentials. The app
-reads all secrets from there and will refuse to start if `DB_PASSWORD` is unset.
-Never commit `.env`.
-
-Database Setup:
-
-Ensure MySQL server is installed and running, then create the database and
-tables. `schema.sql` is the single source of truth for the schema; `seed.sql`
-adds a dozen fictional partners so the search page has something to show.
+Create the schema:
 
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS partnerportaldb"
-mysql -u root -p partnerportaldb < schema.sql
-mysql -u root -p partnerportaldb < seed.sql
+alembic upgrade head
 ```
 
-Run the Application:
+Optionally load a dozen fictional organizations, built to demonstrate two-way
+matches:
 
-Start the Flask backend server:
+```bash
+python seed.py
+```
+
+Then start the server and open <http://127.0.0.1:5001>:
 
 ```bash
 python app.py
 ```
 
-Serve the frontend from the project root (opening the HTML files directly with
-`file://` will break the API calls):
+Flask serves the frontend as well as the API, so there is nothing else to run.
 
-```bash
-python -m http.server 8000
-```
+## Project layout
 
-Then visit http://localhost:8000/index.html
+| File | Purpose |
+| --- | --- |
+| `app.py` | Routes: auth, onboarding, matching, proposals, static frontend |
+| `models.py` | `Organization` and `Partnership` |
+| `matching.py` | Bidirectional scoring and the reasons shown to users |
+| `categories.py` | The shared need/offer vocabulary and timeline options |
+| `db.py` | Engine and session setup |
+| `seed.py` | Demo organizations |
+| `migrations/` | Alembic migrations — the schema's source of truth |
 
-## Usage
+Pages: `index.html` (landing), `onboarding.html`, `ppsearch.html` (matches),
+`proposals.html` (partnerships), `ppdashboard.html`, `partnership.html`
+(public agreement summary).
 
-Start at `onboarding.html` and describe your organization. Your profile is saved
-to the database and kept in `localStorage`, which is what the search page ranks
-partners against — without it you get an unranked list.
+## Data model note
 
-On `ppsearch.html`, use the search box to narrow the current results, "Filters"
-to query the server by type, location, or resources, and "Add Partner" to add a
-record. Click any card to see full details and contact information.
+`organizations` is a single table covering accounts, profiles, and the
+searchable directory. An earlier version split these across `users`,
+`onboarding_profiles`, and `partners`, which meant an organization that signed
+up and completed onboarding was invisible to everyone else's search. An account
+*is* an organization here.
 
-## Known limitations
+Profiles can exist without a password (`password_hash` is nullable). Those are
+unclaimed profiles — useful for pre-creating an entry for an organization you
+are recruiting, which they can claim later.
 
-Onboarding profiles are not yet linked to user accounts, so an organization that
-completes onboarding does not appear in anyone else's search results. Merging
-`users`, `partners`, and `onboarding_profiles` into a single organizations model
-is the next piece of work. Sessions are also not implemented — login stores a
-name in `localStorage` and no endpoint requires authentication.
+## Status
 
-## Contributing
+Working: accounts and sessions, onboarding, bidirectional matching, partnership
+proposals with mutual confirmation, and public agreement summaries.
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
+Not built yet: in-app messaging, email notifications, and public organization
+profile pages.
 
 ## License
 
