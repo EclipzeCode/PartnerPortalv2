@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Portal</title>
+    <link rel="stylesheet" href="pp.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="icon" href="images/Partner Portal.jpg" type="image/x-icon">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <div class="bx bx-menu" id="menu-icon"></div>
+        <nav class="navbar">
+            <a href="index.html" class="active">Home</a>
+            <a href="onboarding.html">Onboarding</a>
+            <a href="ppsearch.html">Search</a>
+            <a href="ppdashboard.html">Dashboard</a>
+            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pplogin.html">Login</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+<section class="hero" id="home">
+    <div class="hero-bg" aria-hidden="true">
+        <span class="hero-blob blob-1"></span>
+        <span class="hero-blob blob-2"></span>
+
+        <!--
+            Two peaks separated by a chasm, joined by a suspension bridge.
+            Layers shift at different rates with the cursor (parallax), and the
+            deck lamps light up as the cursor passes over them. Decorative only.
+        -->
+        <div class="hero-scene" id="heroScene">
+            <svg class="scene-svg" viewBox="0 0 1440 520" preserveAspectRatio="xMidYMax slice" role="presentation" focusable="false">
+                <!-- Far range -->
+                <g class="scene-layer" data-depth="0.12">
+                    <path class="peak-far" d="M-60,520 L-60,362 L140,286 L330,336 L520,262 L700,330 L900,268 L1090,332 L1280,278 L1500,346 L1500,520 Z"/>
+                </g>
+
+                <!-- Mid range: the two peaks the bridge connects -->
+                <g class="scene-layer" data-depth="0.3">
+                    <path class="peak-mid" d="M-60,520 L-60,404 L120,330 L300,240 L430,300 L560,352 L560,520 Z"/>
+                    <path class="peak-mid" d="M880,520 L880,352 L1010,296 L1150,222 L1320,314 L1500,388 L1500,520 Z"/>
+                </g>
+
+                <!-- The bridge -->
+                <g class="scene-layer scene-bridge" data-depth="0.46">
+                    <!-- main suspension cable: anchor, over left tower, sag, over right tower, anchor -->
+                    <path class="bridge-cable" d="M560,350 L634,258 Q720,338 806,258 L880,350"/>
+
+                    <!-- hangers from cable down to deck -->
+                    <g class="bridge-hangers">
+                        <line x1="596" y1="304" x2="596" y2="350"/>
+                        <line x1="664" y1="286" x2="664" y2="350"/>
+                        <line x1="700" y1="300" x2="700" y2="350"/>
+                        <line x1="740" y1="300" x2="740" y2="350"/>
+                        <line x1="776" y1="286" x2="776" y2="350"/>
+                        <line x1="844" y1="304" x2="844" y2="350"/>
+                    </g>
+
+                    <!-- towers -->
+                    <rect class="bridge-tower" x="630" y="252" width="8" height="102" rx="2"/>
+                    <rect class="bridge-tower" x="802" y="252" width="8" height="102" rx="2"/>
+
+                    <!-- deck -->
+                    <rect class="bridge-deck" x="556" y="348" width="328" height="7" rx="3"/>
+
+                    <!-- lamps along the deck -->
+                    <g class="bridge-lamps">
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="588" cy="340" r="15"/><circle class="lamp-core" cx="588" cy="340" r="3.2"/></g>
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="646" cy="340" r="15"/><circle class="lamp-core" cx="646" cy="340" r="3.2"/></g>
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="704" cy="340" r="15"/><circle class="lamp-core" cx="704" cy="340" r="3.2"/></g>
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="762" cy="340" r="15"/><circle class="lamp-core" cx="762" cy="340" r="3.2"/></g>
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="820" cy="340" r="15"/><circle class="lamp-core" cx="820" cy="340" r="3.2"/></g>
+                        <g class="bridge-lamp"><circle class="lamp-glow" cx="866" cy="340" r="15"/><circle class="lamp-core" cx="866" cy="340" r="3.2"/></g>
+                    </g>
+                </g>
+
+                <!-- Near ridge. Kept low and shallow: it is the darkest fill in
+                     the scene, so if it rises any higher it sits behind the hero
+                     stats and drags their contrast down. -->
+                <g class="scene-layer" data-depth="0.75">
+                    <path class="peak-near" d="M-60,520 L-60,500 L200,477 L420,495 L640,480 L880,497 L1120,481 L1500,499 L1500,520 Z"/>
+                </g>
+            </svg>
+        </div>
+    </div>
+
+    <div class="hero-content">
+        <div class="hero-badge">
+            <span class="badge-dot"></span>
+            Built for two-way partnerships
+        </div>
+
+        <h1 class="hero-title">
+            Find a partner who needs<br>
+            what you <span>already have</span>
+        </h1>
+
+        <p class="hero-subtitle">
+            Most partnerships fall apart because one side is doing a favour. PartnerPortal
+            matches organizations on both what they need <em>and</em> what they can offer &mdash;
+            so both sides walk in with something to gain.
+        </p>
+
+        <div class="hero-buttons">
+            <a href="onboarding.html" class="btn-primary">Get matched free</a>
+            <a href="ppsearch.html" class="btn-secondary">Browse partners <i class='bx bx-right-arrow-alt'></i></a>
+        </div>
+
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <div class="hero-stat-number">1,000+</div>
+                <div class="hero-stat-label">Partnerships</div>
+            </div>
+            <div class="hero-stat">
+                <div class="hero-stat-number">95%</div>
+                <div class="hero-stat-label">Success Rate</div>
+            </div>
+            <div class="hero-stat">
+                <div class="hero-stat-number">24h</div>
+                <div class="hero-stat-label">Avg. Response Time</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hero-visual">
+        <!-- Live match demo: cycles through example pairings -->
+        <div class="match-demo" id="matchDemo">
+            <div class="match-demo-head">
+                <span class="match-flag"><i class='bx bx-transfer-alt'></i> Mutual match</span>
+                <span class="match-score" id="matchScore">92</span>
+            </div>
+
+            <div class="match-org match-org-a">
+                <div class="org-avatar" id="orgAvatarA">CB</div>
+                <div class="org-info">
+                    <div class="org-name" id="orgNameA">Coders Over Borders</div>
+                    <div class="org-type" id="orgTypeA">Non-profit</div>
+                </div>
+            </div>
+
+            <div class="match-exchange">
+                <div class="exchange-row">
+                    <span class="exchange-arrow down"><i class='bx bx-down-arrow-alt'></i></span>
+                    <span class="exchange-text">
+                        offers <strong id="offerA">Web Development</strong>
+                    </span>
+                </div>
+                <div class="exchange-line"></div>
+                <div class="exchange-row">
+                    <span class="exchange-arrow up"><i class='bx bx-up-arrow-alt'></i></span>
+                    <span class="exchange-text">
+                        offers <strong id="offerB">Student Internships</strong>
+                    </span>
+                </div>
+            </div>
+
+            <div class="match-org match-org-b">
+                <div class="org-avatar alt" id="orgAvatarB">RT</div>
+                <div class="org-info">
+                    <div class="org-name" id="orgNameB">Riverside Tech</div>
+                    <div class="org-type" id="orgTypeB">Small Business</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="match-dots" id="matchDots" role="tablist" aria-label="Example matches">
+            <button class="match-dot active" data-index="0" aria-label="Example match 1"></button>
+            <button class="match-dot" data-index="1" aria-label="Example match 2"></button>
+            <button class="match-dot" data-index="2" aria-label="Example match 3"></button>
+        </div>
+    </div>
+</section>
+
+    <!-- About Section -->
+<section class="about" id="about">    
+    <!-- Platform Section -->
+    <div class="scroll-section platform-section">
+        <div class="scroll-content">
+            <div class="text-content">
+                <h3 class="section-subtitle">Our Platform</h3>
+                <h2 class="section-title">Bridging the gap between <span>business</span> and <span>industry</span></h2>
+                <p class="section-description">PartnerPortal revolutionizes how start-ups and non-profits connect with business partners to create meaningful collaborations.</p>
+            </div>
+            <div class="visual-content">
+                <div class="stats-grid">
+                    <div class="stat-item" data-target="950" data-suffix="+">
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Listed Organizations</div>
+                    </div>
+                    <div class="stat-item" data-target="98" data-suffix="%">
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">User Satisfaction</div>
+                    </div>
+                    <div class="stat-item" data-target="74">
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Successful Partnerships</div>
+                    </div>
+                    <div class="stat-item" data-target="23">
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Completed Contracts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Features Section -->
+    <div class="scroll-section features-section">
+        <div class="scroll-content">
+            <div class="visual-content">
+                <div class="feature-cards">
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class='bx bx-search-alt'></i></div>
+                        <h3>Advanced Search</h3>
+                        <p>Find the perfect partners with our powerful filtering system</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class='bx bx-network-chart'></i></div>
+                        <h3>Smart Matching</h3>
+                        <p>OpenAI algorithm suggests ideal partners based on your needs</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class='bx bx-data'></i></div>
+                        <h3>Detailed Analytics</h3>
+                        <p>Track partnership success with comprehensive reporting</p>
+                    </div>
+                </div>
+            </div>
+            <div class="text-content">
+                <h3 class="section-subtitle">Our Features</h3>
+                <h2 class="section-title">Powerful tools for <span>building</span> and <span>managing</span> partnerships</h2>
+                <p class="section-description">We provide everything you need to establish, grow, and measure successful industry-education collaborations.</p>
+                <button class="btn-primary">Explore Features</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Benefits Section -->
+    <div class="scroll-section benefits-section">
+        <div class="scroll-content">
+            <div class="text-content">
+                <h3 class="section-subtitle">The Benefits</h3>
+                <h2 class="section-title">Empower <span>your organization</span> with meaningful, growth-driven partnerships</h2>
+                <p class="section-description">Startups and nonprofits using PartnerPortal see faster collaboration setups, increased exposure, and stronger outcomes from mission-aligned partnerships.</p>
+                
+                <div class="benefit-list">
+                    <div class="benefit-item">
+                        <div class="benefit-number">3x</div>
+                        <div class="benefit-text">More strategic collaboration opportunities</div>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-number">50%</div>
+                        <div class="benefit-text">Reduction in partnership setup time</div>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-number">2.5x</div>
+                        <div class="benefit-text">Higher engagement with qualified partners</div>
+                    </div>
+                </div>
+            </div>
+            <div class="visual-content">
+                <div class="testimonial-carousel">
+                <div class="testimonial active">
+                    <div class="testimonial-content">
+                        "PartnerPortal helped us connect with organizations that truly resonate with our mission. We closed partnerships faster—and with long-term impact."
+                    </div>
+                    <div class="testimonial-author">
+                        <img src="images/ruhaan.jpg" alt="Ruhaan" class="author-avatar">
+                        <div class="author-info">
+                            <div class="author-name">Dr. Ruhaan Keote</div>
+                            <div class="author-title">CEO, Creator Colosseum</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CTA Section -->
+    <div class="scroll-section cta-section">
+        <div class="scroll-content">
+            <h2 class="cta-title">Ready to transform your institution's partnerships?</h2>
+            <p class="cta-text">Join hundreds of Organizations already creating better opportunities with dedicated partners</p>
+            <div class="cta-buttons">
+                <a href="onboarding.html" class="btn-primary">Get Started</a>
+                <button type="button" id="requestDemoBtn" class="btn-secondary">Request Demo</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+        <!-- Modal HTML -->
+    <div id="instructions-modal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Partner Portal Guide</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="instruction-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Account Setup</h3>
+                        <p>Begin by creating your account or logging in to access all platform features.</p>
+                    </div>
+                </div>
+                <div class="instruction-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Navigation</h3>
+                        <p>Use the menu bar at the top to explore different sections of the platform.</p>
+                    </div>
+                </div>
+                <div class="instruction-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Partner Search</h3>
+                        <p>Click "Search" to find business partners using our advanced filtering system.</p>
+                    </div>
+                </div>
+                <div class="instruction-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Connection Management</h3>
+                        <p>View partner profiles, save favorites, and initiate contact through the platform.</p>
+                    </div>
+                </div>
+                <div class="instruction-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h3>Getting Help</h3>
+                        <p>Visit our Help section for FAQs or to contact our support team with any questions.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-confirm">Got It, Let's Begin</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request a demo / get in touch. Posts to /api/contact. -->
+    <div id="contact-modal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Request a demo</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">Tell us about your organization and what you are hoping to find in a partner. We read every message.</p>
+                <form id="contactForm">
+                    <div class="form-group">
+                        <label for="contactName">Your name</label>
+                        <input type="text" id="contactName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmail">Email</label>
+                        <input type="email" id="contactEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactPhone">Phone <span class="optional">(optional)</span></label>
+                        <input type="tel" id="contactPhone">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactMessage">What are you looking for?</label>
+                        <textarea id="contactMessage" rows="4" required></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Send message</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+    <script src="pp.js"></script>
+</body>
+</html>

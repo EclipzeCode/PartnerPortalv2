@@ -1,0 +1,12 @@
+{
+  "name": "partner-portal",
+  "version": "1.0.0",
+  "description": "Welcome to Partner Portal, a web application designed to connect users with various types of business partners based on their needs.",
+  "main": "pp.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

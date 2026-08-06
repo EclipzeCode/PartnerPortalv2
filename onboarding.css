@@ -1,0 +1,672 @@
+/* Onboarding CSS - onboarding.css
+   Deliberately mirrors ppdashboard.css: same tokens, same section header +
+   underline, same white card treatment, same .btn-action. */
+
+:root {
+  --primary: #4361ee;
+  --primary-dark: #20348f;
+  --secondary: #3f37c9;
+  --dark: #1a1a2e;
+  --light: #f8f9fa;
+  --accent: #4cc9f0;
+  --text: #2b2d42;
+  --text-light: #8d99ae;
+  --success: #16a34a;
+  --warning: #fbbf24;
+  --error: #dc2626;
+  --border: #e0e0e0;
+  --bg-light: #f5f7ff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-light);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ---------- Navigation ---------- */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 1.5rem 10%;
+  background: white;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.logo {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: 0.1s ease;
+}
+
+.logo:hover {
+  color: var(--primary-dark);
+  transition: 0.3s ease;
+}
+
+.navbar {
+  display: flex;
+  gap: 2rem;
+}
+
+.navbar a {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 1.1rem;
+  text-decoration: none;
+  position: relative;
+  padding: 0.5rem 0;
+  transition: all 0.3s ease;
+}
+
+.navbar a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.navbar a:hover::after,
+.navbar a.active::after {
+  width: 100%;
+}
+
+.navbar a.active {
+  color: var(--primary);
+}
+
+#menu-icon {
+  font-size: 2.5rem;
+  color: var(--text);
+  cursor: pointer;
+  display: none;
+}
+
+/* ---------- Section shell (matches dashboard) ---------- */
+.onboarding-section {
+  padding: 8rem 10% 5rem;
+  background-color: var(--bg-light);
+  min-height: 100vh;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.section-header h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 span {
+  color: var(--primary);
+}
+
+.underline {
+  width: 80px;
+  height: 4px;
+  background: var(--primary);
+  margin: 0 auto;
+  border-radius: 2px;
+}
+
+.section-intro {
+  max-width: 620px;
+  margin: 1.5rem auto 0;
+  color: var(--text-light);
+}
+
+.onboarding-container {
+  background: white;
+  border-radius: 16px;
+  padding: 3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ---------- Progress strip ---------- */
+.progress-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: white;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.progress-step.done {
+  border-color: var(--primary);
+  box-shadow: 0 5px 15px rgba(67, 97, 238, 0.12);
+}
+
+.step-icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(67, 97, 238, 0.1);
+  color: var(--primary);
+  font-size: 1.4rem;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.progress-step.done .step-icon {
+  background: var(--primary);
+  color: white;
+}
+
+.step-text h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step-text p {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  line-height: 1.3;
+}
+
+/* ---------- Layout ---------- */
+.onboarding-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.sidebar-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  position: sticky;
+  top: 110px;
+}
+
+/* ---------- Cards (matches .dashboard-card) ---------- */
+.onboarding-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.card-header h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card-step {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-hint {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  background: var(--bg-light);
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ---------- Form fields ---------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.req {
+  color: var(--error);
+}
+
+.form-group input[type="text"],
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: white;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #b3bacb;
+}
+
+/* Textareas are a fixed height and scroll internally -- dragging the resize
+   handle used to let them push the whole layout around. */
+.form-group textarea {
+  height: 150px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+.form-group textarea.textarea-sm {
+  height: 100px;
+}
+
+.form-group textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.form-group textarea::-webkit-scrollbar-thumb {
+  background: #d5d9e6;
+  border-radius: 4px;
+}
+
+.form-group textarea::-webkit-scrollbar-thumb:hover {
+  background: #b9c0d4;
+}
+
+.input-error {
+  border-color: var(--error) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0 !important;
+  cursor: pointer;
+  font-weight: 400 !important;
+  color: var(--text-light);
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ---------- Needs / offers pair ---------- */
+.trade-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.trade-need label i,
+.trade-offer label i {
+  margin-right: 0.25rem;
+  vertical-align: -2px;
+}
+
+.trade-need label i {
+  color: var(--primary);
+}
+
+.trade-offer label i {
+  color: var(--success);
+}
+
+.char-count {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-light);
+  text-align: right;
+}
+
+/* ---------- Sidebar ---------- */
+.strength-meter {
+  margin-bottom: 1.25rem;
+}
+
+.strength-bar {
+  height: 8px;
+  background: var(--bg-light);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.strength-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transition: width 0.4s ease;
+}
+
+.strength-label {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.checklist,
+.reason-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-light);
+  transition: color 0.2s ease;
+}
+
+.checklist li i {
+  font-size: 1.1rem;
+  color: #cdd3e2;
+  transition: color 0.2s ease;
+}
+
+.checklist li.done {
+  color: var(--text);
+}
+
+.checklist li.done i {
+  color: var(--success);
+}
+
+.reason-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.reason-list li i {
+  color: var(--primary);
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.tip-box {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--bg-light);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  color: var(--text-light);
+}
+
+.tip-box i {
+  color: var(--primary);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.tip-box strong {
+  display: block;
+  color: var(--text);
+}
+
+/* ---------- Buttons (matches .btn-action) ---------- */
+.actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-action:hover:not(:disabled) {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  transform: translateY(-2px);
+}
+
+.btn-action:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-action.secondary {
+  background: white;
+  color: var(--primary);
+}
+
+.btn-action.secondary:hover {
+  background: var(--bg-light);
+  color: var(--primary-dark);
+}
+
+/* ---------- Alerts ---------- */
+.alert {
+  padding: 0.95rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.alert.success {
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--success);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+}
+
+.alert.error {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--error);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.hidden {
+  display: none;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 992px) {
+  .onboarding-content {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-column {
+    position: static;
+  }
+
+  .onboarding-container {
+    padding: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 1.25rem 5%;
+  }
+
+  .navbar {
+    position: fixed;
+    top: 80px;
+    left: -100%;
+    width: 100%;
+    background: white;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 0;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .navbar.active {
+    left: 0;
+  }
+
+  #menu-icon {
+    display: block;
+  }
+
+  .onboarding-section {
+    padding: 7rem 5% 3rem;
+  }
+
+  .section-header h2 {
+    font-size: 2rem;
+  }
+
+  .progress-strip {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .form-grid,
+  .trade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions .btn-action {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .onboarding-section {
+    padding: 7rem 4% 3rem;
+  }
+
+  .onboarding-container {
+    padding: 1.25rem;
+    border-radius: 12px;
+  }
+
+  .onboarding-card {
+    padding: 1.25rem;
+  }
+
+  .section-header h2 {
+    font-size: 1.75rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

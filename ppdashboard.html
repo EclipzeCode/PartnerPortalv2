@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Portal | Client Dashboard</title>
+    <link rel="stylesheet" href="ppdashboard.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="icon" href="images/Partner Portal.jpg" type="image/x-icon">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <div class="bx bx-menu" id="menu-icon"></div>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="onboarding.html">Onboarding</a>
+            <a href="ppsearch.html">Search</a>
+            <a href="ppdashboard.html" class="active">Dashboard</a>
+            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pplogin.html">Login</a>
+        </nav>
+    </header>
+
+    <!-- Dashboard Section -->
+    <section class="dashboard-section">
+        <div class="section-header">
+            <h2>Client <span>Dashboard</span></h2>
+            <div class="underline"></div>
+        </div>
+        
+        <div class="dashboard-container">
+            <!-- Quick Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class='bx bx-group'></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Active Partners</h3>
+                        <span class="stat-value" id="activePartners">12</span>
+                        <span class="stat-change positive">+2 this month</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class='bx bx-chat'></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Messages</h3>
+                        <span class="stat-value" id="unreadMessages">5</span>
+                        <span class="stat-change neutral">3 unread</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class='bx bx-calendar-check'></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Upcoming</h3>
+                        <span class="stat-value" id="upcomingEvents">3</span>
+                        <span class="stat-change">meetings</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class='bx bx-star'></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Partner Score</h3>
+                        <span class="stat-value" id="partnerScore">86</span>
+                        <span class="stat-change positive">+6 this quarter</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content Area -->
+            <div class="dashboard-content">
+                <!-- Recent Activity -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3>Recent Activity</h3>
+                        <button class="btn-action small">
+                            <i class='bx bx-filter-alt'></i> Filter
+                        </button>
+                    </div>
+                    <div class="activity-list">
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class='bx bx-message-rounded-dots'></i>
+                            </div>
+                            <div class="activity-content">
+                                <p><strong>Local Food Bank</strong> sent you a message about the upcoming fundraiser</p>
+                                <span class="activity-time">2 hours ago</span>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class='bx bx-calendar-event'></i>
+                            </div>
+                            <div class="activity-content">
+                                <p>Meeting scheduled with <strong>Tech for Good</strong> on Friday at 2:00 PM</p>
+                                <span class="activity-time">Yesterday</span>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class='bx bx-check-circle'></i>
+                            </div>
+                            <div class="activity-content">
+                                <p>Partnership with <strong>Green Initiative</strong> was successfully completed</p>
+                                <span class="activity-time">3 days ago</span>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class='bx bx-file'></i>
+                            </div>
+                            <div class="activity-content">
+                                <p><strong>Community Builders</strong> shared a document: "Project Proposal.pdf"</p>
+                                <span class="activity-time">1 week ago</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="#" class="view-all">View All Activity <i class='bx bx-chevron-right'></i></a>
+                    </div>
+                </div>
+                
+                <!-- Partner Connections -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3>Partner Connections</h3>
+                        <button class="btn-action small">
+                            <i class='bx bx-search'></i> Find More
+                        </button>
+                    </div>
+                    <div class="connections-grid">
+                        <div class="connection-card">
+                            <div class="connection-avatar">
+                                <img src="images/pointingcomp.jpg" alt="Partner">
+                                <div class="connection-status online"></div>
+                            </div>
+                            <div class="connection-info">
+                                <h4>Local Food Bank</h4>
+                                <p>Food Distribution</p>
+                                <div class="connection-rating">
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star-half'></i>
+                                </div>
+                            </div>
+                            <button class="btn-connect">
+                                <i class='bx bx-chat'></i> Message
+                            </button>
+                        </div>
+                        
+                        <div class="connection-card">
+                            <div class="connection-avatar">
+                                <img src="images/pointingcomp.jpg" alt="Partner">
+                                <div class="connection-status offline"></div>
+                            </div>
+                            <div class="connection-info">
+                                <h4>Tech for Good</h4>
+                                <p>Technology Services</p>
+                                <div class="connection-rating">
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bx-star'></i>
+                                </div>
+                            </div>
+                            <button class="btn-connect">
+                                <i class='bx bx-chat'></i> Message
+                            </button>
+                        </div>
+                        
+                        <div class="connection-card">
+                            <div class="connection-avatar">
+                                <img src="images/pointingcomp.jpg" alt="Partner">
+                                <div class="connection-status online"></div>
+                            </div>
+                            <div class="connection-info">
+                                <h4>Green Initiative</h4>
+                                <p>Environmental</p>
+                                <div class="connection-rating">
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                    <i class='bx bxs-star'></i>
+                                </div>
+                            </div>
+                            <button class="btn-connect">
+                                <i class='bx bx-chat'></i> Message
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="#" class="view-all">View All Partners <i class='bx bx-chevron-right'></i></a>
+                    </div>
+                </div>
+                
+                <!-- Upcoming Events -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3>Upcoming Events</h3>
+                        <button class="btn-action small" id="addEventBtn">
+                            <i class='bx bx-plus'></i> Add Event
+                        </button>
+                    </div>
+                    <div class="events-list">
+                        <div class="event-item">
+                            <div class="event-date">
+                                <span class="event-day">15</span>
+                                <span class="event-month">JUN</span>
+                            </div>
+                            <div class="event-details">
+                                <h4>Fundraiser Planning</h4>
+                                <p>With Local Food Bank</p>
+                                <span class="event-time"><i class='bx bx-time'></i> 10:00 AM - 12:00 PM</span>
+                            </div>
+                            <button class="btn-event">
+                                <i class='bx bx-calendar'></i>
+                            </button>
+                        </div>
+                        
+                        <div class="event-item">
+                            <div class="event-date">
+                                <span class="event-day">18</span>
+                                <span class="event-month">JUN</span>
+                            </div>
+                            <div class="event-details">
+                                <h4>Tech Implementation</h4>
+                                <p>With Tech for Good</p>
+                                <span class="event-time"><i class='bx bx-time'></i> 2:00 PM - 3:30 PM</span>
+                            </div>
+                            <button class="btn-event">
+                                <i class='bx bx-calendar'></i>
+                            </button>
+                        </div>
+                        
+                        <div class="event-item">
+                            <div class="event-date">
+                                <span class="event-day">22</span>
+                                <span class="event-month">JUN</span>
+                            </div>
+                            <div class="event-details">
+                                <h4>Community Cleanup</h4>
+                                <p>With Green Initiative</p>
+                                <span class="event-time"><i class='bx bx-time'></i> 9:00 AM - 1:00 PM</span>
+                            </div>
+                            <button class="btn-event">
+                                <i class='bx bx-calendar'></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="#" class="view-all">View Calendar <i class='bx bx-chevron-right'></i></a>
+                    </div>
+                </div>
+                
+                <!-- Resources & Documents -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3>Shared Resources</h3>
+                        <button class="btn-action small">
+                            <i class='bx bx-upload'></i> Upload
+                        </button>
+                    </div>
+                    <div class="resources-list">
+                        <div class="resource-item">
+                            <div class="resource-icon">
+                                <i class='bx bx-file-pdf'></i>
+                            </div>
+                            <div class="resource-info">
+                                <h4>Project Proposal.pdf</h4>
+                                <p>Shared by Community Builders</p>
+                                <span class="resource-date">Jun 5, 2023</span>
+                            </div>
+                            <button class="btn-resource">
+                                <i class='bx bx-download'></i>
+                            </button>
+                        </div>
+                        
+                        <div class="resource-item">
+                            <div class="resource-icon">
+                                <i class='bx bx-spreadsheet'></i>
+                            </div>
+                            <div class="resource-info">
+                                <h4>Budget_2023.xlsx</h4>
+                                <p>Shared by Local Food Bank</p>
+                                <span class="resource-date">May 28, 2023</span>
+                            </div>
+                            <button class="btn-resource">
+                                <i class='bx bx-download'></i>
+                            </button>
+                        </div>
+                        
+                        <div class="resource-item">
+                            <div class="resource-icon">
+                                <i class='bx bx-image'></i>
+                            </div>
+                            <div class="resource-info">
+                                <h4>Event_Photos.zip</h4>
+                                <p>Shared by Green Initiative</p>
+                                <span class="resource-date">May 15, 2023</span>
+                            </div>
+                            <button class="btn-resource">
+                                <i class='bx bx-download'></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="#" class="view-all">View All Resources <i class='bx bx-chevron-right'></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Event Modal -->
+    <div id="eventModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Add New Event</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title</label>
+                        <input type="text" id="eventTitle" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="eventDate">Date</label>
+                            <input type="date" id="eventDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventTime">Time</label>
+                            <input type="time" id="eventTime" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDuration">Duration (hours)</label>
+                        <input type="number" id="eventDuration" min="0.5" step="0.5" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventPartner">With Partner</label>
+                        <select id="eventPartner" required>
+                            <option value="">Select a partner</option>
+                            <option value="1">Local Food Bank</option>
+                            <option value="2">Tech for Good</option>
+                            <option value="3">Green Initiative</option>
+                            <option value="4">Community Builders</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventLocation">Location</label>
+                        <input type="text" id="eventLocation" placeholder="Enter location or meeting link">
+                    </div>
+                    <button type="submit" class="btn-primary">Save Event</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+    <script src="ppdashboard.js"></script>
+</body>
+</html>

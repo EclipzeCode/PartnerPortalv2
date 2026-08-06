@@ -1,0 +1,141 @@
+/* Shared across every page. Loaded AFTER each page's own stylesheet so these
+   rules win where they overlap.
+
+   Each page still has its own stylesheet with its own copy of the header and
+   button styles; this file is deliberately limited to the pieces that must look
+   identical everywhere (the footer, focus rings, the mobile drawer backdrop)
+   rather than trying to unify all five at once. */
+
+/* ---------- Footer ---------- */
+.site-footer {
+    background: #1a1a2e;
+    color: #c7cbe0;
+    padding: 3.5rem 8% 2rem;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.site-footer a {
+    color: #c7cbe0;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.site-footer a:hover {
+    color: #ffffff;
+}
+
+.footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2.5rem;
+    max-width: 1200px;
+    margin: 0 auto 2.5rem;
+}
+
+.footer-brand-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.footer-tagline {
+    max-width: 340px;
+    color: #9aa0bd;
+}
+
+.footer-col h4 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.footer-col ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.footer-col li {
+    margin-bottom: 0.6rem;
+}
+
+.footer-bottom {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-top: 1.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    color: #7d84a6;
+    font-size: 0.875rem;
+}
+
+/* Condensed footer for auth pages. The full three-column footer is 330px tall,
+   which forced ~250px of scrolling on the login page and dragged the login card
+   up behind the fixed header. This variant keeps the page a single screen. */
+.site-footer.compact {
+    padding: 1.25rem 8%;
+}
+
+.site-footer.compact .footer-bottom {
+    padding-top: 0;
+    border-top: none;
+    justify-content: center;
+    text-align: center;
+    gap: 0.4rem 1.5rem;
+}
+
+.site-footer.compact .footer-links {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ---------- Accessibility ---------- */
+/* Keyboard focus was invisible everywhere -- several stylesheets set
+   `outline: none` on inputs without providing a replacement. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #4361ee;
+    outline-offset: 2px;
+}
+
+/* ---------- Mobile drawer ---------- */
+@media (max-width: 768px) {
+    /* The nav drawer is a fixed panel; give it a floor so long link lists stay
+       reachable and it never sits flush against the viewport edge. */
+    .navbar {
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+    }
+
+    .site-footer {
+        padding: 2.5rem 6% 1.5rem;
+    }
+
+    .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 1.75rem;
+    }
+
+    .footer-tagline {
+        max-width: 100%;
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

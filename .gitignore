@@ -1,0 +1,21 @@
+# Environment / secrets
+.env
+.env.local
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node
+node_modules/
+
+# Editor / OS
+.vscode/
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+
+# Local SQL scratch files
+*.session.sql

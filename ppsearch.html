@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Portal | Search Partners</title>
+    <link rel="stylesheet" href="ppsearch.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="icon" href="images/Partner Portal.jpg" type="image/x-icon">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <div class="bx bx-menu" id="menu-icon"></div>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="onboarding.html">Onboarding</a>
+            <a href="ppsearch.html" class="active">Search</a>
+            <a href="ppdashboard.html">Dashboard</a>
+            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pplogin.html">Login</a>
+        </nav>
+    </header>
+
+    <!-- Search Section -->
+    <section class="search-section">
+        <div class="section-header">
+            <h2>Find <span>Partners</span></h2>
+            <div class="underline"></div>
+        </div>
+        
+        <div class="search-container">
+            <div class="search-tools">
+                <div class="search-box">
+                    <i class='bx bx-search'></i>
+                    <input type="text" id="searchInput" placeholder="Search partners...">
+                </div>
+                <div class="action-buttons">
+                    <button id="add-btn" class="btn-action">
+                        <i class='bx bx-user-plus'></i> Add Partner
+                    </button>
+                    <button id="filter-btn" class="btn-action">
+                        <i class='bx bx-filter-alt'></i> Filters
+                    </button>
+                </div>
+            </div>
+            
+            <div class="partners-grid" id="partnersGrid">
+                <!-- Partner cards will be injected here by JavaScript -->
+            </div>
+            
+            <div class="pagination">
+                <button id="prevBtn" class="btn-pagination" disabled>
+                    <i class='bx bx-chevron-left'></i>
+                </button>
+                <span id="pageIndicator">Page 1 of 1</span>
+                <button id="nextBtn" class="btn-pagination">
+                    <i class='bx bx-chevron-right'></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Add Partner Modal -->
+    <div id="addPartnerModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Add New Partner</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addPartnerForm">
+                    <div class="form-group">
+                        <label for="addName">Name</label>
+                        <input type="text" id="addName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addType">Type</label>
+                        <input type="text" id="addType" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addExpertise">Expertise</label>
+                        <input type="text" id="addExpertise" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addResources">Resources</label>
+                        <input type="text" id="addResources" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addEmail">Email</label>
+                        <input type="email" id="addEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addPhone">Phone Number</label>
+                        <input type="tel" id="addPhone" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addLocation">Location</label>
+                        <input type="text" id="addLocation" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="addBio">Description</label>
+                        <textarea id="addBio" rows="4" required></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Add Partner</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div id="filterModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Filter Partners</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="filterForm">
+                    <div class="form-group">
+                        <label for="typeInput">Organization Type</label>
+                        <input type="text" id="typeInput" placeholder="Enter type">
+                    </div>
+                    <div class="form-group">
+                        <label for="locationInput">Location</label>
+                        <input type="text" id="locationInput" placeholder="Enter location">
+                    </div>
+                    <div class="form-group">
+                        <label for="resourcesInput">Resources</label>
+                        <input type="text" id="resourcesInput" placeholder="Enter resources">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Apply Filters</button>
+                        <button type="button" id="clearFiltersBtn" class="btn-ghost">Clear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partner Detail Modal -->
+    <div id="partnerDetailModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="partnerDetailTitle">Partner Details</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="partner-image">
+                    <img id="partnerDetailImage" src="Images/pointingcomp.jpg" alt="Partner Image">
+                    <div class="partner-score" id="partnerDetailScore">92</div>
+                </div>
+                <div class="partner-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Type:</span>
+                        <span id="partnerDetailType" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Expertise:</span>
+                        <span id="partnerDetailExpertise" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Resources:</span>
+                        <span id="partnerDetailResources" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row full-width">
+                        <span class="detail-label">Description:</span>
+                        <span id="partnerDetailBio" class="detail-value"></span>
+                    </div>
+                    
+                    <div class="contact-info">
+                        <div class="detail-row">
+                            <span class="detail-label">Email:</span>
+                            <span id="partnerDetailEmail" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Phone:</span>
+                            <span id="partnerDetailPhone" class="detail-value"></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Location:</span>
+                            <span id="partnerDetailLocation" class="detail-value"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+    <script src="ppsearch.js"></script>
+</body>
+</html>

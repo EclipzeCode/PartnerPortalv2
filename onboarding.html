@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner Portal | Get Started</title>
+  <link rel="stylesheet" href="onboarding.css" />
+  <link rel="stylesheet" href="shared.css">
+  <link rel="icon" href="images/Partner Portal.jpg" type="image/x-icon">
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <header class="header">
+    <a href="index.html" class="logo">PartnerPortal</a>
+    <div class="bx bx-menu" id="menu-icon"></div>
+    <nav class="navbar">
+      <a href="index.html">Home</a>
+      <a href="onboarding.html" class="active">Get Started</a>
+      <a href="ppsearch.html">Search</a>
+      <a href="ppdashboard.html">Dashboard</a>
+      <a href="pplogin.html">Login</a>
+    </nav>
+  </header>
+
+  <!-- Onboarding Section -->
+  <section class="onboarding-section">
+    <div class="section-header">
+      <h2>Get <span>Started</span></h2>
+      <div class="underline"></div>
+      <p class="section-intro">
+        Tell us what your organization needs and what it can offer. We use both
+        sides to rank partners you can actually trade value with.
+      </p>
+    </div>
+
+    <div class="onboarding-container">
+      <!-- Progress strip -->
+      <div class="progress-strip">
+        <div class="progress-step" data-step="1">
+          <div class="step-icon"><i class='bx bx-building-house'></i></div>
+          <div class="step-text">
+            <h4>Your organization</h4>
+            <p>Who you are</p>
+          </div>
+        </div>
+        <div class="progress-step" data-step="2">
+          <div class="step-icon"><i class='bx bx-transfer-alt'></i></div>
+          <div class="step-text">
+            <h4>Needs &amp; offers</h4>
+            <p>What you trade</p>
+          </div>
+        </div>
+        <div class="progress-step" data-step="3">
+          <div class="step-icon"><i class='bx bx-target-lock'></i></div>
+          <div class="step-text">
+            <h4>Preferences</h4>
+            <p>Who you want</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="successMessage" class="alert success hidden"></div>
+      <div id="errorMessage" class="alert error hidden"></div>
+
+      <form id="onboardingForm">
+        <div class="onboarding-content">
+          <div class="form-column">
+            <!-- Step 1 -->
+            <div class="onboarding-card" id="card-1">
+              <div class="card-header">
+                <h3><span class="card-step">1</span> Your organization</h3>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="organizationName">Organization Name <span class="req">*</span></label>
+                  <input type="text" id="organizationName" placeholder="Bridgewater Youth Outreach" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="organizationType">Organization Type <span class="req">*</span></label>
+                  <select id="organizationType" required>
+                    <option value="">Select type</option>
+                    <option value="Nonprofit">Nonprofit</option>
+                    <option value="Small Business">Small Business</option>
+                    <option value="Startup">Startup</option>
+                    <option value="School">School</option>
+                    <option value="Community Organization">Community Organization</option>
+                    <option value="Service Provider">Service Provider</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="location">Location <span class="req">*</span></label>
+                  <input type="text" id="location" placeholder="Somerville, NJ" required />
+                </div>
+
+                <div class="form-group checkbox-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="remoteFriendly" />
+                    <span>Open to remote / non-local partnerships</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="onboarding-card" id="card-2">
+              <div class="card-header">
+                <h3><span class="card-step">2</span> Needs &amp; offers</h3>
+                <span class="card-hint">This drives your matches</span>
+              </div>
+
+              <div class="trade-grid">
+                <div class="form-group trade-need">
+                  <label for="needs">
+                    <i class='bx bx-down-arrow-alt'></i>
+                    What do you need? <span class="req">*</span>
+                  </label>
+                  <textarea
+                    id="needs"
+                    placeholder="Examples: sponsorships, marketing help, volunteers, event space, funding, outreach support"
+                    required
+                  ></textarea>
+                  <span class="char-count" data-for="needs">0 characters</span>
+                </div>
+
+                <div class="form-group trade-offer">
+                  <label for="offers">
+                    <i class='bx bx-up-arrow-alt'></i>
+                    What can you offer? <span class="req">*</span>
+                  </label>
+                  <textarea
+                    id="offers"
+                    placeholder="Examples: community access, youth audience, event visibility, technical expertise, volunteers"
+                    required
+                  ></textarea>
+                  <span class="char-count" data-for="offers">0 characters</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="onboarding-card" id="card-3">
+              <div class="card-header">
+                <h3><span class="card-step">3</span> Preferences</h3>
+                <span class="card-hint">Optional</span>
+              </div>
+
+              <div class="form-group">
+                <label for="preferredPartnerTypes">Preferred Partner Types</label>
+                <input
+                  type="text"
+                  id="preferredPartnerTypes"
+                  placeholder="Examples: local businesses, sponsors, schools, nonprofits"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="partnershipGoals">Partnership Goals</label>
+                <textarea
+                  id="partnershipGoals"
+                  class="textarea-sm"
+                  placeholder="Examples: co-host events, gain sponsors, build community reach, share resources"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="description">Short Description</label>
+                <textarea
+                  id="description"
+                  class="textarea-sm"
+                  placeholder="Tell us a little about your organization and what kind of collaboration would be valuable."
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button type="submit" id="submitBtn" class="btn-action">
+                <i class='bx bx-search-alt-2'></i>
+                Save &amp; Find Matches
+              </button>
+
+              <button type="button" id="clearBtn" class="btn-action secondary">
+                <i class='bx bx-eraser'></i>
+                Clear Form
+              </button>
+            </div>
+          </div>
+
+          <!-- Sidebar -->
+          <aside class="sidebar-column">
+            <div class="onboarding-card summary-card">
+              <div class="card-header">
+                <h3>Profile strength</h3>
+              </div>
+              <div class="strength-meter">
+                <div class="strength-bar"><span id="strengthFill"></span></div>
+                <div class="strength-label" id="strengthLabel">Just getting started</div>
+              </div>
+              <ul class="checklist" id="checklist">
+                <li data-field="organizationName"><i class='bx bx-circle'></i> Organization name</li>
+                <li data-field="organizationType"><i class='bx bx-circle'></i> Organization type</li>
+                <li data-field="location"><i class='bx bx-circle'></i> Location</li>
+                <li data-field="needs"><i class='bx bx-circle'></i> What you need</li>
+                <li data-field="offers"><i class='bx bx-circle'></i> What you offer</li>
+                <li data-field="description"><i class='bx bx-circle'></i> Description</li>
+              </ul>
+            </div>
+
+            <div class="onboarding-card info-card">
+              <div class="card-header">
+                <h3>Why we ask</h3>
+              </div>
+              <ul class="reason-list">
+                <li><i class='bx bx-check-circle'></i> Matches are ranked on what you need <em>and</em> what you offer.</li>
+                <li><i class='bx bx-check-circle'></i> Location surfaces realistic local partnerships.</li>
+                <li><i class='bx bx-check-circle'></i> Partner types filter out weak suggestions.</li>
+              </ul>
+              <div class="tip-box">
+                <i class='bx bx-bulb'></i>
+                <div>
+                  <strong>Tip</strong>
+                  The more specific your needs and offers, the better your matches.
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <span class="footer-brand-name">PartnerPortal</span>
+        <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="onboarding.html">Get Started</a></li>
+          <li><a href="ppsearch.html">Find Partners</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Account</h4>
+        <ul>
+          <li><a href="pplogin.html">Log In</a></li>
+          <li><a href="pplogin.html">Create Account</a></li>
+          <li><a href="ppdashboard.html">Dashboard</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 PartnerPortal</span>
+      <span>Built for organizations that lift each other up.</span>
+    </div>
+  </footer>
+
+  <script src="common.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

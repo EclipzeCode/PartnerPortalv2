@@ -1,0 +1,518 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+/* Modern CSS Reset */
+:root {
+    --primary: #4361ee;
+    --primary-dark: #20348f;
+    --secondary: #3f37c9;
+    --dark: #1a1a2e;
+    --light: #f8f9fa;
+    --accent: #4cc9f0;
+    --text: #2b2d42;
+    --text-light: #8d99ae;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+
+    /* These two were referenced ten times across this file but never defined,
+       which left the Sign In / Sign Up buttons with no background at all. */
+    --main-color: #4361ee;
+    --bg-color: #ffffff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f5f7ff;
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+
+    /* The form was previously a plain block in normal flow, so it sat at the
+       top-left under the fixed header instead of being centred. */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Centres the login card in whatever space is left between the fixed header
+   and the footer, rather than centring the footer along with it. */
+.login-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 8rem leaves comfortable clearance under the 94px fixed header -- the old
+       7rem left only 18px, so the card looked like it was touching the navbar. */
+    padding: 8rem 1.5rem 2.5rem;
+}
+
+button {
+    font-family: 'Poppins', sans-serif;
+}
+
+/* Navigation Bar */
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 1.5rem 10%;
+    background: white;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.logo {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: 0.1s ease;
+}
+
+.logo:hover {
+  color: var(--primary-dark);
+  transition: 0.3s ease;
+}
+
+.navbar {
+    display: flex;
+    gap: 2rem;
+}
+
+.navbar a {
+    color: var(--text);
+    font-weight: 500;
+    font-size: 1.1rem;
+    text-decoration: none;
+    position: relative;
+    padding: 0.5rem 0;
+    transition: all 0.3s ease;
+}
+
+.navbar a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--primary);
+    transition: width 0.3s ease;
+}
+
+.navbar a:hover::after,
+.navbar a.active::after {
+    width: 100%;
+}
+
+.navbar a.active {
+    color: var(--primary);
+}
+
+#menu-icon {
+    font-size: 2.5rem;
+    color: var(--text);
+    cursor: pointer;
+    display: none;
+}
+
+.container{
+    background-color: #fff;
+    border-radius: 24px;
+    box-shadow: 0 20px 50px rgba(26, 26, 46, 0.15);
+    position: relative;
+    overflow: hidden;
+    /* Height used to be `50vw` -- driven by viewport WIDTH, so the panel grew
+       absurdly tall on wide screens and collapsed on narrow ones. */
+    width: 100%;
+    max-width: 900px;
+    /* Shrinks on short viewports so the card never has to scroll up behind the
+       fixed header just to reach the footer. The 275px accounts for the header
+       (94) + compact footer (141) + the main element's bottom padding (40). */
+    height: min(560px, calc(100vh - 275px));
+    min-height: 420px;
+    /* Creates a stacking context so the panels inside can never paint over the
+       fixed header, whatever z-index they use. */
+    isolation: isolate;
+    z-index: 1;
+}
+
+.container p{
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.3px;
+    margin: 20px 0;
+}
+
+.btn-box {
+    padding: 0; /* Remove padding to avoid misalignment */
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 220px;
+    height: 44px;
+    margin-top: 1.25rem;
+    background: var(--main-color);
+    border: 2px solid var(--main-color);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--bg-color);
+    text-decoration: none;
+    font-weight: 600;
+    letter-spacing: 1px;
+    z-index: 1;
+    overflow: hidden;
+    transition: 0.5s;
+}
+
+.btn-box:hover {
+    color: var(--main-color);
+}
+
+.btn-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    background: var(--bg-color);
+    z-index: -1;
+    transition: 0.5s;
+}
+
+.btn-box:hover::before {
+    width: 100%;
+}
+
+.container span{
+    font-size: 12px;
+}
+
+.container a{
+    color: #333;
+    font-size: 13px;
+    text-decoration: none;
+    margin: 15px 0 10px;
+}
+
+.container button.hidden {
+    padding: 0; /* Remove padding to avoid misalignment */
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 120px;
+    height: 40px; /* Set a fixed height */
+    background: var(--main-color);
+    border: 2px solid var(--main-color);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--bg-color);
+    text-decoration: none;
+    font-weight: 600;
+    letter-spacing: 1px;
+    z-index: 1;
+    overflow: hidden;
+    transition: 0.5s;
+}
+
+.container button.hidden:hover {
+    color: var(--main-color);
+}
+
+.container button.hidden::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    background: var(--bg-color);
+    z-index: -1;
+    transition: 0.5s;
+}
+
+.container button.hidden:hover::before {
+    width: 100%;
+}
+
+.container form{
+    background-color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 0 40px;
+    height: 100%;
+}
+
+.container form h1 {
+    font-size: 1.75rem;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+}
+
+.container form span {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 1.25rem;
+}
+
+.container input{
+    background-color: #f3f5fb;
+    border: 1.5px solid transparent;
+    margin: 6px 0;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.container input:focus {
+    border-color: var(--primary);
+    background-color: #fff;
+}
+
+.container input::placeholder {
+    color: var(--text-light);
+}
+
+.form-container{
+    position: absolute;
+    top: 0;
+    height: 100%;
+    transition: all 0.6s ease-in-out;
+}
+
+.sign-in{
+    left: 0;
+    width: 50%;
+    z-index: 2;
+    font-size: 14px;
+    line-height: 30px;
+    letter-spacing: 0.3px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.container.active .sign-in{
+    transform: translateX(100%);
+}
+
+.sign-up{
+    left: 0;
+    width: 50%;
+    opacity: 0;
+    z-index: 1;
+    font-size: 14px;
+    line-height: 30px;
+    letter-spacing: 0.3px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.container.active .sign-up{
+    transform: translateX(100%);
+    opacity: 1;
+    z-index: 5;
+    animation: move 0.6s;
+}
+
+@keyframes move{
+    0%, 49.99%{
+        opacity: 0;
+        z-index: 1;
+    }
+    50%, 100%{
+        opacity: 1;
+        z-index: 5;
+    }
+}
+
+.toggle-container{
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    transition: all 0.6s ease-in-out;
+    border-radius: 150px 0 0 100px;
+    /* Was 1000 -- the same as the fixed .header. Equal stacking with a later
+       DOM position meant this panel painted over the navbar when the page was
+       scrolled. It only needs to sit above .form-container (z-index 1-5). */
+    z-index: 10;
+}
+
+.container.active .toggle-container{
+    transform: translateX(-100%);
+    border-radius: 0 150px 100px 0;
+}
+
+.toggle{
+    /* Was a teal (#005c80) that clashed with the blue used everywhere else. */
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: #fff;
+    position: relative;
+    left: -100%;
+    height: 100%;
+    width: 200%;
+    transform: translateX(0);
+    transition: all 0.6s ease-in-out;
+}
+
+.container.active .toggle{
+    transform: translateX(50%);
+}
+
+.toggle-panel{
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 0 30px;
+    text-align: center;
+    top: 0;
+    transform: translateX(0);
+    transition: all 0.6s ease-in-out;
+}
+
+.toggle-left{
+    transform: translateX(-200%);
+}
+
+.container.active .toggle-left{
+    transform: translateX(0);
+}
+
+.toggle-right{
+    right: 0;
+    transform: translateX(0);
+}
+
+.container.active .toggle-right{
+    transform: translateX(200%);
+}
+
+/* Switch links inside each form. On desktop the sliding panel handles moving
+   between sign in and sign up, so these stay hidden; on mobile that panel is
+   removed and these become the only way across. */
+.switch-hint {
+    display: none;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-top: 1.25rem;
+}
+
+.switch-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* Mobile navigation. Mirrors the pattern used in pp.css / ppsearch.css so the
+   header behaves the same way on every page. */
+@media (max-width: 768px) {
+    /* The 50/50 split panel cannot work at phone widths. Below this breakpoint
+       the two forms stack into a single full-width card and the sliding toggle
+       panel is removed entirely. */
+    .container {
+        height: auto;
+        max-width: 420px;
+        min-height: 0;
+    }
+
+    .form-container {
+        position: static;
+        width: 100%;
+        height: auto;
+        transform: none !important;
+        opacity: 1;
+        animation: none !important;
+    }
+
+    .container form {
+        padding: 2.5rem 1.75rem;
+        height: auto;
+    }
+
+    .sign-up,
+    .container.active .sign-in {
+        display: none;
+    }
+
+    .container.active .sign-up {
+        display: block;
+    }
+
+    .toggle-container {
+        display: none;
+    }
+
+    .switch-hint {
+        display: block;
+    }
+
+    .btn-box {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        padding: 1.5rem 5%;
+    }
+
+    .navbar {
+        position: fixed;
+        top: 80px;
+        left: -100%;
+        width: 100%;
+        background: white;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 2rem 0;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+
+    .navbar.active {
+        left: 0;
+    }
+
+    #menu-icon {
+        display: block;
+    }
+}
