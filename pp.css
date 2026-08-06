@@ -1466,3 +1466,37 @@ button.btn-secondary {
 .form-message.hidden {
     display: none;
 }
+
+/* --- Origin note -------------------------------------------------------- */
+/* Replaced the testimonial carousel. Styled as a statement from the builder
+   rather than a customer quote, so it cannot be mistaken for social proof. */
+.origin-note {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
+    border-left: 4px solid var(--primary);
+}
+
+.origin-note > i {
+    font-size: 1.9rem;
+    color: var(--primary);
+    opacity: 0.35;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.origin-note p {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: var(--text);
+    margin-bottom: 1.1rem;
+}
+
+.origin-attribution {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-light);
+}
