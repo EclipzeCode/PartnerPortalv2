@@ -20,11 +20,17 @@ from matching import find_matches, score_pair
 from models import Organization, Partnership
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(HERE, "static")
 
 # The frontend is served by Flask itself. That makes the API same-origin, which
 # removes the CORS setup and the hardcoded localhost API base, and is what lets
 # the session cookie work without SameSite gymnastics.
-app = Flask(__name__, static_folder=HERE, static_url_path="")
+#
+# static_folder MUST stay pointed at static/ and never at the project root.
+# Flask serves everything under static_folder verbatim, so rooting it here
+# would publish .env, app.py and the rest of the source at the top level --
+# GET /.env would hand out DATABASE_URL and SECRET_KEY to anyone asking.
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 
 # Sessions are signed with this key. A generated fallback keeps local
 # development working, but it changes on every restart -- so every session is
@@ -85,7 +91,7 @@ def login_required(view):
 # --- Static frontend --------------------------------------------------------
 @app.route("/")
 def index():
-    return send_from_directory(HERE, "index.html")
+    return send_from_directory(STATIC_DIR, "index.html")
 
 
 # --- Reference data ---------------------------------------------------------

@@ -83,10 +83,18 @@ Flask serves the frontend as well as the API, so there is nothing else to run.
 | `db.py` | Engine and session setup |
 | `seed.py` | Demo organizations |
 | `migrations/` | Alembic migrations — the schema's source of truth |
+| `static/` | The entire frontend — HTML, CSS, JS |
+| `render.yaml` | Deployment blueprint |
 
-Pages: `index.html` (landing), `onboarding.html`, `ppsearch.html` (matches),
-`proposals.html` (partnerships), `ppdashboard.html`, `partnership.html`
-(public agreement summary).
+Pages, all under `static/`: `index.html` (landing), `onboarding.html`,
+`ppsearch.html` (matches), `proposals.html` (partnerships),
+`ppdashboard.html`, `partnership.html` (public agreement summary).
+
+Flask serves `static/` at the site root, so `/ppsearch.html` maps to
+`static/ppsearch.html`. The frontend lives in its own directory rather than at
+the project root for a reason: Flask hands out **everything** under its
+`static_folder` verbatim, so rooting it at the project would publish `.env`,
+`app.py` and the rest of the source to anyone who asked for them.
 
 ## Data model note
 

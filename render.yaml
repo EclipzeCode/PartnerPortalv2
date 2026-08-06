@@ -1,0 +1,39 @@
+# Render blueprint. With this committed, Render can configure the service from
+# the repo instead of you filling in fields by hand.
+#
+# DATABASE_URL and SECRET_KEY are deliberately NOT set here -- this file is
+# public. Both are marked sync:false, which makes Render prompt for them once
+# and store them as secrets.
+
+services:
+  - type: web
+    name: partnerportal
+    runtime: python
+    plan: free
+    region: ohio          # closest to the Neon project (aws-us-east-2)
+
+    buildCommand: pip install -r requirements.txt
+
+    # Migrations run before the new version takes traffic, so the schema is
+    # never behind the code that expects it.
+    preDeployCommand: alembic upgrade head
+
+    # Two workers is plenty at this scale. `--timeout 120` covers Neon waking
+    # from scale-to-zero on the first request after an idle period.
+    startCommand: gunicorn app:app --workers 2 --timeout 120 --access-logfile -
+
+    healthCheckPath: /api/categories
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.15"
+      # Makes the session cookie HTTPS-only. Render terminates TLS, so this is
+      # safe here and would break local development over plain HTTP.
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
