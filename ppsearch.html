@@ -19,6 +19,7 @@
             <a href="index.html">Home</a>
             <a href="onboarding.html">Onboarding</a>
             <a href="ppsearch.html" class="active">Search</a>
+            <a href="proposals.html">Partnerships</a>
             <a href="ppdashboard.html">Dashboard</a>
             <!-- <a href="pphelp.html">Help</a> -->
             <a href="pplogin.html">Login</a>
@@ -133,7 +134,59 @@
                             <span id="partnerDetailLocation" class="detail-value"></span>
                         </div>
                     </div>
+
+                    <div class="detail-actions">
+                        <button type="button" id="proposeBtn" class="btn-primary">
+                            <i class='bx bx-handshake'></i> Propose Partnership
+                        </button>
+                    </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Propose Partnership Modal -->
+    <div id="proposeModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="proposeTitle">Propose a Partnership</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="propose-intro">
+                    Terms start from your match. Adjust what each side brings —
+                    a partnership needs something from both.
+                </p>
+                <form id="proposeForm">
+                    <div class="propose-grid">
+                        <div class="form-group">
+                            <label><i class='bx bx-up-arrow-alt'></i> You provide</label>
+                            <div class="category-picker compact" id="proposerGivesPicker"></div>
+                            <span class="picker-count" data-for="proposerGives">None selected</span>
+                        </div>
+                        <div class="form-group">
+                            <label><i class='bx bx-down-arrow-alt'></i> They provide</label>
+                            <div class="category-picker compact" id="recipientGivesPicker"></div>
+                            <span class="picker-count" data-for="recipientGives">None selected</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="proposeTimeline">Timeline</label>
+                        <select id="proposeTimeline"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="proposeMessage">Message</label>
+                        <textarea id="proposeMessage" rows="3"
+                            placeholder="Why this partnership makes sense."></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Send proposal</button>
+                        <button type="button" id="proposeCancel" class="btn-ghost">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

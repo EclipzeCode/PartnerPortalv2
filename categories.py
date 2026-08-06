@@ -70,6 +70,20 @@ CATEGORY_LABELS = {
 
 VALID_CATEGORIES = frozenset(CATEGORY_LABELS)
 
+# How long a proposed partnership is meant to run. Slugs are stored; labels are
+# display-only, same rule as categories.
+TIMELINE_OPTIONS = [
+    ("one_off", "One-off — a single event or project"),
+    ("one_month", "About a month"),
+    ("three_months", "About three months"),
+    ("six_months", "About six months"),
+    ("one_year", "About a year"),
+    ("ongoing", "Ongoing, no end date"),
+]
+
+TIMELINE_LABELS = dict(TIMELINE_OPTIONS)
+VALID_TIMELINES = frozenset(TIMELINE_LABELS)
+
 ORGANIZATION_TYPES = [
     "Non-profit",
     "NGO",

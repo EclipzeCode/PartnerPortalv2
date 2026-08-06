@@ -178,6 +178,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Detail ---------------------------------------------------------
     function showDetail(m) {
+        // Remembered so the Propose button knows who it is proposing to.
+        detailTarget = m;
         const set = (id, value) => {
             const el = document.getElementById(id);
             if (el) el.textContent = value || '--';
@@ -218,6 +220,181 @@ document.addEventListener('DOMContentLoaded', async () => {
         const m = displayed[Number(card.dataset.index)];
         if (m) showDetail(m);
     });
+
+    // --- Propose a partnership ------------------------------------------
+    const proposeModal = document.getElementById('proposeModal');
+    const proposeForm = document.getElementById('proposeForm');
+    const proposeBtn = document.getElementById('proposeBtn');
+    const proposeCancel = document.getElementById('proposeCancel');
+    const proposeTitle = document.getElementById('proposeTitle');
+    const proposeTimeline = document.getElementById('proposeTimeline');
+
+    // The org whose detail modal is open, and the term selections for it.
+    let detailTarget = null;
+    const proposeSelected = { proposerGives: new Set(), recipientGives: new Set() };
+    let me = null;
+    let categoryGroups = [];
+
+    try {
+        const [meData, catData] = await Promise.all([
+            window.api('/api/me'),
+            window.api('/api/categories')
+        ]);
+        me = meData.organization;
+        categoryGroups = catData.groups;
+        catData.timelines.forEach((t) => {
+            const opt = document.createElement('option');
+            opt.value = t.slug;
+            opt.textContent = t.label;
+            proposeTimeline.appendChild(opt);
+        });
+        proposeTimeline.value = 'three_months';
+    } catch {
+        // api() redirects on 401. Anything else leaves the propose flow off,
+        // which is better than a half-built form.
+    }
+
+    // Terms are drawn from what each side can actually supply: your own offers
+    // for your column, theirs for theirs. Anything outside that is not a thing
+    // that organization has said it can provide.
+    function buildProposePickers(target) {
+        const columns = [
+            ['proposerGives', document.getElementById('proposerGivesPicker'),
+             new Set(me ? me.offers : [])],
+            ['recipientGives', document.getElementById('recipientGivesPicker'),
+             new Set(target.offers || [])]
+        ];
+
+        columns.forEach(([side, container, allowed]) => {
+            container.innerHTML = '';
+            proposeSelected[side].clear();
+
+            if (allowed.size === 0) {
+                container.innerHTML =
+                    '<p class="picker-empty">Nothing listed yet.</p>';
+                return;
+            }
+
+            categoryGroups.forEach((group) => {
+                const options = group.categories.filter((c) => allowed.has(c.slug));
+                if (options.length === 0) return;
+
+                const wrap = document.createElement('div');
+                wrap.className = 'category-group';
+                wrap.innerHTML = `<h4>${esc(group.name)}</h4>`;
+                const row = document.createElement('div');
+                row.className = 'category-options';
+                options.forEach((c) => {
+                    const id = `prop-${side}-${c.slug}`;
+                    const label = document.createElement('label');
+                    label.className = 'category-chip';
+                    label.setAttribute('for', id);
+                    label.innerHTML = `
+                        <input type="checkbox" id="${id}" value="${esc(c.slug)}">
+                        <span>${esc(c.label)}</span>`;
+                    row.appendChild(label);
+                });
+                wrap.appendChild(row);
+                container.appendChild(wrap);
+            });
+
+            container.onchange = (e) => {
+                const box = e.target.closest('input[type="checkbox"]');
+                if (!box) return;
+                if (box.checked) proposeSelected[side].add(box.value);
+                else proposeSelected[side].delete(box.value);
+                box.closest('.category-chip').classList.toggle('checked', box.checked);
+                updateProposeCounts();
+            };
+        });
+    }
+
+    function updateProposeCounts() {
+        Object.entries(proposeSelected).forEach(([side, set]) => {
+            const counter = document.querySelector(`.picker-count[data-for="${side}"]`);
+            if (counter) {
+                counter.textContent = set.size === 0 ? 'None selected' : `${set.size} selected`;
+            }
+        });
+    }
+
+    // Preselect the categories the match already identified. That is the whole
+    // point of proposing from a match: the terms are already worked out.
+    function prefillFromMatch(target) {
+        const detail = target.match_detail || {};
+        [['proposerGives', detail.i_give], ['recipientGives', detail.they_give]]
+            .forEach(([side, slugs]) => {
+                (slugs || []).forEach((slug) => {
+                    const box = document.getElementById(`prop-${side}-${slug}`);
+                    if (box) {
+                        box.checked = true;
+                        box.closest('.category-chip').classList.add('checked');
+                        proposeSelected[side].add(slug);
+                    }
+                });
+            });
+        updateProposeCounts();
+    }
+
+    if (proposeBtn) {
+        proposeBtn.addEventListener('click', () => {
+            if (!detailTarget || !me) return;
+            proposeTitle.textContent = `Propose a Partnership with ${detailTarget.name}`;
+            buildProposePickers(detailTarget);
+            prefillFromMatch(detailTarget);
+            document.getElementById('proposeMessage').value = '';
+            setProposeMessage('');
+            closeModal(detailModal);
+            openModal(proposeModal);
+        });
+    }
+
+    if (proposeCancel) {
+        proposeCancel.addEventListener('click', () => closeModal(proposeModal));
+    }
+
+    function setProposeMessage(text) {
+        let box = proposeForm.querySelector('.form-message');
+        if (!box) {
+            box = document.createElement('p');
+            box.className = 'form-message';
+            proposeForm.prepend(box);
+        }
+        box.textContent = text;
+        box.classList.toggle('hidden', !text);
+    }
+
+    if (proposeForm) {
+        proposeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!detailTarget) return;
+
+            const submitBtn = proposeForm.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            setProposeMessage('');
+
+            try {
+                await window.api('/api/proposals', {
+                    method: 'POST',
+                    body: {
+                        recipient_id: detailTarget.id,
+                        proposer_gives: [...proposeSelected.proposerGives],
+                        recipient_gives: [...proposeSelected.recipientGives],
+                        timeline: proposeTimeline.value,
+                        message: document.getElementById('proposeMessage').value.trim()
+                    }
+                });
+                closeModal(proposeModal);
+                window.location.href = 'proposals.html#outgoing';
+            } catch (error) {
+                setProposeMessage(error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send proposal';
+            }
+        });
+    }
 
     // --- Filters --------------------------------------------------------
     if (filterForm) {

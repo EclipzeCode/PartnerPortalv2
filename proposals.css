@@ -1,0 +1,261 @@
+/* Proposals page. Layered on ppsearch.css, which supplies the header, section
+   header, modal and button styles. */
+
+:root {
+    --primary: #4361ee;
+    --primary-dark: #20348f;
+    --text: #2b2d42;
+    --text-light: #8d99ae;
+    --border: #e6e8f0;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warning: #d97706;
+}
+
+/* --- Tabs --------------------------------------------------------------- */
+.proposal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.75rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+}
+
+.proposal-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.55rem 0.9rem;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.proposal-tab:hover {
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.06);
+}
+
+.proposal-tab.active {
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.1);
+    border-color: rgba(67, 97, 238, 0.25);
+}
+
+.tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+.proposal-tab:not(.active) .tab-count {
+    background: var(--text-light);
+}
+
+/* --- Cards -------------------------------------------------------------- */
+.proposal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.proposal-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.proposal-card.status-accepted {
+    border-color: rgba(22, 163, 74, 0.4);
+}
+
+.proposal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.proposal-direction {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-light);
+}
+
+.proposal-head h3 {
+    font-size: 1.25rem;
+    color: var(--text);
+    margin: 0.15rem 0;
+}
+
+.proposal-meta {
+    font-size: 0.86rem;
+    color: var(--text-light);
+}
+
+.status-pill {
+    flex-shrink: 0;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.status-pill.status-pending { background: rgba(217, 119, 6, 0.12); color: var(--warning); }
+.status-pill.status-accepted { background: rgba(22, 163, 74, 0.12); color: var(--success); }
+.status-pill.status-declined,
+.status-pill.status-withdrawn { background: rgba(141, 153, 174, 0.15); color: var(--text-light); }
+
+/* --- Terms -------------------------------------------------------------- */
+/* Both sides shown side by side: the exchange is the point, so it should be
+   readable at a glance without comparing paragraphs. */
+.terms {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.terms-side {
+    background: #f7f9ff;
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+}
+
+.terms-side.gets {
+    background: #f4fbf6;
+}
+
+.terms-side h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    margin-bottom: 0.55rem;
+}
+
+.terms-side.gives h4 i { color: var(--primary); }
+.terms-side.gets h4 i { color: var(--success); }
+
+.terms-side ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.terms-side li {
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.terms-side li::before {
+    content: '•';
+    color: var(--text-light);
+    margin-right: 0.5rem;
+}
+
+.terms-side li.none {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.proposal-timeline {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+    color: var(--text-light);
+    margin-bottom: 0.75rem;
+}
+
+.proposal-message {
+    border-left: 3px solid var(--border);
+    padding: 0.35rem 0 0.35rem 0.9rem;
+    color: var(--text);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    margin-bottom: 0.9rem;
+}
+
+.proposal-message.reply {
+    border-left-color: var(--success);
+}
+
+.proposal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.proposal-actions .btn-primary,
+.proposal-actions .btn-ghost,
+.proposal-actions .btn-danger {
+    padding: 0.55rem 1.1rem;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
+/* --- Respond modal ------------------------------------------------------ */
+.respond-terms {
+    margin-bottom: 1.25rem;
+}
+
+.respond-note {
+    font-size: 0.86rem;
+    color: var(--text-light);
+    line-height: 1.6;
+    background: #f7f9ff;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+}
+
+@media (max-width: 640px) {
+    .terms {
+        grid-template-columns: 1fr;
+    }
+}
