@@ -23,3 +23,9 @@ Thumbs.db
 
 # Local SQL scratch files
 *.session.sql
+
+# Agent / editor tooling installed by `neon init`. Regenerable by re-running
+# it, and not part of the application, so it stays out of the repo.
+.agents/
+.claude/
+skills-lock.json
