@@ -6,6 +6,7 @@
   <title>Partner Portal | Get Started</title>
   <link rel="stylesheet" href="onboarding.css" />
   <link rel="stylesheet" href="shared.css">
+  <link rel="stylesheet" href="forms.css">
   <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -64,7 +65,7 @@
       <div id="successMessage" class="alert success hidden"></div>
       <div id="errorMessage" class="alert error hidden"></div>
 
-      <form id="onboardingForm">
+      <form id="onboardingForm" novalidate>
         <div class="onboarding-content">
           <div class="form-column">
             <!-- Step 1 -->
@@ -276,6 +277,30 @@
       <span>Built for organizations that lift each other up.</span>
     </div>
   </footer>
+
+  <!-- Clearing wipes every selection, so it asks first. -->
+  <div id="clearConfirmModal" class="modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Clear the whole form?</h2>
+        <span class="close-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p class="confirm-text">
+          This empties every field and unselects every category you have
+          picked. It cannot be undone.
+        </p>
+        <div class="form-actions">
+          <button type="button" id="clearConfirmBtn" class="btn-danger">
+            Yes, clear it
+          </button>
+          <button type="button" id="clearCancelBtn" class="btn-ghost">
+            Keep my answers
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="common.js"></script>
   <script src="onboarding.js"></script>

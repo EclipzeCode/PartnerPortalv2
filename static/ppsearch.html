@@ -6,6 +6,7 @@
     <title>Partner Portal | Search Partners</title>
     <link rel="stylesheet" href="ppsearch.css">
     <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -97,47 +98,50 @@
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
-                <div class="partner-image no-image">
-                    <div class="partner-score" id="partnerDetailScore">92</div>
-                </div>
-                <div class="partner-details">
-                    <div class="detail-row">
-                        <span class="detail-label">Type:</span>
-                        <span id="partnerDetailType" class="detail-value"></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Expertise:</span>
-                        <span id="partnerDetailExpertise" class="detail-value"></span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Resources:</span>
-                        <span id="partnerDetailResources" class="detail-value"></span>
-                    </div>
-                    <div class="detail-row full-width">
-                        <span class="detail-label">Description:</span>
-                        <span id="partnerDetailBio" class="detail-value"></span>
-                    </div>
-                    
-                    <div class="contact-info">
-                        <div class="detail-row">
-                            <span class="detail-label">Email:</span>
-                            <span id="partnerDetailEmail" class="detail-value"></span>
+                <div class="detail-scroll">
+                    <!-- Score and identity together at the top, so the first
+                         thing read is who this is and how well they fit. -->
+                    <div class="detail-summary">
+                        <div class="detail-score">
+                            <span id="partnerDetailScore">--</span>
+                            <small>match</small>
                         </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Phone:</span>
-                            <span id="partnerDetailPhone" class="detail-value"></span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Location:</span>
-                            <span id="partnerDetailLocation" class="detail-value"></span>
+                        <div class="detail-identity">
+                            <p id="partnerDetailType" class="detail-type"></p>
+                            <p id="partnerDetailLocation" class="detail-location"></p>
+                            <span id="partnerDetailMutual" class="mutual-badge hidden">
+                                <i class='bx bx-transfer'></i> Two-way match
+                            </span>
                         </div>
                     </div>
 
-                    <div class="detail-actions">
-                        <button type="button" id="proposeBtn" class="btn-primary">
-                            <i class='bx bx-handshake'></i> Propose Partnership
-                        </button>
+                    <p id="partnerDetailBio" class="detail-bio"></p>
+
+                    <!-- The exchange, in the same give/receive shape used on
+                         the proposals page and the public agreement. -->
+                    <div class="detail-exchange">
+                        <div class="exchange-side">
+                            <h4><i class='bx bx-down-arrow-alt'></i> They can offer you</h4>
+                            <ul id="partnerDetailOffers"></ul>
+                        </div>
+                        <div class="exchange-side">
+                            <h4><i class='bx bx-up-arrow-alt'></i> They are looking for</h4>
+                            <ul id="partnerDetailNeeds"></ul>
+                        </div>
                     </div>
+
+                    <div class="detail-contact">
+                        <h4>Contact</h4>
+                        <p><i class='bx bx-envelope'></i> <span id="partnerDetailEmail"></span></p>
+                        <p><i class='bx bx-phone'></i> <span id="partnerDetailPhone"></span></p>
+                    </div>
+                </div>
+
+                <!-- Outside the scrolling region, so it is always visible. -->
+                <div class="form-actions">
+                    <button type="button" id="proposeBtn" class="btn-primary">
+                        <i class='bx bx-handshake'></i> Propose Partnership
+                    </button>
                 </div>
             </div>
         </div>

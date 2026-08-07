@@ -187,22 +187,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         set('partnerDetailTitle', m.name);
         set('partnerDetailType', m.organization_type);
-        set('partnerDetailExpertise', (m.offers_labels || []).join(', '));
-        set('partnerDetailResources', (m.needs_labels || []).join(', '));
+        set('partnerDetailLocation', m.location);
+        set('partnerDetailScore', m.match_score);
         set('partnerDetailBio', m.description);
         set('partnerDetailEmail', m.contact_email);
         set('partnerDetailPhone', m.contact_phone);
-        set('partnerDetailLocation', m.location);
-        set('partnerDetailScore', m.match_score);
 
-        const img = document.getElementById('partnerDetailImage');
-        if (img) {
-            const well = img.closest('.partner-image');
-            const loaded = img.complete && img.naturalWidth > 0;
-            img.style.display = loaded ? '' : 'none';
-            if (well) well.classList.toggle('no-image', !loaded);
-        }
+        // Highlight the categories that actually drove the match, so the two
+        // lists are scannable rather than an undifferentiated wall of tags.
+        const detail = m.match_detail || {};
+        fillList('partnerDetailOffers', m.offers_labels, detail.they_give_labels);
+        fillList('partnerDetailNeeds', m.needs_labels, detail.i_give_labels);
+
+        const badge = document.getElementById('partnerDetailMutual');
+        if (badge) badge.classList.toggle('hidden', !detail.mutual);
+
         openModal(detailModal);
+    }
+
+    function fillList(id, labels, highlighted) {
+        const ul = document.getElementById(id);
+        if (!ul) return;
+        ul.innerHTML = '';
+        const hot = new Set(highlighted || []);
+        if (!labels || labels.length === 0) {
+            ul.innerHTML = '<li class="none">Nothing listed</li>';
+            return;
+        }
+        labels.forEach((label) => {
+            const li = document.createElement('li');
+            li.textContent = label;
+            // A match on this category is the reason they are in the list.
+            if (hot.has(label)) li.className = 'matched';
+            ul.appendChild(li);
+        });
     }
 
     partnersGrid.addEventListener('click', (e) => {

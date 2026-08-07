@@ -119,6 +119,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         else selected[side].delete(box.value);
         box.closest('.category-chip').classList.toggle('checked', box.checked);
         container.classList.remove('input-error');
+        const note = container.closest('.form-group').querySelector(':scope > .field-error');
+        if (note) note.remove();
         updateProgress();
       });
     });
@@ -163,29 +165,119 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Validation -------------------------------------------------------
+  // Rules live here rather than on `required` attributes so the messages are
+  // ours: the native bubble says "Please fill out this field" and vanishes on
+  // the next click, which is no help when several things are wrong at once.
+  // Minimums exist because a single character passes a presence check while
+  // telling a prospective partner nothing.
+  const RULES = {
+    organizationName: {
+      min: 2,
+      label: 'Organization name',
+      short: 'Give your full organization name (at least 2 characters).'
+    },
+    organizationType: {
+      min: 1,
+      label: 'Organization type',
+      short: 'Choose the option that best describes you.'
+    },
+    location: {
+      min: 2,
+      label: 'Location',
+      short: 'Add a city or region so nearby partners can find you.'
+    },
+    description: {
+      min: 20,
+      optional: true,
+      label: 'Short description',
+      short: 'A description this short will not tell anyone much — aim for a sentence or two.'
+    },
+    contactEmail: {
+      optional: true,
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      label: 'Contact email',
+      short: 'That does not look like an email address.'
+    }
+  };
+
+  function setFieldError(el, message) {
+    if (!el) return;
+    el.classList.toggle('input-error', Boolean(message));
+    const holder = el.closest('.form-group') || el.parentElement;
+    let note = holder.querySelector(':scope > .field-error');
+    if (!message) {
+      if (note) note.remove();
+      return;
+    }
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'field-error';
+      holder.appendChild(note);
+    }
+    note.textContent = message;
+  }
+
+  function clearAllFieldErrors() {
+    document.querySelectorAll('.field-error').forEach((n) => n.remove());
+    Object.values(fields).forEach((f) => f && f.classList.remove('input-error'));
+    Object.values(pickers).forEach((p) => p && p.classList.remove('input-error'));
+  }
+
   function validateForm() {
-    clearValidationStyles();
+    clearAllFieldErrors();
     clearMessages();
 
     let firstInvalid = null;
+    const problems = [];
 
-    ['organizationName', 'organizationType', 'location'].forEach((key) => {
+    Object.entries(RULES).forEach(([key, rule]) => {
       const field = fields[key];
-      if (!valueOf(field)) {
-        field.classList.add('input-error');
+      if (!field) return;
+      const value = String(valueOf(field) || '').trim();
+
+      // Optional fields only get checked once the user has put something in.
+      if (rule.optional && value === '') return;
+
+      let message = null;
+      if (value === '') {
+        message = `${rule.label} is required. ${rule.short}`;
+      } else if (rule.min && value.length < rule.min) {
+        message = rule.short;
+      } else if (rule.pattern && !rule.pattern.test(value)) {
+        message = rule.short;
+      }
+
+      if (message) {
+        setFieldError(field, message);
+        problems.push(rule.label);
         if (!firstInvalid) firstInvalid = field;
       }
     });
 
     ['needs', 'offers'].forEach((side) => {
-      if (selected[side].size === 0) {
-        pickers[side].classList.add('input-error');
-        if (!firstInvalid) firstInvalid = pickers[side];
+      if (selected[side].size > 0) return;
+      const picker = pickers[side];
+      picker.classList.add('input-error');
+      const holder = picker.closest('.form-group');
+      let note = holder.querySelector(':scope > .field-error');
+      if (!note) {
+        note = document.createElement('span');
+        note.className = 'field-error';
+        holder.appendChild(note);
       }
+      note.textContent = side === 'needs'
+        ? 'Pick at least one thing you need — this is half of every match.'
+        : 'Pick at least one thing you can offer — this is the other half.';
+      problems.push(side === 'needs' ? 'What you need' : 'What you offer');
+      if (!firstInvalid) firstInvalid = picker;
     });
 
     if (firstInvalid) {
-      showError('Pick at least one need and one offer, and fill in the required fields.');
+      showError(
+        problems.length === 1
+          ? `${problems[0]} still needs attention.`
+          : `${problems.length} things still need attention: ${problems.join(', ')}.`
+      );
       firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (firstInvalid.focus) firstInvalid.focus({ preventScroll: true });
       return false;
@@ -288,20 +380,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  clearBtn.addEventListener('click', () => {
+  // ---- Clear, behind a confirmation ------------------------------------
+  // Losing 30-odd category selections to a stray click is not recoverable,
+  // so this asks first.
+  const clearModal = document.getElementById('clearConfirmModal');
+
+  function openClearModal() {
+    clearModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeClearModal() {
+    clearModal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+  }
+
+  function doClear() {
     onboardingForm.reset();
     Object.values(selected).forEach((set) => set.clear());
     document.querySelectorAll('.category-chip.checked')
       .forEach((c) => c.classList.remove('checked'));
-    clearValidationStyles();
+    clearAllFieldErrors();
     clearMessages();
     updateProgress();
+  }
+
+  clearBtn.addEventListener('click', openClearModal);
+  document.getElementById('clearCancelBtn').addEventListener('click', closeClearModal);
+  clearModal.querySelector('.close-modal').addEventListener('click', closeClearModal);
+  clearModal.addEventListener('click', (e) => {
+    if (e.target === clearModal) closeClearModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && clearModal.classList.contains('active')) closeClearModal();
+  });
+  document.getElementById('clearConfirmBtn').addEventListener('click', () => {
+    doClear();
+    closeClearModal();
   });
 
   Object.entries(fields).forEach(([, field]) => {
     if (!field) return;
     const handler = () => {
-      field.classList.remove('input-error');
+      // Clear this field's error as soon as the user starts fixing it, rather
+      // than leaving stale red text under a field they are already correcting.
+      setFieldError(field, null);
       updateProgress();
     };
     field.addEventListener('input', handler);

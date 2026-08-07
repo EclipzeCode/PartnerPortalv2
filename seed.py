@@ -3,7 +3,7 @@
     python seed.py          # insert demo orgs (skips ones already present)
     python seed.py --reset  # delete demo orgs first
 
-These are fictional, use @example.org addresses, and have no password set --
+These are fictional, use .example.org addresses, and have no password set --
 they are unclaimed profiles, not accounts. That is deliberate: it is the same
 shape a real org's profile takes before they sign up, so you can pre-create a
 profile for an org you are recruiting and let them claim it later.
@@ -17,7 +17,7 @@ import sys
 from db import SessionLocal
 from models import Organization
 
-DEMO_DOMAIN = "@example.org"
+DEMO_DOMAIN = ".example.org"
 
 DEMO_ORGS = [
     dict(

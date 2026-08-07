@@ -1,0 +1,340 @@
+/* Canonical form control and modal styling.
+ *
+ * Loaded LAST on every page so it wins over the per-page stylesheets, which
+ * had each grown their own partial (and in ppsearch.css, triplicated) copies
+ * of these rules. Anything to do with an input, select, textarea, button or
+ * modal belongs here, not in a page stylesheet.
+ *
+ * Colour variables are read with fallbacks because the per-page :root blocks
+ * do not all define the same set.
+ */
+
+:root {
+    --ctl-border: #e0e0e0;
+    --ctl-radius: 8px;
+}
+
+/* --- Text inputs, selects, textareas ------------------------------------ */
+/* The :not() keeps specificity level with the `input[type="text"]` rules in
+   the page stylesheets while covering email, tel, password, number and date,
+   which previously matched nothing and rendered unstyled. */
+.form-group input:not([type="checkbox"]):not([type="radio"]),
+.form-group select,
+.form-group textarea,
+.modal-body input:not([type="checkbox"]):not([type="radio"]),
+.modal-body select,
+.modal-body textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border, var(--ctl-border));
+    border-radius: var(--ctl-radius);
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--text, #2b2d42);
+    background: #fff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input:not([type="checkbox"]):not([type="radio"]):focus,
+.form-group select:focus,
+.form-group textarea:focus,
+.modal-body input:not([type="checkbox"]):not([type="radio"]):focus,
+.modal-body select:focus,
+.modal-body textarea:focus {
+    outline: none;
+    border-color: var(--primary, #4361ee);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder,
+.modal-body input::placeholder,
+.modal-body textarea::placeholder {
+    color: var(--text-light, #8d99ae);
+    opacity: 1;
+}
+
+/* Native select chrome differs per platform and reads as unstyled next to the
+   text inputs. Reset it and draw the arrow ourselves. */
+.form-group select,
+.modal-body select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-light, #8d99ae) 50%),
+        linear-gradient(135deg, var(--text-light, #8d99ae) 50%, transparent 50%);
+    background-position:
+        calc(100% - 20px) calc(50% + 2px),
+        calc(100% - 15px) calc(50% + 2px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 40px;
+    cursor: pointer;
+}
+
+/* Textareas are never user-resizable: dragging one out of shape breaks the
+   modal sizing that everything else here depends on. */
+.form-group textarea,
+.modal-body textarea,
+textarea {
+    resize: none;
+    min-height: 90px;
+}
+
+.form-group textarea.textarea-sm,
+.modal-body textarea.textarea-sm {
+    min-height: 70px;
+}
+
+/* --- Validation --------------------------------------------------------- */
+.input-error,
+.form-group input.input-error,
+.form-group select.input-error,
+.form-group textarea.input-error {
+    border-color: var(--error, #dc2626);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+/* Per-field message, written under the offending control by the page script
+   instead of relying on the browser's native validation bubble. */
+.field-error {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--error, #dc2626);
+    font-weight: 500;
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+/* .btn-primary and .btn-secondary were written for anchors in some
+   stylesheets; these fill in what a <button> does not inherit. */
+button.btn-primary,
+button.btn-secondary,
+button.btn-ghost,
+button.btn-danger,
+button.btn-action {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-light, #8d99ae);
+    border: 1px solid var(--border, var(--ctl-border));
+    padding: 0.7rem 1.3rem;
+    border-radius: var(--ctl-radius);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+    color: var(--text, #2b2d42);
+    border-color: var(--text-light, #8d99ae);
+    background: #f7f9ff;
+}
+
+.btn-danger {
+    background: transparent;
+    color: var(--error, #dc2626);
+    border: 1px solid var(--error, #dc2626);
+    padding: 0.7rem 1.3rem;
+    border-radius: var(--ctl-radius);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+    background: var(--error, #dc2626);
+    color: #fff;
+}
+
+.btn-primary:disabled,
+.btn-danger:disabled,
+.btn-ghost:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    align-items: center;
+    margin-top: 1.25rem;
+}
+
+/* ppsearch.css sets .btn-primary { width: 100% } in two places -- a leftover
+   from the removed add-partner modal, where a full-bleed submit made sense.
+   In an action row the buttons should size to their labels. */
+.form-actions .btn-primary,
+.form-actions .btn-secondary,
+.form-actions .btn-ghost,
+.form-actions .btn-danger {
+    width: auto;
+    margin-top: 0;
+}
+
+/* --- Category chips ----------------------------------------------------- */
+/* The checkbox stays a real, focusable checkbox for keyboard and screen
+   reader users, but is invisible and stretched to cover the whole chip.
+ *
+ * Covering matters: a 1px hidden checkbox sits at some arbitrary point in the
+ * layout, and because focus follows a click, the browser then scrolls that
+ * point into view -- which is what made the page jump to the bottom every
+ * time a category was selected. Filling the chip means the focus target and
+ * the thing the user just clicked are the same rectangle, so nothing moves. */
+.category-chip {
+    position: relative;
+}
+
+.category-chip input[type="checkbox"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* --- Modals ------------------------------------------------------------- */
+/* One definition, replacing the three that had accumulated in ppsearch.css.
+ *
+ * The container is a flex column capped at the viewport height, so the dialog
+ * itself never scrolls and never overflows the screen: the header and the
+ * action row hold their size and the body takes what is left. Long option
+ * lists inside the body scroll within their own bounded box rather than
+ * pushing the dialog past the bottom of the window. */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 26, 46, 0.55);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    z-index: 1000;
+}
+
+.modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-container {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 640px;
+    /* Adjusts to the device: never taller than the viewport minus the
+       backdrop padding. */
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+    transform: translateY(12px) scale(0.98);
+    transition: transform 0.2s ease;
+}
+
+.modal.active .modal-container {
+    transform: translateY(0) scale(1);
+}
+
+.modal-container.modal-wide {
+    max-width: 780px;
+}
+
+.modal-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border, var(--ctl-border));
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    line-height: 1.35;
+    color: var(--text, #2b2d42);
+    margin: 0;
+}
+
+.close-modal {
+    flex-shrink: 0;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--text-light, #8d99ae);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0 0.25rem;
+    transition: color 0.2s ease;
+}
+
+.close-modal:hover {
+    color: var(--text, #2b2d42);
+}
+
+/* min-height:0 is what allows this flex child to shrink instead of forcing
+   the container taller than the viewport. */
+.modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+}
+
+/* Forms inside a modal inherit the same column behaviour so their own
+   scrollable regions can shrink correctly. */
+.modal-body form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.modal-body .form-actions {
+    flex: 0 0 auto;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border, var(--ctl-border));
+}
+
+.modal-footer {
+    flex: 0 0 auto;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border, var(--ctl-border));
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* The only thing permitted to scroll inside a modal: a bounded list of
+   options that genuinely cannot fit on a short screen.
+   Scoped to .modal-body -- unscoped, this also caught the onboarding page's
+   pickers and put a second scrollbar back inside the page. */
+.modal-body .category-picker {
+    flex: 1 1 auto;
+    min-height: 80px;
+    overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+    .modal { padding: 0.75rem; }
+    .modal-container { max-height: calc(100vh - 1.5rem); }
+    .modal-header { padding: 1rem 1.15rem; }
+    .modal-body { padding: 1.15rem; }
+}

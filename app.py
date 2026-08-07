@@ -225,19 +225,27 @@ def save_onboarding(org, db):
     needs = clean_categories(data.get("needs"))
     offers = clean_categories(data.get("offers"))
 
-    missing = []
-    if not name:
-        missing.append("organization name")
+    # Mirrors the minimums the onboarding form enforces. A single character
+    # passes a presence check while telling a prospective partner nothing, and
+    # the client is not the only way into this endpoint.
+    problems = []
+    if len(name) < 2:
+        problems.append("a full organization name")
     if not organization_type:
-        missing.append("organization type")
-    if not location:
-        missing.append("location")
+        problems.append("an organization type")
+    if len(location) < 2:
+        problems.append("a location")
     if not needs:
-        missing.append("at least one thing you need")
+        problems.append("at least one thing you need")
     if not offers:
-        missing.append("at least one thing you can offer")
-    if missing:
-        return jsonify({"error": "Please provide " + ", ".join(missing) + "."}), 400
+        problems.append("at least one thing you can offer")
+
+    description = (data.get("description") or "").strip()
+    if description and len(description) < 20:
+        problems.append("a longer description, or none at all")
+
+    if problems:
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
 
     org.name = name
     org.organization_type = organization_type
@@ -248,7 +256,7 @@ def save_onboarding(org, db):
     org.needs_note = (data.get("needs_note") or "").strip() or None
     org.offers_note = (data.get("offers_note") or "").strip() or None
     org.partnership_goals = (data.get("partnership_goals") or "").strip() or None
-    org.description = (data.get("description") or "").strip() or None
+    org.description = description or None
     org.contact_email = (data.get("contact_email") or "").strip() or org.email
     org.contact_phone = (data.get("contact_phone") or "").strip() or None
     org.onboarding_complete = True

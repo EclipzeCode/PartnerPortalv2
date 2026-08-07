@@ -229,17 +229,6 @@
     align-items: center;
 }
 
-.btn-danger {
-    background: transparent;
-    color: var(--danger);
-    border: 1px solid var(--danger);
-}
-
-.btn-danger:hover {
-    background: var(--danger);
-    color: #fff;
-}
-
 /* --- Respond modal ------------------------------------------------------ */
 .respond-terms {
     margin-bottom: 1.25rem;
@@ -258,4 +247,12 @@
     .terms {
         grid-template-columns: 1fr;
     }
+}
+
+/* The respond dialog's terms block scrolls if a proposal lists many
+   categories, so the dialog itself keeps its size and the buttons stay put. */
+.respond-terms {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
 }

@@ -938,12 +938,6 @@ button {
     align-items: center;
 }
 
-#partnerDetailModal .modal-body {
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-}
-
 .partner-image {
     position: relative;
     height: 250px;
@@ -1375,4 +1369,146 @@ button {
 
 @media (max-width: 640px) {
     .propose-grid { grid-template-columns: 1fr; }
+}
+
+/* --- Partner detail modal, rebuilt -------------------------------------- */
+/* Was a flat list of label/value rows that read as a wall of blue text, with
+   the action button pushed off the bottom of the dialog. Now: identity and
+   score first, the exchange in two columns, contact last, and the button
+   pinned outside the scrolling region so it is always reachable. */
+.detail-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.detail-summary {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid #e6e8f0;
+    margin-bottom: 1.1rem;
+}
+
+.detail-score {
+    flex-shrink: 0;
+    width: 74px;
+    height: 74px;
+    border-radius: 14px;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.detail-score span { font-size: 1.7rem; font-weight: 700; }
+.detail-score small { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; margin-top: 2px; }
+
+.detail-identity { min-width: 0; }
+.detail-type { font-weight: 600; color: var(--text); }
+.detail-location { color: var(--text-light); font-size: 0.9rem; margin-top: 0.1rem; }
+.detail-identity .mutual-badge { margin-top: 0.5rem; margin-bottom: 0; }
+.mutual-badge.hidden { display: none; }
+
+.detail-bio {
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 0.95rem;
+    margin-bottom: 1.25rem;
+}
+
+.detail-exchange {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.exchange-side {
+    background: #f7f9ff;
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+}
+
+.exchange-side:last-child { background: #f4fbf6; }
+
+.exchange-side h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    margin-bottom: 0.6rem;
+}
+
+.exchange-side ul { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+
+.exchange-side li {
+    font-size: 0.88rem;
+    color: var(--text);
+    padding-left: 0.9rem;
+    position: relative;
+}
+
+.exchange-side li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--text-light);
+}
+
+/* The categories that actually produced the match. */
+.exchange-side li.matched {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.exchange-side li.matched::before { content: '✓'; color: var(--primary); }
+.exchange-side li.none { color: var(--text-light); font-style: italic; }
+.exchange-side li.none::before { content: '–'; }
+
+.detail-contact {
+    background: #fafbff;
+    border: 1px solid #e6e8f0;
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+}
+
+.detail-contact h4 {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+}
+
+.detail-contact p {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+    word-break: break-all;
+}
+
+.detail-contact i { color: var(--text-light); flex-shrink: 0; }
+
+#proposeBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.8rem 1.5rem;
+    font-size: 0.98rem;
+}
+
+@media (max-width: 640px) {
+    .detail-exchange { grid-template-columns: 1fr; }
 }

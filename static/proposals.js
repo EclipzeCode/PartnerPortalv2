@@ -182,12 +182,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`
         }[act];
 
-        respondTerms.innerHTML = act === 'accept'
-            ? termsBlock(proposal) +
-              '<p class="respond-note">Accepting creates a shareable summary ' +
-              'that anyone with the link can read. It contains both ' +
-              'organization names and these terms, but no contact details.</p>'
-            : '';
+        // Every branch says something: withdrawing used to leave a blank gap
+        // between the title and the buttons.
+        if (act === 'accept') {
+            respondTerms.innerHTML = termsBlock(proposal) +
+                '<p class="respond-note">Accepting creates a shareable summary ' +
+                'that anyone with the link can read. It contains both ' +
+                'organization names and these terms, but no contact details.</p>';
+        } else if (act === 'withdraw') {
+            respondTerms.innerHTML =
+                `<p class="respond-note">This takes the proposal back before ` +
+                `${esc(proposal.counterpart.name)} has responded. They will no ` +
+                `longer see it, and nothing is sent to them. You can propose ` +
+                `again later.</p>`;
+        } else {
+            respondTerms.innerHTML =
+                `<p class="respond-note">${esc(proposal.counterpart.name)} will ` +
+                `see that you declined. Your note below, if you add one, goes ` +
+                `with it.</p>`;
+        }
 
         respondMessage.parentElement.style.display =
             act === 'withdraw' ? 'none' : '';
