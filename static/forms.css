@@ -12,6 +12,11 @@
 :root {
     --ctl-border: #e0e0e0;
     --ctl-radius: 8px;
+    /* Destructive actions own their colour here rather than reading --error,
+       which is #dc2626 in onboarding.css but #f87171 in ppsearch.css. Reading
+       the page variable meant Clear Form and Withdraw -- the same kind of
+       button -- came out two different reds. */
+    --ctl-danger: #dc2626;
 }
 
 /* --- Text inputs, selects, textareas ------------------------------------ */
@@ -91,7 +96,7 @@ textarea {
 .form-group input.input-error,
 .form-group select.input-error,
 .form-group textarea.input-error {
-    border-color: var(--error, #dc2626);
+    border-color: var(--ctl-danger);
     box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
@@ -101,7 +106,7 @@ textarea {
     display: block;
     margin-top: 0.4rem;
     font-size: 0.82rem;
-    color: var(--error, #dc2626);
+    color: var(--ctl-danger);
     font-weight: 500;
 }
 
@@ -138,8 +143,8 @@ button.btn-action {
 
 .btn-danger {
     background: transparent;
-    color: var(--error, #dc2626);
-    border: 1px solid var(--error, #dc2626);
+    color: var(--ctl-danger);
+    border: 1px solid var(--ctl-danger);
     padding: 0.7rem 1.3rem;
     border-radius: var(--ctl-radius);
     font-size: 0.95rem;
@@ -150,7 +155,7 @@ button.btn-action {
 }
 
 .btn-danger:hover {
-    background: var(--error, #dc2626);
+    background: var(--ctl-danger);
     color: #fff;
 }
 
@@ -330,6 +335,21 @@ button.btn-action {
     flex: 1 1 auto;
     min-height: 80px;
     overflow-y: auto;
+}
+
+/* The picker grid is the flexible region of the propose form. Everything
+   from here down is fixed-size, so the action row keeps its place no matter
+   how short the window is or how many error lines appear above it. */
+.modal-body .propose-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.modal-body .propose-grid .form-group {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 0;
 }
 
 @media (max-width: 640px) {

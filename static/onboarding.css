@@ -108,14 +108,14 @@ body {
 
 /* ---------- Section shell (matches dashboard) ---------- */
 .onboarding-section {
-  padding: 8rem 10% 5rem;
+  padding: 6.5rem 7% 3rem;
   background-color: var(--bg-light);
   min-height: 100vh;
 }
 
 .section-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .section-header h2 {
@@ -209,28 +209,28 @@ body {
 /* ---------- Layout ---------- */
 .onboarding-content {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 2rem;
+  grid-template-columns: 2.4fr 1fr;
+  gap: 1.5rem;
   align-items: start;
 }
 
 .form-column {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
 }
 
 .sidebar-column {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
 }
 
 /* ---------- Cards (matches .dashboard-card) ---------- */
 .onboarding-card {
   background: white;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem 1.35rem;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border);
 }
@@ -382,8 +382,8 @@ body {
 /* ---------- Needs / offers pair ---------- */
 .trade-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
 }
 
 .trade-need label i,
@@ -683,9 +683,12 @@ body {
 .category-picker {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 0.9rem 1rem;
-  max-height: none;
+  padding: 0.85rem 0.95rem;
   background: #fff;
+  /* Bounded so two of these do not add 3800px to the page. Scrolls inside
+     its own box; the sticky group headings keep the grouping readable. */
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .category-picker.input-error {
@@ -773,4 +776,22 @@ body {
   color: var(--text);
   line-height: 1.7;
   margin-bottom: 0.5rem;
+}
+
+
+/* Group headings stay visible while the picker scrolls, so the categories
+   never lose their context. */
+.category-picker .category-group h4 {
+  position: sticky;
+  top: -0.85rem;
+  background: #fff;
+  padding: 0.35rem 0 0.4rem;
+  margin: 0 0 0.5rem;
+  z-index: 1;
+}
+
+.category-picker .category-group + .category-group {
+  margin-top: 0.65rem;
+  padding-top: 0;
+  border-top: none;
 }

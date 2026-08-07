@@ -1512,3 +1512,25 @@ button {
 @media (max-width: 640px) {
     .detail-exchange { grid-template-columns: 1fr; }
 }
+
+/* Propose dialog: keep the fixed parts small so the pickers -- the only part
+   you actually interact with -- get the remaining height on short screens. */
+.propose-intro {
+    margin-bottom: 0.9rem;
+    font-size: 0.88rem;
+}
+
+.modal-body .propose-grid {
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.modal-body .propose-grid label {
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.modal-body .propose-grid .picker-count {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+}
