@@ -12,11 +12,12 @@ services:
     plan: free
     region: ohio          # closest to the Neon project (aws-us-east-2)
 
-    buildCommand: pip install -r requirements.txt
-
-    # Migrations run before the new version takes traffic, so the schema is
-    # never behind the code that expects it.
-    preDeployCommand: alembic upgrade head
+    # Migrations run in the build step, not a separate pre-deploy step: the
+    # free tier does not support preDeployCommand. DATABASE_URL is available
+    # during the build, so `alembic upgrade head` connects to Neon and brings
+    # the schema up to date before the new version starts. It is a no-op when
+    # there is nothing new to apply.
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
 
     # Two workers is plenty at this scale. `--timeout 120` covers Neon waking
     # from scale-to-zero on the first request after an idle period.
