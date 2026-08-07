@@ -112,18 +112,24 @@ def _join(labels):
     return ", ".join(labels[:-1]) + f" and {labels[-1]}"
 
 
-def find_matches(session, me, limit=50, mutual_only=False):
+def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
     """Rank other organizations as partners for `me`.
 
     Only orgs with at least one category in common in either direction are
     considered -- everything else scores nothing, so pulling it out of the
     database would be wasted work.
+
+    Seeded example organizations are excluded by default: a real signup should
+    never be paired with something fictional. `demo_only=True` returns exactly
+    those instead, for the clearly-labelled "example matches" view shown when
+    the real directory is still small.
     """
     from models import Organization
 
     stmt = select(Organization).where(
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
+        Organization.is_demo.is_(demo_only),
     )
 
     # `&&` is "arrays overlap" and is what the GIN indexes accelerate. An org

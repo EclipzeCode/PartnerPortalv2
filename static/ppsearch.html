@@ -47,6 +47,17 @@
                 </div>
             </div>
             
+            <!-- Shown only when a new org has no real matches yet. -->
+            <div id="exampleBanner" class="example-banner hidden">
+                <i class='bx bx-info-circle'></i>
+                <div>
+                    <strong>These are example organizations.</strong>
+                    You do not have any real matches yet — this is how matching
+                    will look once more organizations join. You cannot propose a
+                    partnership with an example.
+                </div>
+            </div>
+
             <div class="partners-grid" id="partnersGrid">
                 <!-- Partner cards will be injected here by JavaScript -->
             </div>
@@ -143,6 +154,11 @@
                     <button type="button" id="proposeBtn" class="btn-primary">
                         <i class='bx bx-handshake'></i> Propose Partnership
                     </button>
+                    <p id="detailExampleNote" class="detail-example-note hidden">
+                        <i class='bx bx-info-circle'></i>
+                        This is an example organization. Propose a partnership
+                        once real organizations have joined.
+                    </p>
                 </div>
             </div>
         </div>

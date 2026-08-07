@@ -1448,3 +1448,66 @@ button {
     margin-top: 0.35rem;
     font-size: 0.75rem;
 }
+
+/* --- Example (demo) matches --------------------------------------------- */
+/* A bare .hidden was only ever defined scoped (.form-message.hidden etc.), so
+   the new example elements need a general one. */
+.hidden { display: none !important; }
+
+.example-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background: #fff8e1;
+    border: 1px solid #f5d67b;
+    border-radius: 0.75rem;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1.5rem;
+    color: #7a5b00;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.example-banner i {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.example-banner strong { color: #5c4400; }
+
+/* Example cards read as secondary: muted and dashed, so they are clearly not
+   real matches even at a glance. */
+.partner-card.is-example {
+    border-style: dashed;
+    border-color: #d9c48a;
+    background: #fffdf6;
+}
+
+.example-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #f5d67b;
+    color: #5c4400;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    margin-bottom: 0.6rem;
+}
+
+.detail-example-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-light);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.detail-example-note i {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+}

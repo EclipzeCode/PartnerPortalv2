@@ -76,6 +76,12 @@ class Organization(Base):
     onboarding_complete: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # Seeded example organizations. Kept out of real orgs' match results so a
+    # new signup is never paired with something fictional, but still shown --
+    # clearly labelled -- as example matches while the directory is small.
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -118,6 +124,7 @@ class Organization(Base):
             "partnership_goals": self.partnership_goals,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
+            "is_demo": self.is_demo,
         }
 
     def private_dict(self):

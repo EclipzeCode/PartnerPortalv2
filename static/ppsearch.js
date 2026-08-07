@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const esc = window.escapeHtml;
 
     let allMatches = [];
+    let exampleMatches = [];
+    let showingExamples = false;
     let displayed = [];
     let currentPage = 1;
     let mutualOnly = false;
@@ -40,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `/api/matches${mutualOnly ? '?mutual=1' : ''}`
             );
             allMatches = data.matches || [];
+            exampleMatches = data.examples || [];
         } catch (error) {
             if (error.status === 409 && error.data && error.data.needs_onboarding) {
                 partnersGrid.innerHTML =
@@ -62,14 +65,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const q = (searchInput.value || '').toLowerCase().trim();
         const norm = (v) => (v || '').toLowerCase();
 
+        // No real matches yet, but seeded examples exist: show those instead
+        // of an empty page. They are visibly flagged and cannot be proposed to.
+        showingExamples = allMatches.length === 0 && exampleMatches.length > 0;
+        const source = showingExamples ? exampleMatches : allMatches;
+
         displayed = q
-            ? allMatches.filter((m) =>
+            ? source.filter((m) =>
                 norm(m.name).includes(q) ||
                 norm(m.organization_type).includes(q) ||
                 norm(m.location).includes(q) ||
                 (m.offers_labels || []).some((l) => norm(l).includes(q)) ||
                 (m.needs_labels || []).some((l) => norm(l).includes(q)))
-            : [...allMatches];
+            : [...source];
 
         currentPage = 1;
         render();
@@ -78,6 +86,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Rendering ------------------------------------------------------
     function render() {
         partnersGrid.innerHTML = '';
+        const banner = document.getElementById('exampleBanner');
+        if (banner) banner.classList.toggle('hidden', !showingExamples);
+
         const pages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
         if (currentPage > pages) currentPage = pages;
 
@@ -94,15 +105,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const start = (currentPage - 1) * PAGE_SIZE;
         displayed.slice(start, start + PAGE_SIZE).forEach((m, offset) => {
             const card = document.createElement('div');
-            card.className = 'partner-card' + (m.match_detail.mutual ? ' mutual' : '');
+            card.className = 'partner-card'
+                + (m.match_detail.mutual ? ' mutual' : '')
+                + (m.is_demo ? ' is-example' : '');
             card.tabIndex = 0;
             card.setAttribute('role', 'button');
             card.setAttribute('aria-label', `View details for ${m.name}`);
             card.dataset.index = String(start + offset);
 
-            const badge = m.match_detail.mutual
-                ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
-                : '';
+            const badge = m.is_demo
+                ? '<span class="example-tag">Example</span>'
+                : (m.match_detail.mutual
+                    ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
+                    : '');
 
             const reasons = (m.reasons || [])
                 .map((r) => `<li>${esc(r)}</li>`).join('');
@@ -201,6 +216,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const badge = document.getElementById('partnerDetailMutual');
         if (badge) badge.classList.toggle('hidden', !detail.mutual);
+
+        // Examples cannot be proposed to (they have no owner), so the button is
+        // hidden and a short note takes its place.
+        const proposeBtn = document.getElementById('proposeBtn');
+        const exampleNote = document.getElementById('detailExampleNote');
+        if (proposeBtn) proposeBtn.classList.toggle('hidden', Boolean(m.is_demo));
+        if (exampleNote) exampleNote.classList.toggle('hidden', !m.is_demo);
 
         openModal(detailModal);
     }

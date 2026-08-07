@@ -196,6 +196,7 @@ def seed(reset=False):
                 **spec,
                 contact_email=spec["email"],
                 onboarding_complete=True,
+                is_demo=True,
                 password_hash=None,  # unclaimed profile, cannot be logged into
             ))
             added += 1

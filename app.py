@@ -280,10 +280,21 @@ def get_matches(org, db):
 
     mutual_only = request.args.get("mutual") == "1"
     matches = find_matches(db, org, mutual_only=mutual_only)
+
+    # While the real directory is small a new org can have no real matches at
+    # all. Rather than show an empty page, surface the seeded examples --
+    # clearly flagged as examples by the client -- so there is something to
+    # look at. They are never mixed into `matches`.
+    examples = []
+    if not matches:
+        examples = find_matches(db, org, mutual_only=mutual_only, demo_only=True)
+
     return jsonify({
         "matches": matches,
         "count": len(matches),
         "mutual_count": sum(1 for m in matches if m["match_detail"]["mutual"]),
+        "examples": examples,
+        "example_count": len(examples),
     })
 
 
@@ -372,6 +383,13 @@ def create_proposal(org, db):
     recipient = db.get(Organization, recipient_id)
     if recipient is None or not recipient.onboarding_complete:
         return jsonify({"error": "Organization not found."}), 404
+    if recipient.is_demo:
+        # Example organizations have no owner and cannot accept or decline, so
+        # a proposal to one would sit pending forever.
+        return jsonify({
+            "error": "This is an example organization, shown to illustrate how "
+                     "matching works. You can only propose to real organizations."
+        }), 400
 
     proposer_gives = clean_categories(data.get("proposer_gives"))
     recipient_gives = clean_categories(data.get("recipient_gives"))
