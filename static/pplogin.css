@@ -56,94 +56,26 @@ button {
 }
 
 /* Navigation Bar */
-.header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 1.5rem 10%;
-    background: white;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-.logo {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--primary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: 0.1s ease;
-}
-
 .logo:hover {
   color: var(--primary-dark);
   transition: 0.3s ease;
 }
 
-.navbar {
-    display: flex;
-    gap: 2rem;
-}
-
-.navbar a {
-    color: var(--text);
-    font-weight: 500;
-    font-size: 1.1rem;
-    text-decoration: none;
-    position: relative;
-    padding: 0.5rem 0;
-    transition: all 0.3s ease;
-}
-
-.navbar a::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: var(--primary);
-    transition: width 0.3s ease;
-}
-
-.navbar a:hover::after,
-.navbar a.active::after {
-    width: 100%;
-}
-
-.navbar a.active {
-    color: var(--primary);
-}
-
-#menu-icon {
-    font-size: 2.5rem;
-    color: var(--text);
-    cursor: pointer;
-    display: none;
-}
-
 .container{
     background-color: #fff;
-    border-radius: 24px;
+    border-radius: 1.5rem;
     box-shadow: 0 20px 50px rgba(26, 26, 46, 0.15);
     position: relative;
     overflow: hidden;
     /* Height used to be `50vw` -- driven by viewport WIDTH, so the panel grew
        absurdly tall on wide screens and collapsed on narrow ones. */
     width: 100%;
-    max-width: 900px;
+    max-width: 56.25rem;
     /* Shrinks on short viewports so the card never has to scroll up behind the
        fixed header just to reach the footer. The 275px accounts for the header
        (94) + compact footer (141) + the main element's bottom padding (40). */
-    height: min(560px, calc(100vh - 275px));
-    min-height: 420px;
+    height: min(35rem, calc(100vh - 17.1875rem));
+    min-height: 26.25rem;
     /* Creates a stacking context so the panels inside can never paint over the
        fixed header, whatever z-index they use. */
     isolation: isolate;
@@ -151,10 +83,10 @@ button {
 }
 
 .container p{
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
     letter-spacing: 0.3px;
-    margin: 20px 0;
+    margin: 1.25rem 0;
 }
 
 .btn-box {
@@ -166,13 +98,13 @@ button {
     justify-content: center;
     align-items: center;
     width: 100%;
-    max-width: 220px;
-    height: 44px;
+    max-width: 13.75rem;
+    height: 2.75rem;
     margin-top: 1.25rem;
     background: var(--main-color);
     border: 2px solid var(--main-color);
-    border-radius: 8px;
-    font-size: 14px;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
     color: var(--bg-color);
     text-decoration: none;
     font-weight: 600;
@@ -203,14 +135,14 @@ button {
 }
 
 .container span{
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 
 .container a{
     color: #333;
-    font-size: 13px;
+    font-size: 0.8125rem;
     text-decoration: none;
-    margin: 15px 0 10px;
+    margin: 0.9375rem 0 0.625rem;
 }
 
 .container button.hidden {
@@ -221,12 +153,12 @@ button {
     display: inline-flex;
     justify-content: center;
     align-items: center;
-    width: 120px;
-    height: 40px; /* Set a fixed height */
+    width: 7.5rem;
+    height: 2.5rem; /* Set a fixed height */
     background: var(--main-color);
     border: 2px solid var(--main-color);
-    border-radius: 8px;
-    font-size: 14px;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
     color: var(--bg-color);
     text-decoration: none;
     font-weight: 600;
@@ -262,7 +194,7 @@ button {
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    padding: 0 40px;
+    padding: 0 2.5rem;
     height: 100%;
 }
 
@@ -281,10 +213,10 @@ button {
 .container input{
     background-color: #f3f5fb;
     border: 1.5px solid transparent;
-    margin: 6px 0;
-    padding: 12px 16px;
+    margin: 0.375rem 0;
+    padding: 0.75rem 1rem;
     font-size: 0.9rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     width: 100%;
     outline: none;
     font-family: inherit;
@@ -311,10 +243,10 @@ button {
     left: 0;
     width: 50%;
     z-index: 2;
-    font-size: 14px;
-    line-height: 30px;
+    font-size: 0.875rem;
+    line-height: 1.875rem;
     letter-spacing: 0.3px;
-    margin: 20px 0;
+    margin: 1.25rem 0;
     text-align: center;
 }
 
@@ -327,10 +259,10 @@ button {
     width: 50%;
     opacity: 0;
     z-index: 1;
-    font-size: 14px;
-    line-height: 30px;
+    font-size: 0.875rem;
+    line-height: 1.875rem;
     letter-spacing: 0.3px;
-    margin: 20px 0;
+    margin: 1.25rem 0;
     text-align: center;
 }
 
@@ -360,7 +292,7 @@ button {
     height: 100%;
     overflow: hidden;
     transition: all 0.6s ease-in-out;
-    border-radius: 150px 0 0 100px;
+    border-radius: 9.375rem 0 0 6.25rem;
     /* Was 1000 -- the same as the fixed .header. Equal stacking with a later
        DOM position meant this panel painted over the navbar when the page was
        scrolled. It only needs to sit above .form-container (z-index 1-5). */
@@ -369,7 +301,7 @@ button {
 
 .container.active .toggle-container{
     transform: translateX(-100%);
-    border-radius: 0 150px 100px 0;
+    border-radius: 0 9.375rem 6.25rem 0;
 }
 
 .toggle{
@@ -396,7 +328,7 @@ button {
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    padding: 0 30px;
+    padding: 0 1.875rem;
     text-align: center;
     top: 0;
     transform: translateX(0);
@@ -443,13 +375,13 @@ button {
 
 /* Mobile navigation. Mirrors the pattern used in pp.css / ppsearch.css so the
    header behaves the same way on every page. */
-@media (max-width: 768px) {
+@media (max-width: 48em) {
     /* The 50/50 split panel cannot work at phone widths. Below this breakpoint
        the two forms stack into a single full-width card and the sliding toggle
        panel is removed entirely. */
     .container {
         height: auto;
-        max-width: 420px;
+        max-width: 26.25rem;
         min-height: 0;
     }
 
@@ -489,30 +421,5 @@ button {
     }
 }
 
-@media (max-width: 768px) {
-    .header {
-        padding: 1.5rem 5%;
-    }
-
-    .navbar {
-        position: fixed;
-        top: 80px;
-        left: -100%;
-        width: 100%;
-        background: white;
-        flex-direction: column;
-        align-items: center;
-        gap: 1rem;
-        padding: 2rem 0;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-    }
-
-    .navbar.active {
-        left: 0;
-    }
-
-    #menu-icon {
-        display: block;
-    }
+@media (max-width: 48em) {
 }

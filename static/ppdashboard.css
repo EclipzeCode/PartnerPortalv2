@@ -30,77 +30,9 @@ body {
 }
 
 /* Navigation Bar (Same as search page) */
-.header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 1.5rem 10%;
-    background: white;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-.logo {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--primary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: 0.1s ease;
-}
-
 .logo:hover {
     color: var(--primary-dark);
     transition: 0.3s ease;
-}
-
-.navbar {
-    display: flex;
-    gap: 2rem;
-}
-
-.navbar a {
-    color: var(--text);
-    font-weight: 500;
-    font-size: 1.1rem;
-    text-decoration: none;
-    position: relative;
-    padding: 0.5rem 0;
-    transition: all 0.3s ease;
-}
-
-.navbar a::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: var(--primary);
-    transition: width 0.3s ease;
-}
-
-.navbar a:hover::after,
-.navbar a.active::after {
-    width: 100%;
-}
-
-.navbar a.active {
-    color: var(--primary);
-}
-
-#menu-icon {
-    font-size: 2.5rem;
-    color: var(--text);
-    cursor: pointer;
-    display: none;
 }
 
 /* Dashboard Section */
@@ -126,8 +58,8 @@ body {
 }
 
 .underline {
-    width: 80px;
-    height: 4px;
+    width: 5rem;
+    height: 0.25rem;
     background: var(--primary);
     margin: 0 auto;
     border-radius: 2px;
@@ -135,7 +67,7 @@ body {
 
 .dashboard-container {
     background: white;
-    border-radius: 16px;
+    border-radius: 1rem;
     padding: 3rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
     margin-top: 2rem;
@@ -144,14 +76,14 @@ body {
 /* Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(13.75rem, 1fr));
     gap: 1.5rem;
     margin-bottom: 3rem;
 }
 
 .stat-card {
     background: white;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     padding: 1.5rem;
     display: flex;
     align-items: center;
@@ -167,8 +99,8 @@ body {
 }
 
 .stat-icon {
-    width: 60px;
-    height: 60px;
+    width: 3.75rem;
+    height: 3.75rem;
     border-radius: 50%;
     background: rgba(67, 97, 238, 0.1);
     display: flex;
@@ -224,7 +156,7 @@ body {
 
 .dashboard-card {
     background: white;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     padding: 1.5rem;
     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     border: 1px solid var(--border);
@@ -249,7 +181,7 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.8rem 1.5rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     background: var(--primary);
     color: white;
     border: none;
@@ -287,8 +219,8 @@ body {
 }
 
 .activity-icon {
-    width: 40px;
-    height: 40px;
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: 50%;
     background: rgba(67, 97, 238, 0.1);
     display: flex;
@@ -322,14 +254,14 @@ body {
 /* Connections Grid */
 .connections-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: 1.5rem;
     margin-bottom: 1rem;
 }
 
 .connection-card {
     background: white;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     padding: 1.5rem;
     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     border: 1px solid var(--border);
@@ -344,8 +276,8 @@ body {
 
 .connection-avatar {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 5rem;
+    height: 5rem;
     margin: 0 auto 1rem;
 }
 
@@ -360,10 +292,10 @@ body {
 
 .connection-status {
     position: absolute;
-    bottom: 5px;
-    right: 5px;
-    width: 15px;
-    height: 15px;
+    bottom: 0.3125rem;
+    right: 0.3125rem;
+    width: 0.9375rem;
+    height: 0.9375rem;
     border-radius: 50%;
     border: 2px solid white;
 }
@@ -398,7 +330,7 @@ body {
     color: white;
     border: none;
     padding: 0.5rem 1rem;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     font-size: 0.9rem;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -434,10 +366,10 @@ body {
 .event-date {
     background: rgba(67, 97, 238, 0.1);
     color: var(--primary);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     padding: 0.5rem;
     text-align: center;
-    min-width: 50px;
+    min-width: 3.125rem;
 }
 
 .event-day {
@@ -480,8 +412,8 @@ body {
     background: transparent;
     color: var(--primary);
     border: 1px solid var(--primary);
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -594,9 +526,9 @@ body {
 
 .modal-container {
     background: white;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     width: 90%;
-    max-width: 500px;
+    max-width: 31.25rem;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     transform: translateY(20px);
     transition: transform 0.3s ease;
@@ -670,7 +602,7 @@ body {
 .form-group select {
     width: 100%;
     padding: 0.8rem 1rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     border: 1px solid #e0e0e0;
     font-size: 1rem;
     transition: all 0.3s ease;
@@ -686,7 +618,7 @@ body {
 }
 
 .form-group textarea {
-    min-height: 120px;
+    min-height: 7.5rem;
     resize: vertical;
 }
 
@@ -703,7 +635,7 @@ body {
     background: var(--primary);
     color: white;
     padding: 0.8rem 1.5rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-weight: 600;
     border: none;
     cursor: pointer;
@@ -720,43 +652,22 @@ body {
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
+@media (max-width: 75em) {
     .dashboard-content {
         grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: 992px) {
-    .header {
-        padding: 1.5rem 5%;
-    }
+@media (max-width: 62em) {
     
     .dashboard-section {
         padding: 8rem 5% 5rem;
     }
 }
 
-@media (max-width: 768px) {
-    .navbar {
-        position: fixed;
-        top: 80px;
-        left: -100%;
-        width: 100%;
-        background: white;
-        flex-direction: column;
-        align-items: center;
-        padding: 2rem 0;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-    }
+@media (max-width: 48em) {
     
-    .navbar.active {
-        left: 0;
-    }
     
-    #menu-icon {
-        display: block;
-    }
     
     .section-header h2 {
         font-size: 2rem;
@@ -771,10 +682,7 @@ body {
     }
 }
 
-@media (max-width: 576px) {
-    .header {
-        padding: 1.5rem 3%;
-    }
+@media (max-width: 36em) {
     
     .dashboard-section {
         padding: 8rem 3% 5rem;
@@ -805,13 +713,13 @@ body {
     color: var(--primary);
     background: rgba(67, 97, 238, 0.1);
     padding: 0.2rem 0.55rem;
-    border-radius: 999px;
+    border-radius: 62.4375rem;
 }
 
 .btn-connection {
     margin-left: auto;
     padding: 0.45rem 1rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     border: 1px solid var(--primary);
     color: var(--primary);
     background: transparent;
@@ -842,6 +750,6 @@ body {
     background: var(--primary);
     color: #fff;
     padding: 0.7rem 1.4rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-weight: 600;
 }

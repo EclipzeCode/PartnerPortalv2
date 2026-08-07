@@ -33,77 +33,9 @@ body {
 }
 
 /* ---------- Navigation ---------- */
-.header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  padding: 1.5rem 10%;
-  background: white;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 1000;
-  transition: all 0.3s ease;
-}
-
-.logo {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--primary);
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: 0.1s ease;
-}
-
 .logo:hover {
   color: var(--primary-dark);
   transition: 0.3s ease;
-}
-
-.navbar {
-  display: flex;
-  gap: 2rem;
-}
-
-.navbar a {
-  color: var(--text);
-  font-weight: 500;
-  font-size: 1.1rem;
-  text-decoration: none;
-  position: relative;
-  padding: 0.5rem 0;
-  transition: all 0.3s ease;
-}
-
-.navbar a::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: var(--primary);
-  transition: width 0.3s ease;
-}
-
-.navbar a:hover::after,
-.navbar a.active::after {
-  width: 100%;
-}
-
-.navbar a.active {
-  color: var(--primary);
-}
-
-#menu-icon {
-  font-size: 2.5rem;
-  color: var(--text);
-  cursor: pointer;
-  display: none;
 }
 
 /* ---------- Section shell (matches dashboard) ---------- */
@@ -129,25 +61,25 @@ body {
 }
 
 .underline {
-  width: 80px;
-  height: 4px;
+  width: 5rem;
+  height: 0.25rem;
   background: var(--primary);
   margin: 0 auto;
   border-radius: 2px;
 }
 
 .section-intro {
-  max-width: 620px;
+  max-width: 38.75rem;
   margin: 1.5rem auto 0;
   color: var(--text-light);
 }
 
 .onboarding-container {
   background: white;
-  border-radius: 16px;
+  border-radius: 1rem;
   padding: 3rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-  max-width: 1200px;
+  max-width: 75rem;
   margin: 0 auto;
 }
 
@@ -164,7 +96,7 @@ body {
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: white;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
@@ -176,10 +108,10 @@ body {
 }
 
 .step-icon {
-  width: 46px;
-  height: 46px;
+  width: 2.875rem;
+  height: 2.875rem;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -243,7 +175,7 @@ body {
 /* ---------- Cards (matches .dashboard-card) ---------- */
 .onboarding-card {
   background: white;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   padding: 1.25rem 1.35rem;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border);
@@ -267,8 +199,8 @@ body {
 }
 
 .card-step {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--primary);
@@ -285,7 +217,7 @@ body {
   color: var(--text-light);
   background: var(--bg-light);
   padding: 0.3rem 0.75rem;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
   white-space: nowrap;
 }
 
@@ -318,7 +250,7 @@ body {
   width: 100%;
   padding: 0.8rem 1rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   font-family: inherit;
   font-size: 0.95rem;
   color: var(--text);
@@ -342,23 +274,23 @@ body {
 /* Textareas are a fixed height and scroll internally -- dragging the resize
    handle used to let them push the whole layout around. */
 .form-group textarea {
-  height: 150px;
+  height: 9.375rem;
   resize: none;
   overflow-y: auto;
   line-height: 1.6;
 }
 
 .form-group textarea.textarea-sm {
-  height: 100px;
+  height: 6.25rem;
 }
 
 .form-group textarea::-webkit-scrollbar {
-  width: 8px;
+  width: 0.5rem;
 }
 
 .form-group textarea::-webkit-scrollbar-thumb {
   background: #d5d9e6;
-  border-radius: 4px;
+  border-radius: 0.25rem;
 }
 
 .form-group textarea::-webkit-scrollbar-thumb:hover {
@@ -386,8 +318,8 @@ body {
 }
 
 .checkbox-label input {
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   accent-color: var(--primary);
   cursor: pointer;
   flex-shrink: 0;
@@ -428,9 +360,9 @@ body {
 }
 
 .strength-bar {
-  height: 8px;
+  height: 0.5rem;
   background: var(--bg-light);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   overflow: hidden;
 }
 
@@ -438,7 +370,7 @@ body {
   display: block;
   height: 100%;
   width: 0;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: linear-gradient(90deg, var(--primary), var(--accent));
   transition: width 0.4s ease;
 }
@@ -503,7 +435,7 @@ body {
   padding: 1rem;
   background: var(--bg-light);
   border-left: 3px solid var(--primary);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   font-size: 0.88rem;
   color: var(--text-light);
 }
@@ -531,7 +463,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.8rem 1.5rem;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: var(--primary);
   color: white;
   border: 1px solid var(--primary);
@@ -567,7 +499,7 @@ body {
 /* ---------- Alerts ---------- */
 .alert {
   padding: 0.95rem 1rem;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   margin-bottom: 1.5rem;
   font-size: 0.95rem;
 }
@@ -589,7 +521,7 @@ body {
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 992px) {
+@media (max-width: 62em) {
   .onboarding-content {
     grid-template-columns: 1fr;
   }
@@ -610,33 +542,7 @@ body {
   }
 }
 
-@media (max-width: 768px) {
-  .header {
-    padding: 1.25rem 5%;
-  }
-
-  .navbar {
-    position: fixed;
-    top: 80px;
-    left: -100%;
-    width: 100%;
-    background: white;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem 0;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-  }
-
-  .navbar.active {
-    left: 0;
-  }
-
-  #menu-icon {
-    display: block;
-  }
-
+@media (max-width: 48em) {
   .onboarding-section {
     padding: 7rem 5% 3rem;
   }
@@ -665,14 +571,14 @@ body {
   }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 36em) {
   .onboarding-section {
     padding: 7rem 4% 3rem;
   }
 
   .onboarding-container {
     padding: 1.25rem;
-    border-radius: 12px;
+    border-radius: 0.75rem;
   }
 
   .onboarding-card {
@@ -703,12 +609,12 @@ body {
 
 .category-picker {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   padding: 0.85rem 0.95rem;
   background: #fff;
   /* Bounded so two of these do not add 3800px to the page. Scrolls inside
      its own box; the sticky group headings keep the grouping readable. */
-  max-height: 300px;
+  max-height: 18.75rem;
   overflow-y: auto;
 }
 
@@ -756,7 +662,7 @@ body {
   align-items: center;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 62.4375rem;
   font-size: 0.85rem;
   color: var(--text);
   cursor: pointer;

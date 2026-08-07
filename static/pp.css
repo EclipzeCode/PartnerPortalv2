@@ -32,77 +32,9 @@ button {
 }
 
 /* Navigation Bar */
-.header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 1.5rem 10%;
-    background: white;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-.logo {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--primary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: 0.1s ease;
-}
-
 .logo:hover {
   color: var(--primary-dark);
   transition: 0.3s ease;
-}
-
-.navbar {
-    display: flex;
-    gap: 2rem;
-}
-
-.navbar a {
-    color: var(--text);
-    font-weight: 500;
-    font-size: 1.1rem;
-    text-decoration: none;
-    position: relative;
-    padding: 0.5rem 0;
-    transition: all 0.3s ease;
-}
-
-.navbar a::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: var(--primary);
-    transition: width 0.3s ease;
-}
-
-.navbar a:hover::after,
-.navbar a.active::after {
-    width: 100%;
-}
-
-.navbar a.active {
-    color: var(--primary);
-}
-
-#menu-icon {
-    font-size: 2.5rem;
-    color: var(--text);
-    cursor: pointer;
-    display: none;
 }
 
 /* ---------- Hero ---------- */
@@ -133,19 +65,19 @@ button {
 }
 
 .blob-1 {
-    width: 420px;
-    height: 420px;
-    top: -120px;
-    right: -80px;
+    width: 26.25rem;
+    height: 26.25rem;
+    top: -7.5rem;
+    right: -5rem;
     background: radial-gradient(circle, rgba(67, 97, 238, 0.32) 0%, rgba(67, 97, 238, 0) 70%);
     animation: blobDrift 18s ease-in-out infinite;
 }
 
 .blob-2 {
-    width: 360px;
-    height: 360px;
-    bottom: -100px;
-    left: -60px;
+    width: 22.5rem;
+    height: 22.5rem;
+    bottom: -6.25rem;
+    left: -3.75rem;
     background: radial-gradient(circle, rgba(76, 201, 240, 0.28) 0%, rgba(76, 201, 240, 0) 70%);
     animation: blobDrift 22s ease-in-out infinite reverse;
 }
@@ -164,7 +96,7 @@ button {
     right: -5%;
     bottom: 0;
     height: 46%;
-    min-height: 260px;
+    min-height: 16.25rem;
     pointer-events: none;
 }
 
@@ -240,10 +172,10 @@ button {
 }
 
 /* No cursor to react to, and the fine detail is lost at this size. */
-@media (max-width: 767px) {
+@media (max-width: 47.9375em) {
     .hero-scene {
         height: 34%;
-        min-height: 180px;
+        min-height: 11.25rem;
         opacity: 0.75;
     }
 }
@@ -263,7 +195,7 @@ button {
 .hero-content {
     flex: 1;
     padding-right: 2rem;
-    max-width: 620px;
+    max-width: 38.75rem;
     position: relative;
     z-index: 2;
 }
@@ -275,7 +207,7 @@ button {
     padding: 0.45rem 0.95rem;
     margin-bottom: 1.5rem;
     border: 1px solid #dfe5f8;
-    border-radius: 999px;
+    border-radius: 62.4375rem;
     background: rgba(255, 255, 255, 0.8);
     font-size: 0.82rem;
     font-weight: 500;
@@ -283,8 +215,8 @@ button {
 }
 
 .badge-dot {
-    width: 7px;
-    height: 7px;
+    width: 0.4375rem;
+    height: 0.4375rem;
     border-radius: 50%;
     background: #22c55e;
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
@@ -322,7 +254,7 @@ button {
     font-size: 1.25rem;
     color: var(--text-light);
     margin-bottom: 2.5rem;
-    max-width: 500px;
+    max-width: 31.25rem;
     line-height: 1.6;
 }
 
@@ -336,7 +268,7 @@ button {
     background: var(--primary);
     color: white;
     padding: 0.9rem 2rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.3s ease;
@@ -354,7 +286,7 @@ button {
     background: white;
     color: var(--primary);
     padding: 0.9rem 2rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.3s ease;
@@ -391,7 +323,7 @@ button {
     top: 50%;
     transform: translateY(-50%);
     width: 1px;
-    height: 40px;
+    height: 2.5rem;
     background: #e0e0e0;
 }
 
@@ -422,10 +354,10 @@ button {
 
 .match-demo {
     width: 100%;
-    max-width: 420px;
+    max-width: 26.25rem;
     background: white;
     border: 1px solid #e7eaf6;
-    border-radius: 18px;
+    border-radius: 1.125rem;
     padding: 1.5rem;
     box-shadow: 0 20px 50px rgba(26, 26, 46, 0.10);
 }
@@ -449,7 +381,7 @@ button {
     color: var(--primary);
     background: rgba(67, 97, 238, 0.09);
     padding: 0.35rem 0.75rem;
-    border-radius: 999px;
+    border-radius: 62.4375rem;
 }
 
 .match-flag i {
@@ -475,16 +407,16 @@ button {
     align-items: center;
     gap: 0.9rem;
     padding: 0.85rem;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     background: #fafbff;
     border: 1px solid #eef0f9;
 }
 
 .org-avatar {
-    width: 44px;
-    height: 44px;
+    width: 2.75rem;
+    height: 2.75rem;
     flex-shrink: 0;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -526,8 +458,8 @@ button {
 }
 
 .exchange-arrow {
-    width: 26px;
-    height: 26px;
+    width: 1.625rem;
+    height: 1.625rem;
     flex-shrink: 0;
     border-radius: 50%;
     display: flex;
@@ -576,8 +508,8 @@ button {
 }
 
 .match-dot {
-    width: 8px;
-    height: 8px;
+    width: 0.5rem;
+    height: 0.5rem;
     padding: 0;
     border: none;
     border-radius: 50%;
@@ -591,20 +523,20 @@ button {
 }
 
 .match-dot.active {
-    width: 22px;
-    border-radius: 4px;
+    width: 1.375rem;
+    border-radius: 0.25rem;
     background: var(--primary);
 }
 
 
 /* Responsive Design (hero) */
-@media (max-width: 1200px) {
+@media (max-width: 75em) {
     .hero-title {
         font-size: 3rem;
     }
 }
 
-@media (max-width: 992px) {
+@media (max-width: 62em) {
     .hero {
         flex-direction: column;
         text-align: center;
@@ -635,7 +567,7 @@ button {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48em) {
     .hero-title {
         font-size: 2.5rem;
     }
@@ -661,7 +593,7 @@ button {
     }
 
     .hero-stat {
-        flex: 1 0 120px;
+        flex: 1 0 7.5rem;
     }
 
     .hero-stat:not(:last-child):after {
@@ -669,7 +601,7 @@ button {
     }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 36em) {
     .hero-title {
         font-size: 2rem;
     }
@@ -686,8 +618,8 @@ button {
 
 .gradient-circle {
     position: absolute;
-    width: 500px;
-    height: 500px;
+    width: 31.25rem;
+    height: 31.25rem;
     background: radial-gradient(circle, var(--primary) 0%, rgba(67, 97, 238, 0) 70%);
     opacity: 0.1;
     border-radius: 50%;
@@ -717,7 +649,7 @@ button {
 
 .scroll-content {
     width: 100%;
-    max-width: 1400px;
+    max-width: 87.5rem;
     margin: 0 auto;
     display: flex;
     align-items: center;
@@ -765,7 +697,7 @@ button {
     color: var(--text-light);
     line-height: 1.8;
     margin-bottom: 3rem;
-    max-width: 600px;
+    max-width: 37.5rem;
 }
 
 /* Platform Section */
@@ -783,7 +715,7 @@ button {
 .stat-item {
     background: white;
     padding: 2rem;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     box-shadow: 0 5px 20px rgba(0,0,0,0.05);
     transition: all 0.3s ease
 }
@@ -808,7 +740,7 @@ button {
 
 .platform-image {
     position: relative;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     max-width: 70%;
     overflow: hidden;
     box-shadow: 0 30px 60px rgba(0,0,0,0.1);
@@ -817,7 +749,7 @@ button {
 .platform-screenshot {
     width: 100%;
     display: block;
-    border-radius: 12px;
+    border-radius: 0.75rem;
 }
 
 .screenshot-highlight {
@@ -844,7 +776,7 @@ button {
 .feature-card {
     background: white;
     padding: 2.5rem 2rem;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
     transition: all 0.3s ease;
     text-align: center;
@@ -895,7 +827,7 @@ button {
     font-weight: 700;
     color: var(--primary);
     margin-right: 2rem;
-    min-width: 100px;
+    min-width: 6.25rem;
 }
 
 .benefit-text {
@@ -907,9 +839,9 @@ button {
 .testimonial-carousel {
     background: white;
     padding: 3rem;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    max-width: 600px;
+    max-width: 37.5rem;
     margin-left: auto;
 }
 
@@ -929,8 +861,8 @@ button {
 }
 
 .author-avatar {
-    width: 60px;
-    height: 60px;
+    width: 3.75rem;
+    height: 3.75rem;
     border-radius: 50%;
     object-fit: cover;
     margin-right: 1.5rem;
@@ -991,7 +923,7 @@ button {
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
+@media (max-width: 75em) {
     .section-title {
         font-size: 3rem;
     }
@@ -1001,7 +933,7 @@ button {
     }
 }
 
-@media (max-width: 992px) {
+@media (max-width: 62em) {
     .scroll-content {
         flex-direction: column;
     }
@@ -1009,13 +941,13 @@ button {
     .text-content, 
     .visual-content {
         width: 100%;
-        max-width: 800px;
+        max-width: 50rem;
         margin: 0 auto;
     }
     
     .feature-cards {
         grid-template-columns: 1fr;
-        max-width: 500px;
+        max-width: 31.25rem;
         margin: 0 auto;
     }
     
@@ -1024,7 +956,7 @@ button {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48em) {
     .section-title {
         font-size: 2.5rem;
     }
@@ -1061,7 +993,7 @@ button {
     }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 36em) {
     .section-title {
         font-size: 2rem;
     }
@@ -1099,9 +1031,9 @@ button {
 
 .modal-container {
     background: white;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     width: 90%;
-    max-width: 600px;
+    max-width: 37.5rem;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     transform: translateY(20px);
     transition: transform 0.3s ease;
@@ -1152,8 +1084,8 @@ button {
 .step-number {
     background-color: #4361ee;
     color: white;
-    width: 28px;
-    height: 28px;
+    width: 1.75rem;
+    height: 1.75rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1189,7 +1121,7 @@ button {
     color: white;
     border: none;
     padding: 0.7rem 1.5rem;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1225,7 +1157,7 @@ button {
 
 /* Responsive Design */
 
-@media (max-width: 992px) {
+@media (max-width: 62em) {
     .hero {
         flex-direction: column;
         text-align: center;
@@ -1280,27 +1212,9 @@ button {
     }
 }
 
-@media (max-width: 768px) {
-    .navbar {
-        position: fixed;
-        top: 80px;
-        left: -100%;
-        width: 100%;
-        background: white;
-        flex-direction: column;
-        align-items: center;
-        padding: 2rem 0;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-    }
+@media (max-width: 48em) {
     
-    .navbar.active {
-        left: 0;
-    }
     
-    #menu-icon {
-        display: block;
-    }
     
     .hero-title {
         font-size: 2.5rem;
@@ -1328,7 +1242,7 @@ button {
     }
 }
 
-@media (max-width: 576px) {
+@media (max-width: 36em) {
     .hero {
         padding: 7rem 6% 4rem;
     }
@@ -1427,9 +1341,9 @@ button.btn-secondary {
 .form-group input,
 .form-group textarea {
     width: 100%;
-    padding: 12px 14px;
+    padding: 0.75rem 0.875rem;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-family: inherit;
     font-size: 1rem;
     color: var(--text);
@@ -1451,8 +1365,8 @@ button.btn-secondary {
     background: #fef2f2;
     color: #b91c1c;
     border: 1px solid #f87171;
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
     margin-bottom: 1rem;
     font-size: 0.9rem;
 }
@@ -1472,7 +1386,7 @@ button.btn-secondary {
    rather than a customer quote, so it cannot be mistaken for social proof. */
 .origin-note {
     background: #fff;
-    border-radius: 16px;
+    border-radius: 1rem;
     padding: 2rem;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
     border-left: 4px solid var(--primary);

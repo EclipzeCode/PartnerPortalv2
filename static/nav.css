@@ -1,0 +1,157 @@
+/* Canonical site header and navigation.
+ *
+ * Loaded LAST on every page, replacing the copy that each page stylesheet had
+ * grown. Those copies all switched to the mobile drawer at 48em (768px), but
+ * the bar needs roughly 69em to lay out: a 1.8rem logo plus six links at
+ * 1.1rem with 2rem gaps. Between those two widths the links had nowhere to go
+ * and wrapped onto a second line, overlapping the page beneath.
+ *
+ * Two changes stop that happening again:
+ *   1. The drawer now opens at 68.75em, before the bar can run out of room.
+ *   2. Above that, the logo, link size and gaps are all fluid, so the bar
+ *      tightens gradually as the window narrows instead of holding one size
+ *      until it breaks.
+ */
+
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    /* Padding shrinks with the viewport so the nav keeps its room longest. */
+    padding: clamp(0.75rem, 1.6vw, 1.5rem) clamp(1rem, 5vw, 6rem);
+    background: #fff;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1000;
+}
+
+.logo {
+    font-size: clamp(1.25rem, 2.2vw, 1.8rem);
+    font-weight: 700;
+    color: var(--primary, #4361ee);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    /* The logo gives up space before the links do, but never truncates. */
+    flex: 0 1 auto;
+    white-space: nowrap;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.9rem, 1.8vw, 2rem);
+    flex: 0 1 auto;
+    /* Links never wrap: if they cannot fit, the drawer breakpoint has been
+       reached and this whole element is hidden instead. */
+    white-space: nowrap;
+}
+
+.navbar a {
+    color: var(--text, #2b2d42);
+    font-weight: 500;
+    font-size: clamp(0.9rem, 1.05vw, 1.1rem);
+    text-decoration: none;
+    position: relative;
+    padding: 0.5rem 0;
+    transition: color 0.2s ease;
+}
+
+.navbar a:hover,
+.navbar a.active {
+    color: var(--primary, #4361ee);
+}
+
+/* Underline for the current page, drawn without shifting layout. */
+.navbar a.active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--primary, #4361ee);
+    border-radius: 2px;
+}
+
+#menu-icon {
+    font-size: 2rem;
+    color: var(--text, #2b2d42);
+    cursor: pointer;
+    display: none;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* --- Drawer ------------------------------------------------------------- */
+/* 68.75em = 1100px at the default font size, which is where the six links
+   plus the logo stop fitting. Stated in em so a larger browser font moves the
+   breakpoint out with it, rather than overflowing at the same pixel width. */
+@media (max-width: 68.75em) {
+    #menu-icon {
+        display: block;
+    }
+
+    .navbar {
+        /* Absolute, not fixed: the header is the containing block, so
+           `top: 100%` means "directly below the header". Fixed would resolve
+           100% against the viewport and drop the drawer off the bottom of
+           the screen. */
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        background: #fff;
+        /* Hidden by default; common.js toggles .active. Clipping rather than
+           display:none keeps the open/close transition.
+           max-height caps content only -- vertical padding and the shadow
+           still paint at max-height:0 and drew a white strip under the
+           header, so both are held back until the drawer is open. */
+        max-height: 0;
+        padding: 0 5vw;
+        box-shadow: none;
+        overflow: hidden;
+        transition: max-height 0.25s ease, padding 0.25s ease;
+    }
+
+    .navbar.active {
+        max-height: calc(100vh - 5rem);
+        padding: 0.5rem 5vw 1rem;
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.12);
+        overflow-y: auto;
+    }
+
+    .navbar a {
+        font-size: 1rem;
+        padding: 0.9rem 0.25rem;
+        border-bottom: 1px solid #eef0f6;
+    }
+
+    .navbar a:last-child {
+        border-bottom: none;
+    }
+
+    .navbar a.active::after {
+        display: none;
+    }
+}
+
+/* --- Small phones ------------------------------------------------------- */
+@media (max-width: 26.25em) {
+    .logo {
+        font-size: 1.15rem;
+    }
+
+    #menu-icon {
+        font-size: 1.75rem;
+    }
+}

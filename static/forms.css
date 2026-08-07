@@ -11,7 +11,7 @@
 
 :root {
     --ctl-border: #e0e0e0;
-    --ctl-radius: 8px;
+    --ctl-radius: 0.5rem;
     /* Destructive actions own their colour here rather than reading --error,
        which is #dc2626 in onboarding.css but #f87171 in ppsearch.css. Reading
        the page variable meant Clear Form and Withdraw -- the same kind of
@@ -30,7 +30,7 @@
 .modal-body select,
 .modal-body textarea {
     width: 100%;
-    padding: 12px 14px;
+    padding: 0.75rem 0.875rem;
     border: 1px solid var(--border, var(--ctl-border));
     border-radius: var(--ctl-radius);
     font-family: inherit;
@@ -73,7 +73,7 @@
         calc(100% - 15px) calc(50% + 2px);
     background-size: 5px 5px, 5px 5px;
     background-repeat: no-repeat;
-    padding-right: 40px;
+    padding-right: 2.5rem;
     cursor: pointer;
 }
 
@@ -83,12 +83,12 @@
 .modal-body textarea,
 textarea {
     resize: none;
-    min-height: 90px;
+    min-height: 5.625rem;
 }
 
 .form-group textarea.textarea-sm,
 .modal-body textarea.textarea-sm {
-    min-height: 70px;
+    min-height: 4.375rem;
 }
 
 /* --- Validation --------------------------------------------------------- */
@@ -238,9 +238,9 @@ button.btn-action {
 
 .modal-container {
     background: #fff;
-    border-radius: 14px;
+    border-radius: 0.875rem;
     width: 100%;
-    max-width: 640px;
+    max-width: 40rem;
     /* Adjusts to the device: never taller than the viewport minus the
        backdrop padding. */
     max-height: calc(100vh - 3rem);
@@ -257,7 +257,7 @@ button.btn-action {
 }
 
 .modal-container.modal-wide {
-    max-width: 780px;
+    max-width: 48.75rem;
 }
 
 .modal-header {
@@ -333,7 +333,7 @@ button.btn-action {
    pickers and put a second scrollbar back inside the page. */
 .modal-body .category-picker {
     flex: 1 1 auto;
-    min-height: 80px;
+    min-height: 5rem;
     overflow-y: auto;
 }
 
@@ -352,7 +352,7 @@ button.btn-action {
     margin-bottom: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40em) {
     .modal { padding: 0.75rem; }
     .modal-container { max-height: calc(100vh - 1.5rem); }
     .modal-header { padding: 1rem 1.15rem; }

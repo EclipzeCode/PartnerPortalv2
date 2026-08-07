@@ -30,7 +30,7 @@
     display: grid;
     grid-template-columns: 2fr 1fr 1fr;
     gap: 2.5rem;
-    max-width: 1200px;
+    max-width: 75rem;
     margin: 0 auto 2.5rem;
 }
 
@@ -43,7 +43,7 @@
 }
 
 .footer-tagline {
-    max-width: 340px;
+    max-width: 21.25rem;
     color: #9aa0bd;
 }
 
@@ -65,7 +65,7 @@
 }
 
 .footer-bottom {
-    max-width: 1200px;
+    max-width: 75rem;
     margin: 0 auto;
     padding-top: 1.75rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -113,11 +113,11 @@ textarea:focus-visible {
 }
 
 /* ---------- Mobile drawer ---------- */
-@media (max-width: 768px) {
+@media (max-width: 48em) {
     /* The nav drawer is a fixed panel; give it a floor so long link lists stay
        reachable and it never sits flush against the viewport edge. */
     .navbar {
-        max-height: calc(100vh - 80px);
+        max-height: calc(100vh - 5rem);
         overflow-y: auto;
     }
 
@@ -137,5 +137,77 @@ textarea:focus-visible {
     .footer-bottom {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+/* ---------- Fluid typography ----------
+   Headings scaled with clamp() so they interpolate with the viewport instead
+   of holding one size until a breakpoint changes it. The minimum is what
+   should be readable on a small phone; the maximum is the original desktop
+   size, so nothing gets larger than it was. */
+.section-header h2,
+.section-title {
+    font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+    line-height: 1.25;
+}
+
+.hero-title {
+    font-size: clamp(2rem, 5.2vw, 3.5rem);
+    line-height: 1.15;
+}
+
+.hero-subtitle,
+.section-intro,
+.section-description {
+    font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+}
+
+.cta-title {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    line-height: 1.3;
+}
+
+/* ---------- Small screens ----------
+   Fixes that need more than a scaled value. */
+@media (max-width: 40em) {
+    /* Long words -- organization names, email addresses, category labels --
+       are the usual cause of horizontal overflow on a phone. */
+    body {
+        overflow-wrap: break-word;
+    }
+
+    h1, h2, h3, h4 {
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+
+    /* Action rows stack and go full width so nothing is half off-screen. */
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-actions > * {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+
+    /* A dialog on a phone should use the screen it has. */
+    .modal {
+        padding: 0.5rem;
+    }
+
+    .modal-container {
+        max-height: calc(100vh - 1rem);
+        border-radius: 0.75rem;
+    }
+}
+
+/* Very small phones: reclaim the horizontal padding that the page sections
+   spend on margins. */
+@media (max-width: 26.25em) {
+    .site-footer {
+        padding: 2rem 5% 1.25rem;
     }
 }
