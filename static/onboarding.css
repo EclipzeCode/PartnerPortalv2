@@ -207,23 +207,37 @@ body {
 }
 
 /* ---------- Layout ---------- */
+/* One grid holding all six cards, rather than two independent columns.
+   `display: contents` on the wrappers lifts their children into this grid so
+   each row is a real row: with the default stretch alignment, the two cards
+   in a row share a height, which lines up their tops AND their bottoms.
+   Cards with no partner span the full width instead of leaving a gap. */
 .onboarding-content {
   display: grid;
   grid-template-columns: 2.4fr 1fr;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-.form-column {
-  display: flex;
-  flex-direction: column;
   gap: 1.25rem;
+  align-items: stretch;
 }
 
+.form-column,
 .sidebar-column {
+  display: contents;
+}
+
+#card-1        { grid-column: 1; grid-row: 1; }
+#card-2        { grid-column: 1; grid-row: 2; }
+.summary-card  { grid-column: 2; grid-row: 1; }
+.info-card     { grid-column: 2; grid-row: 2; }
+/* Nothing sits beside these two, so they run the full width and finish flush
+   with the right edge of the sidebar cards above. */
+#card-3        { grid-column: 1 / -1; grid-row: 3; }
+.actions       { grid-column: 1 / -1; grid-row: 4; }
+
+/* Cards are flex columns so a short one can push a trailing element to its
+   bottom edge and fill the height its row was given. */
+.onboarding-card {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
 }
 
 /* ---------- Cards (matches .dashboard-card) ---------- */
@@ -580,6 +594,13 @@ body {
     grid-template-columns: 1fr;
   }
 
+  /* Stacked: everything is full width and follows DOM order. */
+  #card-1, #card-2, #card-3, .actions,
+  .summary-card, .info-card {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
   .sidebar-column {
     position: static;
   }
@@ -794,4 +815,30 @@ body {
   margin-top: 0.65rem;
   padding-top: 0;
   border-top: none;
+}
+
+
+/* Fills the height a stretched row hands these cards, instead of leaving a
+   block of empty white below the last line of content. */
+.card-note {
+  margin-top: auto;
+  padding-top: 1rem;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-light);
+  border-top: 1px solid var(--border);
+}
+
+.card-note strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.info-card .tip-box {
+  margin-top: auto;
+}
+
+/* Preferences spans both columns, so its fields should use the width. */
+#card-3 .form-grid {
+  grid-template-columns: repeat(2, 1fr);
 }
