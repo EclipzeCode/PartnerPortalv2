@@ -65,6 +65,9 @@ def _send_via_resend(cfg, to_addr, subject, html, text):
         headers={
             "Authorization": f"Bearer {cfg['api_key']}",
             "Content-Type": "application/json",
+            # Cloudflare (Resend's CDN) blocks the default `Python-urllib/x.y`
+            # user agent with error 1010. Any real UA works.
+            "User-Agent": "PartnerPortal/1.0 (+partnerportal-j6x1.onrender.com)",
         },
         method="POST",
     )
