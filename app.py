@@ -1,9 +1,18 @@
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
 from functools import wraps
 
 import bcrypt
+
+# Flask leaves the root logger at WARNING, which hides notifications.py's INFO
+# lines. Every send would happen silently, including the dry-run fallback that
+# is the whole point of running without an API key.
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 from flask import (
     Flask, jsonify, request, session, send_from_directory
 )
@@ -18,6 +27,7 @@ from categories import (
 from db import SessionLocal
 from matching import find_matches, score_pair
 from models import Organization, Partnership
+from notifications import notify_proposal_created, notify_proposal_responded
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(HERE, "static")
@@ -428,6 +438,10 @@ def create_proposal(org, db):
             "error": "You already have a pending proposal with this organization."
         }), 409
 
+    # Fire-and-forget: sending happens on a background thread so a slow
+    # provider does not slow down the response.
+    notify_proposal_created(proposal)
+
     return jsonify({
         "message": "Proposal sent",
         "proposal": proposal.to_dict(viewer_id=org.id),
@@ -505,6 +519,8 @@ def accept_proposal(org, db, proposal_id):
     proposal.share_token = secrets.token_urlsafe(24)
     db.commit()
 
+    notify_proposal_responded(proposal)
+
     return jsonify({
         "message": "Partnership agreed",
         "proposal": proposal.to_dict(viewer_id=org.id),
@@ -531,6 +547,9 @@ def decline_proposal(org, db, proposal_id):
     proposal.responded_at = datetime.now(timezone.utc)
     proposal.response_message = (data.get("message") or "").strip() or None
     db.commit()
+
+    notify_proposal_responded(proposal)
+
     return jsonify({
         "message": "Proposal declined",
         "proposal": proposal.to_dict(viewer_id=org.id),
