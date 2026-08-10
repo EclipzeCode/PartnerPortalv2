@@ -466,5 +466,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
     searchInput.addEventListener('input', applyView);
 
+    // Arriving from the dashboard's "Two-way matches" card, which links to
+    // ppsearch.html?mutual=1. The filter UI is synced too, so the state is
+    // visible and can be cleared the usual way rather than being a hidden
+    // mode that only the URL knows about.
+    if (new URLSearchParams(location.search).get('mutual') === '1') {
+        mutualOnly = true;
+        const box = document.getElementById('mutualOnlyInput');
+        if (box) box.checked = true;
+        if (filterBtn) {
+            filterBtn.classList.add('has-filters');
+            filterBtn.innerHTML = `<i class='bx bx-filter-alt'></i> Filters (1)`;
+        }
+    }
+
     await loadMatches();
 });

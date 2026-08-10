@@ -44,31 +44,36 @@
                 </a>
             </div>
 
-            <!-- Quick Stats -->
+            <!-- Quick Stats. Each card links to whatever it is counting, so a
+                 number is a way in rather than a dead end. Static labels and
+                 icons match what ppdashboard.js sets once data arrives, so the
+                 pre-load state does not say something different. -->
             <div class="stats-grid">
-                <div class="stat-card">
+                <a class="stat-card" href="ppsearch.html">
                     <div class="stat-icon">
                         <i class='bx bx-group'></i>
                     </div>
                     <div class="stat-content">
-                        <h3>Active Partners</h3>
+                        <h3>Matches</h3>
                         <span class="stat-value" id="activePartners">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
-                </div>
+                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                </a>
 
-                <div class="stat-card">
+                <a class="stat-card" href="ppsearch.html?mutual=1">
                     <div class="stat-icon">
-                        <i class='bx bx-chat'></i>
+                        <i class='bx bx-transfer'></i>
                     </div>
                     <div class="stat-content">
-                        <h3>Messages</h3>
+                        <h3>Two-way matches</h3>
                         <span class="stat-value" id="unreadMessages">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
-                </div>
+                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                </a>
 
-                <div class="stat-card">
+                <a class="stat-card" href="#upcomingEventsCard">
                     <div class="stat-icon">
                         <i class='bx bx-calendar-check'></i>
                     </div>
@@ -77,18 +82,20 @@
                         <span class="stat-value" id="upcomingEvents">0</span>
                         <span class="stat-change">meetings</span>
                     </div>
-                </div>
+                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                </a>
 
-                <div class="stat-card">
+                <a class="stat-card" href="onboarding.html">
                     <div class="stat-icon">
                         <i class='bx bx-star'></i>
                     </div>
                     <div class="stat-content">
-                        <h3>Partner Score</h3>
+                        <h3>Profile tags</h3>
                         <span class="stat-value" id="partnerScore">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
-                </div>
+                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                </a>
             </div>
 
             <!-- Partnerships: incoming/outgoing proposals, agreed and closed -->
@@ -143,7 +150,7 @@
                 </div>
 
                 <!-- Upcoming Events -->
-                <div class="dashboard-card">
+                <div class="dashboard-card" id="upcomingEventsCard">
                     <div class="card-header">
                         <h3>Upcoming Events</h3>
                         <button class="btn-action small" id="addEventBtn">
@@ -190,7 +197,11 @@
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
-                <form id="eventForm">
+                <!-- novalidate: the browser's own bubble ("Please select an item
+                     in the list.") is unstyled, disappears on the next click and
+                     only ever shows the first problem. ppdashboard.js validates
+                     on submit and writes into the .field-error slots below. -->
+                <form id="eventForm" novalidate>
                     <div class="form-group">
                         <label for="eventTitle">Event Title</label>
                         <input type="text" id="eventTitle" required>

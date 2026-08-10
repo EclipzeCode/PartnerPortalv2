@@ -125,6 +125,7 @@ a.btn-action {
     margin-bottom: 3rem;
 }
 
+/* Anchors: each card links through to what it counts. */
 .stat-card {
     background: white;
     border-radius: 0.75rem;
@@ -135,11 +136,56 @@ a.btn-action {
     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    text-decoration: none;
+    color: inherit;
 }
 
 .stat-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border-color: rgba(67, 97, 238, 0.35);
+}
+
+.stat-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Affordance that the card goes somewhere; slides on hover. */
+.stat-go {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 1.3rem;
+    color: var(--text-light);
+    opacity: 0;
+    transform: translateX(-0.35rem);
+    transition: opacity 0.25s ease, transform 0.25s ease, color 0.25s ease;
+}
+
+.stat-card:hover .stat-go,
+.stat-card:focus-visible .stat-go {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--primary);
+}
+
+/* Touch devices have no hover, so the chevron would never appear. */
+@media (hover: none) {
+    .stat-go {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-card,
+    .stat-go {
+        transition: none;
+    }
+
+    .stat-card:hover {
+        transform: none;
+    }
 }
 
 .stat-icon {
@@ -202,7 +248,65 @@ a.btn-action {
     display: grid;
     grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 1fr);
     gap: 2rem;
-    align-items: start;
+}
+
+/* Both cards are the same fixed height so their bottoms line up regardless of
+   how much each one holds. Tall enough for three activity rows even when the
+   text wraps to two lines; past that the list itself scrolls rather than the
+   card growing and breaking the alignment. */
+.dashboard-content > .dashboard-card {
+    height: 28rem;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+.dashboard-content .card-header,
+.dashboard-content .card-footer {
+    flex-shrink: 0;
+}
+
+.dashboard-content .activity-list,
+.dashboard-content .events-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 0;
+    /* Room for the scrollbar so it never sits on top of the text. */
+    padding-right: 0.35rem;
+}
+
+/* Anchored from the stats card, so clear the fixed site header. */
+#upcomingEventsCard {
+    scroll-margin-top: 7rem;
+}
+
+/* Slim scrollbars: the default chrome is heavy inside a small card. */
+.dashboard-content .activity-list,
+.dashboard-content .events-list {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd3e8 transparent;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar,
+.dashboard-content .events-list::-webkit-scrollbar {
+    width: 0.5rem;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-track,
+.dashboard-content .events-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-thumb,
+.dashboard-content .events-list::-webkit-scrollbar-thumb {
+    background: #cbd3e8;
+    border-radius: 62.4375rem;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-thumb:hover,
+.dashboard-content .events-list::-webkit-scrollbar-thumb:hover {
+    background: #aab5d6;
 }
 
 .dashboard-card {
@@ -318,27 +422,57 @@ a.btn-action {
 .activity-item.kind-incoming .activity-icon { background: rgba(217, 119, 6, 0.14); color: #d97706; }
 .activity-item.kind-event .activity-icon { background: rgba(76, 201, 240, 0.18); color: #0d8fb5; }
 
-/* Filter control */
+/* Filter control. Built as a pill rather than a bare <select> so it reads as
+   a sibling of the .btn-action in the other card's header. */
 .activity-filter {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.4rem 0.7rem;
+    padding: 0.5rem 1.75rem 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     color: var(--text-light);
     background: #fff;
     cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
 
-.activity-filter:hover,
+.activity-filter:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.04);
+}
+
 .activity-filter:focus-within {
     border-color: var(--primary);
     color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.activity-filter > i {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+/* Chevron drawn here, since the native one cannot be positioned. */
+.activity-filter::after {
+    content: '';
+    position: absolute;
+    right: 0.7rem;
+    top: 50%;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-top: -0.3rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    pointer-events: none;
 }
 
 .activity-filter select {
+    appearance: none;
+    -webkit-appearance: none;
     border: none;
     background: none;
     font-family: inherit;
@@ -351,6 +485,12 @@ a.btn-action {
 
 .activity-filter select:focus {
     outline: none;
+}
+
+/* Options render in the OS menu, which does not inherit the pill's colour. */
+.activity-filter select option {
+    color: var(--text);
+    font-weight: 500;
 }
 
 /* .view-all is an <a> elsewhere; as a button it needs the chrome stripped. */
@@ -664,6 +804,52 @@ button.view-all {
     resize: vertical;
 }
 
+/* --- Select control ------------------------------------------------------ */
+/* forms.css already resets the native chrome and draws the arrow for every
+   `.modal-body select`, so this only adds what it leaves out. */
+.modal-body select {
+    cursor: pointer;
+}
+
+.modal-body select:hover {
+    border-color: #c7cee4;
+}
+
+/* Until a real choice is made the control should read like the empty inputs
+   above it, not like a filled-in value. */
+.modal-body select:has(option[value=""]:checked) {
+    color: var(--text-light);
+}
+
+.modal-body select option {
+    color: var(--text);
+}
+
+/* --- Inline field errors ------------------------------------------------- */
+/* The .field-error note and .input-error control state are styled in
+   forms.css, which every page shares. Only the extras this modal adds live
+   here, scoped to the form so the other pages' errors are left alone. */
+#eventForm .field-error {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    line-height: 1.45;
+}
+
+#eventForm .field-error::before {
+    content: '\26A0';
+    font-size: 0.9rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* forms.css colours the border; the tint makes the field itself read as the
+   thing at fault, not just its outline. `background-color` specifically, so
+   the arrow that forms.css draws with `background-image` survives. */
+#eventForm .input-error {
+    background-color: #fef6f6;
+}
+
 .form-row {
     display: flex;
     gap: 1rem;
@@ -745,6 +931,12 @@ button.view-all {
         align-items: flex-start;
         gap: 0.75rem;
         padding: 1rem;
+    }
+
+    /* `margin-left: auto` means nothing once the card is a column, and there
+       is no width to spare for it either. */
+    .stat-go {
+        display: none;
     }
 
     .stat-value {

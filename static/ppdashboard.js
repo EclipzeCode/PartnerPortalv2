@@ -339,6 +339,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function openModal() {
         if (!modal) return;
+        // Errors from a previous attempt should not greet a fresh one.
+        if (eventForm) clearEventErrors();
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
@@ -427,11 +429,97 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // --- Event form validation ------------------------------------------
+    // The form carries `novalidate`, so these messages replace the browser's
+    // own bubbles: those are unstyled, vanish on the next click, and only ever
+    // report the first offending field.
+    //
+    // Same shape as onboarding.js: `.input-error` on the control, a
+    // `.field-error` note appended to the enclosing .form-group. Both are
+    // already styled in forms.css.
+    function setFieldError(field, message) {
+        if (!field) return;
+        field.classList.toggle('input-error', Boolean(message));
+        field.setAttribute('aria-invalid', message ? 'true' : 'false');
+
+        const holder = field.closest('.form-group') || field.parentElement;
+        let note = holder.querySelector(':scope > .field-error');
+        if (!message) {
+            if (note) note.remove();
+            return;
+        }
+        if (!note) {
+            note = document.createElement('span');
+            note.className = 'field-error';
+            holder.appendChild(note);
+        }
+        note.textContent = message;
+    }
+
+    function clearEventErrors() {
+        eventForm.querySelectorAll('.field-error').forEach((n) => n.remove());
+        eventForm.querySelectorAll('.input-error').forEach((f) => {
+            f.classList.remove('input-error');
+            f.setAttribute('aria-invalid', 'false');
+        });
+    }
+
+    function validateEventForm() {
+        const title = document.getElementById('eventTitle');
+        const date = document.getElementById('eventDate');
+        const time = document.getElementById('eventTime');
+        const duration = document.getElementById('eventDuration');
+        const partner = document.getElementById('eventPartner');
+
+        const problems = [];
+        const fail = (field, message) => {
+            setFieldError(field, message);
+            problems.push(field);
+        };
+
+        clearEventErrors();
+
+        if (!title.value.trim()) fail(title, 'Give the meeting a title.');
+        if (!date.value) fail(date, 'Pick a date.');
+        if (!time.value) fail(time, 'Pick a start time.');
+
+        const hours = parseFloat(duration.value);
+        if (!duration.value || Number.isNaN(hours) || hours <= 0) {
+            fail(duration, 'Enter how long it runs, in hours.');
+        }
+
+        if (!partner.value) {
+            // The dropdown is empty until there is someone to meet with, so
+            // say that rather than asking for a choice that cannot be made.
+            fail(partner, partner.options.length <= 1
+                ? 'No partners yet — agree a partnership first, then schedule with them.'
+                : 'Choose who the meeting is with.');
+        }
+
+        return problems;
+    }
+
     if (eventForm) {
+        // Clear a field's error as soon as it is corrected, so the form does
+        // not keep complaining about something already fixed.
+        eventForm.addEventListener('input', (e) => {
+            if (e.target.classList.contains('input-error')) setFieldError(e.target, '');
+        });
+        eventForm.addEventListener('change', (e) => {
+            if (e.target.classList.contains('input-error')) setFieldError(e.target, '');
+        });
+
         eventForm.addEventListener('submit', (e) => {
             e.preventDefault();
+
+            const problems = validateEventForm();
+            if (problems.length) {
+                problems[0].focus();
+                return;
+            }
+
             const select = document.getElementById('eventPartner');
-            const newEvent = {
+            saveEvents([...loadEvents(), {
                 id: Date.now(),
                 title: document.getElementById('eventTitle').value.trim(),
                 date: document.getElementById('eventDate').value,
@@ -440,15 +528,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 partner: select.options[select.selectedIndex].text,
                 description: document.getElementById('eventDescription').value.trim(),
                 location: document.getElementById('eventLocation').value.trim()
-            };
+            }]);
 
-            if (!newEvent.title || !newEvent.date || !newEvent.time || !select.value) {
-                return; // `required` attributes already surface the message
-            }
-
-            saveEvents([...loadEvents(), newEvent]);
             renderSavedEvents();
             eventForm.reset();
+            clearEventErrors();
             closeModal();
         });
     }
