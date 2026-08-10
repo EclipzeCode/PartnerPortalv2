@@ -224,6 +224,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (proposeBtn) proposeBtn.classList.toggle('hidden', Boolean(m.is_demo));
         if (exampleNote) exampleNote.classList.toggle('hidden', !m.is_demo);
 
+        // The shareable profile, for sending to someone without an account.
+        const profileLink = document.getElementById('viewProfileBtn');
+        if (profileLink) {
+            profileLink.href = `organization.html?id=${encodeURIComponent(m.id)}`;
+        }
+
         openModal(detailModal);
     }
 
