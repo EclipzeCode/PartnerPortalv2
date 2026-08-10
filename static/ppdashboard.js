@@ -1,8 +1,8 @@
 // Dashboard.
 //
-// The stat cards, activity feed and connections list used to be hardcoded
-// markup. They are now filled from /api/dashboard, which reports the
-// signed-in org's real match counts and its actual top matches.
+// The stat cards and activity feed used to be hardcoded markup. They are now
+// filled from /api/dashboard, which reports the signed-in org's real match
+// counts, its top matches and its proposal history.
 //
 // Events remain local to the browser: there is no events table yet, so
 // loadEvents/saveEvents still read localStorage. They are kept isolated so
@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const eventForm = document.getElementById('eventForm');
     const eventsList = document.querySelector('.events-list');
     const closeBtn = modal ? modal.querySelector('.close-modal') : null;
+
+    const activityFilter = document.getElementById('activityFilter');
+    const activityViewAll = document.getElementById('activityViewAll');
+    const ACTIVITY_COLLAPSED = 4;
+    let activityExpanded = false;
 
     // --- Live data ------------------------------------------------------
     let dashboard = null;
@@ -61,119 +66,245 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Prompt to finish onboarding rather than showing a page of zeroes.
+    const toolbar = document.querySelector('.dashboard-toolbar');
+    const toolbarHint = document.getElementById('toolbarHint');
+    const editProfileBtn = document.getElementById('editProfileBtn');
+
     if (dashboard.needs_onboarding) {
-        const grid = document.querySelector('.connections-grid');
-        if (grid) {
-            grid.innerHTML =
-                '<p class="empty-state">Your profile is not finished yet, so ' +
-                'there is nothing to match against.<br><br>' +
-                '<a class="btn-primary" href="onboarding.html">Complete your profile</a></p>';
+        if (toolbar) toolbar.classList.add('needs-profile');
+        if (toolbarHint) {
+            toolbarHint.textContent =
+                'Your profile is not finished yet, so there is nothing to match against.';
         }
-        replaceActivity([{
-            icon: 'bx-user-plus',
-            text: 'Finish your profile to start matching',
-            time: 'Now'
-        }]);
-    } else {
-        renderConnections(dashboard.top_matches || []);
-        renderActivity(dashboard.top_matches || [], org);
-    }
-
-    // --- Connections ----------------------------------------------------
-    function renderConnections(matches) {
-        const grid = document.querySelector('.connections-grid');
-        if (!grid) return;
-        grid.innerHTML = '';
-
-        if (matches.length === 0) {
-            grid.innerHTML =
-                '<p class="empty-state">No matches yet. Adding more needs and ' +
-                'offers to your profile widens the search.<br><br>' +
-                '<a class="btn-primary" href="onboarding.html">Edit profile</a></p>';
-            return;
+        if (editProfileBtn) {
+            editProfileBtn.innerHTML = "<i class='bx bx-user-plus'></i> Complete your profile";
         }
-
-        matches.forEach((m) => {
-            const initials = (m.name || '?')
-                .split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-            const card = document.createElement('div');
-            card.className = 'connection-card';
-            card.innerHTML = `
-                <div class="connection-avatar">${esc(initials)}</div>
-                <div class="connection-info">
-                    <h4>${esc(m.name)}</h4>
-                    <p>${esc(m.organization_type || '')} · ${esc(m.location || '')}</p>
-                    <span class="connection-score">${m.match_score} match${
-                        m.match_detail.mutual ? ' · two-way' : ''
-                    }</span>
-                </div>
-                <a class="btn-connection" href="ppsearch.html">View</a>
-            `;
-            grid.appendChild(card);
-        });
+    } else if (toolbarHint) {
+        const parts = [];
+        if (org.organization_type) parts.push(org.organization_type);
+        if (org.location) parts.push(org.location);
+        toolbarHint.textContent = parts.join(' · ');
     }
 
     // --- Activity -------------------------------------------------------
-    function renderActivity(matches, me) {
+    // Built from real records: proposal history (with real timestamps), the
+    // org's current top matches, and locally saved meetings. Previously this
+    // list was four invented rows of markup.
+    function buildActivity() {
         const items = [];
-        const mutual = matches.filter((m) => m.match_detail.mutual);
 
-        if (mutual.length) {
+        (dashboard.recent_proposals || []).forEach((p) => {
+            const who = `<strong>${esc(p.counterpart.name)}</strong>`;
+            const incoming = p.direction === 'incoming';
+
             items.push({
-                icon: 'bx-transfer',
-                text: `Two-way match with <strong>${esc(mutual[0].name)}</strong>`,
-                time: 'From your profile'
+                kind: 'proposal',
+                variant: incoming ? 'incoming' : 'sent',
+                icon: incoming ? 'bx-envelope' : 'bx-send',
+                text: incoming
+                    ? `${who} proposed a partnership`
+                    : `You proposed a partnership to ${who}`,
+                at: p.created_at
             });
-        }
-        matches.slice(0, 3).forEach((m) => {
+
+            if (p.status !== 'pending' && p.responded_at) {
+                const closers = {
+                    accepted: {
+                        icon: 'bx-check-circle',
+                        text: `Partnership with ${who} agreed`
+                    },
+                    declined: {
+                        icon: 'bx-x-circle',
+                        text: incoming
+                            ? `You declined the proposal from ${who}`
+                            : `${who} declined your proposal`
+                    },
+                    withdrawn: {
+                        icon: 'bx-undo',
+                        text: incoming
+                            ? `${who} withdrew their proposal`
+                            : `You withdrew your proposal to ${who}`
+                    }
+                };
+                const closer = closers[p.status];
+                if (closer) {
+                    items.push({
+                        kind: 'proposal',
+                        variant: p.status,
+                        icon: closer.icon,
+                        text: closer.text,
+                        at: p.responded_at
+                    });
+                }
+            }
+        });
+
+        // Matches are current state rather than events, so they carry no
+        // timestamp and sort below anything that actually happened.
+        (dashboard.top_matches || []).slice(0, 4).forEach((m) => {
             const gives = (m.match_detail.they_give_labels || [])[0];
             items.push({
-                icon: 'bx-link',
+                kind: 'match',
+                variant: m.match_detail.mutual ? 'mutual' : 'oneway',
+                icon: m.match_detail.mutual ? 'bx-transfer' : 'bx-link',
                 text: gives
                     ? `<strong>${esc(m.name)}</strong> offers ${esc(gives)}`
                     : `<strong>${esc(m.name)}</strong> could use what you offer`,
-                time: `${m.match_score} match`
+                note: `${m.match_score} match${m.match_detail.mutual ? ' · two-way' : ''}`
             });
         });
-        if (me.location) {
+
+        loadEvents().forEach((ev) => {
             items.push({
-                icon: 'bx-map',
-                text: `Matching against organizations near ${esc(me.location)}`,
-                time: 'Profile'
+                kind: 'event',
+                variant: 'event',
+                icon: 'bx-calendar-event',
+                text: `Meeting <strong>${esc(ev.title)}</strong> with ${esc(ev.partner)}`,
+                at: eventDateTime(ev)
             });
-        }
-        replaceActivity(items);
+        });
+
+        // Newest first; undated entries keep their order at the end.
+        return items.sort((a, b) => {
+            if (a.at && b.at) return new Date(b.at) - new Date(a.at);
+            if (a.at) return -1;
+            if (b.at) return 1;
+            return 0;
+        });
     }
 
-    function replaceActivity(items) {
+    // Local datetime for an event; a bare date string would be read as UTC.
+    function eventDateTime(ev) {
+        if (!ev.date) return null;
+        const [y, m, d] = ev.date.split('-').map(Number);
+        const [hh, mm] = (ev.time || '00:00').split(':').map(Number);
+        return new Date(y, m - 1, d, hh || 0, mm || 0).toISOString();
+    }
+
+    function relativeTime(iso) {
+        const then = new Date(iso);
+        if (Number.isNaN(then.getTime())) return '';
+
+        const diffMs = then - Date.now();
+        const future = diffMs > 0;
+        const mins = Math.round(Math.abs(diffMs) / 60000);
+
+        if (mins < 1) return 'Just now';
+        if (mins < 60) return future ? `In ${mins} min` : `${mins} min ago`;
+
+        const hours = Math.round(mins / 60);
+        if (hours < 24) {
+            const unit = hours === 1 ? 'hour' : 'hours';
+            return future ? `In ${hours} ${unit}` : `${hours} ${unit} ago`;
+        }
+
+        const days = Math.round(hours / 24);
+        if (days === 1) return future ? 'Tomorrow' : 'Yesterday';
+        if (days < 30) return future ? `In ${days} days` : `${days} days ago`;
+
+        return then.toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+        });
+    }
+
+    function renderActivity() {
         const list = document.querySelector('.activity-list');
         if (!list) return;
+
+        const filter = activityFilter ? activityFilter.value : 'all';
+        const all = buildActivity()
+            .filter((i) => filter === 'all' || i.kind === filter);
+
         list.innerHTML = '';
-        items.forEach((item) => {
+
+        if (all.length === 0) {
+            const messages = {
+                all: dashboard.needs_onboarding
+                    ? 'Finish your profile to start matching.'
+                    : 'Nothing has happened yet. Propose a partnership to get started.',
+                proposal: 'No partnership activity yet.',
+                match: 'No matches yet. More needs and offers widen the search.',
+                event: 'No meetings scheduled yet.'
+            };
+            list.innerHTML = `<p class="empty-state">${esc(messages[filter])}</p>`;
+            if (activityViewAll) activityViewAll.hidden = true;
+            return;
+        }
+
+        const shown = activityExpanded ? all : all.slice(0, ACTIVITY_COLLAPSED);
+        shown.forEach((item) => {
             const row = document.createElement('div');
-            row.className = 'activity-item';
+            row.className = `activity-item kind-${item.variant}`;
             row.innerHTML = `
                 <div class="activity-icon"><i class='bx ${esc(item.icon)}'></i></div>
                 <div class="activity-content">
                     <p>${item.text}</p>
-                    <span class="activity-time">${esc(item.time)}</span>
+                    <span class="activity-time">${
+                        esc(item.at ? relativeTime(item.at) : (item.note || ''))
+                    }</span>
                 </div>
             `;
             list.appendChild(row);
         });
+
+        if (activityViewAll) {
+            activityViewAll.hidden = all.length <= ACTIVITY_COLLAPSED;
+            activityViewAll.innerHTML = activityExpanded
+                ? "Show less <i class='bx bx-chevron-up'></i>"
+                : `View all activity (${all.length}) <i class='bx bx-chevron-right'></i>`;
+        }
     }
+
+    if (activityFilter) {
+        activityFilter.addEventListener('change', () => {
+            activityExpanded = false;
+            renderActivity();
+        });
+    }
+
+    if (activityViewAll) {
+        activityViewAll.addEventListener('click', () => {
+            activityExpanded = !activityExpanded;
+            renderActivity();
+        });
+    }
+
+    // Accepting or declining in the Partnerships card changes the history the
+    // feed is built from, so re-read it rather than leaving a stale list.
+    document.addEventListener('partnerships:changed', async () => {
+        try {
+            dashboard = await window.api('/api/dashboard');
+        } catch {
+            return; // leave the current feed rather than blanking it
+        }
+        renderActivity();
+    });
 
     // --- Event partner dropdown -----------------------------------------
     // Was a hardcoded list of four invented organizations.
+    //
+    // Orgs you have already agreed a partnership with come first: those are
+    // the ones you actually arrange meetings with. Listing only top matches
+    // left the dropdown empty -- and the form unsubmittable, since the field
+    // is required -- for any org whose partners were all already agreed.
     const partnerSelect = document.getElementById('eventPartner');
     if (partnerSelect) {
         partnerSelect.innerHTML = '<option value="">Select a partner</option>';
-        (dashboard.top_matches || []).forEach((m) => {
+
+        const seen = new Set();
+        const addOption = (id, name) => {
+            if (!name || seen.has(String(id))) return;
+            seen.add(String(id));
             const opt = document.createElement('option');
-            opt.value = String(m.id);
-            opt.textContent = m.name;
+            opt.value = String(id);
+            opt.textContent = name;
             partnerSelect.appendChild(opt);
-        });
+        };
+
+        (dashboard.recent_proposals || [])
+            .filter((p) => p.status === 'accepted')
+            .forEach((p) => addOption(p.counterpart.id, p.counterpart.name));
+        (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));
     }
 
     // --- Events (still local) -------------------------------------------
@@ -279,6 +410,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const counter = document.getElementById('upcomingEvents');
         if (counter) counter.textContent = events.length;
+
+        // Meetings are one of the feed's sources, so adding or removing one
+        // has to reach the activity list too.
+        renderActivity();
     }
 
     if (eventsList) {
@@ -319,4 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     renderSavedEvents();
+    // Explicit, because renderSavedEvents bails early if the events card is
+    // absent and the feed must not depend on that.
+    renderActivity();
 });

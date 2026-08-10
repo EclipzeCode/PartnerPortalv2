@@ -225,6 +225,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Land on the tab where the result now lives.
             if (pending.action === 'accept') activateTab('agreed');
             await load();
+            // The dashboard's activity feed is built from this same history.
+            document.dispatchEvent(new CustomEvent('partnerships:changed'));
         } catch (error) {
             respondTerms.innerHTML =
                 `<p class="form-message">${esc(error.message)}</p>`;
@@ -265,7 +267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         t.addEventListener('click', () => activateTab(t.dataset.tab));
     });
 
-    // Deep link from the dashboard, e.g. proposals.html#agreed
+    // Deep link into a tab, e.g. ppdashboard.html#agreed
     const hash = location.hash.replace('#', '');
     if (['incoming', 'outgoing', 'agreed', 'closed'].includes(hash)) {
         activeTab = hash;

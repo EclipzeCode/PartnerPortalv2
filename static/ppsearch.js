@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
                 closeModal(proposeModal);
-                window.location.href = 'proposals.html#outgoing';
+                window.location.href = 'ppdashboard.html#outgoing';
             } catch (error) {
                 setProposeMessage(error.message);
             } finally {

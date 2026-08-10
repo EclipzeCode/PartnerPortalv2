@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="ppdashboard.css">
     <link rel="stylesheet" href="shared.css">
     <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="proposals.css">
     <link rel="stylesheet" href="nav.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,9 +19,7 @@
         <div class="bx bx-menu" id="menu-icon"></div>
         <nav class="navbar">
             <a href="index.html">Home</a>
-            <a href="onboarding.html">Onboarding</a>
             <a href="ppsearch.html">Search</a>
-            <a href="proposals.html">Partnerships</a>
             <a href="ppdashboard.html" class="active">Dashboard</a>
             <!-- <a href="pphelp.html">Help</a> -->
             <a href="pplogin.html">Login</a>
@@ -33,8 +32,18 @@
             <h2>Client <span>Dashboard</span></h2>
             <div class="underline"></div>
         </div>
-        
+
         <div class="dashboard-container">
+            <!-- Profile actions. Editing your profile is the one thing every org
+                 comes back here to do, so it sits above the fold rather than
+                 buried in an empty state. -->
+            <div class="dashboard-toolbar">
+                <p class="toolbar-hint" id="toolbarHint"></p>
+                <a href="onboarding.html" class="btn-action" id="editProfileBtn">
+                    <i class='bx bx-edit'></i> Edit profile
+                </a>
+            </div>
+
             <!-- Quick Stats -->
             <div class="stats-grid">
                 <div class="stat-card">
@@ -43,112 +52,177 @@
                     </div>
                     <div class="stat-content">
                         <h3>Active Partners</h3>
-                        <span class="stat-value" id="activePartners">12</span>
-                        <span class="stat-change positive">+2 this month</span>
+                        <span class="stat-value" id="activePartners">0</span>
+                        <span class="stat-change">&mdash;</span>
                     </div>
                 </div>
-                
+
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class='bx bx-chat'></i>
                     </div>
                     <div class="stat-content">
                         <h3>Messages</h3>
-                        <span class="stat-value" id="unreadMessages">5</span>
-                        <span class="stat-change neutral">3 unread</span>
+                        <span class="stat-value" id="unreadMessages">0</span>
+                        <span class="stat-change">&mdash;</span>
                     </div>
                 </div>
-                
+
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class='bx bx-calendar-check'></i>
                     </div>
                     <div class="stat-content">
                         <h3>Upcoming</h3>
-                        <span class="stat-value" id="upcomingEvents">3</span>
+                        <span class="stat-value" id="upcomingEvents">0</span>
                         <span class="stat-change">meetings</span>
                     </div>
                 </div>
-                
+
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class='bx bx-star'></i>
                     </div>
                     <div class="stat-content">
                         <h3>Partner Score</h3>
-                        <span class="stat-value" id="partnerScore">86</span>
-                        <span class="stat-change positive">+6 this quarter</span>
+                        <span class="stat-value" id="partnerScore">0</span>
+                        <span class="stat-change">&mdash;</span>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Partnerships: incoming/outgoing proposals, agreed and closed -->
+            <div class="dashboard-card partnerships-card">
+                <div class="card-header">
+                    <h3>Partnerships</h3>
+                </div>
+
+                <div class="proposal-tabs" role="tablist">
+                    <button class="proposal-tab active" data-tab="incoming" role="tab">
+                        Needs your response <span class="tab-count" id="countIncoming">0</span>
+                    </button>
+                    <button class="proposal-tab" data-tab="outgoing" role="tab">
+                        Sent <span class="tab-count" id="countOutgoing">0</span>
+                    </button>
+                    <button class="proposal-tab" data-tab="agreed" role="tab">
+                        Agreed <span class="tab-count" id="countAgreed">0</span>
+                    </button>
+                    <button class="proposal-tab" data-tab="closed" role="tab">
+                        Closed
+                    </button>
+                </div>
+
+                <div id="proposalList" class="proposal-list"></div>
+            </div>
+
             <!-- Main Content Area -->
             <div class="dashboard-content">
                 <!-- Recent Activity -->
                 <div class="dashboard-card">
                     <div class="card-header">
                         <h3>Recent Activity</h3>
-                        <button class="btn-action small">
-                            <i class='bx bx-filter-alt'></i> Filter
-                        </button>
+                        <label class="activity-filter">
+                            <i class='bx bx-filter-alt'></i>
+                            <span class="visually-hidden">Filter activity</span>
+                            <select id="activityFilter">
+                                <option value="all">All activity</option>
+                                <option value="proposal">Partnerships</option>
+                                <option value="match">Matches</option>
+                                <option value="event">Meetings</option>
+                            </select>
+                        </label>
                     </div>
                     <div class="activity-list">
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class='bx bx-message-rounded-dots'></i>
-                            </div>
-                            <div class="activity-content">
-                                <p><strong>Local Food Bank</strong> sent you a message about the upcoming fundraiser</p>
-                                <span class="activity-time">2 hours ago</span>
-                            </div>
-                        </div>
-                        
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class='bx bx-calendar-event'></i>
-                            </div>
-                            <div class="activity-content">
-                                <p>Meeting scheduled with <strong>Tech for Good</strong> on Friday at 2:00 PM</p>
-                                <span class="activity-time">Yesterday</span>
-                            </div>
-                        </div>
-                        
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class='bx bx-check-circle'></i>
-                            </div>
-                            <div class="activity-content">
-                                <p>Partnership with <strong>Green Initiative</strong> was successfully completed</p>
-                                <span class="activity-time">3 days ago</span>
-                            </div>
-                        </div>
-                        
-                        <div class="activity-item">
-                            <div class="activity-icon">
-                                <i class='bx bx-file'></i>
-                            </div>
-                            <div class="activity-content">
-                                <p><strong>Community Builders</strong> shared a document: "Project Proposal.pdf"</p>
-                                <span class="activity-time">1 week ago</span>
-                            </div>
-                        </div>
+                        <!-- Filled from /api/dashboard by ppdashboard.js -->
                     </div>
                     <div class="card-footer">
-                        <a href="#" class="view-all">View All Activity <i class='bx bx-chevron-right'></i></a>
-                    </div>
-                </div>
-                
-                <!-- Partner Connections -->
-                <div class="dashboard-card">
-                    <div class="card-header">
-                        <h3>Partner Connections</h3>
-                        <button class="btn-action small">
-                            <i class='bx bx-search'></i> Find More
+                        <button type="button" class="view-all" id="activityViewAll" hidden>
+                            View all activity <i class='bx bx-chevron-right'></i>
                         </button>
                     </div>
-                    <div class="connections-grid">
-                        <!-- Filled from /api/dashboard by ppdashboard.js -->
-                    
+                </div>
+
+                <!-- Upcoming Events -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3>Upcoming Events</h3>
+                        <button class="btn-action small" id="addEventBtn">
+                            <i class='bx bx-plus'></i> Add Event
+                        </button>
+                    </div>
+                    <div class="events-list">
+                        <!-- Filled from localStorage by ppdashboard.js -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Respond to a partnership proposal -->
+    <div id="respondModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="respondTitle">Respond</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="respondTerms" class="respond-terms"></div>
+                <form id="respondForm">
+                    <div class="form-group">
+                        <label for="respondMessage">Add a note (optional)</label>
+                        <textarea id="respondMessage" rows="3"
+                            placeholder="Anything the other organization should know?"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" id="respondConfirm">Confirm</button>
+                        <button type="button" class="btn-ghost" id="respondCancel">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Event Modal -->
+    <div id="eventModal" class="modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Add New Event</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title</label>
+                        <input type="text" id="eventTitle" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="eventDate">Date</label>
+                            <input type="date" id="eventDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventTime">Time</label>
+                            <input type="time" id="eventTime" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDuration">Duration (hours)</label>
+                        <input type="number" id="eventDuration" min="0.5" step="0.5" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventPartner">With Partner</label>
+                        <select id="eventPartner" required>
+                            <option value="">Select a partner</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventLocation">Location</label>
+                        <input type="text" id="eventLocation" placeholder="Enter location or meeting link">
+                    </div>
                     <button type="submit" class="btn-primary">Save Event</button>
                 </form>
             </div>
@@ -187,5 +261,6 @@
 
     <script src="common.js"></script>
     <script src="ppdashboard.js"></script>
+    <script src="proposals.js"></script>
 </body>
 </html>
