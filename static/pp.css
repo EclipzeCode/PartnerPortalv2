@@ -95,8 +95,12 @@ button {
     left: -5%;
     right: -5%;
     bottom: 0;
-    height: 46%;
-    min-height: 16.25rem;
+    /* Sized from viewport width, not the hero's own height. The hero can grow
+       much taller than it is wide once the content stacks on narrower screens,
+       and a height driven by that flips which axis preserveAspectRatio="slice"
+       crops from -- exposing mid-mountain peaks that are meant to stay off to
+       the sides, as a jagged notch behind the hero content. */
+    height: clamp(8rem, 34vw, 26rem);
     pointer-events: none;
 }
 
@@ -174,8 +178,6 @@ button {
 /* No cursor to react to, and the fine detail is lost at this size. */
 @media (max-width: 47.9375em) {
     .hero-scene {
-        height: 34%;
-        min-height: 11.25rem;
         opacity: 0.75;
     }
 }
