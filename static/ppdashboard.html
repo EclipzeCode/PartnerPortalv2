@@ -44,12 +44,13 @@
                 </a>
             </div>
 
-            <!-- Quick Stats. Each card links to whatever it is counting, so a
-                 number is a way in rather than a dead end. Static labels and
-                 icons match what ppdashboard.js sets once data arrives, so the
-                 pre-load state does not say something different. -->
+            <!-- Quick Stats. Each card opens a dialog listing everything it is
+                 counting, so a number is a way in rather than a dead end.
+                 data-stat picks the view; ppdashboard.js fills it. Static
+                 labels and icons match what the script sets once data arrives,
+                 so the pre-load state does not say something different. -->
             <div class="stats-grid">
-                <a class="stat-card" href="ppsearch.html">
+                <button type="button" class="stat-card" data-stat="matches">
                     <div class="stat-icon">
                         <i class='bx bx-group'></i>
                     </div>
@@ -59,9 +60,9 @@
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
-                </a>
+                </button>
 
-                <a class="stat-card" href="ppsearch.html?mutual=1">
+                <button type="button" class="stat-card" data-stat="mutual">
                     <div class="stat-icon">
                         <i class='bx bx-transfer'></i>
                     </div>
@@ -71,9 +72,9 @@
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
-                </a>
+                </button>
 
-                <a class="stat-card" href="#upcomingEventsCard">
+                <button type="button" class="stat-card" data-stat="events">
                     <div class="stat-icon">
                         <i class='bx bx-calendar-check'></i>
                     </div>
@@ -83,9 +84,9 @@
                         <span class="stat-change">meetings</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
-                </a>
+                </button>
 
-                <a class="stat-card" href="onboarding.html">
+                <button type="button" class="stat-card" data-stat="tags">
                     <div class="stat-icon">
                         <i class='bx bx-star'></i>
                     </div>
@@ -95,7 +96,7 @@
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
-                </a>
+                </button>
             </div>
 
             <!-- Partnerships: incoming/outgoing proposals, agreed and closed -->
@@ -149,13 +150,20 @@
                     </div>
                 </div>
 
-                <!-- Upcoming Events -->
+                <!-- Upcoming Events. The rows and "View all" both open the same
+                     dialog the Upcoming stat card does, so there is one place
+                     meetings are read regardless of where you click from. -->
                 <div class="dashboard-card" id="upcomingEventsCard">
                     <div class="card-header">
                         <h3>Upcoming Events</h3>
-                        <button class="btn-action small" id="addEventBtn">
-                            <i class='bx bx-plus'></i> Add Event
-                        </button>
+                        <div class="card-header-actions">
+                            <button class="btn-action small ghost" id="eventsViewAll">
+                                View all
+                            </button>
+                            <button class="btn-action small" id="addEventBtn">
+                                <i class='bx bx-plus'></i> Add Event
+                            </button>
+                        </div>
                     </div>
                     <div class="events-list">
                         <!-- Filled from localStorage by ppdashboard.js -->
@@ -164,6 +172,26 @@
             </div>
         </div>
     </section>
+
+    <!-- Detail for a stat card: the full list behind whichever number was
+         clicked. One dialog for all four, with a second level for a single
+         meeting or match; the back button returns to the list. -->
+    <div id="statModal" class="modal">
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div class="modal-heading">
+                    <button type="button" class="stat-back" id="statBack" hidden aria-label="Back to list">
+                        <i class='bx bx-chevron-left'></i>
+                    </button>
+                    <h2 id="statTitle">Details</h2>
+                </div>
+                <button type="button" class="close-modal" id="statClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="statBody"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Respond to a partnership proposal -->
     <div id="respondModal" class="modal">

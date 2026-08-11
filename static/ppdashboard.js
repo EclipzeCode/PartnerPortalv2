@@ -364,20 +364,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    function renderEvent(event) {
-        // Parse as local time; a bare "YYYY-MM-DD" is treated as UTC by Date
-        // and would render as the previous day in western timezones.
+    // Local time; a bare "YYYY-MM-DD" is treated as UTC by Date and would
+    // render as the previous day in western timezones.
+    function eventDate(event) {
         const [year, month, day] = event.date.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        const monthLabel = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        return new Date(year, month - 1, day);
+    }
 
+    function eventTimeLabel(event) {
         const endTime = addHours(event.time, event.duration);
-        const timeLabel = endTime
+        return endTime
             ? `${formatTime(event.time)} - ${endTime}`
             : formatTime(event.time);
+    }
+
+    function renderEvent(event) {
+        const date = eventDate(event);
+        const monthLabel = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        const timeLabel = eventTimeLabel(event);
 
         const item = document.createElement('div');
         item.className = 'event-item';
+        // Opens the same dialog the Upcoming stat card does.
+        item.dataset.eventId = event.id;
         item.innerHTML = `
             <div class="event-date">
                 <span class="event-day">${date.getDate()}</span>
@@ -416,16 +425,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Meetings are one of the feed's sources, so adding or removing one
         // has to reach the activity list too.
         renderActivity();
+        // ...and the dialog, if it is open on the meetings it just changed.
+        if (statModal && statModal.classList.contains('active')) renderStat();
     }
 
     if (eventsList) {
         eventsList.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-event[data-event-id]');
-            if (!btn) return;
-            saveEvents(loadEvents().filter(
-                (ev) => String(ev.id) !== btn.dataset.eventId
-            ));
-            renderSavedEvents();
+            if (btn) {
+                saveEvents(loadEvents().filter(
+                    (ev) => String(ev.id) !== btn.dataset.eventId
+                ));
+                renderSavedEvents();
+                return;
+            }
+            // Anywhere else on the row opens that meeting in the dialog.
+            const item = e.target.closest('.event-item[data-event-id]');
+            if (item) openStat('events', { kind: 'event', id: item.dataset.eventId });
         });
     }
 
@@ -534,6 +550,302 @@ document.addEventListener('DOMContentLoaded', async () => {
             eventForm.reset();
             clearEventErrors();
             closeModal();
+        });
+    }
+
+    // --- Stat detail dialog ----------------------------------------------
+    // One dialog behind all four stat cards. `statView` picks the list;
+    // `statDetail`, when set, replaces it with a single item and reveals the
+    // back button. Layout aims to fit a whole list without scrolling (see the
+    // two-column .stat-list in ppdashboard.css); the body can still scroll,
+    // because with enough matches nothing fits and clipping would be worse.
+    const statModal = document.getElementById('statModal');
+    const statTitle = document.getElementById('statTitle');
+    const statBody = document.getElementById('statBody');
+    const statBack = document.getElementById('statBack');
+
+    let statView = null;
+    let statDetail = null;
+    let allMatches = null;   // cached /api/matches
+    let matchesError = null;
+
+    const VIEW_TITLES = {
+        matches: 'Matches',
+        mutual: 'Two-way matches',
+        events: 'Upcoming meetings',
+        tags: 'Profile tags'
+    };
+
+    function sortedEvents() {
+        return loadEvents().sort((a, b) =>
+            `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+    }
+
+    function matchesFor(view) {
+        const list = allMatches || [];
+        return view === 'mutual'
+            ? list.filter((m) => m.match_detail && m.match_detail.mutual)
+            : list;
+    }
+
+    function emptyState(message) {
+        return `<p class="empty-state">${esc(message)}</p>`;
+    }
+
+    function matchRow(m) {
+        const meta = [m.organization_type, m.location].filter(Boolean).map(esc).join(' · ');
+        return `
+            <button type="button" class="stat-row" data-match-id="${m.id}">
+                <span class="stat-row-mark">${esc(m.match_score)}<small>match</small></span>
+                <span class="stat-row-main">
+                    <span class="stat-row-title">${esc(m.name)}${
+                        m.match_detail && m.match_detail.mutual
+                            ? '<span class="mutual-flag">2-way</span>' : ''
+                    }</span>
+                    <span class="stat-row-meta">${meta || '&mdash;'}</span>
+                </span>
+                <i class='bx bx-chevron-right stat-row-go'></i>
+            </button>`;
+    }
+
+    function eventRow(ev) {
+        const d = eventDate(ev);
+        return `
+            <button type="button" class="stat-row" data-event-id="${esc(ev.id)}">
+                <span class="stat-row-mark">${d.getDate()}<small>${
+                    esc(d.toLocaleString('en-US', { month: 'short' }))
+                }</small></span>
+                <span class="stat-row-main">
+                    <span class="stat-row-title">${esc(ev.title)}</span>
+                    <span class="stat-row-meta">${esc(ev.partner)} · ${esc(eventTimeLabel(ev))}</span>
+                </span>
+                <i class='bx bx-chevron-right stat-row-go'></i>
+            </button>`;
+    }
+
+    function field(label, value) {
+        if (!value) return '';
+        return `<div class="stat-field"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
+    }
+
+    function eventDetail(ev) {
+        const d = eventDate(ev);
+        const full = d.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+        });
+        const hours = Number(ev.duration) || 1;
+        return `
+            <div class="stat-detail-head">
+                <span class="stat-row-mark">${d.getDate()}<small>${
+                    esc(d.toLocaleString('en-US', { month: 'short' }))
+                }</small></span>
+                <div>
+                    <div class="stat-row-title">${esc(ev.title)}</div>
+                    <div class="stat-row-meta">With ${esc(ev.partner)}</div>
+                </div>
+            </div>
+            <dl class="stat-detail-grid">
+                ${field('Date', full)}
+                ${field('Time', eventTimeLabel(ev))}
+                ${field('Duration', `${hours} hour${hours === 1 ? '' : 's'}`)}
+                ${field('Location', ev.location)}
+            </dl>
+            ${ev.description
+                ? `<p class="stat-detail-note">${esc(ev.description)}</p>` : ''}
+            <div class="stat-detail-actions">
+                <button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}">
+                    <i class='bx bx-trash'></i> Remove meeting
+                </button>
+            </div>`;
+    }
+
+    function matchDetail(m) {
+        const d = m.match_detail || {};
+        const meta = [m.organization_type, m.location].filter(Boolean).map(esc).join(' · ');
+        const list = (items) => (items && items.length)
+            ? `<div class="tag-chips">${items.map((i) => `<span>${esc(i)}</span>`).join('')}</div>`
+            : '<p class="stat-row-meta">Nothing listed</p>';
+
+        return `
+            <div class="stat-detail-head">
+                <span class="stat-row-mark">${esc(m.match_score)}<small>match</small></span>
+                <div>
+                    <div class="stat-row-title">${esc(m.name)}${
+                        d.mutual ? '<span class="mutual-flag">2-way</span>' : ''
+                    }</div>
+                    <div class="stat-row-meta">${meta || '&mdash;'}</div>
+                </div>
+            </div>
+            ${m.description ? `<p class="stat-detail-note">${esc(m.description)}</p>` : ''}
+            <div class="stat-tags">
+                <div class="needs">
+                    <h3><i class='bx bx-down-arrow-alt'></i> They can offer you</h3>
+                    ${list(d.they_give_labels)}
+                </div>
+                <div class="offers">
+                    <h3><i class='bx bx-up-arrow-alt'></i> You can offer them</h3>
+                    ${list(d.i_give_labels)}
+                </div>
+            </div>
+            <dl class="stat-detail-grid" style="margin-top:1rem">
+                ${field('Contact', m.contact_email)}
+                ${field('Phone', m.contact_phone)}
+            </dl>
+            <div class="stat-detail-actions">
+                <a class="btn-primary" href="organization.html?id=${encodeURIComponent(m.id)}"
+                   target="_blank" rel="noopener">
+                    <i class='bx bx-id-card'></i> View public profile
+                </a>
+                <a class="btn-ghost" href="ppsearch.html">Propose a partnership</a>
+            </div>`;
+    }
+
+    function tagsView() {
+        const org = (dashboard && dashboard.organization) || {};
+        const chips = (items) => (items && items.length)
+            ? `<div class="tag-chips">${items.map((i) => `<span>${esc(i)}</span>`).join('')}</div>`
+            : '<p class="stat-row-meta">Nothing selected yet.</p>';
+        return `
+            <div class="stat-tags">
+                <div class="needs">
+                    <h3><i class='bx bx-down-arrow-alt'></i> What you need
+                        (${(org.needs_labels || []).length})</h3>
+                    ${chips(org.needs_labels)}
+                </div>
+                <div class="offers">
+                    <h3><i class='bx bx-up-arrow-alt'></i> What you offer
+                        (${(org.offers_labels || []).length})</h3>
+                    ${chips(org.offers_labels)}
+                </div>
+            </div>`;
+    }
+
+    function renderStat() {
+        if (!statModal) return;
+
+        // Drilled into a single item.
+        if (statDetail) {
+            statBack.hidden = false;
+            if (statDetail.kind === 'event') {
+                const ev = loadEvents().find((e) => String(e.id) === String(statDetail.id));
+                if (!ev) { statDetail = null; return renderStat(); }
+                statTitle.textContent = ev.title;
+                statBody.innerHTML = eventDetail(ev);
+            } else {
+                const m = (allMatches || []).find((x) => String(x.id) === String(statDetail.id));
+                if (!m) { statDetail = null; return renderStat(); }
+                statTitle.textContent = m.name;
+                statBody.innerHTML = matchDetail(m);
+            }
+            return;
+        }
+
+        statBack.hidden = true;
+
+        if (statView === 'events') {
+            const events = sortedEvents();
+            statTitle.textContent = `${VIEW_TITLES.events} (${events.length})`;
+            statBody.innerHTML = events.length
+                ? `<div class="stat-list">${events.map(eventRow).join('')}</div>`
+                : emptyState('No meetings scheduled yet. Use Add Event to create one.');
+            return;
+        }
+
+        if (statView === 'tags') {
+            const org = (dashboard && dashboard.organization) || {};
+            const total = (org.needs_labels || []).length + (org.offers_labels || []).length;
+            statTitle.textContent = `${VIEW_TITLES.tags} (${total})`;
+            statBody.innerHTML = tagsView();
+            return;
+        }
+
+        // matches / mutual
+        statTitle.textContent = VIEW_TITLES[statView] || 'Details';
+        if (matchesError) {
+            statBody.innerHTML = emptyState(matchesError);
+            return;
+        }
+        if (allMatches === null) {
+            statBody.innerHTML = emptyState('Loading...');
+            return;
+        }
+        const list = matchesFor(statView);
+        statTitle.textContent = `${VIEW_TITLES[statView]} (${list.length})`;
+        statBody.innerHTML = list.length
+            ? `<div class="stat-list">${list.map(matchRow).join('')}</div>`
+            : emptyState(statView === 'mutual'
+                ? 'No two-way matches yet. These are organizations that need what you offer and offer what you need.'
+                : 'No matches yet. Adding more needs and offers to your profile widens the search.');
+    }
+
+    async function ensureMatches() {
+        if (allMatches !== null || matchesError) return;
+        try {
+            const data = await window.api('/api/matches');
+            allMatches = data.matches || [];
+        } catch (error) {
+            matchesError = error.status === 409
+                ? 'Finish your profile first — matches are built from what you need and offer.'
+                : (error.message || 'Could not load matches.');
+        }
+        renderStat();
+    }
+
+    function openStat(view, detail) {
+        if (!statModal) return;
+        statView = view;
+        statDetail = detail || null;
+        statModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        renderStat();
+        if (view === 'matches' || view === 'mutual') ensureMatches();
+    }
+
+    function closeStat() {
+        if (!statModal) return;
+        statModal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+        statDetail = null;
+    }
+
+    document.querySelectorAll('.stat-card[data-stat]').forEach((card) => {
+        card.addEventListener('click', () => openStat(card.dataset.stat));
+    });
+
+    const eventsViewAll = document.getElementById('eventsViewAll');
+    if (eventsViewAll) eventsViewAll.addEventListener('click', () => openStat('events'));
+
+    if (statModal) {
+        statBack.addEventListener('click', () => { statDetail = null; renderStat(); });
+        document.getElementById('statClose').addEventListener('click', closeStat);
+        statModal.addEventListener('click', (e) => {
+            if (e.target === statModal) closeStat();
+        });
+
+        // Row clicks and the in-detail remove button.
+        statBody.addEventListener('click', (e) => {
+            const remove = e.target.closest('[data-remove-event]');
+            if (remove) {
+                saveEvents(loadEvents().filter(
+                    (ev) => String(ev.id) !== remove.dataset.removeEvent));
+                statDetail = null;
+                renderSavedEvents();  // repaints the card, the feed and this dialog
+                return;
+            }
+            const row = e.target.closest('.stat-row');
+            if (!row) return;
+            if (row.dataset.eventId) {
+                statDetail = { kind: 'event', id: row.dataset.eventId };
+            } else if (row.dataset.matchId) {
+                statDetail = { kind: 'match', id: row.dataset.matchId };
+            }
+            renderStat();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || !statModal.classList.contains('active')) return;
+            // Escape steps back out of a detail before closing the dialog.
+            if (statDetail) { statDetail = null; renderStat(); } else closeStat();
         });
     }
 
