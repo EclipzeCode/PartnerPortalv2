@@ -127,6 +127,34 @@ class Organization(Base):
             "is_demo": self.is_demo,
         }
 
+    def public_profile(self):
+        """The org's profile page. No contact details, no account required.
+
+        Narrower than public_dict on purpose. public_dict is "public" only in
+        the sense of visible to another signed-in organization, and it carries
+        contact_email and contact_phone precisely so a match can be acted on.
+        This payload is served unauthenticated, so those two would be handing
+        every listed organization's inbox and phone number to anyone crawling
+        the site. Same line Partnership.public_summary draws.
+
+        A signed-in viewer still gets the contact block -- see the authenticated
+        /api/organizations/<id>, which the profile page enriches from.
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "organization_type": self.organization_type,
+            "location": self.location,
+            "remote_friendly": self.remote_friendly,
+            "description": self.description,
+            "needs_labels": labels_for(self.needs),
+            "offers_labels": labels_for(self.offers),
+            "needs_note": self.needs_note,
+            "offers_note": self.offers_note,
+            "partnership_goals": self.partnership_goals,
+            "is_demo": self.is_demo,
+        }
+
     def private_dict(self):
         """The signed-in org's own record, including account-level fields."""
         data = self.public_dict()

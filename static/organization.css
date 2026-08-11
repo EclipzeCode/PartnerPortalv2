@@ -1,0 +1,316 @@
+/* Public organization profile.
+   Standalone stylesheet, like partnership.css: this page is shown to people
+   who have never seen the app, so it carries no navigation. */
+
+:root {
+    --primary: #4361ee;
+    --primary-dark: #20348f;
+    --text: #2b2d42;
+    --text-light: #8d99ae;
+    --border: #e6e8f0;
+    --success: #16a34a;
+    --warning: #d97706;
+    --bg: #f5f7ff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+}
+
+.org-page {
+    max-width: 48.75rem;
+    margin: 0 auto;
+}
+
+.org-card {
+    background: #fff;
+    border-radius: 1rem;
+    padding: 2.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
+}
+
+.loading,
+.org-error {
+    color: var(--text-light);
+    text-align: center;
+    padding: 2rem 0;
+}
+
+/* Seeded example orgs are fictional; say so before anything else on a page
+   that can be linked to from outside the app. */
+.org-demo-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(217, 119, 6, 0.1);
+    color: var(--warning);
+    border-radius: 0.625rem;
+    padding: 0.7rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-bottom: 1.75rem;
+}
+
+/* --- Header -------------------------------------------------------------- */
+.org-head {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.org-avatar {
+    width: 4rem;
+    height: 4rem;
+    flex-shrink: 0;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(67, 97, 238, 0.12);
+    color: var(--primary);
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.org-headings {
+    flex: 1;
+    min-width: 12rem;
+}
+
+.org-headings h1 {
+    font-size: 1.9rem;
+    line-height: 1.25;
+}
+
+.org-meta {
+    color: var(--text-light);
+    font-size: 0.95rem;
+}
+
+.org-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.09);
+    padding: 0.25rem 0.65rem;
+    border-radius: 62.4375rem;
+}
+
+/* Only rendered for a signed-in viewer, from the authenticated endpoint. */
+.org-match {
+    flex-shrink: 0;
+    text-align: center;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1.1rem;
+}
+
+.org-match-score {
+    display: block;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.1;
+}
+
+.org-match-label {
+    font-size: 0.72rem;
+    color: var(--text-light);
+}
+
+.org-bio {
+    color: var(--text);
+    margin-bottom: 2rem;
+}
+
+/* --- The exchange -------------------------------------------------------- */
+/* Same give/receive shape as the proposals page and the public agreement, so
+   the product reads consistently wherever a pairing is described. */
+.org-exchange {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.org-side {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+}
+
+.org-side h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    margin-bottom: 0.75rem;
+}
+
+.org-side:first-child h2 i { color: var(--success); }
+.org-side:last-child h2 i { color: var(--primary); }
+
+.org-side ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.org-side li {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 62.4375rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.86rem;
+}
+
+.org-side li.none {
+    border-style: dashed;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.org-note {
+    margin-top: 0.8rem;
+    font-size: 0.88rem;
+    color: var(--text-light);
+    line-height: 1.55;
+}
+
+/* --- Sections ------------------------------------------------------------ */
+.org-section {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+}
+
+.org-section h2 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.org-contact p {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+}
+
+.org-contact i {
+    color: var(--primary);
+}
+
+.org-contact a {
+    color: var(--primary);
+}
+
+.org-contact-locked {
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
+.org-contact-locked i {
+    color: var(--text-light);
+    margin-right: 0.25rem;
+}
+
+.org-contact-locked a {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* --- Actions ------------------------------------------------------------- */
+.org-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.btn-share,
+.btn-find {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.7rem 1.3rem;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.btn-share {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.btn-share:hover {
+    background: rgba(67, 97, 238, 0.07);
+}
+
+.btn-find {
+    background: var(--primary);
+    color: #fff;
+    border: 1px solid var(--primary);
+}
+
+.btn-find:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.org-footer {
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.86rem;
+    margin-top: 1.5rem;
+}
+
+.org-footer a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+@media (max-width: 40em) {
+    .org-card {
+        padding: 1.5rem;
+    }
+
+    .org-exchange {
+        grid-template-columns: 1fr;
+    }
+
+    .org-headings h1 {
+        font-size: 1.5rem;
+    }
+
+    .btn-share,
+    .btn-find {
+        width: 100%;
+        justify-content: center;
+    }
+}

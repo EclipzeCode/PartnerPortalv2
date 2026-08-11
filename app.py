@@ -324,6 +324,28 @@ def get_organization(org, db, org_id):
     return jsonify({"organization": data})
 
 
+@app.route("/api/organizations/<int:org_id>/public", methods=["GET"])
+def public_organization(org_id):
+    """An organization's public profile. Deliberately unauthenticated.
+
+    So an org can be linked to from an email, a grant application or its own
+    website without the reader needing an account. public_profile() is used
+    rather than public_dict() because this is served to anyone: see the note
+    there about contact details.
+
+    Only completed profiles resolve, matching the signed-in route -- a
+    half-filled row says nothing useful and should not have a public URL.
+    """
+    db = get_db()
+    try:
+        other = db.get(Organization, org_id)
+        if other is None or not other.onboarding_complete:
+            return jsonify({"error": "Organization not found."}), 404
+        return jsonify({"organization": other.public_profile()})
+    finally:
+        db.close()
+
+
 # --- Dashboard --------------------------------------------------------------
 @app.route("/api/dashboard", methods=["GET"])
 @login_required

@@ -73,14 +73,59 @@ body {
     margin-top: 2rem;
 }
 
+/* Profile toolbar */
+.dashboard-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.toolbar-hint {
+    font-size: 0.95rem;
+    color: var(--text-light);
+    margin: 0;
+}
+
+/* An <a> styled as .btn-action: the shared rule sets no text-decoration
+   because it was only ever used on <button>. */
+a.btn-action {
+    text-decoration: none;
+    display: inline-flex;
+}
+
+/* Draws the eye when the profile is the thing actually blocking matches. */
+.dashboard-toolbar.needs-profile .btn-action {
+    animation: toolbarNudge 2.4s ease-in-out 3;
+}
+
+@keyframes toolbarNudge {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
+    50%      { box-shadow: 0 0 0 0.5rem rgba(67, 97, 238, 0.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-toolbar.needs-profile .btn-action {
+        animation: none;
+    }
+}
+
 /* Stats Grid */
+/* Fixed 2x2 at every width. auto-fit with a minmax() floor used to reflow to
+   3-across (leaving one card stranded on its own row) at in-between widths;
+   the cards now share the row width instead of dictating it. */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13.75rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.5rem;
     margin-bottom: 3rem;
 }
 
+/* Anchors: each card links through to what it counts. */
 .stat-card {
     background: white;
     border-radius: 0.75rem;
@@ -91,11 +136,56 @@ body {
     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    text-decoration: none;
+    color: inherit;
 }
 
 .stat-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border-color: rgba(67, 97, 238, 0.35);
+}
+
+.stat-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Affordance that the card goes somewhere; slides on hover. */
+.stat-go {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 1.3rem;
+    color: var(--text-light);
+    opacity: 0;
+    transform: translateX(-0.35rem);
+    transition: opacity 0.25s ease, transform 0.25s ease, color 0.25s ease;
+}
+
+.stat-card:hover .stat-go,
+.stat-card:focus-visible .stat-go {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--primary);
+}
+
+/* Touch devices have no hover, so the chevron would never appear. */
+@media (hover: none) {
+    .stat-go {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-card,
+    .stat-go {
+        transition: none;
+    }
+
+    .stat-card:hover {
+        transform: none;
+    }
 }
 
 .stat-icon {
@@ -110,8 +200,11 @@ body {
     font-size: 1.8rem;
 }
 
+/* min-width:0 lets the text shrink inside the fixed 2-up grid instead of
+   forcing the card wider than its column. */
 .stat-content {
     flex: 1;
+    min-width: 0;
 }
 
 .stat-content h3 {
@@ -148,10 +241,72 @@ body {
 }
 
 /* Dashboard Content */
+/* Two cards now that Partner Connections is gone, so the side column gets a
+   floor wide enough for "Upcoming Events" and its Add Event button to sit on
+   one line instead of wrapping. */
 .dashboard-content {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 1fr);
     gap: 2rem;
+}
+
+/* Both cards are the same fixed height so their bottoms line up regardless of
+   how much each one holds. Tall enough for three activity rows even when the
+   text wraps to two lines; past that the list itself scrolls rather than the
+   card growing and breaking the alignment. */
+.dashboard-content > .dashboard-card {
+    height: 28rem;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+.dashboard-content .card-header,
+.dashboard-content .card-footer {
+    flex-shrink: 0;
+}
+
+.dashboard-content .activity-list,
+.dashboard-content .events-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 0;
+    /* Room for the scrollbar so it never sits on top of the text. */
+    padding-right: 0.35rem;
+}
+
+/* Anchored from the stats card, so clear the fixed site header. */
+#upcomingEventsCard {
+    scroll-margin-top: 7rem;
+}
+
+/* Slim scrollbars: the default chrome is heavy inside a small card. */
+.dashboard-content .activity-list,
+.dashboard-content .events-list {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd3e8 transparent;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar,
+.dashboard-content .events-list::-webkit-scrollbar {
+    width: 0.5rem;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-track,
+.dashboard-content .events-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-thumb,
+.dashboard-content .events-list::-webkit-scrollbar-thumb {
+    background: #cbd3e8;
+    border-radius: 62.4375rem;
+}
+
+.dashboard-content .activity-list::-webkit-scrollbar-thumb:hover,
+.dashboard-content .events-list::-webkit-scrollbar-thumb:hover {
+    background: #aab5d6;
 }
 
 .dashboard-card {
@@ -167,6 +322,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
     margin-bottom: 1.5rem;
 }
 
@@ -195,6 +352,12 @@ body {
     background: var(--primary-dark);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
+}
+
+.btn-action.small {
+    padding: 0.55rem 1rem;
+    font-size: 0.88rem;
+    white-space: nowrap;
 }
 
 .btn-action.small i {
@@ -251,101 +414,106 @@ body {
     color: var(--text-light);
 }
 
-/* Connections Grid */
-.connections-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 1rem;
-}
+/* Colour-codes the feed by what kind of thing happened, so a decline does not
+   read the same as an agreement at a glance. */
+.activity-item.kind-accepted .activity-icon { background: rgba(22, 163, 74, 0.12); color: #16a34a; }
+.activity-item.kind-declined .activity-icon,
+.activity-item.kind-withdrawn .activity-icon { background: rgba(141, 153, 174, 0.16); color: var(--text-light); }
+.activity-item.kind-incoming .activity-icon { background: rgba(217, 119, 6, 0.14); color: #d97706; }
+.activity-item.kind-event .activity-icon { background: rgba(76, 201, 240, 0.18); color: #0d8fb5; }
 
-.connection-card {
-    background: white;
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    border: 1px solid var(--border);
-    text-align: center;
-    transition: all 0.3s ease;
-}
-
-.connection-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-}
-
-.connection-avatar {
+/* Filter control. Built as a pill rather than a bare <select> so it reads as
+   a sibling of the .btn-action in the other card's header. */
+.activity-filter {
     position: relative;
-    width: 5rem;
-    height: 5rem;
-    margin: 0 auto 1rem;
-}
-
-.connection-avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid white;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-}
-
-.connection-status {
-    position: absolute;
-    bottom: 0.3125rem;
-    right: 0.3125rem;
-    width: 0.9375rem;
-    height: 0.9375rem;
-    border-radius: 50%;
-    border: 2px solid white;
-}
-
-.connection-status.online {
-    background: var(--success);
-}
-
-.connection-status.offline {
-    background: var(--text-light);
-}
-
-.connection-info h4 {
-    font-size: 1.1rem;
-    margin-bottom: 0.3rem;
-}
-
-.connection-info p {
-    font-size: 0.9rem;
-    color: var(--text-light);
-    margin-bottom: 0.5rem;
-}
-
-.connection-rating {
-    color: var(--warning);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-}
-
-.btn-connect {
-    background: var(--primary);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    font-family: "poppins";
+    gap: 0.4rem;
+    padding: 0.5rem 1.75rem 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-light);
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
 
-.btn-connect:hover {
-    background: var(--primary-dark);
+.activity-filter:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.04);
 }
 
+.activity-filter:focus-within {
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.activity-filter > i {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+/* Chevron drawn here, since the native one cannot be positioned. */
+.activity-filter::after {
+    content: '';
+    position: absolute;
+    right: 0.7rem;
+    top: 50%;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-top: -0.3rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+.activity-filter select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.activity-filter select:focus {
+    outline: none;
+}
+
+/* Options render in the OS menu, which does not inherit the pill's colour. */
+.activity-filter select option {
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* .view-all is an <a> elsewhere; as a button it needs the chrome stripped. */
+button.view-all {
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Connections Grid */
 /* Events List */
 .events-list {
     margin-bottom: 1rem;
@@ -524,6 +692,10 @@ body {
     visibility: visible;
 }
 
+/* Column layout so the header stays put and only the body scrolls. When the
+   whole container scrolled, a tall form (the description textarea alone was
+   7.5rem) pushed the last fields -- Location, and the save button -- past the
+   bottom edge with nothing to indicate they were there. */
 .modal-container {
     background: white;
     border-radius: 0.75rem;
@@ -533,7 +705,9 @@ body {
     transform: translateY(20px);
     transition: transform 0.3s ease;
     max-height: 90vh;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .modal.active .modal-container {
@@ -546,10 +720,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    position: sticky;
-    top: 0;
     background: white;
-    z-index: 1;
+    flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -576,6 +748,9 @@ body {
 
 .modal-body {
     padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 /* Form Styles */
@@ -587,6 +762,13 @@ body {
 
 .form-group {
     margin-bottom: 1rem;
+}
+
+/* The form already spaces its children with `gap`; the per-group margin on
+   top of that was stacking two gaps between every field. */
+#eventForm .form-group,
+#eventForm .form-row {
+    margin-bottom: 0;
 }
 
 .form-group label {
@@ -618,8 +800,54 @@ body {
 }
 
 .form-group textarea {
-    min-height: 7.5rem;
+    min-height: 4.5rem;
     resize: vertical;
+}
+
+/* --- Select control ------------------------------------------------------ */
+/* forms.css already resets the native chrome and draws the arrow for every
+   `.modal-body select`, so this only adds what it leaves out. */
+.modal-body select {
+    cursor: pointer;
+}
+
+.modal-body select:hover {
+    border-color: #c7cee4;
+}
+
+/* Until a real choice is made the control should read like the empty inputs
+   above it, not like a filled-in value. */
+.modal-body select:has(option[value=""]:checked) {
+    color: var(--text-light);
+}
+
+.modal-body select option {
+    color: var(--text);
+}
+
+/* --- Inline field errors ------------------------------------------------- */
+/* The .field-error note and .input-error control state are styled in
+   forms.css, which every page shares. Only the extras this modal adds live
+   here, scoped to the form so the other pages' errors are left alone. */
+#eventForm .field-error {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    line-height: 1.45;
+}
+
+#eventForm .field-error::before {
+    content: '\26A0';
+    font-size: 0.9rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* forms.css colours the border; the tint makes the field itself read as the
+   thing at fault, not just its outline. `background-color` specifically, so
+   the arrow that forms.css draws with `background-image` survives. */
+#eventForm .input-error {
+    background-color: #fef6f6;
 }
 
 .form-row {
@@ -666,76 +894,69 @@ body {
 }
 
 @media (max-width: 48em) {
-    
-    
-    
     .section-header h2 {
         font-size: 2rem;
     }
-    
+
     .dashboard-container {
         padding: 2rem;
     }
-    
+
+    /* Stays 2x2 -- the cards compact instead of dropping to one column. */
     .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .stat-card {
+        gap: 1rem;
+        padding: 1.25rem;
+    }
+
+    .stat-icon {
+        width: 3rem;
+        height: 3rem;
+        font-size: 1.4rem;
     }
 }
 
 @media (max-width: 36em) {
-    
     .dashboard-section {
         padding: 8rem 3% 5rem;
     }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
+
+    /* Icon above the text: side by side leaves too little room for the
+       label once two cards share a phone-width row. */
+    .stat-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
     }
-    
+
+    /* `margin-left: auto` means nothing once the card is a column, and there
+       is no width to spare for it either. */
+    .stat-go {
+        display: none;
+    }
+
+    .stat-value {
+        font-size: 1.6rem;
+    }
+
+    .stat-content h3 {
+        font-size: 0.9rem;
+    }
+
     .modal-container {
         width: 95%;
         max-width: 95%;
     }
-    
+
     .form-row {
         flex-direction: column;
         gap: 1rem;
     }
 }
-/* --- Live connection cards ---------------------------------------------- */
-/* These were hardcoded placeholders; they are now the org's real top matches,
-   so they carry a score and a link through to the full result. */
-.connection-score {
-    display: inline-block;
-    margin-top: 0.35rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--primary);
-    background: rgba(67, 97, 238, 0.1);
-    padding: 0.2rem 0.55rem;
-    border-radius: 62.4375rem;
-}
-
-.btn-connection {
-    margin-left: auto;
-    padding: 0.45rem 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--primary);
-    color: var(--primary);
-    background: transparent;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.btn-connection:hover {
-    background: var(--primary);
-    color: #fff;
-}
-
 .empty-state {
     grid-column: 1 / -1;
     text-align: center;

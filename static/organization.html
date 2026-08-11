@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization | PartnerPortal</title>
+    <!-- Public page: no account needed.
+         noindex for now, matching partnership.html. These profiles describe
+         real organizations that have not opted into being search-indexed;
+         letting crawlers in is a one-word change here once that is a decision
+         someone has actually made. -->
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="organization.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <main class="org-page">
+        <div class="org-card" id="orgCard">
+            <p class="loading">Loading profile...</p>
+        </div>
+
+        <p class="org-footer">
+            <a href="index.html">PartnerPortal</a> &mdash; partnerships where both sides bring something.
+        </p>
+    </main>
+
+    <script src="organization.js"></script>
+</body>
+</html>
