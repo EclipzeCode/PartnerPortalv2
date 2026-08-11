@@ -222,6 +222,46 @@ body {
     color: var(--primary);
 }
 
+/* Chips rather than another list of rows: four short labels read faster
+   side by side, and they wrap cleanly on a phone. */
+.org-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
+.org-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 62.4375rem;
+    background: #fff;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.org-link i {
+    font-size: 1rem;
+    color: var(--text-light);
+    transition: color 0.2s ease;
+}
+
+.org-link:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(67, 97, 238, 0.05);
+}
+
+.org-link:hover i {
+    color: var(--primary);
+}
+
 .org-contact-locked {
     font-size: 0.9rem;
     color: var(--text-light);

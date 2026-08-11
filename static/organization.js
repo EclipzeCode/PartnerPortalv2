@@ -64,7 +64,39 @@
     const initials = (org.name || '?')
         .split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-    const contact = viewer && (viewer.contact_email || viewer.contact_phone)
+    // Links ride with the contact block, and only appear for a signed-in
+    // viewer for the same reason contact_email does: they come from
+    // public_dict, which the unauthenticated payload deliberately excludes.
+    // Every URL here was normalised by links.py to http(s) on a known host,
+    // which is what makes it safe to put in an href.
+    const LINKS = [
+        { key: 'website_url', icon: 'bx-globe', label: 'Website' },
+        { key: 'linkedin_url', icon: 'bxl-linkedin-square', label: 'LinkedIn' },
+        { key: 'instagram_url', icon: 'bxl-instagram', label: 'Instagram' },
+        { key: 'x_url', icon: 'bxl-twitter', label: 'X' },
+    ];
+
+    // links.py already guarantees http(s), so this is belt-and-braces: esc()
+    // stops an injected value breaking out of the attribute, but it does not
+    // stop `javascript:` *inside* an href, which runs on click. Anything that
+    // ever writes these columns without going through links.py -- an import
+    // script, a seed file -- would otherwise turn this render into live XSS.
+    const safeHref = (url) => /^https?:\/\//i.test(String(url || '')) ? url : null;
+
+    const linkChips = viewer
+        ? LINKS.map((l) => ({ ...l, href: safeHref(viewer[l.key]) }))
+            .filter((l) => l.href)
+            .map((l) => `
+            <a class="org-link" href="${esc(l.href)}"
+               target="_blank" rel="noopener noreferrer nofollow">
+                <i class='bx ${esc(l.icon)}'></i> ${esc(l.label)}
+            </a>`).join('')
+        : '';
+
+    const hasContact = viewer && (
+        viewer.contact_email || viewer.contact_phone || linkChips);
+
+    const contact = hasContact
         ? `
             <section class="org-section org-contact">
                 <h2>Contact</h2>
@@ -75,13 +107,14 @@
                 ${viewer.contact_phone
                     ? `<p><i class='bx bx-phone'></i> ${esc(viewer.contact_phone)}</p>`
                     : ''}
+                ${linkChips ? `<div class="org-links">${linkChips}</div>` : ''}
             </section>
           `
         : `
             <section class="org-section org-contact-locked">
                 <p>
                     <i class='bx bx-lock-alt'></i>
-                    Contact details are shown to signed-in organizations.
+                    Contact details and links are shown to signed-in organizations.
                     <a href="pplogin.html">Sign in</a> or
                     <a href="onboarding.html">create a profile</a> to get in touch.
                 </p>

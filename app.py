@@ -29,6 +29,7 @@ from categories import (
     clean_categories,
 )
 from db import SessionLocal
+from links import LinkError, parse_links
 from matching import find_matches, score_pair
 from models import Organization, Partnership
 from notifications import (
@@ -501,6 +502,14 @@ def save_onboarding(org, db):
     if problems:
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
 
+    # All four are optional; parse_links returns None for anything left blank.
+    # Errors name the field so the form can point at the right input rather
+    # than dropping a generic message at the top of the page.
+    try:
+        links = parse_links(data)
+    except LinkError as e:
+        return jsonify({"error": str(e), "field": e.field}), 400
+
     org.name = name
     org.organization_type = organization_type
     org.location = location
@@ -513,6 +522,10 @@ def save_onboarding(org, db):
     org.description = description or None
     org.contact_email = (data.get("contact_email") or "").strip() or org.email
     org.contact_phone = (data.get("contact_phone") or "").strip() or None
+    org.website_url = links["website_url"]
+    org.instagram_url = links["instagram_url"]
+    org.x_url = links["x_url"]
+    org.linkedin_url = links["linkedin_url"]
     org.onboarding_complete = True
 
     db.commit()

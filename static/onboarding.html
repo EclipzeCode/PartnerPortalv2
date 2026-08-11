@@ -200,6 +200,50 @@
                   placeholder="Tell us a little about your organization and what kind of collaboration would be valuable."
                 ></textarea>
               </div>
+
+              <!-- Links. All optional, and shown on the public profile only to
+                   signed-in organizations -- same treatment as the contact
+                   fields above, for the same reason. -->
+              <div class="links-block">
+                <div class="links-head">
+                  <h4>Links</h4>
+                  <p class="links-note">
+                    <i class='bx bx-lock-alt'></i>
+                    All optional. Shown on your profile to signed-in
+                    organizations only, so they are not left out for scrapers.
+                  </p>
+                </div>
+
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="websiteUrl">
+                      <i class='bx bx-globe link-icon'></i> Website
+                    </label>
+                    <input type="text" id="websiteUrl" placeholder="yourorg.org" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="linkedinUrl">
+                      <i class='bx bxl-linkedin-square link-icon'></i> LinkedIn
+                    </label>
+                    <input type="text" id="linkedinUrl" placeholder="linkedin.com/company/your-org" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="instagramUrl">
+                      <i class='bx bxl-instagram link-icon'></i> Instagram
+                    </label>
+                    <input type="text" id="instagramUrl" placeholder="@yourorg" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="xUrl">
+                      <i class='bx bxl-twitter link-icon'></i> X
+                    </label>
+                    <input type="text" id="xUrl" placeholder="@yourorg" />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="actions">

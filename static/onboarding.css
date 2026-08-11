@@ -729,6 +729,54 @@ body {
 }
 
 
+/* ---------- Links ---------- */
+/* Set apart from the fields above it so the "signed-in only" note clearly
+   covers these four and not the whole step. */
+.links-block {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.links-head {
+  margin-bottom: 1rem;
+}
+
+.links-head h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+}
+
+.links-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-light);
+}
+
+.links-note i {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--primary);
+}
+
+/* Sits inside the label, so the field is identifiable at a glance without a
+   separate icon column. */
+.link-icon {
+  font-size: 1rem;
+  vertical-align: -0.12em;
+  margin-right: 0.15rem;
+  color: var(--text-light);
+}
+
+.form-group:focus-within .link-icon {
+  color: var(--primary);
+}
+
 /* Fills the height a stretched row hands these cards, instead of leaving a
    block of empty white below the last line of content. */
 .card-note {

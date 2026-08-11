@@ -20,8 +20,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     partnershipGoals: document.getElementById('partnershipGoals'),
     description: document.getElementById('description'),
     contactEmail: document.getElementById('contactEmail'),
-    contactPhone: document.getElementById('contactPhone')
+    contactPhone: document.getElementById('contactPhone'),
+    websiteUrl: document.getElementById('websiteUrl'),
+    instagramUrl: document.getElementById('instagramUrl'),
+    xUrl: document.getElementById('xUrl'),
+    linkedinUrl: document.getElementById('linkedinUrl')
   };
+
+  // Link inputs, keyed by the column name the server uses. Lets a server-side
+  // LinkError -- which reports `field` as the column name -- be pointed at the
+  // right input without a second mapping to keep in step.
+  const LINK_INPUTS = {
+    website_url: fields.websiteUrl,
+    instagram_url: fields.instagramUrl,
+    x_url: fields.xUrl,
+    linkedin_url: fields.linkedinUrl
+  };
+
+  // `hosts` is the set a URL-shaped value must be on. Absent for the website
+  // field, which is any site by definition.
+  const LINK_CHECKS = [
+    { input: fields.websiteUrl, label: 'Website' },
+    { input: fields.instagramUrl, label: 'Instagram', hosts: ['instagram.com'] },
+    { input: fields.xUrl, label: 'X', hosts: ['x.com', 'twitter.com'] },
+    { input: fields.linkedinUrl, label: 'LinkedIn', hosts: ['linkedin.com'] }
+  ];
 
   const pickers = {
     needs: document.getElementById('needsPicker'),
@@ -147,6 +170,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (me.description) fields.description.value = me.description;
     if (me.contact_email) fields.contactEmail.value = me.contact_email;
     if (me.contact_phone) fields.contactPhone.value = me.contact_phone;
+    // Stored canonical, so what comes back is what was saved, not what was
+    // originally typed -- "@acme" reappears as https://instagram.com/acme.
+    if (me.website_url) fields.websiteUrl.value = me.website_url;
+    if (me.instagram_url) fields.instagramUrl.value = me.instagram_url;
+    if (me.x_url) fields.xUrl.value = me.x_url;
+    if (me.linkedin_url) fields.linkedinUrl.value = me.linkedin_url;
 
     [['needs', me.needs], ['offers', me.offers]].forEach(([side, slugs]) => {
       (slugs || []).forEach((slug) => {
@@ -269,6 +298,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
+    // Links: a light pass only, to catch an obvious typo without a round
+    // trip. links.py is the authority -- it does the scheme allowlisting and
+    // host checking that actually matter, and duplicating that parser here
+    // would be two implementations of one security rule, free to drift.
+    // Anything this misses comes back from the server pointed at the field.
+    LINK_CHECKS.forEach(({ input, label, hosts }) => {
+      if (!input) return;
+      const value = input.value.trim();
+      if (!value) return;  // all four are optional
+
+      let message = null;
+      if (/\s/.test(value)) {
+        message = `${label}: links cannot contain spaces.`;
+      } else {
+        const scheme = value.match(/^([A-Za-z][A-Za-z0-9+.-]*):/);
+        if (scheme && !/^https?$/i.test(scheme[1])) {
+          message = `${label}: links must start with http:// or https://.`;
+        } else if (hosts && /[./]/.test(value)) {
+          // Looks like a URL rather than a bare handle, so it should be on
+          // one of that network's own domains.
+          const host = value.replace(/^https?:\/\//i, '').split('/')[0]
+            .replace(/^www\./i, '').toLowerCase();
+          const ok = hosts.some((h) => host === h || host.endsWith('.' + h));
+          if (!ok) message = `${label}: that link is not on ${hosts.join(' or ')}.`;
+        }
+      }
+
+      if (message) {
+        setFieldError(input, message);
+        problems.push(label);
+        if (!firstInvalid) firstInvalid = input;
+      }
+    });
+
     ['needs', 'offers'].forEach((side) => {
       if (selected[side].size > 0) return;
       const picker = pickers[side];
@@ -313,7 +376,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       partnership_goals: fields.partnershipGoals.value.trim(),
       description: fields.description.value.trim(),
       contact_email: fields.contactEmail.value.trim(),
-      contact_phone: fields.contactPhone.value.trim()
+      contact_phone: fields.contactPhone.value.trim(),
+      website_url: fields.websiteUrl.value.trim(),
+      instagram_url: fields.instagramUrl.value.trim(),
+      x_url: fields.xUrl.value.trim(),
+      linkedin_url: fields.linkedinUrl.value.trim()
     };
   }
 
@@ -389,8 +456,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => { window.location.href = 'ppsearch.html'; }, 900);
     } catch (error) {
+      // A rejected link comes back naming the column that failed; point at
+      // that input rather than leaving a message at the top of a long form
+      // with no indication of which of the four it means.
+      const field = error.data && error.data.field;
+      const input = field && LINK_INPUTS[field];
+      if (input) {
+        setFieldError(input, error.message);
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.focus({ preventScroll: true });
+      }
       showError(error.message || 'Something went wrong. Please try again.');
-      errorMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!input) errorMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setLoadingState(false);
     }
   });

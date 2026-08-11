@@ -70,6 +70,20 @@ class Organization(Base):
     contact_email: Mapped[str | None] = mapped_column(String(255))
     contact_phone: Mapped[str | None] = mapped_column(String(32))
 
+    # --- Links -------------------------------------------------------------
+    # All optional. Stored as full canonical URLs -- links.py normalises
+    # whatever shape they were typed in, and only ever produces http(s) on a
+    # known host, so rendering these in an href is safe.
+    #
+    # These sit alongside contact_email/contact_phone rather than with the
+    # descriptive fields on purpose: they are contact routes, so public_dict
+    # carries them (signed-in viewers) and public_profile does not (anyone
+    # with the URL). A social handle is exactly what a scraper wants.
+    website_url: Mapped[str | None] = mapped_column(String(255))
+    instagram_url: Mapped[str | None] = mapped_column(String(255))
+    x_url: Mapped[str | None] = mapped_column(String(255))
+    linkedin_url: Mapped[str | None] = mapped_column(String(255))
+
     # --- State -------------------------------------------------------------
     # Only completed profiles are matchable; a half-filled row would pollute
     # everyone else's results.
@@ -138,6 +152,10 @@ class Organization(Base):
             "partnership_goals": self.partnership_goals,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
+            "website_url": self.website_url,
+            "instagram_url": self.instagram_url,
+            "x_url": self.x_url,
+            "linkedin_url": self.linkedin_url,
             "is_demo": self.is_demo,
         }
 
@@ -146,10 +164,14 @@ class Organization(Base):
 
         Narrower than public_dict on purpose. public_dict is "public" only in
         the sense of visible to another signed-in organization, and it carries
-        contact_email and contact_phone precisely so a match can be acted on.
-        This payload is served unauthenticated, so those two would be handing
-        every listed organization's inbox and phone number to anyone crawling
-        the site. Same line Partnership.public_summary draws.
+        contact_email, contact_phone and the four link fields precisely so a
+        match can be acted on. This payload is served unauthenticated, so
+        those would be handing every listed organization's inbox, phone number
+        and social handles to anyone crawling the site. Same line
+        Partnership.public_summary draws.
+
+        Anything that lets someone contact the organization belongs in
+        public_dict, not here -- that is the rule this split encodes.
 
         A signed-in viewer still gets the contact block -- see the authenticated
         /api/organizations/<id>, which the profile page enriches from.
