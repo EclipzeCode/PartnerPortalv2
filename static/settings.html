@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Portal | Account Settings</title>
+    <link rel="stylesheet" href="settings.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="nav.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <div class="bx bx-menu" id="menu-icon"></div>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="ppsearch.html">Search</a>
+            <a href="ppdashboard.html">Dashboard</a>
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="settings.html" class="active"><i class='bx bx-cog'></i> Settings</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="settings-section">
+        <div class="section-header">
+            <h2>Account <span>Settings</span></h2>
+            <div class="underline"></div>
+        </div>
+
+        <div class="settings-container">
+            <!-- Notifications ------------------------------------------- -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-bell'></i> Notifications</h3>
+                    <p>Choose what PartnerPortal emails you about.</p>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="emailNotifications">Partnership emails</label>
+                        <p>
+                            Get an email when another organization proposes a partnership,
+                            and when someone accepts or declines one of yours. With this
+                            off, proposals still arrive &mdash; you will only see them on
+                            your dashboard.
+                        </p>
+                    </div>
+                    <!-- The checkbox is the real control; .switch is drawn from
+                         it, so keyboard and screen-reader users get a plain
+                         checkbox and everyone else gets the toggle. -->
+                    <label class="switch">
+                        <input type="checkbox" id="emailNotifications">
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+
+                <p class="setting-status" id="settingStatus" role="status" hidden></p>
+            </div>
+
+            <!-- Account --------------------------------------------------- -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-user'></i> Account</h3>
+                    <p>The email you sign in with. Partners never see this unless
+                       you list it as your contact address.</p>
+                </div>
+
+                <dl class="settings-facts">
+                    <div>
+                        <dt>Sign-in email</dt>
+                        <dd id="accountEmailValue">&mdash;</dd>
+                    </div>
+                    <div>
+                        <dt>Email status</dt>
+                        <dd id="verifiedValue">&mdash;</dd>
+                    </div>
+                    <div>
+                        <dt>Profile</dt>
+                        <dd id="profileValue">&mdash;</dd>
+                    </div>
+                </dl>
+
+                <div class="settings-links">
+                    <a href="onboarding.html" class="btn-ghost">
+                        <i class='bx bx-edit'></i> Edit profile
+                    </a>
+                    <a href="#" class="btn-ghost" id="viewPublicProfile">
+                        <i class='bx bx-show'></i> View public profile
+                    </a>
+                </div>
+            </div>
+
+            <!-- Danger zone ----------------------------------------------- -->
+            <div class="settings-card danger">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-error-circle'></i> Delete account</h3>
+                    <p>
+                        Permanently removes your organization, its profile, and every
+                        partnership and proposal it is part of. This cannot be undone.
+                    </p>
+                </div>
+                <button type="button" class="btn-danger" id="deleteAccountBtn">
+                    Delete my account
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 1: say plainly what is about to happen. Splitting this from the
+         password step means nobody types their password before they have read
+         what it authorises. -->
+    <div class="modal" id="confirmDeleteModal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="confirmDeleteTitle">
+            <div class="modal-header">
+                <h2 id="confirmDeleteTitle">Delete your account?</h2>
+                <button type="button" class="close-modal" data-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-lede">This will permanently delete:</p>
+                <ul class="delete-list">
+                    <li><i class='bx bx-x'></i> Your organization profile, needs and offers</li>
+                    <li><i class='bx bx-x'></i> Every partnership and proposal you are part of</li>
+                    <li><i class='bx bx-x'></i> Your sign-in details</li>
+                </ul>
+                <p class="modal-warning">
+                    <i class='bx bx-error'></i>
+                    Partners you have already agreed with will lose the record too.
+                    This cannot be undone.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn-ghost" data-close>Cancel</button>
+                    <button type="button" class="btn-danger" id="confirmDeleteBtn">Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: re-authenticate. A session cookie alone should not be enough
+         to destroy an account. -->
+    <div class="modal" id="passwordDeleteModal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="passwordDeleteTitle">
+            <div class="modal-header">
+                <h2 id="passwordDeleteTitle">Confirm your password</h2>
+                <button type="button" class="close-modal" data-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- novalidate: the browser's own bubble is unstyled, vanishes on
+                     the next click and only reports one problem. settings.js
+                     writes into the .field-error slot below instead. -->
+                <form id="deleteForm" novalidate>
+                    <p class="modal-lede">
+                        Type the password for <strong id="deleteEmailLabel"></strong>
+                        to delete this account.
+                    </p>
+                    <div class="form-group">
+                        <label for="deletePassword">Password</label>
+                        <input type="password" id="deletePassword"
+                               autocomplete="current-password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-ghost" data-close>Cancel</button>
+                        <button type="submit" class="btn-danger" id="deleteSubmitBtn">
+                            Delete my account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                    <li><a href="onboarding.html">Edit Profile</a></li>
+                    <li><a href="settings.html">Settings</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+    <script src="settings.js"></script>
+</body>
+</html>

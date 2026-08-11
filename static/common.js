@@ -99,27 +99,82 @@ document.addEventListener('DOMContentLoaded', () => {
     updateNavForSession();
 });
 
+// Two words at most, so "Bridgewater Community Arts Trust" reads as BC rather
+// than a wall of capitals. Filtering empties first keeps a stray double space
+// from producing `undefined[0]`.
+function initialsFor(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
 async function updateNavForSession() {
-    const loginLinks = [...document.querySelectorAll('.navbar a[href="pplogin.html"]')];
-    if (loginLinks.length === 0) return;
+    const slot = document.getElementById('navAccount');
+    if (!slot) return;
 
     let me = null;
     try {
         const data = await window.api('/api/me', { allowUnauthenticated: true });
         me = data && data.organization;
     } catch {
-        // Signed out, or the server is down. Either way, leave the nav alone.
+        // Signed out, or the server is down. The signed-out call to action is
+        // the honest thing to show in both cases.
+    }
+
+    if (!me) {
+        slot.dataset.state = 'out';
         return;
     }
-    if (!me) return;
 
-    loginLinks.forEach((link) => {
-        link.textContent = 'Sign out';
-        link.href = '#';
-        link.addEventListener('click', async (e) => {
-            e.preventDefault();
+    const set = (id, text) => {
+        const el = document.getElementById(id);
+        // textContent, not innerHTML: the name is whatever the org typed.
+        if (el) el.textContent = text;
+    };
+    set('accountInitials', initialsFor(me.name));
+    set('accountLabel', me.name || 'Your account');
+    set('accountName', me.name || 'Your account');
+    set('accountEmail', me.email || '');
+
+    slot.dataset.state = 'in';
+    wireAccountMenu();
+}
+
+function wireAccountMenu() {
+    const toggle = document.getElementById('accountToggle');
+    const dropdown = document.getElementById('accountDropdown');
+    const signOut = document.getElementById('accountSignOut');
+    if (!toggle || !dropdown) return;
+
+    const setOpen = (open) => {
+        dropdown.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+    };
+
+    toggle.addEventListener('click', (e) => {
+        // Without this the document listener below sees the same click and
+        // closes the menu in the same tick it was opened.
+        e.stopPropagation();
+        setOpen(dropdown.hidden);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (dropdown.hidden) return;
+        if (!dropdown.contains(e.target) && !toggle.contains(e.target)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || dropdown.hidden) return;
+        setOpen(false);
+        // Focus goes back to what opened the menu, rather than being left on
+        // an element that is now hidden.
+        toggle.focus();
+    });
+
+    if (signOut) {
+        signOut.addEventListener('click', async () => {
             await window.api('/logout', { method: 'POST', allowUnauthenticated: true });
             location.href = 'index.html';
         });
-    });
+    }
 }

@@ -88,6 +88,202 @@
     line-height: 1;
 }
 
+/* --- Account slot -------------------------------------------------------- */
+/* The end of the bar holds one of two things: the signed-out call to action,
+ * or the signed-in avatar. Both are always in the markup, stacked in a single
+ * grid cell, so the slot is permanently as wide as the wider of the two -- the
+ * CTA -- and switching between them cannot shift the links to its left.
+ *
+ * Sizing the slot by stacking the real elements, rather than setting a width
+ * here, is what keeps that promise honest: the CTA's own font-size clamp and
+ * padding decide the reserved width at every viewport, so there is no number
+ * in this file to drift out of step with the button it is reserving room for.
+ */
+.nav-account {
+    display: grid;
+    justify-items: end;
+    align-items: center;
+    flex-shrink: 0;
+    /* Sits further out than the links sit from each other: this is an account
+       control, not another destination in the same list. */
+    margin-left: clamp(0.5rem, 2.2vw, 2.25rem);
+}
+
+.nav-account > * {
+    grid-area: 1 / 1;
+}
+
+/* Both states stay hidden until /api/me answers. The slot still holds its
+   width, so nothing moves when the answer arrives -- and nobody sees "Login"
+   flash at them a moment before the avatar replaces it, which is what the
+   old nav did on every page load. visibility (not opacity) also takes the
+   hidden state out of hit-testing, so the covered element is never clickable. */
+.nav-account[data-state="loading"] > * {
+    visibility: hidden;
+}
+
+.nav-account[data-state="out"] .account-menu {
+    visibility: hidden;
+}
+
+.nav-account[data-state="in"] .nav-auth-cta {
+    visibility: hidden;
+}
+
+/* .navbar a wins on specificity, so these are qualified to match it. */
+.navbar a.nav-auth-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.15rem;
+    border-radius: 999px;
+    background: var(--primary, #4361ee);
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.navbar a.nav-auth-cta:hover {
+    background: var(--primary-dark, #3a56d4);
+    color: #fff;
+    box-shadow: 0 0.35rem 0.9rem rgba(67, 97, 238, 0.28);
+}
+
+/* Never underlined as the "current page", even on pplogin.html: it is a
+   button, and the underline is drawn for text links in the list. */
+.navbar a.nav-auth-cta.active::after {
+    display: none;
+}
+
+.cta-sep {
+    opacity: 0.5;
+    font-weight: 400;
+}
+
+.account-menu {
+    /* Containing block for the dropdown. */
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.avatar-button {
+    width: 2.6rem;
+    height: 2.6rem;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(67, 97, 238, 0.12);
+    color: var(--primary, #4361ee);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.avatar-button:hover,
+.avatar-button[aria-expanded="true"] {
+    background: rgba(67, 97, 238, 0.2);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.12);
+}
+
+/* The name beside the circle exists for the drawer only -- in the bar the
+   dropdown's own header already says whose account this is, and a name here
+   would make the slot's width depend on how long that name happens to be. */
+.avatar-button .avatar-label {
+    display: none;
+}
+
+.account-dropdown {
+    position: absolute;
+    top: calc(100% + 0.65rem);
+    right: 0;
+    min-width: 15rem;
+    padding: 0.4rem;
+    background: #fff;
+    border: 1px solid #eef0f6;
+    border-radius: 0.75rem;
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.14);
+    z-index: 1100;
+}
+
+.account-identity {
+    padding: 0.7rem 0.75rem 0.6rem;
+    border-bottom: 1px solid #eef0f6;
+    margin-bottom: 0.3rem;
+    /* Long org names and emails wrap rather than widening the menu. */
+    overflow-wrap: anywhere;
+}
+
+.account-identity .account-name {
+    display: block;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text, #2b2d42);
+}
+
+.account-identity .account-email {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-light, #6c757d);
+    margin-top: 0.15rem;
+}
+
+/* Qualified so the .navbar a sizing and padding above do not apply. */
+.navbar .account-dropdown a,
+.account-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--text, #2b2d42);
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.navbar .account-dropdown a:hover,
+.account-dropdown button:hover {
+    background: rgba(67, 97, 238, 0.08);
+    color: var(--primary, #4361ee);
+}
+
+.account-dropdown i {
+    font-size: 1.1rem;
+}
+
+.navbar .account-dropdown a.active::after {
+    display: none;
+}
+
+/* Signing out is separated from the two navigation items above it. */
+.account-dropdown .account-signout {
+    margin-top: 0.3rem;
+    border-top: 1px solid #eef0f6;
+    border-radius: 0 0 0.5rem 0.5rem;
+    padding-top: 0.65rem;
+}
+
+.account-dropdown .account-signout:hover {
+    background: rgba(230, 57, 70, 0.08);
+    color: #e63946;
+}
+
 /* --- Drawer ------------------------------------------------------------- */
 /* 68.75em = 1100px at the default font size, which is where the six links
    plus the logo stop fitting. Stated in em so a larger browser font moves the
@@ -141,6 +337,94 @@
     }
 
     .navbar a.active::after {
+        display: none;
+    }
+
+    /* In the drawer the bar is a vertical list, so there is no row width to
+       hold steady and nothing to the left that a swap could push. The grid
+       stacking is dropped entirely and the inactive state is removed from
+       flow, rather than left occupying a cell it would now sit below. */
+    .nav-account {
+        display: block;
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .nav-account > * {
+        grid-area: auto;
+    }
+
+    .nav-account[data-state="loading"] > *,
+    .nav-account[data-state="out"] .account-menu,
+    .nav-account[data-state="in"] .nav-auth-cta {
+        display: none;
+    }
+
+    .navbar a.nav-auth-cta {
+        justify-content: center;
+        margin: 0.9rem 0 0.4rem;
+        padding: 0.8rem 1.15rem;
+    }
+
+    .account-menu {
+        display: block;
+    }
+
+    /* The avatar becomes a full-width row: at this size the menu below it is
+       part of the drawer list, so a 2.6rem circle floating alone would read
+       as an unrelated fragment. */
+    .avatar-button {
+        width: 100%;
+        height: auto;
+        justify-content: flex-start;
+        gap: 0.7rem;
+        padding: 0.9rem 0.25rem;
+        border-radius: 0;
+        background: none;
+        box-shadow: none;
+        border-bottom: 1px solid #eef0f6;
+    }
+
+    .avatar-button:hover,
+    .avatar-button[aria-expanded="true"] {
+        background: none;
+        box-shadow: none;
+    }
+
+    .avatar-button .avatar-initials {
+        width: 2.2rem;
+        height: 2.2rem;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: rgba(67, 97, 238, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Only shown in the drawer, where the circle alone is not enough to say
+       whose account this is. */
+    .avatar-button .avatar-label {
+        display: block;
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--text, #2b2d42);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Opens inline as part of the list instead of floating over the page. */
+    .account-dropdown {
+        position: static;
+        min-width: 0;
+        padding: 0.2rem 0 0.4rem;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .account-identity {
         display: none;
     }
 }

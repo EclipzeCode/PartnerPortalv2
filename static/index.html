@@ -20,7 +20,31 @@
             <a href="ppsearch.html">Search</a>
             <a href="ppdashboard.html">Dashboard</a>
             <!-- <a href="pphelp.html">Help</a> -->
-            <a href="pplogin.html">Login</a>
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
         </nav>
     </header>
 

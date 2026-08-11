@@ -113,6 +113,17 @@ class Organization(Base):
     email_verify_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    # Covers the optional emails only: a partnership proposal arriving, and a
+    # proposal being accepted or declined. Verification mail ignores this,
+    # because it is how someone proves they own the address in the first
+    # place -- an account that opted out before verifying could never verify.
+    #
+    # Defaults to true, unlike links_public: these emails are the only way to
+    # learn a proposal is waiting without signing in to check, so silence has
+    # to be chosen rather than arrived at by default.
+    email_notifications: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
     # Seeded example organizations. Kept out of real orgs' match results so a
     # new signup is never paired with something fictional, but still shown --
     # clearly labelled -- as example matches while the directory is small.
@@ -221,6 +232,7 @@ class Organization(Base):
             "onboarding_complete": self.onboarding_complete,
             "has_password": self.password_hash is not None,
             "email_verified": self.email_verified,
+            "email_notifications": self.email_notifications,
         })
         return data
 

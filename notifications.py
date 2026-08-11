@@ -169,6 +169,8 @@ def notify_proposal_created(proposal):
 
     Called after commit so the proposal.id and share_token are stable.
     """
+    if not proposal.recipient.email_notifications:
+        return
     cfg = _config()
     to_addr = proposal.recipient.contact_email or proposal.recipient.email
     proposer = proposal.proposer.name
@@ -220,6 +222,8 @@ def notify_proposal_created(proposal):
 
 def notify_proposal_responded(proposal):
     """The proposer gets an email when the recipient accepts or declines."""
+    if not proposal.proposer.email_notifications:
+        return
     cfg = _config()
     to_addr = proposal.proposer.contact_email or proposal.proposer.email
     responder = proposal.recipient.name
@@ -282,6 +286,12 @@ def notify_email_verification(org, token):
     contact_email has not been set yet (it defaults to the login email during
     onboarding), and this message is about the account itself, not the
     profile a partner would see.
+
+    Deliberately ignores org.email_notifications, which the other two senders
+    here honour: that setting covers optional partnership mail, and this is
+    how someone proves the address is theirs in the first place. Gating it
+    would also be unreachable in practice -- the only way to opt out is from
+    a signed-in settings page that exists after this has already been sent.
     """
     cfg = _config()
     verify_url = f"{cfg['app_url']}/verify-email.html?token={token}"

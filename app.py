@@ -467,6 +467,94 @@ def get_me(org, db):
     return jsonify({"organization": org.private_dict()})
 
 
+# --- Account settings -------------------------------------------------------
+@app.route("/api/settings", methods=["PATCH"])
+@login_required
+def update_settings(org, db):
+    """Account-level preferences, kept apart from the profile.
+
+    Only fields actually present in the body are touched, so a client that
+    knows about one setting cannot reset another it has never heard of by
+    omitting it. That is the opposite of the rule /api/onboarding uses for
+    links_public -- there the whole profile form is submitted at once, so a
+    missing key really does mean "unticked"; here each control saves on its
+    own and a missing key means "not this one".
+    """
+    data = request.get_json(silent=True) or {}
+
+    if "email_notifications" in data:
+        value = data["email_notifications"]
+        # Strictly a boolean rather than truthiness: "false" and 0 are both
+        # things a client might send, and both read as the wrong answer under
+        # bool(). Rejecting is safer than guessing which one was meant.
+        if not isinstance(value, bool):
+            return jsonify({
+                "error": "Email notifications must be true or false.",
+                "field": "email_notifications",
+            }), 400
+        org.email_notifications = value
+
+    db.commit()
+    return jsonify({
+        "message": "Settings saved",
+        "organization": org.private_dict(),
+    }), 200
+
+
+@app.route("/api/account", methods=["DELETE"])
+@login_required
+def delete_account(org, db):
+    """Delete the signed-in organization, after re-checking its password.
+
+    The password is required even though the caller already holds a valid
+    session: this is the one action with no undo, and a session cookie on a
+    borrowed or unattended browser should not be enough to destroy an account.
+
+    Partnerships pointing at this org go with it -- both foreign keys are
+    ON DELETE CASCADE -- so no proposal is left referencing a row that is no
+    longer there.
+    """
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+
+    if not password:
+        return jsonify({
+            "error": "Enter your password to confirm.",
+            "field": "password",
+        }), 400
+
+    # Keyed by account, not IP: this endpoint needs a valid session, so the
+    # thing worth slowing down is repeated guessing against one account rather
+    # than volume from one address.
+    if rate_limited("delete_account", str(org.id), max_attempts=5,
+                    window_seconds=900):
+        return jsonify({
+            "error": "Too many incorrect attempts. Please wait a few minutes "
+                     "and try again.",
+        }), 429
+
+    if not org.password_hash:
+        # A profile pre-created for an org that never claimed it. There is no
+        # password to check, so there is no safe way to honour this here.
+        return jsonify({
+            "error": "This account has no password set, so it cannot be "
+                     "deleted from here. Please contact support.",
+        }), 400
+
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
+        password.encode("utf-8"), org.password_hash.encode("utf-8")
+    ):
+        return jsonify({
+            "error": "That password is incorrect.",
+            "field": "password",
+        }), 403
+
+    db.delete(org)
+    db.commit()
+    session.clear()
+    return jsonify({"message": "Account deleted"}), 200
+
+
 # --- Onboarding -------------------------------------------------------------
 @app.route("/api/onboarding", methods=["POST"])
 @login_required
