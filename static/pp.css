@@ -122,6 +122,29 @@ button {
 .peak-mid  { fill: #d5def9; }
 .peak-near { fill: #bccbf3; }
 
+/* ---------- Scroll-driven build ----------
+   The bridge assembles as the hero is scrolled: the two peaks start
+   unconnected, and the span draws itself in. It is the same claim the page
+   makes in words -- two organizations, joined by something that carries
+   traffic both ways -- so it is worth showing rather than decorating.
+
+   pp.js drives --build from 0 to 1. It defaults to 1 so that if the script
+   never runs (error, blocked JS, reduced motion) the scene still renders
+   finished rather than as a set of disconnected peaks. */
+.hero-scene {
+    --build: 1;
+}
+
+/* Sub-ranges of the overall build, so the parts arrive in an order that makes
+   structural sense instead of everything fading up at once. Each is the
+   overall progress remapped onto that part's window and clamped to 0..1. */
+.scene-bridge {
+    --b-deck:    clamp(0, (var(--build) - 0.02) / 0.30, 1);
+    --b-towers:  clamp(0, (var(--build) - 0.18) / 0.30, 1);
+    --b-cable:   clamp(0, (var(--build) - 0.38) / 0.42, 1);
+    --b-lamps:   clamp(0, (var(--build) - 0.62) / 0.25, 1);
+}
+
 /* The bridge is the most defined element on purpose -- it is the thing the
    scene is actually about, so it gets the strongest contrast. */
 .bridge-cable {
@@ -129,19 +152,48 @@ button {
     stroke: #8095d8;
     stroke-width: 3;
     stroke-linecap: round;
+    /* pathLength="1" on the element makes these 0..1 regardless of the real
+       geometry, so the cable draws itself from both anchors inward. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: calc(1 - var(--b-cable));
 }
 
 .bridge-hangers line {
     stroke: #97a9e0;
     stroke-width: 1.6;
+    opacity: 0;
 }
 
+/* Staggered so the hangers drop in across the span rather than in one block.
+   Written out per line because there are only six and the alternative is a
+   custom property per element that says the same thing less directly. */
+.bridge-hangers line:nth-child(1) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
+.bridge-hangers line:nth-child(2) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
+.bridge-hangers line:nth-child(3) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
+.bridge-hangers line:nth-child(4) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
+.bridge-hangers line:nth-child(5) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
+.bridge-hangers line:nth-child(6) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
+
+/* Towers rise out of the deck. */
 .bridge-tower {
     fill: #7286d0;
+    transform-box: fill-box;
+    transform-origin: bottom;
+    transform: scaleY(var(--b-towers));
 }
 
+/* Deck extends outward from mid-span. */
 .bridge-deck {
     fill: #6d81cd;
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: scaleX(var(--b-deck));
+}
+
+/* Without this the lamp dots hang in mid-air over an unbuilt span: their own
+   opacity has a non-zero floor so an unlit lamp still reads as a lamp. */
+.bridge-lamps {
+    opacity: var(--b-lamps);
 }
 
 /* Lamps. Warm against the cool blues so they read instantly, and so a lit lamp

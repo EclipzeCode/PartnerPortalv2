@@ -1,10 +1,17 @@
 // ---------------------------------------------------------------------------
-// Hero scene: cursor parallax + bridge lamps
+// Hero scene: scroll-driven bridge build + cursor parallax + bridge lamps
 //
-// Two effects share one rAF loop:
-//   1. Each layer translates by an amount proportional to its depth, so near
+// Three effects, two independent drivers:
+//   1. Scroll assembles the bridge. --build (0..1) is written to the scene and
+//      pp.css remaps it onto each part; the lamps are lit from here in JS
+//      because they share --lit with the cursor effect below.
+//   2. Each layer translates by an amount proportional to its depth, so near
 //      ridges move further than distant ones as the cursor moves.
-//   2. Deck lamps brighten based on how close the cursor is to each one.
+//   3. Deck lamps brighten based on how close the cursor is to each one.
+//
+// The scroll build runs on touch as well -- scrolling is the one interaction
+// every visitor has -- while the parallax and cursor lighting need a real
+// pointer. Reduced motion skips both and leaves the scene finished.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     const scene = document.getElementById('heroScene');
@@ -21,10 +28,89 @@ document.addEventListener('DOMContentLoaded', () => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = window.matchMedia('(pointer: fine)').matches;
 
-    // Without a real cursor (touch) or with reduced motion, leave the scene
-    // static but give the lamps a gentle baseline so the bridge still reads.
+    // Lamps are lit by two things at once. Each keeps its own contribution and
+    // the brighter one wins, so scrolling past does not dim a lamp the cursor
+    // is currently sitting on, and vice versa.
+    const scrollLit = lamps.map(() => 0);
+    const cursorLit = lamps.map(() => 0);
+
+    function applyLamps() {
+        lamps.forEach((lamp, i) => {
+            const lit = Math.max(scrollLit[i], cursorLit[i]);
+            lamp.style.setProperty('--lit', lit.toFixed(3));
+        });
+    }
+
+    // --- Scroll build ----------------------------------------------------
+    const BUILD_FRACTION = 0.6;  // of a viewport height to go from bare to built
+    const LAMP_FIRST = 0.66;     // build progress at which lamp 1 starts to lift
+    const LAMP_STEP = 0.05;      // stagger between lamps
+    const LAMP_RAMP = 0.14;      // how much progress one lamp takes to reach full
+    const LAMP_MAX = 0.6;        // ceiling, so the cursor can still add on top
+
+    let buildQueued = false;
+    let buildStart = 0;   // scrollY at which the build begins
+    let buildSpan = 1;    // how much further scrolling completes it
+
+    // The window the build runs over has to be derived from where the scene
+    // actually sits, not from raw scroll depth. On a short viewport the hero
+    // content pushes the scene below the fold, so a build keyed to scrollY
+    // alone would finish before the bridge was ever on screen. Anchoring to
+    // the scene's own document position keeps the animation in view in both
+    // cases: it starts at 0 when the scene is already visible at rest (tall
+    // viewports) and defers until the scene is entering when it is not.
+    function measureBuildWindow() {
+        const vh = window.innerHeight;
+        const sceneDocTop = scene.getBoundingClientRect().top + window.scrollY;
+        buildStart = Math.max(0, sceneDocTop - vh * 0.95);
+        buildSpan = Math.max(1, vh * BUILD_FRACTION);
+    }
+
+    function applyBuild() {
+        buildQueued = false;
+        const build = Math.min(1, Math.max(0,
+            (window.scrollY - buildStart) / buildSpan));
+        scene.style.setProperty('--build', build.toFixed(4));
+
+        lamps.forEach((_, i) => {
+            const start = LAMP_FIRST + i * LAMP_STEP;
+            const t = Math.min(1, Math.max(0, (build - start) / LAMP_RAMP));
+            scrollLit[i] = t * LAMP_MAX;
+        });
+        applyLamps();
+    }
+
+    function onScroll() {
+        if (buildQueued) return;
+        buildQueued = true;
+        requestAnimationFrame(applyBuild);
+    }
+
+    if (!reduceMotion) {
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', () => {
+            measureBuildWindow();
+            onScroll();
+        });
+        measureBuildWindow();
+        applyBuild();  // honour a restored scroll position on reload
+
+        // The webfont lands after DOMContentLoaded and changes the hero's
+        // height, which moves the scene and so the window measured above.
+        window.addEventListener('load', () => {
+            measureBuildWindow();
+            onScroll();
+        });
+    }
+
+    // Reduced motion keeps the CSS default of --build: 1 (fully assembled) and
+    // gets a gentle static lamp glow. Touch keeps the scroll build above but
+    // stops here: there is no cursor to parallax against.
     if (reduceMotion || !finePointer) {
-        lamps.forEach(l => l.style.setProperty('--lit', '0.35'));
+        if (reduceMotion) {
+            lamps.forEach((_, i) => { scrollLit[i] = 0.35; });
+            applyLamps();
+        }
         return;
     }
 
@@ -75,8 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const dist = Math.hypot(dx, dy);
             const lit = Math.max(0, 1 - dist / LAMP_RADIUS);
             // Ease the falloff so the pool of light has a soft edge.
-            lamp.style.setProperty('--lit', (lit * lit).toFixed(3));
+            cursorLit[i] = lit * lit;
         });
+        applyLamps();
 
         const settled = Math.abs(targetX - currentX) < 0.001 && Math.abs(targetY - currentY) < 0.001;
         if (settled && !inside) {

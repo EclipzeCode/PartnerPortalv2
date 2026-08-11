@@ -50,8 +50,11 @@
 
                 <!-- The bridge -->
                 <g class="scene-layer scene-bridge" data-depth="0.46">
-                    <!-- main suspension cable: anchor, over left tower, sag, over right tower, anchor -->
-                    <path class="bridge-cable" d="M560,350 L634,258 Q720,338 806,258 L880,350"/>
+                    <!-- Main suspension cable: anchor, over left tower, sag, over
+                         right tower, anchor. pathLength="1" normalises the path so
+                         the scroll-driven draw-on in pp.css can work in 0..1 units
+                         without measuring the real length at runtime. -->
+                    <path class="bridge-cable" pathLength="1" d="M560,350 L634,258 Q720,338 806,258 L880,350"/>
 
                     <!-- hangers from cable down to deck -->
                     <g class="bridge-hangers">
