@@ -27,7 +27,11 @@
   <!-- Onboarding Section -->
   <section class="onboarding-section">
     <div class="section-header">
-      <h2>Get <span>Started</span></h2>
+      <!-- Empty on purpose: this page is both first-time onboarding and
+           "Edit profile", and only /api/me says which. onboarding.js fills it
+           once that answers, rather than showing "Get Started" to someone who
+           arrived here to edit an existing profile. -->
+      <h2 id="onboardingTitle"></h2>
       <div class="underline"></div>
       <p class="section-intro">
         Tell us what your organization needs and what it can offer. We use both

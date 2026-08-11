@@ -21,7 +21,10 @@
             <a href="ppsearch.html" class="active">Search</a>
             <a href="ppdashboard.html">Dashboard</a>
             <!-- <a href="pphelp.html">Help</a> -->
-            <a href="pplogin.html">Login</a>
+            <!-- Search is only reachable signed in, so this always ends the
+                 session. Saying "Login" here just to have common.js swap it to
+                 "Sign out" a moment later flashes the wrong word. -->
+            <a href="pplogin.html">Sign Out</a>
         </nav>
     </header>
 

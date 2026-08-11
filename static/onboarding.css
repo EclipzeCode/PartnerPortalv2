@@ -54,6 +54,11 @@ body {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 1rem;
+  /* Ships empty and is filled once /api/me says which mode this is. Pinning
+     the line box keeps the rest of the page from jumping when the text lands
+     -- min-height alone was 2px short of the rendered line. */
+  line-height: 1.25;
+  min-height: 1.25em;
 }
 
 .section-header h2 span {
