@@ -461,6 +461,51 @@ def verify_email():
         db.close()
 
 
+@app.route("/api/verify-email/resend", methods=["POST"])
+@login_required
+def resend_verification(org, db):
+    """Issue a fresh verification link for the signed-in org.
+
+    Registration sends one of these, but a message can bounce, land in spam,
+    or expire while it sits unread -- and until now that was the end of it:
+    the only route to a working link was registering all over again.
+    """
+    if org.email_verified:
+        # No information leak to worry about: this is the caller's own
+        # account, and the settings page already shows the same status.
+        return jsonify({
+            "error": "This email address is already verified.",
+        }), 400
+
+    # Tighter than the other limits in this file on purpose. Every other rate
+    # limit here protects CPU or the database; this one protects somebody's
+    # inbox, and the address is attacker-chosen at signup. Three an hour
+    # covers "it did not arrive, send it again" without making the endpoint
+    # a way to bury an address in mail.
+    if rate_limited("verify_resend", str(org.id),
+                    max_attempts=3, window_seconds=3600):
+        return jsonify({
+            "error": "Several verification emails have gone out recently. "
+                     "Check your inbox and spam folder, then try again in a "
+                     "little while.",
+        }), 429
+
+    # Replacing the token invalidates whatever was in the previous email --
+    # the column holds exactly one, so an older link stops working the moment
+    # this runs. That is the intended behaviour: the newest link is the only
+    # live one, and a link someone forwarded or left in an old message cannot
+    # be used later.
+    org.email_verify_token = secrets.token_urlsafe(32)
+    org.email_verify_sent_at = datetime.now(timezone.utc)
+    db.commit()
+
+    notify_email_verification(org, org.email_verify_token)
+    return jsonify({
+        "message": "Verification email sent",
+        "email": org.email,
+    }), 200
+
+
 @app.route("/api/me", methods=["GET"])
 @login_required
 def get_me(org, db):
@@ -758,6 +803,21 @@ def create_proposal(org, db):
     """Propose a partnership with structured terms on both sides."""
     if not org.onboarding_complete:
         return jsonify({"error": "Complete your profile first."}), 409
+
+    # The one thing an unverified account cannot do. Sending a proposal is
+    # what puts this org's name, and an email, in front of a stranger who did
+    # not ask for it -- so it is the action worth holding back until the
+    # address behind the account is known to be real. Everything else stays
+    # open: an unverified org can sign in, finish its profile, appear in
+    # search, and receive and answer proposals, because none of those let it
+    # reach anyone who has not already chosen to engage.
+    if not org.email_verified:
+        return jsonify({
+            "error": "Verify your email address before proposing a "
+                     "partnership. Open Settings to send a new "
+                     "verification link.",
+            "needs_verification": True,
+        }), 403
 
     data = request.get_json(silent=True) or {}
 

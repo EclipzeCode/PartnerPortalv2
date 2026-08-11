@@ -31,6 +31,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     const publicLink = document.getElementById('viewPublicProfile');
     publicLink.href = `organization.html?id=${encodeURIComponent(me.id)}`;
 
+    // --- Email verification ------------------------------------------------
+    const verifyPrompt = document.getElementById('verifyPrompt');
+    const verifyStatus = document.getElementById('verifyStatus');
+    const resendBtn = document.getElementById('resendVerifyBtn');
+
+    if (!me.email_verified) {
+        document.getElementById('verifyPromptEmail').textContent = me.email || '';
+        verifyPrompt.hidden = false;
+    }
+
+    resendBtn.addEventListener('click', async () => {
+        resendBtn.disabled = true;
+        verifyStatus.hidden = true;
+        try {
+            const result = await window.api('/api/verify-email/resend', {
+                method: 'POST',
+            });
+            verifyStatus.textContent =
+                `Sent. Check ${result.email} for the new link — it replaces any ` +
+                'earlier one.';
+            verifyStatus.className = 'setting-status ok';
+            verifyStatus.hidden = false;
+            // Left disabled on success: the mail is on its way, and the next
+            // useful action is reading it, not sending another.
+        } catch (error) {
+            verifyStatus.textContent =
+                error.message || 'Could not send that. Please try again.';
+            verifyStatus.className = 'setting-status error';
+            verifyStatus.hidden = false;
+            resendBtn.disabled = false;
+        }
+    });
+
     // --- Notification preference -----------------------------------------
     let statusTimer = null;
 

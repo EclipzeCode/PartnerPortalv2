@@ -107,6 +107,25 @@
                     </div>
                 </dl>
 
+                <!-- Shown only while unverified; settings.js unhides it. This
+                     is the one place a new link can be requested, which is why
+                     the dashboard notice points here rather than repeating the
+                     button. -->
+                <div class="verify-prompt" id="verifyPrompt" hidden>
+                    <div class="verify-prompt-copy">
+                        <i class='bx bx-envelope'></i>
+                        <p>
+                            Check <strong id="verifyPromptEmail"></strong> for your
+                            verification link. Until the address is confirmed you can
+                            do everything except send a partnership proposal.
+                        </p>
+                    </div>
+                    <button type="button" class="btn-ghost" id="resendVerifyBtn">
+                        <i class='bx bx-mail-send'></i> Resend email
+                    </button>
+                    <p class="setting-status" id="verifyStatus" role="status" hidden></p>
+                </div>
+
                 <div class="settings-links">
                     <a href="onboarding.html" class="btn-ghost">
                         <i class='bx bx-edit'></i> Edit profile

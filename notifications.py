@@ -280,18 +280,19 @@ def notify_proposal_responded(proposal):
 
 
 def notify_email_verification(org, token):
-    """Sent once, right after registration.
+    """Sent after registration, and again on request from the settings page.
 
-    Uses the login email, not contact_email: at this point in the signup flow
-    contact_email has not been set yet (it defaults to the login email during
-    onboarding), and this message is about the account itself, not the
-    profile a partner would see.
+    Uses the login email, not contact_email: on the signup path contact_email
+    has not been set yet (it defaults to the login email during onboarding),
+    and this message is about the account itself, not the profile a partner
+    would see. On a resend the two are often both set and different, and the
+    login address is still the right one -- it is what this link confirms.
 
     Deliberately ignores org.email_notifications, which the other two senders
-    here honour: that setting covers optional partnership mail, and this is
-    how someone proves the address is theirs in the first place. Gating it
-    would also be unreachable in practice -- the only way to opt out is from
-    a signed-in settings page that exists after this has already been sent.
+    here honour. That setting covers optional partnership mail; this is how
+    someone proves the address is theirs, and it now gates whether they can
+    propose a partnership at all. An org that had turned notifications off
+    could otherwise never verify, and never find out why.
     """
     cfg = _config()
     verify_url = f"{cfg['app_url']}/verify-email.html?token={token}"

@@ -76,6 +76,57 @@ body {
 }
 
 /* Profile toolbar */
+/* Unverified accounts only. Amber, not red: nothing is broken and nothing was
+   lost -- one step is outstanding and it blocks one action. Sits above the
+   toolbar because it is a condition on the whole page, not another action. */
+.verify-banner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgba(240, 173, 78, 0.45);
+    background: rgba(240, 173, 78, 0.08);
+    border-radius: 0.75rem;
+}
+
+.verify-banner > i {
+    color: #b8730f;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.verify-banner p {
+    /* Takes the row, pushing the button to the far edge; drops to its own
+       line once there is no room for both. */
+    flex: 1 1 18rem;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: #7a5210;
+}
+
+.verify-banner strong {
+    color: #6a4409;
+}
+
+/* White fill so the ghost button reads as a control rather than sinking into
+   the amber it sits on. */
+.verify-banner .btn-action.ghost {
+    flex-shrink: 0;
+    background: #fff;
+    border-color: rgba(240, 173, 78, 0.6);
+    color: #8a5a0b;
+}
+
+.verify-banner .btn-action.ghost:hover {
+    background: #fff;
+    border-color: #b8730f;
+    color: #6a4409;
+    box-shadow: 0 0.25rem 0.75rem rgba(184, 115, 15, 0.18);
+}
+
 .dashboard-toolbar {
     display: flex;
     align-items: center;

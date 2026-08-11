@@ -58,6 +58,21 @@
         </div>
 
         <div class="dashboard-container">
+            <!-- Unverified accounts only; ppdashboard.js unhides it. Says what
+                 is blocked and links to Settings, where the resend button
+                 lives -- one implementation of that action rather than the
+                 same button on two pages. -->
+            <div class="verify-banner" id="verifyBanner" hidden>
+                <i class='bx bx-envelope' aria-hidden="true"></i>
+                <p>
+                    <strong>Verify your email address.</strong>
+                    You can browse, edit your profile and answer proposals as
+                    normal &mdash; but you will not be able to send a partnership
+                    proposal until your address is confirmed.
+                </p>
+                <a href="settings.html" class="btn-action ghost">Verify now</a>
+            </div>
+
             <!-- Profile actions. Editing your profile is the one thing every org
                  comes back here to do, so it sits above the fold rather than
                  buried in an empty state. -->

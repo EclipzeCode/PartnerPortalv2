@@ -263,6 +263,43 @@ body {
     color: #b8730f;
 }
 
+/* --- Verification prompt ------------------------------------------------- */
+/* Amber rather than red: nothing is broken and nothing was lost -- there is
+   one step outstanding, and it blocks exactly one action. */
+.verify-prompt {
+    margin-top: 1.5rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid rgba(240, 173, 78, 0.45);
+    background: rgba(240, 173, 78, 0.08);
+    border-radius: 0.75rem;
+}
+
+.verify-prompt-copy {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+
+.verify-prompt-copy i {
+    color: #b8730f;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.verify-prompt-copy p {
+    font-size: 0.9rem;
+    color: #7a5210;
+}
+
+.verify-prompt .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.9rem;
+    background: #fff;
+}
+
 .settings-links {
     display: flex;
     flex-wrap: wrap;

@@ -99,11 +99,19 @@ class Organization(Base):
     onboarding_complete: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    # Tracked but not yet enforced anywhere -- signing up and using the product
-    # do not require this to be true. It exists so a verified badge or a "you
-    # must verify to propose partnerships" gate can be added later without a
-    # schema change. Unhashed, like Partnership.share_token: single-use,
-    # revoked on verify, and not a credential in the way a password is.
+    # Enforced in exactly one place: an org cannot send a partnership proposal
+    # until this is true (see create_proposal). Signing in, finishing a
+    # profile, appearing in search, and answering proposals all stay open --
+    # the gate is on reaching a stranger, not on using the product.
+    #
+    # Organizations that existed before that rule were grandfathered to true
+    # by migration 55c59219492b; the earliest of them hold no token at all and
+    # could never have verified.
+    #
+    # Unhashed, like Partnership.share_token: single-use, revoked on verify,
+    # and not a credential in the way a password is. Only ever one live token
+    # per org -- a resend overwrites the column, which is what retires the
+    # link in any older email.
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )

@@ -46,6 +46,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewProfileBtn.href = `organization.html?id=${encodeURIComponent(org.id)}`;
     }
 
+    // Only surfaced once the profile is finished. Before that, "you cannot
+    // send a proposal yet" is not the useful message -- an unfinished profile
+    // has nothing to propose with, and the toolbar below is already saying so.
+    const verifyBanner = document.getElementById('verifyBanner');
+    if (verifyBanner && org.email_verified === false && !dashboard.needs_onboarding) {
+        verifyBanner.hidden = false;
+    }
+
     // Stat cards. The markup labels are updated too, because "Active Partners"
     // and "Partner Score" described numbers that never existed.
     setStat('activePartners', stats.total_matches, 'Matches',
