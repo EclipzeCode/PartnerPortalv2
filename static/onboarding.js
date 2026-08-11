@@ -161,13 +161,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // The heading ships empty; this is the first point at which we know
     // whether the visitor is setting a profile up or coming back to change
-    // one. Same signal the submit button already uses.
+    // one. Same signal the submit button already uses. The tab title carries
+    // the same static "Get Started" from the <title> tag, so it needs the
+    // same fix -- otherwise the tab still announces onboarding while editing.
     const heading = document.getElementById('onboardingTitle');
     if (heading) {
       heading.innerHTML = me.onboarding_complete
         ? `Edit <span>Profile</span>`
         : `Get <span>Started</span>`;
     }
+    document.title = me.onboarding_complete
+      ? 'Partner Portal | Edit Profile'
+      : 'Partner Portal | Get Started';
 
     if (me.onboarding_complete) {
       submitBtn.innerHTML = `<i class='bx bx-save'></i> Update profile`;

@@ -32,12 +32,55 @@
     <main class="login-main">
     <div class="container" id="container">
         <div class="form-container sign-up">
-            <form>
+            <form novalidate>
                 <h1>Create Account</h1>
                 <span>or use your email for registration</span>
-                <input type="text" id="register-name" placeholder="Name">
-                <input type="email" id="register-email" placeholder="Email">
-                <input type="password" id="register-password" placeholder="Password">
+
+                <p class="form-banner" id="registerBanner" hidden></p>
+
+                <div class="field">
+                    <input type="text" id="register-name" placeholder="Organization name" autocomplete="organization">
+                    <p class="field-error" id="register-name-error"></p>
+                </div>
+
+                <div class="field">
+                    <input type="email" id="register-email" placeholder="Email" autocomplete="email">
+                    <p class="field-error" id="register-email-error"></p>
+                </div>
+
+                <div class="field">
+                    <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+                    <p class="field-error" id="register-password-error"></p>
+
+                    <!-- Live strength meter, shown once the field has a value.
+                         Purely advisory alongside the checklist below it --
+                         submission is gated on the checklist, not the meter. -->
+                    <div class="pw-meter" id="pwMeter" hidden>
+                        <div class="pw-meter-bar">
+                            <span class="pw-meter-fill" id="pwMeterFill"></span>
+                        </div>
+                        <span class="pw-meter-label" id="pwMeterLabel"></span>
+                    </div>
+
+                    <ul class="pw-checklist" id="pwChecklist" hidden>
+                        <li data-rule="length"><i class='bx bx-circle'></i> At least 10 characters</li>
+                        <li data-rule="lower"><i class='bx bx-circle'></i> One lowercase letter</li>
+                        <li data-rule="upper"><i class='bx bx-circle'></i> One uppercase letter</li>
+                        <li data-rule="digit"><i class='bx bx-circle'></i> One number</li>
+                        <li data-rule="special"><i class='bx bx-circle'></i> One special character</li>
+                    </ul>
+                </div>
+
+                <!-- Honeypot: named and placed to look real to a bot's form
+                     filler. Hidden from sighted and screen-reader users alike
+                     (aria-hidden + tabindex="-1" + off-canvas position, not
+                     display:none, since some bots skip fields hidden that
+                     obviously). Never touched by a real visitor. -->
+                <div class="hp-field" aria-hidden="true">
+                    <label for="register-website">Leave this field blank</label>
+                    <input type="text" id="register-website" name="website" tabindex="-1" autocomplete="off">
+                </div>
+
                 <button type="submit" id="register-btn" class="btn-box">Sign Up</button>
                 <p class="switch-hint">
                     Already have an account?
@@ -46,11 +89,22 @@
             </form>
         </div>
         <div class="form-container sign-in">
-            <form>
+            <form novalidate>
                 <h1>Sign In</h1>
                 <span>or use your email account</span>
-                <input type="email" id="login-email" placeholder="Email">
-                <input type="password" id="login-password" placeholder="Password">
+
+                <p class="form-banner" id="loginBanner" hidden></p>
+
+                <div class="field">
+                    <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+                    <p class="field-error" id="login-email-error"></p>
+                </div>
+
+                <div class="field">
+                    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                    <p class="field-error" id="login-password-error"></p>
+                </div>
+
                 <button type="submit" id="login-btn" class="btn-box">Sign In</button>
                 <p class="switch-hint">
                     Don't have an account?

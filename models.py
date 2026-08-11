@@ -76,6 +76,20 @@ class Organization(Base):
     onboarding_complete: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # Tracked but not yet enforced anywhere -- signing up and using the product
+    # do not require this to be true. It exists so a verified badge or a "you
+    # must verify to propose partnerships" gate can be added later without a
+    # schema change. Unhashed, like Partnership.share_token: single-use,
+    # revoked on verify, and not a credential in the way a password is.
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    email_verify_token: Mapped[str | None] = mapped_column(
+        String(64), unique=True
+    )
+    email_verify_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     # Seeded example organizations. Kept out of real orgs' match results so a
     # new signup is never paired with something fictional, but still shown --
     # clearly labelled -- as example matches while the directory is small.
@@ -162,6 +176,7 @@ class Organization(Base):
             "email": self.email,
             "onboarding_complete": self.onboarding_complete,
             "has_password": self.password_hash is not None,
+            "email_verified": self.email_verified,
         })
         return data
 

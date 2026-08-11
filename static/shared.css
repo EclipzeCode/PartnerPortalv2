@@ -6,6 +6,16 @@
    identical everywhere (the footer, focus rings, the mobile drawer backdrop)
    rather than trying to unify all five at once. */
 
+/* The UA sheet's `[hidden] { display: none }` is a bare attribute selector,
+   which carries the same specificity as a single class selector -- so any
+   page rule with `display` on a class (`.pw-meter { display: flex }`, say)
+   wins regardless of source order, and the element stays on screen with its
+   hidden attribute set. This has quietly broken scripted show/hide toggles
+   on more than one page now; fixed once here rather than per page. */
+[hidden] {
+    display: none !important;
+}
+
 /* ---------- Footer ---------- */
 .site-footer {
     background: #1a1a2e;

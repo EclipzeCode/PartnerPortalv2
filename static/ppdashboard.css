@@ -21,14 +21,7 @@
     box-sizing: border-box;
 }
 
-/* The UA sheet's `[hidden] { display: none }` is a bare attribute selector, so
-   any class rule setting `display` outranks it and the element stays on screen
-   with its hidden attribute set. Both scripted toggles here -- the activity
-   View All button and the dialog's back arrow -- are on elements whose class
-   sets display, so without this neither ever actually hides. */
-[hidden] {
-    display: none !important;
-}
+/* [hidden] is fixed for every page in shared.css, loaded below. */
 
 body {
     font-family: 'Poppins', sans-serif;

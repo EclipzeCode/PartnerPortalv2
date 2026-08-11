@@ -275,6 +275,40 @@ def notify_proposal_responded(proposal):
     _dispatch(to_addr, subject, html, text)
 
 
+def notify_email_verification(org, token):
+    """Sent once, right after registration.
+
+    Uses the login email, not contact_email: at this point in the signup flow
+    contact_email has not been set yet (it defaults to the login email during
+    onboarding), and this message is about the account itself, not the
+    profile a partner would see.
+    """
+    cfg = _config()
+    verify_url = f"{cfg['app_url']}/verify-email.html?token={token}"
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Verify your email</h1>
+  <p class="meta">One click confirms {escape(org.email)} is really you.</p>
+
+  <a class="cta" href="{escape(verify_url)}">Verify email</a>
+
+  <p class="foot">You are receiving this because this address was used to
+  register {escape(org.name)} on PartnerPortal. If that was not you, no
+  further action is needed -- the link expires and nothing is shared until
+  it is used.</p>
+</div></body></html>
+"""
+    text = (
+        f"Confirm {org.email} is really you: {verify_url}\n\n"
+        f"You are receiving this because this address was used to register "
+        f"{org.name} on PartnerPortal. If that was not you, no further "
+        f"action is needed.\n"
+    )
+    _dispatch(org.email, "Verify your email for PartnerPortal", html, text)
+
+
 def _label(slug):
     """Category labels via the shared vocabulary."""
     from categories import label_for

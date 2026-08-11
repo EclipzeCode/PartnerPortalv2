@@ -29,63 +29,259 @@ function destinationFor(organization) {
     return 'ppdashboard.html';
 }
 
-function setFieldState(input, message, ok) {
-    input.value = '';
-    input.placeholder = message;
-    input.classList.toggle('error', !ok);
-    input.classList.toggle('success', ok);
+// --- Field-level errors ------------------------------------------------
+// Both forms carry `novalidate`; the browser's own bubble is unstyled,
+// vanishes on the next click, and only ever reports the first problem. These
+// replace it with a message under the offending field, in the same
+// error-slot-plus-input-error-class shape the rest of the app uses (see
+// onboarding.js and ppdashboard.js), just wired to this page's own markup
+// since these inputs are not inside a `.form-group`.
+function setFieldError(input, errorEl, message) {
+    if (errorEl) errorEl.textContent = message || '';
+    if (input) {
+        input.classList.toggle('input-error', Boolean(message));
+        input.setAttribute('aria-invalid', message ? 'true' : 'false');
+    }
+}
+
+function clearFieldErrors(...pairs) {
+    pairs.forEach(([input, errorEl]) => setFieldError(input, errorEl, ''));
+}
+
+function setBanner(banner, message, tone) {
+    if (!banner) return;
+    banner.textContent = message || '';
+    banner.className = 'form-banner' + (tone ? ` ${tone}` : '');
+    banner.hidden = !message;
+}
+
+// A too-permissive check would let obvious typos ("name@gmail") through to
+// the server only to bounce back a second later; this is the same shape the
+// server checks, so a field never passes here and fails there for a
+// different reason.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// --- Password rules ------------------------------------------------------
+// Same five checks app.py's password_problem() enforces server-side, in the
+// same order the checklist below displays them. The server additionally
+// rejects a handful of common passwords and passwords containing the email
+// or org name -- not mirrored here, since duplicating a blocklist client-side
+// just to fail the same request twice adds no value; that feedback surfaces
+// through the banner instead if it is ever what trips someone up.
+const SPECIAL_CHARS_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
+
+function passwordChecks(password) {
+    return {
+        length: password.length >= 10,
+        lower: /[a-z]/.test(password),
+        upper: /[A-Z]/.test(password),
+        digit: /[0-9]/.test(password),
+        special: SPECIAL_CHARS_RE.test(password),
+    };
+}
+
+function passwordIsAcceptable(checks) {
+    return Object.values(checks).every(Boolean);
+}
+
+// A 1-4 heuristic, not a real entropy estimate: reaching "Strong" needs every
+// rule satisfied *and* real length margin above the 10-character floor, so
+// the meter rewards actually going further rather than just clearing the bar.
+const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
+const STRENGTH_COLORS = ['#dc2626', '#d97706', '#65a30d', '#16a34a'];
+
+function passwordStrength(password, checks) {
+    const satisfied = Object.values(checks).filter(Boolean).length;
+    let score;
+    if (satisfied <= 2) score = 1;
+    else if (satisfied === 3) score = 2;
+    else if (satisfied === 4) score = 3;
+    else score = password.length >= 14 ? 4 : 3;
+    return score;
+}
+
+// --- Password strength UI -------------------------------------------------
+const pwInput = document.getElementById('register-password');
+const pwMeter = document.getElementById('pwMeter');
+const pwMeterFill = document.getElementById('pwMeterFill');
+const pwMeterLabel = document.getElementById('pwMeterLabel');
+const pwChecklist = document.getElementById('pwChecklist');
+
+function updatePasswordUI() {
+    const password = pwInput.value;
+    const hasValue = password.length > 0;
+
+    pwMeter.hidden = !hasValue;
+    pwChecklist.hidden = !hasValue;
+    if (!hasValue) return;
+
+    const checks = passwordChecks(password);
+
+    pwChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
+        const met = Boolean(checks[item.dataset.rule]);
+        item.classList.toggle('met', met);
+        const icon = item.querySelector('i');
+        if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
+    });
+
+    const score = passwordStrength(password, checks);
+    pwMeterFill.style.width = `${(score / 4) * 100}%`;
+    pwMeterFill.style.background = STRENGTH_COLORS[score - 1];
+    pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
+    pwMeterLabel.style.color = STRENGTH_COLORS[score - 1];
+}
+
+if (pwInput) {
+    pwInput.addEventListener('input', updatePasswordUI);
+    // Clears whatever server-side password error is showing as soon as the
+    // field changes, so it does not linger once the person starts fixing it.
+    pwInput.addEventListener('input', () => {
+        const err = document.getElementById('register-password-error');
+        if (pwInput.classList.contains('input-error')) setFieldError(pwInput, err, '');
+    });
 }
 
 // --- Register ---------------------------------------------------------------
-document.querySelector('.sign-up form').addEventListener('submit', async (e) => {
+const registerForm = document.querySelector('.sign-up form');
+const registerBanner = document.getElementById('registerBanner');
+const nameInput = document.getElementById('register-name');
+const nameError = document.getElementById('register-name-error');
+const registerEmailInput = document.getElementById('register-email');
+const registerEmailError = document.getElementById('register-email-error');
+const registerPasswordError = document.getElementById('register-password-error');
+const honeypot = document.getElementById('register-website');
+
+registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const nameInput = document.getElementById('register-name');
-    const emailInput = document.getElementById('register-email');
-    const passwordInput = document.getElementById('register-password');
+    setBanner(registerBanner, '');
+    clearFieldErrors(
+        [nameInput, nameError],
+        [registerEmailInput, registerEmailError],
+        [pwInput, registerPasswordError],
+    );
 
     const name = nameInput.value.trim();
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
+    const email = registerEmailInput.value.trim();
+    const password = pwInput.value;
 
-    if (!name) return setFieldState(nameInput, 'Please fill in your organization name.', false);
-    if (!email) return setFieldState(emailInput, 'Please fill in your email.', false);
-    if (!password) return setFieldState(passwordInput, 'Please fill in your password.', false);
-    if (password.length < 8) {
-        return setFieldState(passwordInput, 'Password must be at least 8 characters.', false);
+    let firstInvalid = null;
+    const fail = (input, errorEl, message) => {
+        setFieldError(input, errorEl, message);
+        if (!firstInvalid) firstInvalid = input;
+    };
+
+    if (!name) {
+        fail(nameInput, nameError, 'Enter your organization name.');
     }
 
-    nameInput.classList.remove('error');
-    emailInput.classList.remove('error');
-    passwordInput.classList.remove('error');
+    if (!email) {
+        fail(registerEmailInput, registerEmailError, 'Enter your email.');
+    } else if (!EMAIL_RE.test(email)) {
+        fail(registerEmailInput, registerEmailError,
+            'That does not look like a valid email address.');
+    }
+
+    const checks = passwordChecks(password);
+    if (!passwordIsAcceptable(checks)) {
+        fail(pwInput, registerPasswordError,
+            'Password does not meet the requirements below.');
+    }
+
+    if (firstInvalid) {
+        firstInvalid.focus();
+        return;
+    }
+
+    const submitBtn = document.getElementById('register-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
 
     try {
         const result = await window.api('/register', {
             method: 'POST',
-            body: { name, email, password },
+            body: { name, email, password, website: honeypot.value },
             allowUnauthenticated: true
         });
-        // Registering signs you in, so go straight to building the profile.
-        window.location.href = destinationFor(result.organization);
+        // Registering signs you in. A brief success message before leaving
+        // is the only sign a verification email was sent -- the redirect
+        // itself is instant otherwise, and this is the one moment there is
+        // somewhere on-page to say so.
+        setBanner(registerBanner,
+            "Account created. We've sent a verification link to your email.",
+            'success');
+        submitBtn.textContent = 'Redirecting...';
+        setTimeout(() => {
+            window.location.href = destinationFor(result.organization);
+        }, 1400);
     } catch (error) {
-        setFieldState(emailInput, error.message, false);
-        console.error('Registration error:', error);
+        routeRegisterError(error);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign Up';
     }
 });
 
+function routeRegisterError(error) {
+    const message = error.message || 'Something went wrong. Please try again.';
+    if (error.status === 429) {
+        setBanner(registerBanner, message, 'error');
+        return;
+    }
+    const lower = message.toLowerCase();
+    if (lower.includes('password')) {
+        setFieldError(pwInput, registerPasswordError, message);
+    } else if (lower.includes('email') || lower.includes('name')) {
+        // Covers "already registered", "valid email address" and the
+        // disposable-domain message, all of which are about the email field;
+        // the org-name-in-password case is caught by the password branch
+        // above since its message also contains "password".
+        setFieldError(registerEmailInput, registerEmailError, message);
+    } else {
+        setBanner(registerBanner, message, 'error');
+    }
+}
+
 // --- Login ------------------------------------------------------------------
-document.querySelector('.sign-in form').addEventListener('submit', async (e) => {
+const loginForm = document.querySelector('.sign-in form');
+const loginBanner = document.getElementById('loginBanner');
+const loginEmailInput = document.getElementById('login-email');
+const loginEmailError = document.getElementById('login-email-error');
+const loginPasswordInput = document.getElementById('login-password');
+const loginPasswordError = document.getElementById('login-password-error');
+
+loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const emailInput = document.getElementById('login-email');
-    const passwordInput = document.getElementById('login-password');
+    setBanner(loginBanner, '');
+    clearFieldErrors(
+        [loginEmailInput, loginEmailError],
+        [loginPasswordInput, loginPasswordError],
+    );
 
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
+    const email = loginEmailInput.value.trim();
+    const password = loginPasswordInput.value;
 
-    if (!email) return setFieldState(emailInput, 'Please fill in your email.', false);
-    if (!password) return setFieldState(passwordInput, 'Please fill in your password.', false);
+    let firstInvalid = null;
+    const fail = (input, errorEl, message) => {
+        setFieldError(input, errorEl, message);
+        if (!firstInvalid) firstInvalid = input;
+    };
 
-    emailInput.classList.remove('error');
-    passwordInput.classList.remove('error');
+    if (!email) {
+        fail(loginEmailInput, loginEmailError, 'Enter your email.');
+    } else if (!EMAIL_RE.test(email)) {
+        fail(loginEmailInput, loginEmailError,
+            'That does not look like a valid email address.');
+    }
+    if (!password) {
+        fail(loginPasswordInput, loginPasswordError, 'Enter your password.');
+    }
+
+    if (firstInvalid) {
+        firstInvalid.focus();
+        return;
+    }
+
+    const submitBtn = document.getElementById('login-btn');
+    submitBtn.disabled = true;
 
     try {
         const result = await window.api('/login', {
@@ -95,14 +291,10 @@ document.querySelector('.sign-in form').addEventListener('submit', async (e) => 
         });
         window.location.href = destinationFor(result.organization);
     } catch (error) {
-        setFieldState(emailInput, error.message, false);
-        console.error('Login error:', error);
+        // "Invalid email or password" deliberately does not say which one --
+        // singling out a field would leak whether the address is registered.
+        // A banner says the same thing without pointing at either field.
+        setBanner(loginBanner, error.message || 'Something went wrong.', 'error');
+        submitBtn.disabled = false;
     }
 });
-
-const style = document.createElement('style');
-style.innerHTML = `
-    .error { border: 1px solid red; }
-    .success { border: 1px solid green; }
-`;
-document.head.appendChild(style);

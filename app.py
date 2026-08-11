@@ -1,7 +1,10 @@
 import logging
 import os
+import re
 import secrets
-from datetime import datetime, timezone
+import time
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import bcrypt
@@ -19,6 +22,7 @@ from flask import (
 
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from categories import (
     CATEGORY_GROUPS, ORGANIZATION_TYPES, TIMELINE_OPTIONS, VALID_TIMELINES,
@@ -27,7 +31,9 @@ from categories import (
 from db import SessionLocal
 from matching import find_matches, score_pair
 from models import Organization, Partnership
-from notifications import notify_proposal_created, notify_proposal_responded
+from notifications import (
+    notify_email_verification, notify_proposal_created, notify_proposal_responded,
+)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(HERE, "static")
@@ -41,6 +47,14 @@ STATIC_DIR = os.path.join(HERE, "static")
 # would publish .env, app.py and the rest of the source at the top level --
 # GET /.env would hand out DATABASE_URL and SECRET_KEY to anyone asking.
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+
+# Render terminates TLS and proxies to this app, so request.remote_addr is
+# Render's edge, not the visitor, unless this rewrites it from X-Forwarded-For.
+# The per-IP rate limits below (and any future ones) are meaningless without
+# it -- every request would appear to come from the same address. x_for=1
+# trusts exactly one proxy hop, matching Render's setup; a value too high
+# would let a client forge its own IP by sending its own X-Forwarded-For.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
 # Sessions are signed with this key. A generated fallback keeps local
 # development working, but it changes on every restart -- so every session is
@@ -65,6 +79,134 @@ app.config.update(
 # older versions, so the limit is enforced explicitly rather than surfacing as
 # a 500 for whoever picks a very long passphrase.
 MAX_PASSWORD_BYTES = 72
+
+# --- Signup validation --------------------------------------------------
+# Deliberately not a full RFC 5322 pattern -- those accept addresses no mail
+# server actually does and reject ones people really use. This catches what
+# matters for a signup form: something, an @, something, a dot, something.
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+MIN_PASSWORD_LENGTH = 10
+_SPECIAL_CHARS = set("!@#$%^&*()_+-=[]{}|;:,.<>?/~`\"'\\")
+
+# Checked case-insensitively, exactly as leaked. Not comprehensive -- the
+# point is to catch the handful of passwords bots and lazy signups reach for
+# first, not to replace a real breach-corpus check like haveibeenpwned, which
+# would mean a network call in the request path for a nonprofit tool that does
+# not need that overhead.
+COMMON_PASSWORDS = frozenset({
+    "password", "password1", "password123", "12345678", "123456789",
+    "1234567890", "qwerty123", "qwertyuiop", "letmein123", "welcome123",
+    "abc123456", "iloveyou1", "admin1234", "trustno1a", "sunshine1",
+    "princess1", "football1", "baseball1", "dragon123", "monkey123",
+    "superman1", "michael123", "shadow123", "master123", "starwars1",
+    "whatever1", "freedom123", "passw0rd1", "changeme1", "partnerportal",
+})
+
+# An exact match against COMMON_PASSWORDS alone is trivial to dodge: appending
+# "!" or "1" to "password" satisfies every structural rule above (length,
+# case, digit, special character) while remaining exactly as guessable. This
+# strips trailing digits/punctuation -- the overwhelming pattern in how people
+# adapt a weak base word to a length or complexity rule -- and checks what is
+# left against a short list of common bases, independent of the exact-string
+# list above.
+_TRAILING_NOISE_RE = re.compile(r"[^a-zA-Z]+$")
+COMMON_PASSWORD_STEMS = frozenset({
+    "password", "passw0rd", "qwerty", "qwertyuiop", "letmein", "welcome",
+    "admin", "iloveyou", "trustno", "sunshine", "princess", "football",
+    "baseball", "dragon", "monkey", "superman", "michael", "shadow",
+    "master", "starwars", "whatever", "freedom", "changeme", "partnerportal",
+    "abc",
+})
+
+
+def _password_stem(password):
+    return _TRAILING_NOISE_RE.sub("", password).lower()
+
+
+# A handful of well-known disposable/temporary-inbox providers. Not
+# exhaustive -- new ones appear constantly, and a determined spammer can
+# always run their own domain. This stops the common case: a bot or a bulk
+# signup script working down a list of throwaway-mail generators.
+DISPOSABLE_EMAIL_DOMAINS = frozenset({
+    "mailinator.com", "guerrillamail.com", "guerrillamail.info",
+    "10minutemail.com", "10minutemail.net", "tempmail.com", "temp-mail.org",
+    "throwawaymail.com", "yopmail.com", "trashmail.com", "getnada.com",
+    "fakeinbox.com", "dispostable.com", "sharklasers.com", "maildrop.cc",
+    "mintemail.com", "mohmal.com", "tempinbox.com", "moakt.com",
+    "mailnesia.com", "spamgourmet.com", "mytemp.email", "emailondeck.com",
+    "burnermail.io", "discard.email", "tempr.email",
+})
+
+
+def is_valid_email(email):
+    return bool(EMAIL_RE.match(email))
+
+
+def password_problem(password, *, email="", name=""):
+    """None if the password is acceptable, otherwise why it was rejected.
+
+    Mirrors the checklist pplogin.js shows while typing -- same five rules,
+    same order -- so the message someone sees here is never a surprise given
+    what the page already told them.
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return "Password is too long (72 bytes maximum)."
+    if not any(c.islower() for c in password):
+        return "Password must include a lowercase letter."
+    if not any(c.isupper() for c in password):
+        return "Password must include an uppercase letter."
+    if not any(c.isdigit() for c in password):
+        return "Password must include a number."
+    if not any(c in _SPECIAL_CHARS for c in password):
+        return "Password must include a special character (e.g. ! @ # $ %)."
+
+    lowered = password.lower()
+    stem = _password_stem(password)
+    if lowered in COMMON_PASSWORDS or stem in COMMON_PASSWORD_STEMS:
+        return "That password is too common. Please choose another."
+    # Cheap check against reusing the account's own email or org name as the
+    # password -- not a breach-list lookup, just closing the most obvious gap.
+    local_part = email.split("@", 1)[0].lower()
+    if local_part and local_part in lowered:
+        return "Password should not contain your email address."
+    if name and len(name) >= 3 and name.lower() in lowered:
+        return "Password should not contain your organization name."
+    return None
+
+
+# --- Rate limiting --------------------------------------------------------
+# In-process and per-worker: gunicorn runs this app with 2 workers (see
+# render.yaml), so the real ceiling on any of these limits is up to 2x what
+# is configured here, and a restart clears it entirely. That is a real gap
+# for a determined attacker, but it is a large improvement over no limit at
+# all for the actual threat here -- a script hammering /register -- and
+# adding Redis or another store for a nonprofit tool at this scale is not
+# worth the operational cost it would add.
+_rate_buckets = defaultdict(list)
+
+
+def rate_limited(bucket, key, max_attempts, window_seconds):
+    """True (and records nothing further) if `key` has hit the limit in
+    `bucket` within the last `window_seconds`; otherwise records this attempt
+    and returns False.
+    """
+    now = time.time()
+    attempts = _rate_buckets[(bucket, key)]
+    cutoff = now - window_seconds
+    while attempts and attempts[0] < cutoff:
+        attempts.pop(0)
+    if len(attempts) >= max_attempts:
+        return True
+    attempts.append(now)
+    return False
+
+
+def client_ip():
+    # request.remote_addr, corrected for Render's proxy by ProxyFix above.
+    return request.remote_addr or "unknown"
 
 
 # --- Plumbing ---------------------------------------------------------------
@@ -130,12 +272,39 @@ def register():
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
+    # Honeypot: a field named to look worth filling in to a bot's form-filler,
+    # hidden from real visitors with CSS rather than `type="hidden"` -- some
+    # bots skip inputs that are hidden the obvious way. Genuine submissions
+    # never touch it, so any value here means a script filled every field it
+    # could find. Rather than reject outright and teach the bot what tripped
+    # it, this returns the same shape a real success does, without writing
+    # anything -- from the caller's side, the attempt "worked".
+    if (data.get("website") or "").strip():
+        return jsonify({
+            "message": "Account created",
+            "organization": {"onboarding_complete": False},
+        }), 201
+
+    if rate_limited("register", client_ip(), max_attempts=5, window_seconds=3600):
+        return jsonify({
+            "error": "Too many accounts created from this connection recently. "
+                     "Please try again in a while.",
+        }), 429
+
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
-    if len(password) < 8:
-        return jsonify({"error": "Password must be at least 8 characters."}), 400
-    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        return jsonify({"error": "Password is too long (72 bytes maximum)."}), 400
+    if not is_valid_email(email):
+        return jsonify({"error": "Please enter a valid email address."}), 400
+    domain = email.rsplit("@", 1)[-1]
+    if domain in DISPOSABLE_EMAIL_DOMAINS:
+        return jsonify({
+            "error": "Please use a permanent email address -- that one looks "
+                     "like a temporary inbox provider.",
+        }), 400
+
+    problem = password_problem(password, email=email, name=name)
+    if problem:
+        return jsonify({"error": problem}), 400
 
     db = get_db()
     try:
@@ -151,12 +320,17 @@ def register():
             password_hash=bcrypt.hashpw(
                 password.encode("utf-8"), bcrypt.gensalt()
             ).decode("utf-8"),
+            email_verify_token=secrets.token_urlsafe(32),
+            email_verify_sent_at=datetime.now(timezone.utc),
         )
         db.add(org)
         db.commit()
 
+        notify_email_verification(org, org.email_verify_token)
+
         # Registering signs you in -- otherwise the next step is a pointless
-        # trip back through the login form.
+        # trip back through the login form. Verification is informational
+        # only right now: nothing here or downstream checks email_verified.
         session.clear()
         session["org_id"] = org.id
         session.permanent = True
@@ -176,6 +350,21 @@ def login():
 
     if not email or not password:
         return jsonify({"error": "Email and password are required."}), 400
+    if not is_valid_email(email):
+        # A format check, not an existence check -- it runs before touching
+        # the database, so it gives no information a syntax check does not
+        # already give away.
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    # Generous on purpose: office and library connections share one IP across
+    # many people, and a mistyped password is normal, not an attack. This
+    # blunts a script trying passwords in a loop without punishing a shared
+    # connection for one person fumbling their own login a few times.
+    if rate_limited("login", client_ip(), max_attempts=20, window_seconds=900):
+        return jsonify({
+            "error": "Too many attempts from this connection. Please wait a "
+                     "few minutes and try again.",
+        }), 429
 
     db = get_db()
     try:
@@ -210,6 +399,61 @@ def login():
 def logout():
     session.clear()
     return jsonify({"message": "Signed out"}), 200
+
+
+# How long a verification link stays valid. Generous, since there is no
+# resend flow yet -- letting a link sit unread over a weekend still work
+# matters more than a tight expiry would, given the only recovery from an
+# expired one right now is registering again.
+EMAIL_VERIFY_TOKEN_LIFETIME = timedelta(days=7)
+
+
+@app.route("/api/verify-email", methods=["GET"])
+def verify_email():
+    """The link in notify_email_verification. Deliberately unauthenticated,
+    like /api/partnerships/<token> -- the token itself is the credential, and
+    requiring a session too would break the link for whoever reads their
+    email on a different device than the one they signed up on.
+    """
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return jsonify({"error": "This link is missing its token."}), 400
+
+    db = get_db()
+    try:
+        org = db.query(Organization).filter(
+            Organization.email_verify_token == token
+        ).one_or_none()
+
+        if org is None:
+            # Covers both "never existed" and "already used" -- the token is
+            # cleared on success, so a second click lands here too. Handled
+            # as its own case below when the row is still findable by some
+            # other match; here it genuinely is not.
+            return jsonify({
+                "error": "This verification link is invalid or has already "
+                         "been used.",
+            }), 404
+
+        if org.email_verify_sent_at and (
+            datetime.now(timezone.utc) - org.email_verify_sent_at
+            > EMAIL_VERIFY_TOKEN_LIFETIME
+        ):
+            return jsonify({
+                "error": "This verification link has expired. Verifying is "
+                         "optional and does not limit your account, so you "
+                         "can keep using PartnerPortal as normal.",
+            }), 410
+
+        org.email_verified = True
+        org.email_verify_token = None
+        db.commit()
+        return jsonify({
+            "message": "Email verified",
+            "organization": {"name": org.name},
+        }), 200
+    finally:
+        db.close()
 
 
 @app.route("/api/me", methods=["GET"])
