@@ -31,6 +31,7 @@ from categories import (
 from db import SessionLocal
 from links import LinkError, parse_links
 from matching import find_matches, score_pair
+from moderation import name_problem
 from models import Organization, Partnership
 from notifications import (
     notify_email_verification, notify_proposal_created, notify_proposal_responded,
@@ -294,6 +295,9 @@ def register():
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
+    problem = name_problem(name)
+    if problem:
+        return jsonify({"error": "Please provide " + problem + "."}), 400
     if not is_valid_email(email):
         return jsonify({"error": "Please enter a valid email address."}), 400
     domain = email.rsplit("@", 1)[-1]
@@ -486,6 +490,10 @@ def save_onboarding(org, db):
     problems = []
     if len(name) < 2:
         problems.append("a full organization name")
+    else:
+        problem = name_problem(name)
+        if problem:
+            problems.append(problem)
     if not organization_type:
         problems.append("an organization type")
     if len(location) < 2:
