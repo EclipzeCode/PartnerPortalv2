@@ -227,6 +227,11 @@
     text-decoration: none;
     display: inline-flex;
     align-items: center;
+    /* ppdashboard.css sets .btn-primary { width: 100% } for the Add Event
+       form's single submit button; unscoped, it stretched Accept the full
+       width of the card while Decline next to it stayed sized to its label. */
+    width: auto;
+    margin-top: 0;
 }
 
 /* --- Respond modal ------------------------------------------------------ */
@@ -255,4 +260,17 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+}
+
+/* #respondTerms and #respondForm are siblings in .modal-body, which
+   forms.css's generic `.modal-body form` rule also makes flex:1 1 auto --
+   meant for a form that should stretch to fill the modal. Here it made
+   #respondForm compete with .respond-terms for space instead of sitting
+   below it at its natural size. #respondForm has no overflow-y of its own,
+   so once a long category list (a proposal listing most of the 33
+   categories, say) squeezed it, the note field and the Confirm/Cancel row
+   overflowed past .modal-body's overflow:hidden and were clipped entirely
+   -- not scrollable, just gone. */
+#respondForm {
+    flex: 0 0 auto;
 }
