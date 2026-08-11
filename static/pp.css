@@ -122,6 +122,28 @@ button {
 .peak-mid  { fill: #d5def9; }
 .peak-near { fill: #bccbf3; }
 
+/* ---------- Scroll-driven build ----------
+   The bridge assembles as the hero is scrolled: the two peaks start
+   unconnected, and the span draws itself in. It is the same claim the page
+   makes in words -- two organizations, joined by something that carries
+   traffic both ways -- so it is worth showing rather than decorating.
+
+   pp.js drives --build from 0 to 1. It defaults to 1 so that if the script
+   never runs (error, blocked JS, reduced motion) the scene still renders
+   finished rather than as a set of disconnected peaks. */
+.hero-scene {
+    --build: 1;
+}
+
+/* Sub-ranges of the overall build, so the parts arrive in an order that makes
+   structural sense instead of everything fading up at once. Each is the
+   overall progress remapped onto that part's window and clamped to 0..1. */
+.scene-bridge {
+    --b-deck:    clamp(0, (var(--build) - 0.02) / 0.30, 1);
+    --b-towers:  clamp(0, (var(--build) - 0.18) / 0.30, 1);
+    --b-cable:   clamp(0, (var(--build) - 0.38) / 0.42, 1);
+}
+
 /* The bridge is the most defined element on purpose -- it is the thing the
    scene is actually about, so it gets the strongest contrast. */
 .bridge-cable {
@@ -129,40 +151,44 @@ button {
     stroke: #8095d8;
     stroke-width: 3;
     stroke-linecap: round;
+    /* pathLength="1" on the element makes these 0..1 regardless of the real
+       geometry, so the cable draws itself from both anchors inward. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: calc(1 - var(--b-cable));
 }
 
 .bridge-hangers line {
     stroke: #97a9e0;
     stroke-width: 1.6;
+    opacity: 0;
 }
 
+/* Staggered so the hangers drop in across the span rather than in one block.
+   Written out per line because there are only six and the alternative is a
+   custom property per element that says the same thing less directly. */
+.bridge-hangers line:nth-child(1) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
+.bridge-hangers line:nth-child(2) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
+.bridge-hangers line:nth-child(3) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
+.bridge-hangers line:nth-child(4) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
+.bridge-hangers line:nth-child(5) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
+.bridge-hangers line:nth-child(6) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
+
+/* Towers rise out of the deck. */
 .bridge-tower {
     fill: #7286d0;
+    transform-box: fill-box;
+    transform-origin: bottom;
+    transform: scaleY(var(--b-towers));
 }
 
+/* Deck extends outward from mid-span. */
 .bridge-deck {
     fill: #6d81cd;
-}
-
-/* Lamps. Warm against the cool blues so they read instantly, and so a lit lamp
-   feels like light rather than just a brighter dot. JS drives --lit from 0 to 1
-   based on how close the cursor is. */
-.bridge-lamp {
-    --lit: 0;
-}
-
-.lamp-glow {
-    fill: #ffc46b;
-    opacity: calc(0.06 + 0.5 * var(--lit));
     transform-box: fill-box;
     transform-origin: center;
-    transform: scale(calc(0.55 + 0.45 * var(--lit)));
+    transform: scaleX(var(--b-deck));
 }
 
-.lamp-core {
-    fill: #ffb545;
-    opacity: calc(0.3 + 0.7 * var(--lit));
-}
 
 /* Fades the top of the scene into the page so the ridgelines never cut hard
    across the headline. */
@@ -183,11 +209,6 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .lamp-glow,
-    .lamp-core {
-        transition: none;
-    }
-
     .blob-1,
     .blob-2 {
         animation: none;
@@ -303,10 +324,13 @@ button {
     color: var(--primary-dark);
 }
 
+/* One row, always. Wrapping put the third stat on its own line where the
+   mountains sit, so it read as cut off. The columns share the width instead
+   of claiming their own, and the labels wrap inside their column. */
 .hero-stats {
     display: flex;
-    flex-wrap: wrap;
-    gap: 3rem;
+    flex-wrap: nowrap;
+    gap: 1.75rem;
     margin-top: 2rem;
 }
 
@@ -316,12 +340,16 @@ button {
    the counter animation in pp.js (producing NaN). */
 .hero-stat {
     position: relative;
+    /* Share the row evenly; min-width:0 lets a long label wrap rather than
+       forcing the column wider than its third. */
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .hero-stat:not(:last-child):after {
     content: '';
     position: absolute;
-    right: -1.5rem;
+    right: -0.875rem;
     top: 50%;
     transform: translateY(-50%);
     width: 1px;
@@ -337,18 +365,23 @@ button {
 }
 
 .hero-stat-label {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
     color: var(--text-light);
     font-weight: 500;
 }
 
 /* ---------- Hero visual: live match demo ---------- */
+/* Pinned to the top of the hero rather than centred in it. Centred, the card
+   hung down into the mountain scene and sat on top of the ridgelines; the
+   bottom of the hero belongs to the scene. */
 .hero-visual {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
+    align-self: flex-start;
     gap: 1.25rem;
     position: relative;
     z-index: 2;
@@ -504,6 +537,41 @@ button {
     transform: translateY(-4px);
 }
 
+/* Arrows either side of the dots, so the examples can be stepped through
+   deliberately instead of only waited out. */
+.match-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+
+.match-arrow {
+    width: 1.9rem;
+    height: 1.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #dfe5f8;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--text-light);
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.match-arrow:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: #fff;
+}
+
+.match-arrow:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
 .match-dots {
     display: flex;
     gap: 0.5rem;
@@ -589,23 +657,36 @@ button {
         text-align: center;
     }
 
+    /* Still one row -- the columns tighten instead of wrapping. */
     .hero-stats {
-        flex-wrap: wrap;
-        gap: 2rem;
-    }
-
-    .hero-stat {
-        flex: 1 0 7.5rem;
+        gap: 1.25rem;
     }
 
     .hero-stat:not(:last-child):after {
-        display: none;
+        right: -0.625rem;
     }
 }
 
 @media (max-width: 36em) {
     .hero-title {
         font-size: 2rem;
+    }
+
+    .hero-stats {
+        gap: 0.9rem;
+    }
+
+    .hero-stat-number {
+        font-size: 1.35rem;
+    }
+
+    .hero-stat-label {
+        font-size: 0.72rem;
+    }
+
+    /* Nothing to sit against once the columns are this narrow. */
+    .hero-stat:not(:last-child):after {
+        display: none;
     }
 
     .hero-subtitle {
@@ -1269,10 +1350,9 @@ button {
         justify-content: center;
     }
 
-    /* The vertical divider between hero stats has nothing to sit against once
-       the row wraps, so drop it. */
+    /* The columns are too narrow here for the divider to sit against. */
     .hero-stats {
-        gap: 1.5rem 2rem;
+        gap: 0.9rem;
     }
 
     .hero-stat:not(:last-child):after {

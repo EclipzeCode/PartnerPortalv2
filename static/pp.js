@@ -1,10 +1,15 @@
 // ---------------------------------------------------------------------------
-// Hero scene: cursor parallax + bridge lamps
+// Hero scene: scroll-driven bridge build + cursor parallax
 //
-// Two effects share one rAF loop:
-//   1. Each layer translates by an amount proportional to its depth, so near
+// Two effects, two independent drivers:
+//   1. Scroll assembles the bridge. --build (0..1) is written to the scene and
+//      pp.css remaps it onto each part.
+//   2. Each layer translates by an amount proportional to its depth, so near
 //      ridges move further than distant ones as the cursor moves.
-//   2. Deck lamps brighten based on how close the cursor is to each one.
+//
+// The scroll build runs on touch as well -- scrolling is the one interaction
+// every visitor has -- while the parallax needs a real pointer. Reduced motion
+// skips both and leaves the scene finished.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     const scene = document.getElementById('heroScene');
@@ -15,41 +20,73 @@ document.addEventListener('DOMContentLoaded', () => {
         el,
         depth: parseFloat(el.dataset.depth) || 0
     }));
-    const lamps = [...scene.querySelectorAll('.bridge-lamp')];
-    const bridgeLayer = scene.querySelector('.scene-bridge');
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = window.matchMedia('(pointer: fine)').matches;
 
-    // Without a real cursor (touch) or with reduced motion, leave the scene
-    // static but give the lamps a gentle baseline so the bridge still reads.
-    if (reduceMotion || !finePointer) {
-        lamps.forEach(l => l.style.setProperty('--lit', '0.35'));
-        return;
+    // --- Scroll build ----------------------------------------------------
+    const BUILD_FRACTION = 0.6;  // of a viewport height to go from bare to built
+
+    let buildQueued = false;
+    let buildStart = 0;   // scrollY at which the build begins
+    let buildSpan = 1;    // how much further scrolling completes it
+
+    // The window the build runs over has to be derived from where the scene
+    // actually sits, not from raw scroll depth. On a short viewport the hero
+    // content pushes the scene below the fold, so a build keyed to scrollY
+    // alone would finish before the bridge was ever on screen. Anchoring to
+    // the scene's own document position keeps the animation in view in both
+    // cases: it starts at 0 when the scene is already visible at rest (tall
+    // viewports) and defers until the scene is entering when it is not.
+    function measureBuildWindow() {
+        const vh = window.innerHeight;
+        const sceneDocTop = scene.getBoundingClientRect().top + window.scrollY;
+        buildStart = Math.max(0, sceneDocTop - vh * 0.95);
+        buildSpan = Math.max(1, vh * BUILD_FRACTION);
     }
+
+    function applyBuild() {
+        buildQueued = false;
+        const build = Math.min(1, Math.max(0,
+            (window.scrollY - buildStart) / buildSpan));
+        scene.style.setProperty('--build', build.toFixed(4));
+    }
+
+    function onScroll() {
+        if (buildQueued) return;
+        buildQueued = true;
+        requestAnimationFrame(applyBuild);
+    }
+
+    if (!reduceMotion) {
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', () => {
+            measureBuildWindow();
+            onScroll();
+        });
+        measureBuildWindow();
+        applyBuild();  // honour a restored scroll position on reload
+
+        // The webfont lands after DOMContentLoaded and changes the hero's
+        // height, which moves the scene and so the window measured above.
+        window.addEventListener('load', () => {
+            measureBuildWindow();
+            onScroll();
+        });
+    }
+
+    // Reduced motion keeps the CSS default of --build: 1 (fully assembled).
+    // Touch keeps the scroll build above but stops here: there is no cursor to
+    // parallax against.
+    if (reduceMotion || !finePointer) return;
 
     const MAX_SHIFT_X = 46;   // px of travel for a depth of 1.0
     const MAX_SHIFT_Y = 22;
-    const LAMP_RADIUS = 190;  // px from a lamp at which it is fully lit
 
     let targetX = 0, targetY = 0;   // normalised cursor offset, -1..1
     let currentX = 0, currentY = 0; // smoothed values actually rendered
-    let lampCentres = [];
-    let pointerX = -9999, pointerY = -9999;
     let running = false;
     let inside = false;
-
-    // Cache lamp screen positions once instead of measuring every frame. The
-    // bridge layer's own parallax offset is added back in at read time.
-    function measureLamps() {
-        const prev = bridgeLayer.style.transform;
-        bridgeLayer.style.transform = 'none';
-        lampCentres = lamps.map(lamp => {
-            const r = lamp.getBoundingClientRect();
-            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-        });
-        bridgeLayer.style.transform = prev;
-    }
 
     function render() {
         // Ease toward the target so the scene glides rather than snapping.
@@ -60,22 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const dx = -currentX * depth * MAX_SHIFT_X;
             const dy = -currentY * depth * MAX_SHIFT_Y;
             el.style.transform = `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0)`;
-        });
-
-        // Lamp proximity, accounting for the bridge layer's current offset.
-        const bridgeDepth = layers.find(l => l.el === bridgeLayer);
-        const offsetX = bridgeDepth ? -currentX * bridgeDepth.depth * MAX_SHIFT_X : 0;
-        const offsetY = bridgeDepth ? -currentY * bridgeDepth.depth * MAX_SHIFT_Y : 0;
-
-        lamps.forEach((lamp, i) => {
-            const c = lampCentres[i];
-            if (!c) return;
-            const dx = pointerX - (c.x + offsetX);
-            const dy = pointerY - (c.y + offsetY);
-            const dist = Math.hypot(dx, dy);
-            const lit = Math.max(0, 1 - dist / LAMP_RADIUS);
-            // Ease the falloff so the pool of light has a soft edge.
-            lamp.style.setProperty('--lit', (lit * lit).toFixed(3));
         });
 
         const settled = Math.abs(targetX - currentX) < 0.001 && Math.abs(targetY - currentY) < 0.001;
@@ -96,29 +117,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const r = hero.getBoundingClientRect();
         targetX = ((e.clientX - r.left) / r.width - 0.5) * 2;
         targetY = ((e.clientY - r.top) / r.height - 0.5) * 2;
-        pointerX = e.clientX;
-        pointerY = e.clientY;
         inside = true;
         start();
     });
 
     hero.addEventListener('mouseleave', () => {
-        // Drift back to centre and let the lamps fade out.
+        // Drift back to centre.
         inside = false;
         targetX = 0;
         targetY = 0;
-        pointerX = -9999;
-        pointerY = -9999;
         start();
     });
 
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(measureLamps, 150);
-    });
-
-    measureLamps();
     // Paint the initial (centred) state.
     start();
 });
@@ -209,19 +219,32 @@ document.addEventListener('DOMContentLoaded', () => {
         timer = null;
     }
 
+    // Once someone steers the demo themselves, the auto-advance is done for
+    // good: having it resume would move the card on while they are reading the
+    // pairing they just picked.
+    let manual = false;
+
+    function stepTo(i) {
+        manual = true;
+        stop();
+        show(i);
+    }
+
     dots.forEach(dot => {
-        dot.addEventListener('click', () => {
-            stop();
-            show(Number(dot.dataset.index));
-            start();
-        });
+        dot.addEventListener('click', () => stepTo(Number(dot.dataset.index)));
     });
+
+    const prevBtn = document.getElementById('matchPrev');
+    const nextBtn = document.getElementById('matchNext');
+    if (prevBtn) prevBtn.addEventListener('click', () => stepTo(index - 1));
+    if (nextBtn) nextBtn.addEventListener('click', () => stepTo(index + 1));
 
     // Pause while the visitor is reading it, or when the tab is hidden.
     demo.addEventListener('mouseenter', stop);
-    demo.addEventListener('mouseleave', start);
+    demo.addEventListener('mouseleave', () => { if (!manual) start(); });
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) stop(); else start();
+        if (document.hidden) stop();
+        else if (!manual) start();
     });
 
     paint(0);
