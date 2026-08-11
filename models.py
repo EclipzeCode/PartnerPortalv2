@@ -74,15 +74,24 @@ class Organization(Base):
     # All optional. Stored as full canonical URLs -- links.py normalises
     # whatever shape they were typed in, and only ever produces http(s) on a
     # known host, so rendering these in an href is safe.
-    #
-    # These sit alongside contact_email/contact_phone rather than with the
-    # descriptive fields on purpose: they are contact routes, so public_dict
-    # carries them (signed-in viewers) and public_profile does not (anyone
-    # with the URL). A social handle is exactly what a scraper wants.
     website_url: Mapped[str | None] = mapped_column(String(255))
     instagram_url: Mapped[str | None] = mapped_column(String(255))
     x_url: Mapped[str | None] = mapped_column(String(255))
     linkedin_url: Mapped[str | None] = mapped_column(String(255))
+
+    # Who can see the four links above.
+    #
+    # False (the default) keeps them in public_dict only, so they reach
+    # signed-in organizations and no one else -- the same treatment
+    # contact_email and contact_phone get. True adds them to public_profile
+    # as well, which is served to anyone with the profile URL.
+    #
+    # Defaulting to false matters: it means turning this on is always a
+    # deliberate act by the organization, and an org that never touches the
+    # setting is never surprised by where its handles ended up.
+    links_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
 
     # --- State -------------------------------------------------------------
     # Only completed profiles are matchable; a half-filled row would pollute
@@ -152,31 +161,41 @@ class Organization(Base):
             "partnership_goals": self.partnership_goals,
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
+            **self._link_dict(),
+            "links_public": self.links_public,
+            "is_demo": self.is_demo,
+        }
+
+    def _link_dict(self):
+        """The four link fields. Shared so public_dict and public_profile
+        cannot drift apart on which columns count as "the links"."""
+        return {
             "website_url": self.website_url,
             "instagram_url": self.instagram_url,
             "x_url": self.x_url,
             "linkedin_url": self.linkedin_url,
-            "is_demo": self.is_demo,
         }
 
     def public_profile(self):
-        """The org's profile page. No contact details, no account required.
+        """The org's profile page. No account required.
 
         Narrower than public_dict on purpose. public_dict is "public" only in
         the sense of visible to another signed-in organization, and it carries
-        contact_email, contact_phone and the four link fields precisely so a
-        match can be acted on. This payload is served unauthenticated, so
-        those would be handing every listed organization's inbox, phone number
-        and social handles to anyone crawling the site. Same line
-        Partnership.public_summary draws.
+        contact_email and contact_phone precisely so a match can be acted on.
+        This payload is served unauthenticated, so those would hand every
+        listed organization's inbox and phone number to anyone crawling the
+        site. Same line Partnership.public_summary draws.
 
-        Anything that lets someone contact the organization belongs in
-        public_dict, not here -- that is the rule this split encodes.
+        Contact details are never in here. The four links are the one
+        exception, and only when the organization has ticked links_public --
+        an opt-in, defaulting to off, so nothing appears here that its owner
+        did not choose to publish.
 
-        A signed-in viewer still gets the contact block -- see the authenticated
-        /api/organizations/<id>, which the profile page enriches from.
+        A signed-in viewer gets the full contact block regardless -- see the
+        authenticated /api/organizations/<id>, which the profile page
+        enriches from.
         """
-        return {
+        data = {
             "id": self.id,
             "name": self.name,
             "organization_type": self.organization_type,
@@ -190,6 +209,9 @@ class Organization(Base):
             "partnership_goals": self.partnership_goals,
             "is_demo": self.is_demo,
         }
+        if self.links_public:
+            data.update(self._link_dict())
+        return data
 
     def private_dict(self):
         """The signed-in org's own record, including account-level fields."""

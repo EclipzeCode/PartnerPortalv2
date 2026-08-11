@@ -64,11 +64,14 @@
     const initials = (org.name || '?')
         .split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-    // Links ride with the contact block, and only appear for a signed-in
-    // viewer for the same reason contact_email does: they come from
-    // public_dict, which the unauthenticated payload deliberately excludes.
-    // Every URL here was normalised by links.py to http(s) on a known host,
-    // which is what makes it safe to put in an href.
+    // Links come from whichever payload has them. A signed-in viewer always
+    // gets them (public_dict); a signed-out visitor only when the org ticked
+    // links_public, which is what puts them in the unauthenticated payload at
+    // all. So there is no visibility decision to make here -- the server has
+    // already made it by choosing what to send.
+    //
+    // Every URL was normalised by links.py to http(s) on a known host, which
+    // is what makes it safe to put in an href.
     const LINKS = [
         { key: 'website_url', icon: 'bx-globe', label: 'Website' },
         { key: 'linkedin_url', icon: 'bxl-linkedin-square', label: 'LinkedIn' },
@@ -83,21 +86,23 @@
     // script, a seed file -- would otherwise turn this render into live XSS.
     const safeHref = (url) => /^https?:\/\//i.test(String(url || '')) ? url : null;
 
-    const linkChips = viewer
-        ? LINKS.map((l) => ({ ...l, href: safeHref(viewer[l.key]) }))
-            .filter((l) => l.href)
-            .map((l) => `
+    const linkSource = viewer || org;
+    const linkChips = LINKS
+        .map((l) => ({ ...l, href: safeHref(linkSource[l.key]) }))
+        .filter((l) => l.href)
+        .map((l) => `
             <a class="org-link" href="${esc(l.href)}"
                target="_blank" rel="noopener noreferrer nofollow">
                 <i class='bx ${esc(l.icon)}'></i> ${esc(l.label)}
-            </a>`).join('')
-        : '';
+            </a>`).join('');
 
-    const hasContact = viewer && (
-        viewer.contact_email || viewer.contact_phone || linkChips);
+    const linksBlock = linkChips
+        ? `<div class="org-links">${linkChips}</div>` : '';
 
-    const contact = hasContact
-        ? `
+    let contact;
+    if (viewer) {
+        // Signed in: contact details and links together.
+        contact = `
             <section class="org-section org-contact">
                 <h2>Contact</h2>
                 ${viewer.contact_email
@@ -107,19 +112,33 @@
                 ${viewer.contact_phone
                     ? `<p><i class='bx bx-phone'></i> ${esc(viewer.contact_phone)}</p>`
                     : ''}
-                ${linkChips ? `<div class="org-links">${linkChips}</div>` : ''}
-            </section>
-          `
-        : `
-            <section class="org-section org-contact-locked">
-                <p>
+                ${linksBlock}
+            </section>`;
+    } else if (linkChips) {
+        // Signed out, but this org published its links. They show; contact
+        // details still do not, so the lock note stays alongside them.
+        contact = `
+            <section class="org-section org-contact">
+                <h2>Links</h2>
+                ${linksBlock}
+                <p class="org-contact-locked-inline">
                     <i class='bx bx-lock-alt'></i>
-                    Contact details and links are shown to signed-in organizations.
+                    Contact details are shown to signed-in organizations.
                     <a href="pplogin.html">Sign in</a> or
                     <a href="onboarding.html">create a profile</a> to get in touch.
                 </p>
-            </section>
-          `;
+            </section>`;
+    } else {
+        contact = `
+            <section class="org-section org-contact-locked">
+                <p>
+                    <i class='bx bx-lock-alt'></i>
+                    Contact details are shown to signed-in organizations.
+                    <a href="pplogin.html">Sign in</a> or
+                    <a href="onboarding.html">create a profile</a> to get in touch.
+                </p>
+            </section>`;
+    }
 
     const score = viewer && typeof viewer.match_score === 'number'
         ? `

@@ -267,6 +267,23 @@ body {
     color: var(--text-light);
 }
 
+/* Same note, but sitting under published links rather than replacing them. */
+.org-contact-locked-inline {
+    margin-top: 0.9rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.org-contact-locked-inline i {
+    color: var(--text-light);
+    margin-right: 0.25rem;
+}
+
+.org-contact-locked-inline a {
+    color: var(--primary);
+    font-weight: 600;
+}
+
 .org-contact-locked i {
     color: var(--text-light);
     margin-right: 0.25rem;

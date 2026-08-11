@@ -526,6 +526,10 @@ def save_onboarding(org, db):
     org.instagram_url = links["instagram_url"]
     org.x_url = links["x_url"]
     org.linkedin_url = links["linkedin_url"]
+    # Opt-in, so a missing key means "not public" rather than leaving a
+    # previous true in place: an older client that does not send the field
+    # should not be able to keep links published by omission.
+    org.links_public = bool(data.get("links_public"))
     org.onboarding_complete = True
 
     db.commit()

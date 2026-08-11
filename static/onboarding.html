@@ -201,16 +201,13 @@
                 ></textarea>
               </div>
 
-              <!-- Links. All optional, and shown on the public profile only to
-                   signed-in organizations -- same treatment as the contact
-                   fields above, for the same reason. -->
+              <!-- Links. All optional. Signed-in organizations by default;
+                   the checkbox below opts into showing them to everyone. -->
               <div class="links-block">
                 <div class="links-head">
                   <h4>Links</h4>
                   <p class="links-note">
-                    <i class='bx bx-lock-alt'></i>
-                    All optional. Shown on your profile to signed-in
-                    organizations only, so they are not left out for scrapers.
+                    All optional. Add any that apply.
                   </p>
                 </div>
 
@@ -242,6 +239,16 @@
                     </label>
                     <input type="text" id="xUrl" placeholder="@yourorg" />
                   </div>
+                </div>
+
+                <!-- Visibility. Off by default: links go to signed-in
+                     organizations unless the org chooses otherwise. -->
+                <div class="links-visibility">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="linksPublic" />
+                    <span>Show these links to everyone</span>
+                  </label>
+                  <p class="links-visibility-note" id="linksVisibilityNote"></p>
                 </div>
               </div>
             </div>

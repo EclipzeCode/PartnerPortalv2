@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     websiteUrl: document.getElementById('websiteUrl'),
     instagramUrl: document.getElementById('instagramUrl'),
     xUrl: document.getElementById('xUrl'),
-    linkedinUrl: document.getElementById('linkedinUrl')
+    linkedinUrl: document.getElementById('linkedinUrl'),
+    linksPublic: document.getElementById('linksPublic')
   };
 
   // Link inputs, keyed by the column name the server uses. Lets a server-side
@@ -176,6 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (me.instagram_url) fields.instagramUrl.value = me.instagram_url;
     if (me.x_url) fields.xUrl.value = me.x_url;
     if (me.linkedin_url) fields.linkedinUrl.value = me.linkedin_url;
+    fields.linksPublic.checked = Boolean(me.links_public);
+    updateLinksVisibilityNote();
 
     [['needs', me.needs], ['offers', me.offers]].forEach(([side, slugs]) => {
       (slugs || []).forEach((slug) => {
@@ -380,8 +383,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       website_url: fields.websiteUrl.value.trim(),
       instagram_url: fields.instagramUrl.value.trim(),
       x_url: fields.xUrl.value.trim(),
-      linkedin_url: fields.linkedinUrl.value.trim()
+      linkedin_url: fields.linkedinUrl.value.trim(),
+      links_public: fields.linksPublic.checked
     };
+  }
+
+  // Says plainly who will see the links, so the choice does not rest on
+  // guessing what "everyone" covers.
+  function updateLinksVisibilityNote() {
+    const note = document.getElementById('linksVisibilityNote');
+    if (!note) return;
+    note.textContent = fields.linksPublic.checked
+      ? 'Anyone who opens your profile page will see them, including people without an account.'
+      : 'Only signed-in organizations will see them. Your contact email and phone stay private either way.';
   }
 
   function setLoadingState(isLoading) {
@@ -495,6 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearAllFieldErrors();
     clearMessages();
     updateProgress();
+    updateLinksVisibilityNote();
   }
 
   clearBtn.addEventListener('click', openClearModal);
@@ -522,6 +537,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     field.addEventListener('input', handler);
     field.addEventListener('change', handler);
   });
+
+  fields.linksPublic.addEventListener('change', updateLinksVisibilityNote);
+  updateLinksVisibilityNote();
 
   await buildPickers();
   await prefill();

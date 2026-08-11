@@ -750,18 +750,26 @@ body {
 }
 
 .links-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
   font-size: 0.82rem;
   line-height: 1.5;
   color: var(--text-light);
 }
 
-.links-note i {
-  flex-shrink: 0;
-  margin-top: 0.15rem;
-  color: var(--primary);
+/* Set off from the four inputs so it reads as a setting about them rather
+   than a fifth field. */
+.links-visibility {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1rem;
+  background: var(--bg-light);
+  border-radius: 0.625rem;
+}
+
+.links-visibility-note {
+  margin-top: 0.4rem;
+  padding-left: 1.725rem;  /* clears the checkbox + its gap */
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-light);
 }
 
 /* Sits inside the label, so the field is identifiable at a glance without a
