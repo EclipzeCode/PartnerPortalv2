@@ -41,6 +41,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         heading.innerHTML = `Welcome back, <span>${esc(org.name)}</span>`;
     }
 
+    const viewProfileBtn = document.getElementById('viewProfileBtn');
+    if (viewProfileBtn) {
+        viewProfileBtn.href = `organization.html?id=${encodeURIComponent(org.id)}`;
+    }
+
     // Stat cards. The markup labels are updated too, because "Active Partners"
     // and "Partner Score" described numbers that never existed.
     setStat('activePartners', stats.total_matches, 'Matches',

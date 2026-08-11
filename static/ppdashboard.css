@@ -93,6 +93,13 @@ body {
     margin: 0;
 }
 
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
 /* An <a> styled as .btn-action: the shared rule sets no text-decoration
    because it was only ever used on <button>. */
 a.btn-action {
@@ -101,7 +108,7 @@ a.btn-action {
 }
 
 /* Draws the eye when the profile is the thing actually blocking matches. */
-.dashboard-toolbar.needs-profile .btn-action {
+.dashboard-toolbar.needs-profile #editProfileBtn {
     animation: toolbarNudge 2.4s ease-in-out 3;
 }
 
