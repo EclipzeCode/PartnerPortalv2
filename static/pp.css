@@ -142,7 +142,6 @@ button {
     --b-deck:    clamp(0, (var(--build) - 0.02) / 0.30, 1);
     --b-towers:  clamp(0, (var(--build) - 0.18) / 0.30, 1);
     --b-cable:   clamp(0, (var(--build) - 0.38) / 0.42, 1);
-    --b-lamps:   clamp(0, (var(--build) - 0.62) / 0.25, 1);
 }
 
 /* The bridge is the most defined element on purpose -- it is the thing the
@@ -190,31 +189,6 @@ button {
     transform: scaleX(var(--b-deck));
 }
 
-/* Without this the lamp dots hang in mid-air over an unbuilt span: their own
-   opacity has a non-zero floor so an unlit lamp still reads as a lamp. */
-.bridge-lamps {
-    opacity: var(--b-lamps);
-}
-
-/* Lamps. Warm against the cool blues so they read instantly, and so a lit lamp
-   feels like light rather than just a brighter dot. JS drives --lit from 0 to 1
-   based on how close the cursor is. */
-.bridge-lamp {
-    --lit: 0;
-}
-
-.lamp-glow {
-    fill: #ffc46b;
-    opacity: calc(0.06 + 0.5 * var(--lit));
-    transform-box: fill-box;
-    transform-origin: center;
-    transform: scale(calc(0.55 + 0.45 * var(--lit)));
-}
-
-.lamp-core {
-    fill: #ffb545;
-    opacity: calc(0.3 + 0.7 * var(--lit));
-}
 
 /* Fades the top of the scene into the page so the ridgelines never cut hard
    across the headline. */
@@ -235,11 +209,6 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .lamp-glow,
-    .lamp-core {
-        transition: none;
-    }
-
     .blob-1,
     .blob-2 {
         animation: none;
@@ -355,10 +324,13 @@ button {
     color: var(--primary-dark);
 }
 
+/* One row, always. Wrapping put the third stat on its own line where the
+   mountains sit, so it read as cut off. The columns share the width instead
+   of claiming their own, and the labels wrap inside their column. */
 .hero-stats {
     display: flex;
-    flex-wrap: wrap;
-    gap: 3rem;
+    flex-wrap: nowrap;
+    gap: 1.75rem;
     margin-top: 2rem;
 }
 
@@ -368,12 +340,16 @@ button {
    the counter animation in pp.js (producing NaN). */
 .hero-stat {
     position: relative;
+    /* Share the row evenly; min-width:0 lets a long label wrap rather than
+       forcing the column wider than its third. */
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .hero-stat:not(:last-child):after {
     content: '';
     position: absolute;
-    right: -1.5rem;
+    right: -0.875rem;
     top: 50%;
     transform: translateY(-50%);
     width: 1px;
@@ -389,18 +365,23 @@ button {
 }
 
 .hero-stat-label {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
     color: var(--text-light);
     font-weight: 500;
 }
 
 /* ---------- Hero visual: live match demo ---------- */
+/* Pinned to the top of the hero rather than centred in it. Centred, the card
+   hung down into the mountain scene and sat on top of the ridgelines; the
+   bottom of the hero belongs to the scene. */
 .hero-visual {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
+    align-self: flex-start;
     gap: 1.25rem;
     position: relative;
     z-index: 2;
@@ -556,6 +537,41 @@ button {
     transform: translateY(-4px);
 }
 
+/* Arrows either side of the dots, so the examples can be stepped through
+   deliberately instead of only waited out. */
+.match-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+
+.match-arrow {
+    width: 1.9rem;
+    height: 1.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #dfe5f8;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--text-light);
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.match-arrow:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: #fff;
+}
+
+.match-arrow:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
 .match-dots {
     display: flex;
     gap: 0.5rem;
@@ -641,23 +657,36 @@ button {
         text-align: center;
     }
 
+    /* Still one row -- the columns tighten instead of wrapping. */
     .hero-stats {
-        flex-wrap: wrap;
-        gap: 2rem;
-    }
-
-    .hero-stat {
-        flex: 1 0 7.5rem;
+        gap: 1.25rem;
     }
 
     .hero-stat:not(:last-child):after {
-        display: none;
+        right: -0.625rem;
     }
 }
 
 @media (max-width: 36em) {
     .hero-title {
         font-size: 2rem;
+    }
+
+    .hero-stats {
+        gap: 0.9rem;
+    }
+
+    .hero-stat-number {
+        font-size: 1.35rem;
+    }
+
+    .hero-stat-label {
+        font-size: 0.72rem;
+    }
+
+    /* Nothing to sit against once the columns are this narrow. */
+    .hero-stat:not(:last-child):after {
+        display: none;
     }
 
     .hero-subtitle {
@@ -1321,10 +1350,9 @@ button {
         justify-content: center;
     }
 
-    /* The vertical divider between hero stats has nothing to sit against once
-       the row wraps, so drop it. */
+    /* The columns are too narrow here for the divider to sit against. */
     .hero-stats {
-        gap: 1.5rem 2rem;
+        gap: 0.9rem;
     }
 
     .hero-stat:not(:last-child):after {

@@ -32,8 +32,9 @@
 
         <!--
             Two peaks separated by a chasm, joined by a suspension bridge.
-            Layers shift at different rates with the cursor (parallax), and the
-            deck lamps light up as the cursor passes over them. Decorative only.
+            The span assembles as the page is scrolled (see --build in pp.css)
+            and the layers shift at different rates with the cursor
+            (parallax). Decorative only.
         -->
         <div class="hero-scene" id="heroScene">
             <svg class="scene-svg" viewBox="0 0 1440 520" preserveAspectRatio="xMidYMax slice" role="presentation" focusable="false">
@@ -72,16 +73,6 @@
 
                     <!-- deck -->
                     <rect class="bridge-deck" x="556" y="348" width="328" height="7" rx="3"/>
-
-                    <!-- lamps along the deck -->
-                    <g class="bridge-lamps">
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="588" cy="340" r="15"/><circle class="lamp-core" cx="588" cy="340" r="3.2"/></g>
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="646" cy="340" r="15"/><circle class="lamp-core" cx="646" cy="340" r="3.2"/></g>
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="704" cy="340" r="15"/><circle class="lamp-core" cx="704" cy="340" r="3.2"/></g>
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="762" cy="340" r="15"/><circle class="lamp-core" cx="762" cy="340" r="3.2"/></g>
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="820" cy="340" r="15"/><circle class="lamp-core" cx="820" cy="340" r="3.2"/></g>
-                        <g class="bridge-lamp"><circle class="lamp-glow" cx="866" cy="340" r="15"/><circle class="lamp-core" cx="866" cy="340" r="3.2"/></g>
-                    </g>
                 </g>
 
                 <!-- Near ridge. Kept low and shallow: it is the darkest fill in
@@ -175,10 +166,23 @@
             </div>
         </div>
 
-        <div class="match-dots" id="matchDots" role="tablist" aria-label="Example matches">
-            <button class="match-dot active" data-index="0" aria-label="Example match 1"></button>
-            <button class="match-dot" data-index="1" aria-label="Example match 2"></button>
-            <button class="match-dot" data-index="2" aria-label="Example match 3"></button>
+        <!-- Manual controls. The demo also advances on its own, but that
+             cycling stops for good once either arrow is used, so it never
+             moves on while someone is reading a pairing they chose. -->
+        <div class="match-nav">
+            <button type="button" class="match-arrow" id="matchPrev" aria-label="Previous example match">
+                <i class='bx bx-chevron-left'></i>
+            </button>
+
+            <div class="match-dots" id="matchDots" role="tablist" aria-label="Example matches">
+                <button class="match-dot active" data-index="0" aria-label="Example match 1"></button>
+                <button class="match-dot" data-index="1" aria-label="Example match 2"></button>
+                <button class="match-dot" data-index="2" aria-label="Example match 3"></button>
+            </div>
+
+            <button type="button" class="match-arrow" id="matchNext" aria-label="Next example match">
+                <i class='bx bx-chevron-right'></i>
+            </button>
         </div>
     </div>
 </section>
