@@ -714,6 +714,77 @@ def update_settings(org, db):
     }), 200
 
 
+@app.route("/api/account/password", methods=["POST"])
+@login_required
+def change_password(org, db):
+    """Change the signed-in org's password, given the current one.
+
+    The current password is required even though the caller already holds a
+    valid session, for the same reason /api/account does: a session cookie on
+    a shared or unattended browser should not be enough to hand out a new
+    password on its own. Unlike /api/reset-password, this never touches
+    email -- there is nothing to prove here that a valid session has not
+    already proven, so no token or link is involved.
+    """
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+
+    if not current_password:
+        return jsonify({
+            "error": "Enter your current password.",
+            "field": "current_password",
+        }), 400
+    if not new_password:
+        return jsonify({
+            "error": "Enter a new password.",
+            "field": "new_password",
+        }), 400
+
+    # Keyed by account, like /api/account's own limit: the thing worth
+    # slowing down is guessing against this one account's current password,
+    # not volume from one address.
+    if rate_limited("change_password", str(org.id), max_attempts=5,
+                    window_seconds=900):
+        return jsonify({
+            "error": "Too many incorrect attempts. Please wait a few minutes "
+                     "and try again.",
+        }), 429
+
+    if not org.password_hash:
+        # Cannot happen through the normal session path -- both /register and
+        # /login require a password to reach this point -- but guarded the
+        # same way /api/account guards it, rather than assumed away.
+        return jsonify({
+            "error": "This account has no password set. Please contact "
+                     "support.",
+        }), 400
+
+    if len(current_password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
+        current_password.encode("utf-8"), org.password_hash.encode("utf-8")
+    ):
+        return jsonify({
+            "error": "Your current password is incorrect.",
+            "field": "current_password",
+        }), 403
+
+    if bcrypt.checkpw(new_password.encode("utf-8"), org.password_hash.encode("utf-8")):
+        return jsonify({
+            "error": "That is your current password. Choose a different one.",
+            "field": "new_password",
+        }), 400
+
+    problem = password_problem(new_password, email=org.email, name=org.name)
+    if problem:
+        return jsonify({"error": problem, "field": "new_password"}), 400
+
+    org.password_hash = bcrypt.hashpw(
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+    db.commit()
+    return jsonify({"message": "Password changed"}), 200
+
+
 @app.route("/api/account", methods=["DELETE"])
 @login_required
 def delete_account(org, db):

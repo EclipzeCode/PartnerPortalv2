@@ -109,6 +109,111 @@ body {
     margin-top: 1.25rem;
 }
 
+/* --- Change password form ------------------------------------------------ */
+/* forms.css supplies .form-group's input styling and .field-error; this page
+   never needed a filled primary button before, so .btn-primary is defined
+   here rather than assumed to exist. */
+.password-form {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.password-form .form-group {
+    margin-bottom: 1.1rem;
+}
+
+.password-form .form-group label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+}
+
+.password-form .setting-status {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 0.7rem 1.3rem;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* --- Password strength ---------------------------------------------------- */
+/* Same shape as pplogin.css's .pw-meter/.pw-checklist, restated here rather
+   than shared across stylesheets -- consistent with how reset-password.js's
+   own copy of this UI justifies not importing pplogin.css either. */
+.pw-meter {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.5rem 0 0.6rem;
+}
+
+.pw-meter-bar {
+    flex: 1;
+    height: 0.3rem;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.pw-meter-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    transition: width 0.2s ease, background 0.2s ease;
+}
+
+.pw-meter-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pw-checklist {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 0.75rem;
+    margin: 0 0 1rem;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.pw-checklist li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.pw-checklist li i {
+    font-size: 0.95rem;
+}
+
+.pw-checklist li.met {
+    color: #2a9d5c;
+}
+
 /* --- Setting row --------------------------------------------------------- */
 .setting-row {
     display: flex;
