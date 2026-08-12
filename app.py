@@ -34,8 +34,8 @@ from matching import find_matches, score_pair
 from moderation import name_problem
 from models import Organization, Partnership
 from notifications import (
-    notify_email_verification, notify_password_reset, notify_proposal_created,
-    notify_proposal_responded,
+    notify_email_verification, notify_password_changed, notify_password_reset,
+    notify_proposal_created, notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -782,6 +782,7 @@ def change_password(org, db):
         new_password.encode("utf-8"), bcrypt.gensalt()
     ).decode("utf-8")
     db.commit()
+    notify_password_changed(org)
     return jsonify({"message": "Password changed"}), 200
 
 

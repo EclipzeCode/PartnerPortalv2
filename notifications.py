@@ -361,6 +361,48 @@ def notify_password_reset(org, token):
     _dispatch(org.email, "Reset your PartnerPortal password", html, text)
 
 
+def notify_password_changed(org):
+    """Sent by /api/account/password after a successful change.
+
+    Unlike notify_password_reset, an unsolicited send here is not the
+    expected case -- change_password requires the current password first, so
+    reaching this point means someone already had it. That is exactly why
+    this exists: it is the one signal an account owner gets if that someone
+    was not them, and the forgot-password link below is the actual recourse,
+    since resetting again from the same inbox does not depend on whoever
+    just changed the password knowing about it.
+
+    Uses the login email, like the other two account emails, and for the
+    same reason -- this is about the account's own credentials.
+
+    Deliberately ignores org.email_notifications, like the other two: that
+    setting is about optional partnership mail, not this.
+    """
+    cfg = _config()
+    reset_url = f"{cfg['app_url']}/forgot-password.html"
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Your password was changed</h1>
+  <p class="meta">The password for {escape(org.email)} on PartnerPortal was
+  just changed.</p>
+
+  <p class="foot">If this was you, no action is needed. If it was not,
+  reset your password right away -- the link below goes to the same inbox
+  this message did, regardless of what the password was just changed to.</p>
+
+  <a class="cta" href="{escape(reset_url)}">Reset your password</a>
+</div></body></html>
+"""
+    text = (
+        f"The password for {org.email} on PartnerPortal was just changed.\n\n"
+        f"If this was you, no action is needed. If it was not, reset your "
+        f"password right away: {reset_url}\n"
+    )
+    _dispatch(org.email, "Your PartnerPortal password was changed", html, text)
+
+
 def _label(slug):
     """Category labels via the shared vocabulary."""
     from categories import label_for
