@@ -46,11 +46,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewProfileBtn.href = `organization.html?id=${encodeURIComponent(org.id)}`;
     }
 
-    // Only surfaced once the profile is finished. Before that, "you cannot
-    // send a proposal yet" is not the useful message -- an unfinished profile
-    // has nothing to propose with, and the toolbar below is already saying so.
+    // Only surfaced once the profile is finished. Before that, "verify your
+    // email" is not the useful message -- an unfinished profile has nothing
+    // to propose with, and the toolbar below is already saying so.
     const verifyBanner = document.getElementById('verifyBanner');
     if (verifyBanner && org.email_verified === false && !dashboard.needs_onboarding) {
+        const detail = document.getElementById('verifyBannerDetail');
+        if (detail) {
+            // Only claims proposals are blocked when they actually are.
+            detail.textContent = dashboard.verification_required
+                ? 'You can browse, edit your profile and answer proposals as '
+                  + 'normal — but you will not be able to send a partnership '
+                  + 'proposal until your address is confirmed.'
+                : 'Confirming it shows partners the address behind your '
+                  + 'account is real. Nothing is blocked in the meantime.';
+        }
         verifyBanner.hidden = false;
     }
 

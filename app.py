@@ -406,11 +406,34 @@ def logout():
     return jsonify({"message": "Signed out"}), 200
 
 
-# How long a verification link stays valid. Generous, since there is no
-# resend flow yet -- letting a link sit unread over a weekend still work
-# matters more than a tight expiry would, given the only recovery from an
-# expired one right now is registering again.
+# How long a verification link stays valid. Generous: letting a link sit
+# unread over a weekend and still work matters more than a tight expiry, and
+# an expired one is no longer a dead end now that /api/verify-email/resend
+# can issue a fresh one.
 EMAIL_VERIFY_TOKEN_LIFETIME = timedelta(days=7)
+
+# Whether an unverified org is actually stopped from proposing a partnership.
+#
+# Off by default, and deliberately so. The gate is only fair if the
+# verification email reliably arrives, and right now it does not: Resend is
+# on its sandbox sender (onboarding@resend.dev), which refuses any recipient
+# except the address owning the Resend account --
+#
+#   403 "You can only send testing emails to your own email address"
+#
+# so every signup but one would be told to check an inbox that never receives
+# anything, with no way past it. Enforcing under those conditions does not
+# stop spam, it stops signups.
+#
+# Read from the environment rather than edited here, so turning it on once a
+# domain is verified at resend.com/domains (and EMAIL_FROM points at that
+# domain) is a config change on the host, not a deploy. Everything else about
+# verification stays live meanwhile -- the link, the resend flow, the badge
+# and the prompts -- so the day this flips nothing else has to change.
+REQUIRE_EMAIL_VERIFICATION = (
+    os.environ.get("REQUIRE_EMAIL_VERIFICATION", "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 
 @app.route("/api/verify-email", methods=["GET"])
@@ -509,7 +532,15 @@ def resend_verification(org, db):
 @app.route("/api/me", methods=["GET"])
 @login_required
 def get_me(org, db):
-    return jsonify({"organization": org.private_dict()})
+    # verification_required travels with the payload so the pages that prompt
+    # for verification can say what not verifying actually costs, and stay
+    # truthful when the gate is switched on or off. Server config, not a
+    # property of the org, so it sits beside the organization rather than in
+    # private_dict.
+    return jsonify({
+        "organization": org.private_dict(),
+        "verification_required": REQUIRE_EMAIL_VERIFICATION,
+    })
 
 
 # --- Account settings -------------------------------------------------------
@@ -776,6 +807,7 @@ def get_dashboard(org, db):
     return jsonify({
         "organization": org.private_dict(),
         "needs_onboarding": False,
+        "verification_required": REQUIRE_EMAIL_VERIFICATION,
         "stats": {
             "total_matches": len(matches),
             "mutual_matches": len(mutual),
@@ -804,14 +836,16 @@ def create_proposal(org, db):
     if not org.onboarding_complete:
         return jsonify({"error": "Complete your profile first."}), 409
 
-    # The one thing an unverified account cannot do. Sending a proposal is
-    # what puts this org's name, and an email, in front of a stranger who did
-    # not ask for it -- so it is the action worth holding back until the
-    # address behind the account is known to be real. Everything else stays
-    # open: an unverified org can sign in, finish its profile, appear in
-    # search, and receive and answer proposals, because none of those let it
-    # reach anyone who has not already chosen to engage.
-    if not org.email_verified:
+    # The one thing an unverified account cannot do, when the gate is on (see
+    # REQUIRE_EMAIL_VERIFICATION -- currently off until outbound email is
+    # reliable). Sending a proposal is what puts this org's name, and an
+    # email, in front of a stranger who did not ask for it, so it is the
+    # action worth holding back until the address behind the account is known
+    # to be real. Everything else stays open either way: an unverified org can
+    # sign in, finish its profile, appear in search, and receive and answer
+    # proposals, because none of those reach anyone who has not already
+    # chosen to engage.
+    if REQUIRE_EMAIL_VERIFICATION and not org.email_verified:
         return jsonify({
             "error": "Verify your email address before proposing a "
                      "partnership. Open Settings to send a new "

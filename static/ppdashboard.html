@@ -64,11 +64,13 @@
                  same button on two pages. -->
             <div class="verify-banner" id="verifyBanner" hidden>
                 <i class='bx bx-envelope' aria-hidden="true"></i>
+                <!-- The second sentence depends on whether the gate is
+                     currently enforced, so ppdashboard.js writes it from the
+                     server's verification_required rather than this file
+                     asserting a consequence that may not apply. -->
                 <p>
                     <strong>Verify your email address.</strong>
-                    You can browse, edit your profile and answer proposals as
-                    normal &mdash; but you will not be able to send a partnership
-                    proposal until your address is confirmed.
+                    <span id="verifyBannerDetail"></span>
                 </p>
                 <a href="settings.html" class="btn-action ghost">Verify now</a>
             </div>

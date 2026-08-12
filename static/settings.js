@@ -10,9 +10,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Load ------------------------------------------------------------
     let me;
+    let verificationRequired = false;
     try {
         const data = await window.api('/api/me');
         me = data.organization;
+        verificationRequired = Boolean(data.verification_required);
     } catch (error) {
         console.error('Could not load settings:', error);
         return; // api() redirects on 401; anything else leaves the page as-is
@@ -38,6 +40,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!me.email_verified) {
         document.getElementById('verifyPromptEmail').textContent = me.email || '';
+        // Only claims proposals are blocked when they actually are.
+        document.getElementById('verifyPromptDetail').textContent =
+            verificationRequired
+                ? 'Until the address is confirmed you can do everything except '
+                  + 'send a partnership proposal.'
+                : 'Confirming it shows partners the address behind your account '
+                  + 'is real. Nothing is blocked in the meantime.';
         verifyPrompt.hidden = false;
     }
 

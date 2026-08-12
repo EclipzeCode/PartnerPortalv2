@@ -114,10 +114,12 @@
                 <div class="verify-prompt" id="verifyPrompt" hidden>
                     <div class="verify-prompt-copy">
                         <i class='bx bx-envelope'></i>
+                        <!-- Trailing sentence set by settings.js from the
+                             server's verification_required, so this does not
+                             assert a restriction that may not be switched on. -->
                         <p>
                             Check <strong id="verifyPromptEmail"></strong> for your
-                            verification link. Until the address is confirmed you can
-                            do everything except send a partnership proposal.
+                            verification link. <span id="verifyPromptDetail"></span>
                         </p>
                     </div>
                     <button type="button" class="btn-ghost" id="resendVerifyBtn">

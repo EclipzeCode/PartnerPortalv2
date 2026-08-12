@@ -99,10 +99,14 @@ class Organization(Base):
     onboarding_complete: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    # Enforced in exactly one place: an org cannot send a partnership proposal
-    # until this is true (see create_proposal). Signing in, finishing a
-    # profile, appearing in search, and answering proposals all stay open --
-    # the gate is on reaching a stranger, not on using the product.
+    # Read in exactly one place: create_proposal, which refuses to send a
+    # partnership proposal from an unverified org -- but only when
+    # REQUIRE_EMAIL_VERIFICATION is on, and it is off by default while
+    # outbound email cannot reach anyone but the Resend account owner. So
+    # this is recorded and shown everywhere, and currently blocks nothing.
+    # Signing in, finishing a profile, appearing in search, and answering
+    # proposals stay open regardless -- the gate is on reaching a stranger,
+    # not on using the product.
     #
     # Organizations that existed before that rule were grandfathered to true
     # by migration 55c59219492b; the earliest of them hold no token at all and
