@@ -125,6 +125,19 @@ class Organization(Base):
     email_verify_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+
+    # Same shape as the pair above -- unhashed, single-use, cleared once spent
+    # -- but shorter-lived (checked against a 1-hour window in app.py, not 7
+    # days): this token alone is enough to set a new password, so it grants
+    # more than the verify link does and is worth expiring faster. Set only by
+    # /forgot-password, which never reveals whether the address it was asked
+    # about actually has an account.
+    password_reset_token: Mapped[str | None] = mapped_column(
+        String(64), unique=True
+    )
+    password_reset_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     # Covers the optional emails only: a partnership proposal arriving, and a
     # proposal being accepted or declined. Verification mail ignores this,
     # because it is how someone proves they own the address in the first

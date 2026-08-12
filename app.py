@@ -34,7 +34,8 @@ from matching import find_matches, score_pair
 from moderation import name_problem
 from models import Organization, Partnership
 from notifications import (
-    notify_email_verification, notify_proposal_created, notify_proposal_responded,
+    notify_email_verification, notify_password_reset, notify_proposal_created,
+    notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -404,6 +405,142 @@ def login():
 def logout():
     session.clear()
     return jsonify({"message": "Signed out"}), 200
+
+
+# A reset link is enough on its own to take over the account, unlike a
+# verification link -- so it lives for an hour, not a week. Whoever requested
+# it can always ask for another.
+PASSWORD_RESET_TOKEN_LIFETIME = timedelta(hours=1)
+
+
+@app.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """Start a password reset. Always answers the same way.
+
+    Returning a different message for "no such account" than for "email
+    sent" would let this endpoint be used to check who has registered --
+    exactly the enumeration /login's identical "Invalid email or password"
+    already avoids. So the response here never depends on what was found:
+    the org may not exist, may have no password to reset (a profile someone
+    pre-created that nobody has claimed), or may exist and get an email. All
+    three look the same from the caller's side.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email or not is_valid_email(email):
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    # Two buckets. The IP limit is the usual protection against a script
+    # working down a list of addresses; the email limit exists because the
+    # target here is not the server, it is a stranger's inbox -- without it,
+    # anyone who knows an address could bury it in reset emails from a
+    # rotating set of IPs. Same 3/hour ceiling as verify-email's resend, for
+    # the same reason: this protects mail delivery, not compute.
+    if rate_limited("forgot_password_ip", client_ip(),
+                    max_attempts=8, window_seconds=3600):
+        return jsonify({
+            "error": "Too many requests from this connection. Please try "
+                     "again in a while.",
+        }), 429
+    if rate_limited("forgot_password_email", email,
+                    max_attempts=3, window_seconds=3600):
+        return jsonify({
+            "error": "Too many reset emails have gone out for that address "
+                     "recently. Check your inbox and spam folder, then try "
+                     "again in a little while.",
+        }), 429
+
+    generic = jsonify({
+        "message": "If an account exists for that email, we've sent a "
+                    "password reset link.",
+    }), 200
+
+    db = get_db()
+    try:
+        org = db.query(Organization).filter(
+            Organization.email == email
+        ).one_or_none()
+        # No password_hash means there is nothing to reset -- a pre-created
+        # profile nobody has claimed, the same case /register's password
+        # check protects against from the other direction. Silently doing
+        # nothing keeps this indistinguishable from "no such account".
+        if org is not None and org.password_hash is not None:
+            org.password_reset_token = secrets.token_urlsafe(32)
+            org.password_reset_sent_at = datetime.now(timezone.utc)
+            db.commit()
+            notify_password_reset(org, org.password_reset_token)
+        return generic
+    finally:
+        db.close()
+
+
+@app.route("/api/reset-password", methods=["POST"])
+def reset_password():
+    """The other end of the link in notify_password_reset.
+
+    Unauthenticated like /api/verify-email -- the token is the credential,
+    and requiring a session would break the link for anyone reading their
+    email on a different device than the one they are locked out of.
+    """
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+
+    if not token:
+        return jsonify({"error": "This link is missing its token."}), 400
+
+    db = get_db()
+    try:
+        org = db.query(Organization).filter(
+            Organization.password_reset_token == token
+        ).one_or_none()
+
+        if org is None:
+            # Covers "never existed" and "already used" alike -- the token is
+            # cleared on success, so a second click lands here too.
+            return jsonify({
+                "error": "This reset link is invalid or has already been "
+                         "used.",
+            }), 404
+
+        if org.password_reset_sent_at and (
+            datetime.now(timezone.utc) - org.password_reset_sent_at
+            > PASSWORD_RESET_TOKEN_LIFETIME
+        ):
+            return jsonify({
+                "error": "This reset link has expired. Please request a "
+                         "new one.",
+            }), 410
+
+        # Same rules /register enforces, including the length/common-password
+        # checks the client-side checklist does not mirror -- a stolen or
+        # guessed-at token should not make the account easier to secure badly
+        # than signing up does.
+        problem = password_problem(password, email=org.email, name=org.name)
+        if problem:
+            return jsonify({"error": problem, "field": "password"}), 400
+
+        org.password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+        org.password_reset_token = None
+        org.password_reset_sent_at = None
+        db.commit()
+
+        # Proving control of the inbox and choosing a new password is the
+        # same proof /login asks for; signing in here saves a redundant trip
+        # back through it, the same reasoning /register signs someone in on
+        # completion.
+        session.clear()
+        session["org_id"] = org.id
+        session.permanent = True
+        return jsonify({
+            "message": "Password reset",
+            "organization": org.private_dict(),
+        }), 200
+    finally:
+        db.close()
 
 
 # How long a verification link stays valid. Generous: letting a link sit

@@ -262,6 +262,22 @@ button {
     margin: 0;
 }
 
+/* Right-aligned and quiet on purpose: this is an escape hatch for the rare
+   case, not a second call to action next to Sign In. */
+.container .forgot-link {
+    display: block;
+    width: 100%;
+    text-align: right;
+    margin: 0.35rem 0 0.65rem;
+    font-size: 0.78rem;
+    color: var(--text-light, #8d99ae);
+}
+
+.container .forgot-link:hover {
+    color: var(--main-color, #4361ee);
+    text-decoration: underline;
+}
+
 /* .container p { margin: 1.25rem 0 } outranks a bare .field-error/.form-banner
    (class+type beats class alone), so both are qualified with .container to
    win the properties that rule also sets -- margin and, for .container p's

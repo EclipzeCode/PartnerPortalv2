@@ -320,6 +320,47 @@ def notify_email_verification(org, token):
     _dispatch(org.email, "Verify your email for PartnerPortal", html, text)
 
 
+def notify_password_reset(org, token):
+    """Sent by /forgot-password. The link is the only credential the reset
+    endpoint checks, so this is the one email on the site where an
+    unsolicited send is the expected case, not a bug: anyone can type in
+    anyone else's address, and the reassurance that nothing happens without
+    the click is the point of the footer note below, not filler.
+
+    Uses the login email, like notify_email_verification, and for the same
+    reason -- this is about the account's own credentials, not the profile a
+    partner would see.
+
+    Deliberately ignores org.email_notifications for the same reason
+    notify_email_verification does: that setting is about optional
+    partnership mail, and an account-security action is not optional.
+    """
+    cfg = _config()
+    reset_url = f"{cfg['app_url']}/reset-password.html?token={token}"
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Reset your password</h1>
+  <p class="meta">Someone asked to reset the password for {escape(org.email)}
+  on PartnerPortal. This link expires in 1 hour.</p>
+
+  <a class="cta" href="{escape(reset_url)}">Choose a new password</a>
+
+  <p class="foot">If you did not request this, no action is needed -- your
+  password has not been changed, and it will not change unless this link is
+  used.</p>
+</div></body></html>
+"""
+    text = (
+        f"Reset the password for {org.email} on PartnerPortal: {reset_url}\n"
+        f"This link expires in 1 hour.\n\n"
+        f"If you did not request this, no action is needed -- your password "
+        f"has not been changed.\n"
+    )
+    _dispatch(org.email, "Reset your PartnerPortal password", html, text)
+
+
 def _label(slug):
     """Category labels via the shared vocabulary."""
     from categories import label_for
