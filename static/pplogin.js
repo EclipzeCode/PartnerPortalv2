@@ -55,6 +55,27 @@ function setBanner(banner, message, tone) {
     banner.hidden = !message;
 }
 
+// --- Submit button state -------------------------------------------------
+// Signing in used to only set disabled = true, which greys the button very
+// slightly and says nothing. On a slow connection -- or a cold Render
+// instance, which is the realistic case here -- that reads as a click that
+// did not register, and the natural response is to click again. Both forms
+// go through these so the two cannot drift apart.
+function setButtonLoading(btn, loadingText) {
+    // Stashed rather than hardcoded in the reset, so the idle label lives in
+    // one place: the markup.
+    btn.dataset.idleText = btn.textContent;
+    btn.textContent = loadingText;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+}
+
+function clearButtonLoading(btn) {
+    if (btn.dataset.idleText) btn.textContent = btn.dataset.idleText;
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+}
+
 // A too-permissive check would let obvious typos ("name@gmail") through to
 // the server only to bounce back a second later; this is the same shape the
 // server checks, so a field never passes here and fails there for a
@@ -193,8 +214,7 @@ registerForm.addEventListener('submit', async (e) => {
     }
 
     const submitBtn = document.getElementById('register-btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating account...';
+    setButtonLoading(submitBtn, 'Creating account...');
 
     try {
         const result = await window.api('/register', {
@@ -215,8 +235,7 @@ registerForm.addEventListener('submit', async (e) => {
         }, 1400);
     } catch (error) {
         routeRegisterError(error);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign Up';
+        clearButtonLoading(submitBtn);
     }
 });
 
@@ -281,7 +300,7 @@ loginForm.addEventListener('submit', async (e) => {
     }
 
     const submitBtn = document.getElementById('login-btn');
-    submitBtn.disabled = true;
+    setButtonLoading(submitBtn, 'Signing in...');
 
     try {
         const result = await window.api('/login', {
@@ -289,12 +308,16 @@ loginForm.addEventListener('submit', async (e) => {
             body: { email, password },
             allowUnauthenticated: true
         });
+        // Left in the loading state on purpose: the navigation below is the
+        // next thing to happen, and putting "Sign In" back first would flash
+        // an idle-looking button on a page that is already leaving.
+        submitBtn.textContent = 'Redirecting...';
         window.location.href = destinationFor(result.organization);
     } catch (error) {
         // "Invalid email or password" deliberately does not say which one --
         // singling out a field would leak whether the address is registered.
         // A banner says the same thing without pointing at either field.
         setBanner(loginBanner, error.message || 'Something went wrong.', 'error');
-        submitBtn.disabled = false;
+        clearButtonLoading(submitBtn);
     }
 });

@@ -616,3 +616,51 @@ button {
 
 @media (max-width: 48em) {
 }
+
+/* --- Submit button loading state ---------------------------------------- */
+/* Set by pplogin.js while a sign-in or sign-up request is in flight. The
+   label changes too; this adds the motion, because a static label swap can
+   be missed on a page you were already staring at. */
+.btn-box.is-loading {
+    /* The label sits next to the spinner rather than against it. */
+    gap: 0.55rem;
+    cursor: progress;
+}
+
+/* .btn-box::before is the hover sweep -- an invitation to click. There is
+   nothing to invite while the request is running, and letting it fire under
+   the cursor makes a busy button look interactive. */
+.btn-box.is-loading::before {
+    width: 0;
+}
+
+.btn-box.is-loading:hover {
+    color: var(--bg-color);
+}
+
+/* ::after, because ::before is taken by the sweep above. currentColor keeps
+   it correct against the button's own text colour. */
+.btn-box.is-loading::after {
+    content: '';
+    flex-shrink: 0;
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: btn-spin 0.65s linear infinite;
+}
+
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* The changed label already carries the message; the ring stays as a static
+   marker so the button still looks different from its idle state. */
+@media (prefers-reduced-motion: reduce) {
+    .btn-box.is-loading::after {
+        animation: none;
+        border-top-color: currentColor;
+        opacity: 0.5;
+    }
+}
