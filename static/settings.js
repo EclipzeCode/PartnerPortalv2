@@ -218,6 +218,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             // queued for that page instead; the parameter stays because it
             // is what makes the redirect legible in history and logs.
             window.toastAfterRedirect('Your account has been deleted.');
+            // Otherwise the home page draws an avatar placeholder for an
+            // account that no longer exists, until /api/me 401s and clears
+            // the hint itself.
+            window.forgetSession();
             // The session is already cleared server-side. replace() rather
             // than href so Back cannot return to a settings page for an
             // account that no longer exists.

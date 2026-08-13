@@ -122,6 +122,41 @@
     visibility: hidden;
 }
 
+/* ...except when this browser was signed in last time, in which case the
+   avatar is almost certainly what is coming and a shimmering circle is
+   better than an empty corner. data-hint is set by common.js from a stored
+   marker (never from anything security-relevant -- see SESSION_HINT_KEY),
+   so a first-time or signed-out visitor is never shown an avatar that is
+   about to turn into "Login | Create Account".
+
+   Uses the skeleton-shimmer keyframes from shared.css, which every page
+   carrying nav.css also loads. */
+.nav-account[data-state="loading"][data-hint="in"] .account-menu {
+    visibility: visible;
+}
+
+.nav-account[data-state="loading"][data-hint="in"] .avatar-button {
+    /* There is no menu behind it until the session resolves, so it must not
+       look or behave like something that opens one. */
+    pointer-events: none;
+    cursor: default;
+    box-shadow: none;
+    background: linear-gradient(
+        90deg,
+        #eceef5 25%,
+        #f6f7fb 37%,
+        #eceef5 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-account[data-state="loading"][data-hint="in"] .avatar-button {
+        animation: none;
+    }
+}
+
 .nav-account[data-state="out"] .account-menu {
     visibility: hidden;
 }
@@ -358,6 +393,12 @@
     .nav-account[data-state="out"] .account-menu,
     .nav-account[data-state="in"] .nav-auth-cta {
         display: none;
+    }
+
+    /* The drawer hides by display rather than visibility, so the placeholder
+       needs its own way back in. */
+    .nav-account[data-state="loading"][data-hint="in"] .account-menu {
+        display: block;
     }
 
     .navbar a.nav-auth-cta {

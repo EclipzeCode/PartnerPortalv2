@@ -209,9 +209,56 @@ function initialsFor(name) {
     return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
+// Whether this browser has recently had a signed-in session.
+//
+// NOT authentication, and never to be used as such: the session cookie is
+// HttpOnly precisely so scripts cannot read it, and this flag is trivially
+// forgeable from the console. It decides one thing -- whether to draw an
+// avatar placeholder while /api/me is in flight -- and nothing downstream
+// trusts it. The server is still the only thing that decides who anyone is.
+//
+// It exists because the placeholder would otherwise be a guess. A signed-out
+// visitor shown a shimmering avatar has been told they are logged in, and on
+// a cold start that lie can sit there for a second or more before the CTA
+// replaces it. With the flag, first-time and signed-out visitors get the
+// blank slot they got before, and only people who actually were signed in
+// see the avatar placeholder.
+const SESSION_HINT_KEY = 'partnerPortalSignedIn';
+
+function rememberSessionHint(signedIn) {
+    try {
+        if (signedIn) localStorage.setItem(SESSION_HINT_KEY, '1');
+        else localStorage.removeItem(SESSION_HINT_KEY);
+    } catch {
+        // Storage disabled or full. The placeholder is a nicety; losing it
+        // costs nothing.
+    }
+}
+
+function hasSessionHint() {
+    try {
+        return localStorage.getItem(SESSION_HINT_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+// For pages that end a session themselves rather than through the nav's own
+// sign-out -- deleting an account, for one.
+window.forgetSession = function forgetSession() {
+    rememberSessionHint(false);
+};
+
 async function updateNavForSession() {
     const slot = document.getElementById('navAccount');
     if (!slot) return;
+
+    // Set before the await so the placeholder is up for the whole wait, not
+    // just after it. A stale hint (session expired since the last visit)
+    // shows the placeholder and then resolves to the signed-out CTA, which
+    // is the same correction the nav made anyway -- just with something in
+    // the slot rather than nothing.
+    if (hasSessionHint()) slot.dataset.hint = 'in';
 
     let me = null;
     try {
@@ -221,6 +268,9 @@ async function updateNavForSession() {
         // Signed out, or the server is down. The signed-out call to action is
         // the honest thing to show in both cases.
     }
+
+    rememberSessionHint(Boolean(me));
+    delete slot.dataset.hint;
 
     if (!me) {
         slot.dataset.state = 'out';
@@ -275,6 +325,10 @@ function wireAccountMenu() {
     if (signOut) {
         signOut.addEventListener('click', async () => {
             await window.api('/logout', { method: 'POST', allowUnauthenticated: true });
+            // Cleared here as well as on the next /api/me, so the page landed
+            // on after signing out does not briefly draw an avatar for an
+            // account that just signed out of it.
+            rememberSessionHint(false);
             location.href = 'index.html';
         });
     }
