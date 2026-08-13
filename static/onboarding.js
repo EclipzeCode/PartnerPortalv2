@@ -118,11 +118,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function buildPickers() {
+  async function buildPickers(request) {
     renderPickerSkeletons();
     let data;
     try {
-      data = await window.api('/api/categories');
+      data = await request;
     } catch (err) {
       // Leave the boxes empty rather than shimmering: the error above says
       // what happened, and shimmer that never resolves reads as a page still
@@ -190,10 +190,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Prefill ----------------------------------------------------------
   // Editing an existing profile should show what is already there rather than
   // making the user retype everything.
-  async function prefill() {
+  async function prefill(request) {
     let me;
     try {
-      me = (await window.api('/api/me')).organization;
+      me = (await request).organization;
     } catch {
       return; // api() already redirected to login on a 401
     }
@@ -578,7 +578,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   fields.linksPublic.addEventListener('change', updateLinksVisibilityNote);
   updateLinksVisibilityNote();
 
-  await buildPickers();
-  await prefill();
+  // Both requests go out now, rather than /api/me waiting for
+  // /api/categories to come back first -- the page used to sit through two
+  // round trips in series for two calls that have nothing to say to each
+  // other. The *awaits* stay ordered, because prefill ticks category
+  // checkboxes that buildPickers has to have created first; only the waiting
+  // overlaps.
+  const categoriesRequest = window.api('/api/categories');
+  const meRequest = window.api('/api/me');
+  // If categories fails, buildPickers rethrows and the prefill await below is
+  // never reached -- leaving meRequest rejected with nothing attached, which
+  // the browser reports as an unhandled rejection. Attaching a no-op handler
+  // marks it as handled; awaiting it later still sees the real rejection.
+  meRequest.catch(() => {});
+
+  await buildPickers(categoriesRequest);
+  await prefill(meRequest);
   updateProgress();
 });
