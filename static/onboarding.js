@@ -190,13 +190,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Prefill ----------------------------------------------------------
   // Editing an existing profile should show what is already there rather than
   // making the user retype everything.
+  // Text controls shimmer while /api/me is in flight. This matters most on
+  // the Edit Profile path: the fields are empty until the response lands, so
+  // an org coming back to change one line is shown a blank form with
+  // placeholder text where its saved answers should be. "Loading" and "we
+  // lost your profile" look identical for that second, and the second is
+  // real -- Neon scales to zero, and a cold /api/me was measured at over two
+  // seconds. Get Started ends on an empty form either way, so there the
+  // shimmer just says the page checked before deciding.
+  function setPrefilling(on) {
+    onboardingForm.toggleAttribute('data-prefilling', on);
+    // toggleAttribute would set aria-busy="", which is not a valid value --
+    // it has to read "true" or be gone.
+    if (on) onboardingForm.setAttribute('aria-busy', 'true');
+    else onboardingForm.removeAttribute('aria-busy');
+    const summary = document.querySelector('.summary-card');
+    if (summary) summary.toggleAttribute('data-prefilling', on);
+  }
+
   async function prefill(request) {
+    setPrefilling(true);
     let me;
     try {
       me = (await request).organization;
     } catch {
+      setPrefilling(false);
       return; // api() already redirected to login on a 401
     }
+    setPrefilling(false);
 
     if (me.name) fields.organizationName.value = me.name;
     if (me.organization_type) fields.organizationType.value = me.organization_type;

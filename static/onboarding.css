@@ -835,3 +835,58 @@ body {
 .skeleton-chip:nth-child(3n + 1) { width: 5.5rem; }
 .skeleton-chip:nth-child(3n + 2) { width: 8rem; }
 .skeleton-chip:nth-child(3n + 3) { width: 6.5rem; }
+
+/* --- Prefill shimmer ----------------------------------------------------- */
+/* Set on the form (and the strength card) by onboarding.js while /api/me is
+   in flight. The controls stay real controls -- this only paints over them,
+   rather than swapping in placeholder markup that would have to be removed
+   and would drop anything typed in the meantime.
+ *
+ * Selected through #onboardingForm rather than the bare attribute: forms.css
+ * styles these with `.form-group input:not([type="checkbox"]):not([type="radio"])`
+ * and loads after this file, so a plain `[data-prefilling] input` rule loses
+ * both the background and the colour to it and only the animation survives.
+ * The id puts this out of reach of that without having to count selectors. */
+#onboardingForm[data-prefilling] input:not([type="checkbox"]),
+#onboardingForm[data-prefilling] select,
+#onboardingForm[data-prefilling] textarea {
+  background-image: linear-gradient(
+    90deg,
+    #eceef5 25%,
+    #f6f7fb 37%,
+    #eceef5 63%
+  );
+  background-color: transparent;
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  /* The placeholder is the thing that reads as "we have nothing for you",
+     so it goes too -- otherwise the shimmer sits behind wording that
+     contradicts it. */
+  color: transparent;
+  border-color: transparent;
+  /* Typing into a field that is about to be overwritten by the response
+     loses whatever was typed, so the form is not offered until it settles. */
+  pointer-events: none;
+}
+
+#onboardingForm[data-prefilling] input::placeholder,
+#onboardingForm[data-prefilling] textarea::placeholder {
+  color: transparent;
+}
+
+/* The strength meter is derived from the fields, so it is wrong for the same
+   window and is dimmed for it rather than shimmered -- it is a summary of
+   the form, not another thing being fetched. */
+.summary-card[data-prefilling] .strength-bar,
+.summary-card[data-prefilling] .strength-label,
+.summary-card[data-prefilling] .checklist {
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #onboardingForm[data-prefilling] input:not([type="checkbox"]),
+  #onboardingForm[data-prefilling] select,
+  #onboardingForm[data-prefilling] textarea {
+    animation: none;
+  }
+}
