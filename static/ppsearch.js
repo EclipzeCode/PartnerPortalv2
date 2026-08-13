@@ -455,6 +455,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
                 closeModal(proposeModal);
+                // Queued rather than shown: the redirect below would destroy
+                // a toast raised here before anyone could read it. common.js
+                // picks this up on the dashboard, which is the first moment
+                // there is a page around long enough to say it worked.
+                window.toastAfterRedirect(
+                    `Proposal sent to ${detailTarget.name}.`);
                 window.location.href = 'ppdashboard.html#outgoing';
             } catch (error) {
                 setProposeMessage(error.message);

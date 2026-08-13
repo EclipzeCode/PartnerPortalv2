@@ -213,6 +213,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 method: 'DELETE',
                 body: { password },
             });
+            // ?deleted=1 was landing on a home page that did nothing with
+            // it, so the account vanished without a word. The toast is
+            // queued for that page instead; the parameter stays because it
+            // is what makes the redirect legible in history and logs.
+            window.toastAfterRedirect('Your account has been deleted.');
             // The session is already cleared server-side. replace() rather
             // than href so Back cannot return to a settings page for an
             // account that no longer exists.

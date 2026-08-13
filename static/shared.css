@@ -257,3 +257,106 @@ textarea:focus-visible {
     }
 }
 
+/* ---------- Toasts ---------- */
+/* Confirmation for actions that navigate away on success, which previously
+   just navigated: the proposal was sent, the page changed, and nothing ever
+   said so. common.js can hand a toast across that redirect, so the
+   confirmation appears on the page you land on. */
+.toast-stack {
+    position: fixed;
+    z-index: 3000;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    /* The stack spans the corner but must not swallow clicks in it; each
+       toast turns pointer events back on for itself. */
+    pointer-events: none;
+    max-width: min(24rem, calc(100vw - 3rem));
+}
+
+.toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.6rem;
+    background: #fff;
+    color: #2b2d42;
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.16);
+    border-left: 3px solid #6c757d;
+    animation: toast-in 0.22s ease-out;
+}
+
+.toast.ok    { border-left-color: #2a9d5c; }
+.toast.error { border-left-color: #e63946; }
+
+.toast > i {
+    font-size: 1.15rem;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}
+
+.toast.ok > i    { color: #2a9d5c; }
+.toast.error > i { color: #e63946; }
+
+.toast p {
+    margin: 0;
+    flex: 1;
+    /* A long organization name should wrap, not widen the toast. */
+    overflow-wrap: anywhere;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    padding: 0 0.15rem;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: #8d99ae;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    color: #2b2d42;
+}
+
+/* Leaving is scripted rather than left to the removal, so the element is
+   still there to animate. */
+.toast.leaving {
+    animation: toast-out 0.18s ease-in forwards;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(0.6rem); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(0.4rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast,
+    .toast.leaving {
+        animation: none;
+    }
+}
+
+/* On a phone the corner is where the thumb rests; full width along the
+   bottom keeps a toast from covering whatever was just tapped. */
+@media (max-width: 30em) {
+    .toast-stack {
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        max-width: none;
+    }
+}

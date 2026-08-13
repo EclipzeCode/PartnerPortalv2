@@ -192,7 +192,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Accept is the step that creates a binding-looking agreement and mints
         // a public link, so it is confirmed rather than fired on one click.
-        pending = { id, action: act };
+        // The name rides along for the confirmation toast: by the time the
+        // response lands, load() has re-rendered the list and this
+        // proposal's card may have moved to another tab entirely.
+        pending = { id, action: act, name: proposal.counterpart.name };
         respondTitle.textContent = {
             accept: `Accept partnership with ${proposal.counterpart.name}?`,
             decline: `Decline proposal from ${proposal.counterpart.name}?`,
@@ -232,6 +235,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     respondForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!pending) return;
+        // Captured before the awaits below: `finally` clears pending, and
+        // the toast is worded from it after load() has already run.
+        const { action, name } = pending;
         respondConfirm.disabled = true;
         try {
             await window.api(`/api/proposals/${pending.id}/${pending.action}`, {
@@ -240,8 +246,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             closeModal();
             // Land on the tab where the result now lives.
-            if (pending.action === 'accept') activateTab('agreed');
+            if (action === 'accept') activateTab('agreed');
             await load();
+            // The list re-renders underneath, and on accept the card also
+            // changes tab -- easy to miss that anything happened at all, so
+            // this says which of the three actions actually went through.
+            window.toast({
+                accept: `Partnership with ${name} accepted.`,
+                decline: `Proposal from ${name} declined.`,
+                withdraw: `Your proposal to ${name} was withdrawn.`
+            }[action]);
             // The dashboard's activity feed is built from this same history.
             document.dispatchEvent(new CustomEvent('partnerships:changed'));
         } catch (error) {

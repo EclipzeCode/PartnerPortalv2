@@ -62,6 +62,104 @@ window.escapeHtml = function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 };
 
+// --- Toasts -----------------------------------------------------------
+// Several actions here succeed by navigating: sending a proposal lands you on
+// the dashboard, deleting an account lands you on the home page. The
+// navigation was the only feedback, which reads as "something happened" but
+// never says what, or whether it worked.
+//
+// A toast shown before a redirect would be destroyed by that redirect, so
+// toastAfterRedirect() parks it in sessionStorage and the next page picks it
+// up on load. sessionStorage rather than localStorage: it is scoped to this
+// tab, so a queued message cannot surface in an unrelated one, and it dies
+// with the tab rather than waiting around for the next visit.
+const TOAST_HANDOFF_KEY = 'partnerPortalPendingToast';
+const TOAST_DURATION_MS = 5000;
+
+function toastStack() {
+    let stack = document.querySelector('.toast-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.className = 'toast-stack';
+        // polite, not assertive: these confirm something the user just did,
+        // so they should wait their turn rather than interrupt.
+        stack.setAttribute('role', 'status');
+        stack.setAttribute('aria-live', 'polite');
+        document.body.appendChild(stack);
+    }
+    return stack;
+}
+
+window.toast = function toast(message, kind = 'ok') {
+    if (!message) return;
+
+    const el = document.createElement('div');
+    el.className = `toast ${kind}`;
+
+    const icon = document.createElement('i');
+    icon.className = kind === 'error' ? 'bx bx-error-circle' : 'bx bx-check-circle';
+    icon.setAttribute('aria-hidden', 'true');
+
+    // textContent, not innerHTML: messages interpolate organization names.
+    const text = document.createElement('p');
+    text.textContent = message;
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.innerHTML = '&times;';
+
+    el.append(icon, text, close);
+    toastStack().appendChild(el);
+
+    let timer = null;
+    const dismiss = () => {
+        clearTimeout(timer);
+        if (!el.isConnected) return;
+        el.classList.add('leaving');
+        // Falls back to a timeout because animationend never fires when
+        // prefers-reduced-motion has removed the animation.
+        const drop = () => el.remove();
+        el.addEventListener('animationend', drop, { once: true });
+        setTimeout(drop, 250);
+    };
+
+    close.addEventListener('click', dismiss);
+    timer = setTimeout(dismiss, TOAST_DURATION_MS);
+    return dismiss;
+};
+
+// Queue a toast for whatever page loads next. Call immediately before
+// assigning location.
+window.toastAfterRedirect = function toastAfterRedirect(message, kind = 'ok') {
+    try {
+        sessionStorage.setItem(TOAST_HANDOFF_KEY, JSON.stringify({ message, kind }));
+    } catch {
+        // Private browsing, or storage disabled. The redirect still happens;
+        // only the confirmation is lost, which is no worse than before.
+    }
+};
+
+function drainToastHandoff() {
+    let raw = null;
+    try {
+        raw = sessionStorage.getItem(TOAST_HANDOFF_KEY);
+        // Removed before it is shown, so a queued toast cannot reappear on
+        // every subsequent navigation in this tab.
+        if (raw) sessionStorage.removeItem(TOAST_HANDOFF_KEY);
+    } catch {
+        return;
+    }
+    if (!raw) return;
+    try {
+        const { message, kind } = JSON.parse(raw);
+        if (message) window.toast(message, kind);
+    } catch {
+        // Malformed entry; nothing useful to show.
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Mobile navigation ---------------------------------------------
     const menuIcon = document.getElementById('menu-icon');
@@ -97,6 +195,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // The nav is static markup, so it used to show "Login" to signed-in users.
     // One cheap call settles it for every page.
     updateNavForSession();
+
+    // Anything a previous page queued on its way out.
+    drainToastHandoff();
 });
 
 // Two words at most, so "Bridgewater Community Arts Trust" reads as BC rather
