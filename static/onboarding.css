@@ -809,3 +809,29 @@ body {
 #card-3 .form-grid {
   grid-template-columns: repeat(2, 1fr);
 }
+
+/* --- Loading skeletons -------------------------------------------------- */
+/* Placeholder chips shown in both category pickers while /api/categories
+   resolves. They sit inside the real .category-group / .category-options
+   structure so the spacing and wrapping are the ones the actual chips will
+   get, and the box does not resize when they are replaced. */
+.skeleton-group-heading {
+  /* Matches .category-group h4: 0.72rem text over a 0.6rem margin. */
+  height: 0.72rem;
+  width: 7rem;
+  margin-bottom: 0.6rem;
+}
+
+.skeleton-chip {
+  display: inline-block;
+  /* .category-chip is 0.85rem text with 0.4rem/0.75rem padding and a 1px
+     border, which comes out at this height. */
+  height: 2.05rem;
+  border-radius: 62.4375rem;
+}
+
+/* Category labels are not all the same length, and a row of identical pills
+   reads as a progress bar rather than as a list of things. */
+.skeleton-chip:nth-child(3n + 1) { width: 5.5rem; }
+.skeleton-chip:nth-child(3n + 2) { width: 8rem; }
+.skeleton-chip:nth-child(3n + 3) { width: 6.5rem; }

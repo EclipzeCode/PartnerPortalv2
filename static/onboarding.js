@@ -88,14 +88,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Category pickers -------------------------------------------------
+  // Both pickers start as empty bordered boxes about 3rem tall and become
+  // scroll containers capped at 18.75rem once the vocabulary arrives -- two
+  // of them, so the form below jumped by most of a screen. Placeholder chips
+  // hold that space and say the control is a set of things to pick from,
+  // which an empty box does not.
+  function renderPickerSkeletons() {
+    // Group sizes roughly match the real vocabulary, so the height the
+    // skeleton reserves is close to the height the chips actually need.
+    const html = [6, 5, 7].map((chips) => `
+      <div class="category-group">
+        <div class="skeleton skeleton-group-heading"></div>
+        <div class="category-options">
+          ${Array.from({ length: chips },
+                       () => '<span class="skeleton skeleton-chip"></span>').join('')}
+        </div>
+      </div>
+    `).join('');
+
+    Object.values(pickers).forEach((container) => {
+      container.setAttribute('aria-busy', 'true');
+      container.innerHTML = html;
+    });
+  }
+
+  function clearPickerSkeletons() {
+    Object.values(pickers).forEach((container) => {
+      container.removeAttribute('aria-busy');
+    });
+  }
+
   async function buildPickers() {
+    renderPickerSkeletons();
     let data;
     try {
       data = await window.api('/api/categories');
     } catch (err) {
+      // Leave the boxes empty rather than shimmering: the error above says
+      // what happened, and shimmer that never resolves reads as a page still
+      // working on it.
+      clearPickerSkeletons();
+      Object.values(pickers).forEach((container) => { container.innerHTML = ''; });
       showError('Could not load the category list. Please refresh.');
       throw err;
     }
+    clearPickerSkeletons();
 
     // Organization types come from the same endpoint so the values stored
     // here match what every other organization is stored with.
