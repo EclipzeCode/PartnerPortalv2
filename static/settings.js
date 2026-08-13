@@ -7,8 +7,13 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const toggle = document.getElementById('emailNotifications');
     const status = document.getElementById('settingStatus');
+    const container = document.querySelector('.settings-container');
 
     // --- Load ------------------------------------------------------------
+    // The toggle and the account facts below all come from this request, so
+    // they shimmer (settings.css, [data-loading="true"]) until it settles --
+    // otherwise they show "off" and "—" first, which read as real answers
+    // rather than "not loaded yet".
     let me;
     let verificationRequired = false;
     try {
@@ -17,9 +22,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         verificationRequired = Boolean(data.verification_required);
     } catch (error) {
         console.error('Could not load settings:', error);
+        container.removeAttribute('data-loading');
+        toggle.disabled = false;
         return; // api() redirects on 401; anything else leaves the page as-is
     }
 
+    container.removeAttribute('data-loading');
+    toggle.disabled = false;
     toggle.checked = Boolean(me.email_notifications);
 
     document.getElementById('accountEmailValue').textContent = me.email || '—';

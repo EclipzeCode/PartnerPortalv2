@@ -59,7 +59,11 @@
             <div class="underline"></div>
         </div>
 
-        <div class="settings-container">
+        <!-- settings.js sets data-loading here while /api/me is in flight and
+             clears it once the response lands (or fails). Only the values
+             that actually come from that request shimmer -- change password
+             and delete account need nothing from it. -->
+        <div class="settings-container" data-loading="true">
             <!-- Notifications ------------------------------------------- -->
             <div class="settings-card">
                 <div class="settings-card-header">
@@ -81,7 +85,7 @@
                          it, so keyboard and screen-reader users get a plain
                          checkbox and everyone else gets the toggle. -->
                     <label class="switch">
-                        <input type="checkbox" id="emailNotifications">
+                        <input type="checkbox" id="emailNotifications" disabled>
                         <span class="switch-track" aria-hidden="true"></span>
                     </label>
                 </div>
