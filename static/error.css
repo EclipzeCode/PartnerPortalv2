@@ -1,0 +1,129 @@
+/* 500 page.
+ *
+ * Its own stylesheet rather than a share of a page's, same reasoning as
+ * notfound.css: this can be reached from any request that errors, so it
+ * should not depend on whichever page stylesheet happened to define
+ * .btn-primary. It does load nav.css and shared.css, because the header and
+ * footer here are the real ones.
+ */
+
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --text: #2b2d42;
+    --text-light: #8d99ae;
+    --border: #e6e8f0;
+    --bg: #f5f7ff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.error-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Top padding clears the fixed header. */
+    padding: 8rem 1.25rem 4rem;
+}
+
+.error-card {
+    max-width: 32rem;
+    width: 100%;
+    text-align: center;
+}
+
+/* Big, but set in the page background's own family of blues rather than as a
+   solid headline -- the sentence under it is the part worth reading. */
+.error-code {
+    font-size: clamp(5rem, 18vw, 8.5rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: rgba(67, 97, 238, 0.16);
+    margin-bottom: -0.5rem;
+    user-select: none;
+}
+
+.error-card h1 {
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.error-body {
+    color: var(--text-light);
+    font-size: 1rem;
+    max-width: 26rem;
+    margin: 0 auto 2rem;
+}
+
+.error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+.error-actions a,
+.error-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.8rem 1.6rem;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.error-actions .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: 1px solid var(--primary);
+}
+
+.error-actions .btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.error-actions .btn-ghost {
+    background: #fff;
+    color: var(--text-light);
+    border: 1px solid var(--border);
+}
+
+.error-actions .btn-ghost:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+@media (max-width: 30em) {
+    .error-main {
+        padding-top: 7rem;
+    }
+
+    /* Full-width buttons stack better than two half-width ones on a phone. */
+    .error-actions a,
+    .error-actions button {
+        width: 100%;
+    }
+}

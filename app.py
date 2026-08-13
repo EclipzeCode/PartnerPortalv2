@@ -249,6 +249,128 @@ def index():
     return send_from_directory(STATIC_DIR, "index.html")
 
 
+def _esc_attr(value):
+    """Escape for use inside an HTML attribute value (a meta content="...")."""
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _truncate(text, limit):
+    text = " ".join(text.split())  # collapse newlines from a textarea
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _render_og_page(filename, title, description):
+    """Stamp a static page's <title> and inject its og:/twitter: tags.
+
+    Slack, iMessage and Twitter (and everything else that renders a link
+    preview) fetch the URL and read the HTML directly -- they do not run
+    organization.js or partnership.js, so a preview built by those scripts
+    is invisible to them. This gives crawlers the same title/description a
+    signed-in visitor would see, without a screenshot-style og:image: there
+    is no image generation pipeline behind this site, and a text-only
+    preview beats the bare URL these links show today.
+    """
+    with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
+        html = f.read()
+
+    title = _truncate(title, 70)
+    description = _truncate(description, 200)
+    tags = (
+        '<meta property="og:type" content="website">\n'
+        '    <meta property="og:site_name" content="PartnerPortal">\n'
+        f'    <meta property="og:title" content="{_esc_attr(title)}">\n'
+        f'    <meta property="og:description" content="{_esc_attr(description)}">\n'
+        f'    <meta property="og:url" content="{_esc_attr(request.url)}">\n'
+        '    <meta name="twitter:card" content="summary">\n'
+        f'    <meta name="twitter:title" content="{_esc_attr(title)}">\n'
+        f'    <meta name="twitter:description" content="{_esc_attr(description)}">'
+    )
+    html = html.replace("<!-- og:meta -->", tags, 1)
+    html = re.sub(
+        r"<title>.*?</title>", f"<title>{_esc_attr(title)}</title>", html, count=1,
+    )
+    return html
+
+
+def _org_og_description(profile):
+    bio = (profile.get("description") or "").strip()
+    if bio:
+        return bio
+    type_loc = " in ".join(
+        p for p in [profile.get("organization_type"), profile.get("location")] if p
+    )
+    if type_loc:
+        return f"{type_loc} on PartnerPortal, looking for partners."
+    return "An organization profile on PartnerPortal."
+
+
+@app.route("/organization.html")
+def organization_page():
+    """Same file static/organization.html serves, with real og: tags on top.
+
+    Only completed profiles get a specific title/description, matching what
+    /api/organizations/<id>/public resolves -- a link to a half-filled or
+    missing profile falls back to a generic preview rather than a 404, since
+    organization.js is what actually tells the visitor that on the page.
+    """
+    org_id = request.args.get("id", "")
+    title = "Organization | PartnerPortal"
+    description = (
+        "See what this organization offers and needs, and get in touch to "
+        "propose a partnership on PartnerPortal."
+    )
+    if org_id.isdigit():
+        db = get_db()
+        try:
+            org = db.get(Organization, int(org_id))
+            if org is not None and org.onboarding_complete:
+                profile = org.public_profile()
+                title = f"{profile['name']} | PartnerPortal"
+                description = _org_og_description(profile)
+        finally:
+            db.close()
+    return _render_og_page("organization.html", title, description)
+
+
+@app.route("/partnership.html")
+def partnership_page():
+    """Same file static/partnership.html serves, with real og: tags on top.
+
+    Only an accepted partnership resolves to specific parties, matching
+    /api/partnerships/<token> -- a spent or unknown token falls back to a
+    generic preview, since partnership.js is what shows the actual error.
+    """
+    token = request.args.get("token", "")
+    title = "Partnership Agreement | PartnerPortal"
+    description = (
+        "See the terms two organizations agreed to through PartnerPortal."
+    )
+    if token:
+        db = get_db()
+        try:
+            proposal = db.query(Partnership).filter(
+                Partnership.share_token == token
+            ).one_or_none()
+            if proposal is not None and proposal.status == Partnership.ACCEPTED:
+                summary = proposal.public_summary()
+                p1, p2 = summary["parties"][0]["name"], summary["parties"][1]["name"]
+                title = f"{p1} & {p2} | Partnership Agreement"
+                description = f"{p1} and {p2} confirmed a partnership through PartnerPortal."
+                if summary.get("timeline_label"):
+                    description += f" Timeline: {summary['timeline_label']}."
+        finally:
+            db.close()
+    return _render_og_page("partnership.html", title, description)
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Serve the real 404 page, but never to something expecting JSON.
@@ -268,6 +390,26 @@ def not_found(error):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Not found."}), 404
     return send_from_directory(STATIC_DIR, "404.html"), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Serve the real 500 page, but never to something expecting JSON.
+
+    Same split as not_found() above and for the same reason: common.js's
+    api() calls res.json() on every response, so Flask's default HTML error
+    document would surface there as an unreadable parse failure instead of a
+    message a person could act on.
+
+    Logged here rather than left silent -- a Neon cold start or a dropped
+    connection is exactly the kind of thing this exists to catch, and
+    without a log line it would otherwise vanish the moment the response
+    goes out.
+    """
+    app.logger.error("Unhandled exception", exc_info=error)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+    return send_from_directory(STATIC_DIR, "500.html"), 500
 
 
 # --- Reference data ---------------------------------------------------------

@@ -15,6 +15,12 @@
          letting crawlers in is a one-word change here once that is a decision
          someone has actually made. -->
     <meta name="robots" content="noindex, nofollow">
+    <!-- app.py's organization_page() route stamps og:/twitter: tags here
+         before this file is served, so a link pasted into Slack, iMessage or
+         Twitter gets a real preview -- those crawlers never run
+         organization.js, so anything the preview needs has to already be in
+         the markup they fetch. -->
+    <!-- og:meta -->
     <link rel="stylesheet" href="organization.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">

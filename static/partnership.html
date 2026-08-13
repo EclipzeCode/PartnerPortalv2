@@ -12,6 +12,12 @@
     <!-- Public page: no account needed. Deliberately not indexed, since the
          link is the access control. -->
     <meta name="robots" content="noindex, nofollow">
+    <!-- app.py's partnership_page() route stamps og:/twitter: tags here
+         before this file is served, so a link pasted into Slack, iMessage or
+         Twitter gets a real preview -- those crawlers never run
+         partnership.js, so anything the preview needs has to already be in
+         the markup they fetch. -->
+    <!-- og:meta -->
     <link rel="stylesheet" href="partnership.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
