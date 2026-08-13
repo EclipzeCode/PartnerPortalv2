@@ -24,13 +24,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activityExpanded = false;
 
     // --- Live data ------------------------------------------------------
+    // Set before the await, not after: the stat cards ship with a hardcoded
+    // 0 in the markup, and a 0 that is about to become 4 is worse than a
+    // blank -- it is a wrong answer presented as a real one. data-loading
+    // swaps those numbers for shimmer until the real ones arrive
+    // (ppdashboard.css), and the activity feed gets placeholder rows.
+    const container = document.querySelector('.dashboard-container');
+    const activityList = document.querySelector('.activity-list');
+    if (container) container.dataset.loading = 'true';
+    if (activityList) {
+        activityList.setAttribute('aria-busy', 'true');
+        activityList.innerHTML = Array.from({ length: 3 }, () => `
+            <div class="activity-item skeleton-activity" aria-hidden="true">
+                <div class="skeleton skeleton-dot"></div>
+                <div class="skeleton-activity-text">
+                    <div class="skeleton skeleton-line"></div>
+                    <div class="skeleton skeleton-line short"></div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    const finishLoading = () => {
+        if (container) delete container.dataset.loading;
+        if (activityList) activityList.removeAttribute('aria-busy');
+    };
+
     let dashboard = null;
     try {
         dashboard = await window.api('/api/dashboard');
     } catch (error) {
         console.error('Could not load dashboard:', error);
+        // Leaves the shimmer in place otherwise, which would read as a page
+        // that never finishes loading rather than one that failed.
+        finishLoading();
+        if (activityList) activityList.innerHTML = '';
         return; // api() redirects on 401; anything else leaves the page as-is
     }
+    finishLoading();
 
     const org = dashboard.organization;
     const stats = dashboard.stats;

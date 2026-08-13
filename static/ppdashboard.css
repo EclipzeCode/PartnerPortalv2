@@ -1304,3 +1304,75 @@ button.view-all {
     border-radius: 0.5rem;
     font-weight: 600;
 }
+
+/* --- Loading skeletons -------------------------------------------------- */
+/* The stat cards carry a literal 0 in the markup so the page is not empty
+   before the script runs, but that 0 is a real-looking number that changes a
+   moment later. While data-loading is set, the text is replaced by a shimmer
+   block of roughly its own size -- ppdashboard.js sets the attribute before
+   awaiting /api/dashboard and clears it once the numbers are in. */
+[data-loading="true"] .stat-value,
+[data-loading="true"] .stat-change {
+    /* Inherits .skeleton's paint without needing the class in the markup,
+       which would mean rewriting these nodes twice per load. */
+    background: linear-gradient(
+        90deg,
+        #eceef5 25%,
+        #f6f7fb 37%,
+        #eceef5 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: 0.375rem;
+    color: transparent;
+    user-select: none;
+    width: fit-content;
+}
+
+[data-loading="true"] .stat-value {
+    min-width: 2.5rem;
+}
+
+[data-loading="true"] .stat-change {
+    min-width: 6rem;
+}
+
+/* The chevron promises the card opens something; while the numbers are still
+   loading there is nothing behind it yet. */
+[data-loading="true"] .stat-go {
+    opacity: 0.25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-loading="true"] .stat-value,
+    [data-loading="true"] .stat-change {
+        animation: none;
+    }
+}
+
+/* Activity feed placeholders. The real rows are an icon plus two lines of
+   text, so these are too. */
+.activity-item.skeleton-activity {
+    align-items: center;
+}
+
+.skeleton-dot {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.skeleton-activity-text {
+    flex: 1;
+}
+
+.skeleton-activity-text .skeleton-line {
+    height: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-activity-text .skeleton-line.short {
+    width: 35%;
+    margin-bottom: 0;
+}

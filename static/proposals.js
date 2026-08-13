@@ -17,9 +17,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // What the modal will do on confirm: { id, action, verb }
     let pending = null;
 
+    // Placeholder rows, sized like real proposal cards, so the panel does not
+    // collapse to one line of text and then expand once the list arrives.
+    // Two, not more: most orgs have a handful of proposals at most, and a
+    // wall of shimmer would overstate what is coming.
+    function renderSkeletonRows(count = 2) {
+        list.innerHTML = Array.from({ length: count }, () => `
+            <article class="proposal-card skeleton-row" aria-hidden="true">
+                <div class="skeleton skeleton-line title"></div>
+                <div class="skeleton skeleton-line meta"></div>
+                <div class="skeleton skeleton-block"></div>
+            </article>
+        `).join('');
+    }
+
     // --- Data -----------------------------------------------------------
     async function load() {
-        list.innerHTML = '<p class="empty-state">Loading...</p>';
+        list.setAttribute('aria-busy', 'true');
+        renderSkeletonRows();
         try {
             const data = await window.api('/api/proposals');
             proposals = data.proposals || [];
@@ -30,9 +45,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('countAgreed').textContent =
                 data.counts.accepted;
         } catch (error) {
+            list.removeAttribute('aria-busy');
             list.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
             return;
         }
+        list.removeAttribute('aria-busy');
         render();
     }
 

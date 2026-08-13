@@ -34,9 +34,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     // organizations model was built to remove.
     if (addBtn) addBtn.remove();
 
+    // Stands in for the cards that are about to arrive, rather than a line of
+    // text that occupies none of their space -- the grid used to be one short
+    // sentence and then suddenly a screen of cards, which moved everything
+    // below it. Six is a full first page, so the page height is roughly right
+    // before the data lands.
+    function renderSkeletonCards(count = 6) {
+        partnersGrid.innerHTML = Array.from({ length: count }, () => `
+            <div class="partner-card skeleton-card" aria-hidden="true">
+                <div class="skeleton skeleton-score"></div>
+                <div class="partner-content">
+                    <div class="skeleton skeleton-line title"></div>
+                    <div class="skeleton skeleton-line"></div>
+                    <div class="skeleton skeleton-line"></div>
+                    <div class="skeleton skeleton-line short"></div>
+                </div>
+            </div>
+        `).join('');
+    }
+
     // --- Data -----------------------------------------------------------
     async function loadMatches() {
-        partnersGrid.innerHTML = '<p class="empty-state">Finding your matches...</p>';
+        // Screen readers get the status line; sighted users get the shapes.
+        partnersGrid.setAttribute('aria-busy', 'true');
+        renderSkeletonCards();
         try {
             const data = await window.api(
                 `/api/matches${mutualOnly ? '?mutual=1' : ''}`
@@ -44,6 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             allMatches = data.matches || [];
             exampleMatches = data.examples || [];
         } catch (error) {
+            partnersGrid.removeAttribute('aria-busy');
             if (error.status === 409 && error.data && error.data.needs_onboarding) {
                 partnersGrid.innerHTML =
                     '<p class="empty-state">Tell us about your organization first — ' +
@@ -58,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updatePagination(0);
             return;
         }
+        partnersGrid.removeAttribute('aria-busy');
         applyView();
     }
 

@@ -1518,3 +1518,43 @@ button {
     flex-shrink: 0;
     font-size: 1.1rem;
 }
+
+/* --- Loading skeletons -------------------------------------------------- */
+/* Placeholder cards shown while /api/matches resolves. They reuse
+   .partner-card so the grid keeps its real column sizing and the page does
+   not resize when the data arrives; the interactive parts of that class are
+   switched back off here, since there is nothing to click yet. */
+.partner-card.skeleton-card {
+    cursor: default;
+}
+
+.partner-card.skeleton-card:hover {
+    transform: none;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Matches .partner-score's box (the later rule at line ~998 wins: a padded
+   pill, not the circle the earlier one describes). */
+.skeleton-score {
+    width: 3rem;
+    height: 2.25rem;
+    margin: 0.625rem;
+    border-radius: 0.5rem;
+}
+
+.skeleton-line {
+    height: 0.85rem;
+    margin-bottom: 0.7rem;
+}
+
+/* Stands in for the h3, which is 1.3rem with a 1rem bottom margin. */
+.skeleton-line.title {
+    height: 1.3rem;
+    width: 65%;
+    margin-bottom: 1.1rem;
+}
+
+.skeleton-line.short {
+    width: 45%;
+    margin-bottom: 0;
+}

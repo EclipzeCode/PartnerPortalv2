@@ -221,3 +221,39 @@ textarea:focus-visible {
         padding: 2rem 5% 1.25rem;
     }
 }
+
+/* ---------- Loading skeletons ---------- */
+/* The shimmer itself is shared; the shapes it fills are per page, because a
+   skeleton is only useful if it matches the thing it stands in for. Pages
+   used to show either a bare "Loading..." line or, on the dashboard, a real
+   zero that jumped to the true number a moment later -- the second is worse
+   than blank, because a 0 that is about to become 4 is not a loading state,
+   it is a wrong answer shown confidently. */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        #eceef5 25%,
+        #f6f7fb 37%,
+        #eceef5 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: 0.375rem;
+    /* Nothing inside a skeleton is real text, so it must never be read out
+       or land in a copy/paste. */
+    color: transparent;
+    user-select: none;
+    pointer-events: none;
+}
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+    }
+}
+
