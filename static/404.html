@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page not found | PartnerPortal</title>
+    <!-- SVG first for anything modern (one file, sharp at every size); the
+         .ico is the legacy fallback and is also what a bare /favicon.ico
+         request gets. -->
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- A 404 has no business in an index. -->
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="notfound.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="nav.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Carries the real nav rather than a bare apology: whoever landed here
+         mistyped a URL or followed a stale link, and the useful thing is a way
+         back into the product. common.js fills the account slot as usual, so
+         a signed-in visitor still sees their own menu. -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <div class="bx bx-menu" id="menu-icon"></div>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="ppsearch.html">Search</a>
+            <a href="ppdashboard.html">Dashboard</a>
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="notfound-main">
+        <div class="notfound-card">
+            <p class="notfound-code" aria-hidden="true">404</p>
+            <h1>We couldn't find that page</h1>
+            <p class="notfound-body">
+                The link may be out of date, or the address may have a typo in
+                it. Nothing has gone wrong with your account.
+            </p>
+
+            <div class="notfound-actions">
+                <a class="btn-primary" href="index.html">Back to home</a>
+                <a class="btn-ghost" href="ppsearch.html">Find partners</a>
+            </div>
+
+            <p class="notfound-hint">
+                Looking for your own profile or proposals? They are on your
+                <a href="ppdashboard.html">dashboard</a>.
+            </p>
+        </div>
+    </main>
+
+    <footer class="site-footer compact">
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <nav class="footer-links">
+                <a href="index.html">Home</a>
+                <a href="onboarding.html">Get Started</a>
+                <a href="ppsearch.html">Find Partners</a>
+            </nav>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+</body>
+</html>

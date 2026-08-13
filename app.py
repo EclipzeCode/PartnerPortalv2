@@ -249,6 +249,27 @@ def index():
     return send_from_directory(STATIC_DIR, "index.html")
 
 
+@app.errorhandler(404)
+def not_found(error):
+    """Serve the real 404 page, but never to something expecting JSON.
+
+    Only unrouted requests reach this. Handlers that return their own 404 --
+    an unknown organization id, a spent verification token -- return jsonify
+    directly and are unaffected.
+
+    The split matters because Flask's default 404 is an HTML document, and
+    every fetch on this site goes through common.js's api(), which calls
+    res.json() on the response. On an HTML body that throws, the parsed data
+    is left null, and the caller ends up showing "Request failed (404)"
+    instead of anything a person could act on. A mistyped API path is a
+    programming error rather than a visitor error, so it gets a plain JSON
+    404 and the HTML page is reserved for someone who actually typed a URL.
+    """
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found."}), 404
+    return send_from_directory(STATIC_DIR, "404.html"), 404
+
+
 # --- Reference data ---------------------------------------------------------
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
