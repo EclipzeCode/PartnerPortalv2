@@ -268,14 +268,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- Modal ----------------------------------------------------------
+    // The Accept/Decline/Withdraw button that opened this, so closing returns
+    // focus there instead of dropping a keyboard visitor at the top of the
+    // page -- matching what settings.js's delete-account dialog already does.
+    let lastFocus = null;
+
     function openModal() {
+        lastFocus = document.activeElement;
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        // No focus() into the dialog here -- .modal is `visibility: hidden`
+        // under a transition, so the call would silently do nothing in the
+        // tick the class lands. Returning focus on close is the part that
+        // works and the part that was missing.
     }
 
     function closeModal() {
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        // The opener is routinely gone by now: confirming re-renders the list
+        // and the card can move to another tab entirely.
+        if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+        lastFocus = null;
     }
 
     modal.querySelector('.close-modal').addEventListener('click', closeModal);

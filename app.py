@@ -32,7 +32,7 @@ from db import SessionLocal
 from links import LinkError, parse_links
 from matching import find_matches, score_pair
 from moderation import name_problem
-from models import Organization, Partnership
+from models import Event, Organization, Partnership
 from notifications import (
     notify_email_verification, notify_password_changed, notify_password_reset,
     notify_proposal_created, notify_proposal_responded,
@@ -1167,6 +1167,13 @@ def public_organization(org_id):
 @login_required
 def get_dashboard(org, db):
     """Real numbers for the dashboard, replacing the hardcoded placeholders."""
+    # Rides along with the payload the page already fetches, rather than a
+    # second request on load -- same reasoning as pending_proposals on
+    # /api/me. Included in the not-yet-onboarded branch too: that page still
+    # renders the meetings card, and an empty list there should mean "none"
+    # rather than "never asked".
+    events = [e.to_dict() for e in _events_for(db, org)]
+
     if not org.onboarding_complete:
         return jsonify({
             "organization": org.private_dict(),
@@ -1176,6 +1183,7 @@ def get_dashboard(org, db):
                 "needs_count": 0, "offers_count": 0,
             },
             "top_matches": [],
+            "events": events,
         })
 
     matches = find_matches(db, org)
@@ -1208,7 +1216,110 @@ def get_dashboard(org, db):
         },
         "top_matches": matches[:5],
         "recent_proposals": proposals[:5],
+        "events": events,
     })
+
+
+# --- Meetings ---------------------------------------------------------------
+# These were kept in localStorage, which meant they were not saved at all:
+# they belonged to one browser, died with site data, and never followed the
+# account. Everything else on the dashboard is server-backed, so this was the
+# one place the page lost work someone had done.
+def _events_for(db, org):
+    """This org's meetings, soonest first. Covered by ix_events_organization_date."""
+    return db.query(Event).filter(
+        Event.organization_id == org.id
+    ).order_by(Event.date, Event.time).all()
+
+
+@app.route("/api/events", methods=["GET"])
+@login_required
+def list_events(org, db):
+    return jsonify({"events": [e.to_dict() for e in _events_for(db, org)]})
+
+
+@app.route("/api/events", methods=["POST"])
+@login_required
+def create_event(org, db):
+    """Save a meeting.
+
+    Mirrors the checks ppdashboard.js's validateEventForm already makes --
+    the form is not the only way in here, and the columns are Date/Time/Float
+    rather than the strings the browser sends, so anything malformed has to
+    be turned away before it reaches them.
+    """
+    data = request.get_json(silent=True) or {}
+
+    title = (data.get("title") or "").strip()
+    partner = (data.get("partner") or "").strip()
+    description = (data.get("description") or "").strip()
+    location = (data.get("location") or "").strip()
+
+    problems = []
+    if not title:
+        problems.append("a title")
+    if not partner:
+        problems.append("who the meeting is with")
+
+    # strptime rather than date.fromisoformat: fromisoformat also accepts
+    # forms the date input never produces, and the column stores neither.
+    event_date = event_time = None
+    try:
+        event_date = datetime.strptime(data.get("date") or "", "%Y-%m-%d").date()
+    except ValueError:
+        problems.append("a valid date")
+    try:
+        event_time = datetime.strptime(data.get("time") or "", "%H:%M").time()
+    except ValueError:
+        problems.append("a valid start time")
+
+    try:
+        duration = float(data.get("duration"))
+    except (TypeError, ValueError):
+        duration = None
+    # Capped as well as floored: a meeting cannot run longer than the day it
+    # is filed under, and the check constraint only rules out zero and below.
+    if duration is None or duration <= 0 or duration > 24:
+        problems.append("a length between 0 and 24 hours")
+
+    if problems:
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+
+    # Length caps match the columns, so an over-long field is a 400 here
+    # rather than a DataError from the driver further down.
+    if len(title) > 200 or len(partner) > 255 or len(location) > 255:
+        return jsonify({"error": "That is longer than this field allows."}), 400
+
+    event = Event(
+        organization_id=org.id,
+        title=title,
+        date=event_date,
+        time=event_time,
+        duration=duration,
+        partner_name=partner,
+        description=description or None,
+        location=location or None,
+    )
+    db.add(event)
+    db.commit()
+    return jsonify({"message": "Meeting saved", "event": event.to_dict()}), 201
+
+
+@app.route("/api/events/<int:event_id>", methods=["DELETE"])
+@login_required
+def delete_event(org, db, event_id):
+    event = db.query(Event).filter(
+        Event.id == event_id,
+        # Scoped to the caller, so another org's meeting id cannot be deleted
+        # -- or probed for existence -- through this route.
+        Event.organization_id == org.id,
+    ).one_or_none()
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+
+    db.delete(event)
+    db.commit()
+    return jsonify({"message": "Meeting removed"})
 
 
 # --- Partnership proposals --------------------------------------------------

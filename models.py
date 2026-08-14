@@ -10,11 +10,11 @@ Here an account *is* an organization. Registering creates the row; onboarding
 fills in the matchable parts and flips `onboarding_complete`.
 """
 
-from datetime import datetime
+from datetime import date as date_type, datetime, time as time_type
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, Text, func,
-    text,
+    Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index, String,
+    Text, Time, func, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -451,4 +451,75 @@ class Partnership(Base):
                     "receives": labels_for(self.proposer_gives),
                 },
             ],
+        }
+
+
+class Event(Base):
+    """A meeting an organization has scheduled with a partner.
+
+    These lived in localStorage until now, which meant they were not really
+    saved at all: they belonged to one browser on one device, vanished with
+    site data, and never followed the account that created them. Everything
+    else on the dashboard reads from the database, so a meeting quietly
+    disappearing was the one place the page lost work someone had done.
+
+    The partner is stored as the name shown at the time rather than a foreign
+    key. This is a calendar note the owner wrote for themselves -- it should
+    still read correctly after the other organization renames itself or
+    deletes its account, neither of which should reach into someone else's
+    diary. Nothing here is shown to the partner; only `organization_id` ever
+    sees these rows.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Real Date/Time columns rather than the strings the browser sends, so the
+    # database rejects "2026-13-45", and "next meeting first" is an ORDER BY
+    # rather than a string comparison that only works while the format holds.
+    date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    time: Mapped[time_type] = mapped_column(Time, nullable=False)
+    # Hours. Fractional on purpose -- a 30-minute call is 0.5.
+    duration: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")
+
+    partner_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(255))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("duration > 0", name="ck_events_duration_positive"),
+        # Every read is "this org's meetings, soonest first".
+        Index("ix_events_organization_date", "organization_id", "date", "time"),
+    )
+
+    def __repr__(self):
+        return f"<Event {self.id} org={self.organization_id} {self.date} {self.title!r}>"
+
+    def to_dict(self):
+        """The shape ppdashboard.js already renders.
+
+        date and time are formatted as the browser's own `YYYY-MM-DD` and
+        `HH:MM`, which is what the date/time inputs produce and what the
+        rendering code splits on -- isoformat() would append seconds to the
+        time and quietly break `time.split(':')`.
+        """
+        return {
+            "id": self.id,
+            "title": self.title,
+            "date": self.date.strftime("%Y-%m-%d"),
+            "time": self.time.strftime("%H:%M"),
+            "duration": self.duration,
+            "partner": self.partner_name,
+            "description": self.description or "",
+            "location": self.location or "",
         }

@@ -4,11 +4,14 @@
 // filled from /api/dashboard, which reports the signed-in org's real match
 // counts, its top matches and its proposal history.
 //
-// Events remain local to the browser: there is no events table yet, so
-// loadEvents/saveEvents still read localStorage. They are kept isolated so
-// swapping in an API call later is a two-function change.
+// Meetings are server-backed as of the events table: they arrive with
+// /api/dashboard and are written through /api/events. They used to live in
+// localStorage, which meant they were not saved at all -- one browser, gone
+// with site data, never following the account that made them.
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Only still read to rescue anything left behind by that older version;
+    // nothing is ever written here now. See migrateLocalEvents below.
     const EVENTS_KEY = 'partnerPortalEvents';
     const esc = window.escapeHtml;
 
@@ -17,6 +20,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const eventForm = document.getElementById('eventForm');
     const eventsList = document.querySelector('.events-list');
     const closeBtn = modal ? modal.querySelector('.close-modal') : null;
+    const eventFormError = document.getElementById('eventFormError');
+    const eventSubmitBtn = document.getElementById('eventSubmitBtn');
 
     const activityFilter = document.getElementById('activityFilter');
     const activityViewAll = document.getElementById('activityViewAll');
@@ -361,17 +366,85 @@ document.addEventListener('DOMContentLoaded', async () => {
         (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));
     }
 
-    // --- Events (still local) -------------------------------------------
+    // --- Events -----------------------------------------------------------
+    // Seeded from the dashboard payload, then kept in step with the server by
+    // addEvent/removeEvent. Held in memory so every render below can stay
+    // synchronous -- the reads are frequent (the card, the feed, the dialog)
+    // and none of them should have to await.
+    let events = (dashboard && dashboard.events) || [];
+
+    // A copy: callers sort the result in place, and doing that to the backing
+    // array would quietly reorder everyone else's view of it.
     function loadEvents() {
-        try {
-            return JSON.parse(localStorage.getItem(EVENTS_KEY)) || [];
-        } catch {
-            return [];
-        }
+        return events.slice();
     }
 
-    function saveEvents(events) {
-        localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+    async function addEvent(payload) {
+        const data = await window.api('/api/events', {
+            method: 'POST',
+            body: payload,
+        });
+        events.push(data.event);
+        return data.event;
+    }
+
+    async function removeEvent(id) {
+        await window.api(`/api/events/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+        });
+        events = events.filter((ev) => String(ev.id) !== String(id));
+    }
+
+    // One-time rescue of meetings saved by the localStorage version. Without
+    // it, the release that fixed "meetings do not persist" would itself be
+    // the release that lost the meetings people already had.
+    //
+    // Each entry is dropped from storage only once the server has it, so a
+    // failure halfway through leaves the rest to be retried on the next load
+    // rather than uploading the successful ones twice. The key is removed
+    // once empty, which is what makes this run only until it has finished.
+    async function migrateLocalEvents() {
+        let stored;
+        try {
+            stored = JSON.parse(localStorage.getItem(EVENTS_KEY)) || [];
+        } catch {
+            stored = [];
+        }
+        if (!Array.isArray(stored) || stored.length === 0) {
+            try { localStorage.removeItem(EVENTS_KEY); } catch { /* nothing to clear */ }
+            return;
+        }
+
+        const remaining = [...stored];
+        for (const ev of stored) {
+            try {
+                await addEvent({
+                    title: ev.title,
+                    date: ev.date,
+                    time: ev.time,
+                    duration: ev.duration,
+                    partner: ev.partner,
+                    description: ev.description,
+                    location: ev.location,
+                });
+            } catch (error) {
+                // A 400 means this row can never be accepted (it predates the
+                // server's validation), so it is dropped rather than retried
+                // forever. Anything else is likely temporary and is kept.
+                if (!error.status || error.status !== 400) break;
+            }
+            remaining.shift();
+        }
+
+        try {
+            if (remaining.length) {
+                localStorage.setItem(EVENTS_KEY, JSON.stringify(remaining));
+            } else {
+                localStorage.removeItem(EVENTS_KEY);
+            }
+        } catch {
+            // Storage disabled; the rows are on the server either way.
+        }
     }
 
     function formatTime(time24) {
@@ -391,18 +464,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         return formatTime(`${endHours}:${String(endMinutes).padStart(2, '0')}`);
     }
 
+    // What to put focus back on when a dialog closes. Without this, closing
+    // one drops the caret at the top of the document and a keyboard visitor
+    // has to tab all the way back to where they were -- settings.js has done
+    // this since the delete-account flow was built; these two had not.
+    // Separate variables per dialog: the stat dialog can be opened from a row
+    // inside a page that the event dialog also covers, and sharing one slot
+    // would send focus back to whichever opened last.
+    let lastEventFocus = null;
+    let lastStatFocus = null;
+
     function openModal() {
         if (!modal) return;
+        lastEventFocus = document.activeElement;
         // Errors from a previous attempt should not greet a fresh one.
         if (eventForm) clearEventErrors();
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        // No focus() into the form here: .modal is `visibility: hidden` under
+        // a transition, so nothing inside it is focusable in the tick the
+        // class lands and the call would silently do nothing (measured -- it
+        // is why the same line in settings.js has never moved focus either).
+        // Moving focus in properly means trapping it too, which is a larger
+        // change than this; what matters below is that closing puts it back.
     }
 
     function closeModal() {
         if (!modal) return;
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        // document.contains: the opener can be gone by now -- removing a
+        // meeting from the dialog repaints the list that its row was in.
+        if (lastEventFocus && document.contains(lastEventFocus)) {
+            lastEventFocus.focus();
+        }
+        lastEventFocus = null;
     }
 
     if (addEventBtn) addEventBtn.addEventListener('click', openModal);
@@ -484,13 +580,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (eventsList) {
-        eventsList.addEventListener('click', (e) => {
+        eventsList.addEventListener('click', async (e) => {
             const btn = e.target.closest('.btn-event[data-event-id]');
             if (btn) {
-                saveEvents(loadEvents().filter(
-                    (ev) => String(ev.id) !== btn.dataset.eventId
-                ));
-                renderSavedEvents();
+                // Disabled while the request is in flight: the row stays put
+                // until the server confirms, and a second click would send a
+                // delete for something already gone.
+                btn.disabled = true;
+                try {
+                    await removeEvent(btn.dataset.eventId);
+                    renderSavedEvents();
+                } catch (error) {
+                    btn.disabled = false;
+                    // The row is still on screen and still real, so this says
+                    // so rather than leaving a delete that looked ignored.
+                    window.toast(
+                        error.message || 'Could not remove that meeting.',
+                        'error',
+                    );
+                }
                 return;
             }
             // Anywhere else on the row opens that meeting in the dialog.
@@ -526,8 +634,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         note.textContent = message;
     }
 
+    function showEventFormError(message) {
+        if (!eventFormError) return;
+        eventFormError.textContent = message;
+        eventFormError.hidden = false;
+    }
+
     function clearEventErrors() {
-        eventForm.querySelectorAll('.field-error').forEach((n) => n.remove());
+        eventForm.querySelectorAll('.field-error').forEach((n) => {
+            // The whole-form slot is markup, not one of the notes setFieldError
+            // creates -- hidden and emptied rather than removed, or the next
+            // failure would have nowhere to report to.
+            if (n === eventFormError) {
+                n.hidden = true;
+                n.textContent = '';
+                return;
+            }
+            n.remove();
+        });
         eventForm.querySelectorAll('.input-error').forEach((f) => {
             f.classList.remove('input-error');
             f.setAttribute('aria-invalid', 'false');
@@ -579,7 +703,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target.classList.contains('input-error')) setFieldError(e.target, '');
         });
 
-        eventForm.addEventListener('submit', (e) => {
+        eventForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const problems = validateEventForm();
@@ -589,8 +713,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const select = document.getElementById('eventPartner');
-            saveEvents([...loadEvents(), {
-                id: Date.now(),
+            const payload = {
                 title: document.getElementById('eventTitle').value.trim(),
                 date: document.getElementById('eventDate').value,
                 time: document.getElementById('eventTime').value,
@@ -598,7 +721,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 partner: select.options[select.selectedIndex].text,
                 description: document.getElementById('eventDescription').value.trim(),
                 location: document.getElementById('eventLocation').value.trim()
-            }]);
+            };
+
+            // The dialog stays open and the button says what is happening,
+            // rather than closing on a meeting that may not have saved.
+            if (eventSubmitBtn) {
+                eventSubmitBtn.disabled = true;
+                eventSubmitBtn.textContent = 'Saving…';
+            }
+            try {
+                await addEvent(payload);
+            } catch (error) {
+                showEventFormError(
+                    error.message || 'Could not save that meeting. Please try again.',
+                );
+                return;
+            } finally {
+                if (eventSubmitBtn) {
+                    eventSubmitBtn.disabled = false;
+                    eventSubmitBtn.textContent = 'Save Event';
+                }
+            }
 
             renderSavedEvents();
             eventForm.reset();
@@ -847,6 +990,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function openStat(view, detail) {
         if (!statModal) return;
+        // Not overwritten when the dialog is already open: drilling from a
+        // row into its detail calls nothing here, but a stat card clicked
+        // while another view is showing should still return to the first
+        // opener rather than to a row that has since been repainted away.
+        if (!statModal.classList.contains('active')) {
+            lastStatFocus = document.activeElement;
+        }
         statView = view;
         statDetail = detail || null;
         statModal.classList.add('active');
@@ -860,6 +1010,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         statModal.classList.remove('active');
         document.body.style.overflow = 'auto';
         statDetail = null;
+        if (lastStatFocus && document.contains(lastStatFocus)) {
+            lastStatFocus.focus();
+        }
+        lastStatFocus = null;
     }
 
     document.querySelectorAll('.stat-card[data-stat]').forEach((card) => {
@@ -877,13 +1031,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // Row clicks and the in-detail remove button.
-        statBody.addEventListener('click', (e) => {
+        statBody.addEventListener('click', async (e) => {
             const remove = e.target.closest('[data-remove-event]');
             if (remove) {
-                saveEvents(loadEvents().filter(
-                    (ev) => String(ev.id) !== remove.dataset.removeEvent));
-                statDetail = null;
-                renderSavedEvents();  // repaints the card, the feed and this dialog
+                remove.disabled = true;
+                try {
+                    await removeEvent(remove.dataset.removeEvent);
+                    statDetail = null;
+                    renderSavedEvents();  // repaints the card, the feed and this dialog
+                } catch (error) {
+                    remove.disabled = false;
+                    window.toast(
+                        error.message || 'Could not remove that meeting.',
+                        'error',
+                    );
+                }
                 return;
             }
             const row = e.target.closest('.stat-row');
@@ -907,4 +1069,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Explicit, because renderSavedEvents bails early if the events card is
     // absent and the feed must not depend on that.
     renderActivity();
+
+    // After the first paint, not before it: the meetings already on the
+    // server are what almost every load has, and holding the card back on an
+    // upload that only matters once would delay all of them for none of them.
+    // Repaints only if it actually moved something across.
+    const before = events.length;
+    await migrateLocalEvents();
+    if (events.length !== before) renderSavedEvents();
 });

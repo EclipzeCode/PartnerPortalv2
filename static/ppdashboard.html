@@ -313,7 +313,13 @@
                         <label for="eventLocation">Location</label>
                         <input type="text" id="eventLocation" placeholder="Enter location or meeting link">
                     </div>
-                    <button type="submit" class="btn-primary">Save Event</button>
+                    <!-- Saving now goes to the server, so it can fail for
+                         reasons no single field explains (offline, a session
+                         that expired while the dialog sat open). Those land
+                         here rather than silently closing the dialog on a
+                         meeting that was never saved. -->
+                    <p class="field-error" id="eventFormError" role="alert" hidden></p>
+                    <button type="submit" class="btn-primary" id="eventSubmitBtn">Save Event</button>
                 </form>
             </div>
         </div>
