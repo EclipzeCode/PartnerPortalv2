@@ -837,9 +837,20 @@ def get_me(org, db):
     # truthful when the gate is switched on or off. Server config, not a
     # property of the org, so it sits beside the organization rather than in
     # private_dict.
+    #
+    # pending_proposals is what the nav badge (common.js) reads. Every page
+    # already calls /api/me to resolve the signed-in state, so folding the
+    # count in here costs one indexed COUNT query, rather than a second
+    # request to /api/proposals' much heavier full-list payload on every
+    # page load just to find out whether anything is waiting.
+    pending_proposals = db.query(Partnership).filter(
+        Partnership.recipient_id == org.id,
+        Partnership.status == Partnership.PENDING,
+    ).count()
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
+        "pending_proposals": pending_proposals,
     })
 
 

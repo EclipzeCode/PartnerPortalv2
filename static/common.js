@@ -261,9 +261,11 @@ async function updateNavForSession() {
     if (hasSessionHint()) slot.dataset.hint = 'in';
 
     let me = null;
+    let pendingProposals = 0;
     try {
         const data = await window.api('/api/me', { allowUnauthenticated: true });
         me = data && data.organization;
+        pendingProposals = (data && data.pending_proposals) || 0;
     } catch {
         // Signed out, or the server is down. The signed-out call to action is
         // the honest thing to show in both cases.
@@ -274,6 +276,7 @@ async function updateNavForSession() {
 
     if (!me) {
         slot.dataset.state = 'out';
+        updateProposalBadge(0);
         return;
     }
 
@@ -289,6 +292,23 @@ async function updateNavForSession() {
 
     slot.dataset.state = 'in';
     wireAccountMenu();
+    updateProposalBadge(pendingProposals);
+}
+
+// The badge on the nav's Dashboard link. Proposals waiting on this org to
+// respond were otherwise invisible outside of email -- the dashboard is the
+// only place they can be acted on, and nothing on the rest of the site said
+// one was there. Hidden entirely rather than shown as "0", the same "nothing
+// here" treatment the rest of the nav uses.
+function updateProposalBadge(count) {
+    const badge = document.getElementById('navProposalBadge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.hidden = false;
+    } else {
+        badge.hidden = true;
+    }
 }
 
 function wireAccountMenu() {
