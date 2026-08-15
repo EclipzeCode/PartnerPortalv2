@@ -1289,6 +1289,10 @@ def get_dashboard(org, db):
     # renders the meetings card, and an empty list there should mean "none"
     # rather than "never asked".
     events = [e.to_dict() for e in _events_for(db, org)]
+    # The shortlist's size only -- the dialog behind the card fetches the
+    # organizations themselves when it is opened, the same way the matches
+    # views do.
+    saved_count = len(_saved_ids(db, org))
 
     if not org.onboarding_complete:
         return jsonify({
@@ -1297,6 +1301,7 @@ def get_dashboard(org, db):
             "stats": {
                 "total_matches": 0, "mutual_matches": 0,
                 "needs_count": 0, "offers_count": 0,
+                "saved": saved_count,
             },
             "top_matches": [],
             "events": events,
@@ -1329,6 +1334,7 @@ def get_dashboard(org, db):
                 if p["direction"] == "outgoing" and p["status"] == "pending"
             ),
             "agreed": sum(1 for p in proposals if p["status"] == "accepted"),
+            "saved": saved_count,
         },
         "top_matches": matches[:5],
         "recent_proposals": proposals[:5],

@@ -108,6 +108,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             'both sides benefit');
     setStat('partnerScore', stats.needs_count + stats.offers_count, 'Profile tags',
             `${stats.needs_count} needs · ${stats.offers_count} offers`);
+    setStat('savedLeadsCount', stats.saved || 0, 'Saved',
+            stats.saved ? 'shortlisted' : 'none yet');
 
     function setStat(id, value, label, changeText) {
         const el = document.getElementById(id);
@@ -765,12 +767,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     let statDetail = null;
     let allMatches = null;   // cached /api/matches
     let matchesError = null;
+    let savedLeads = null;   // cached /api/saved
+    let savedError = null;
 
     const VIEW_TITLES = {
         matches: 'Matches',
         mutual: 'Two-way matches',
         events: 'Upcoming meetings',
-        tags: 'Profile tags'
+        tags: 'Profile tags',
+        saved: 'Saved'
     };
 
     function sortedEvents() {
@@ -929,7 +934,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statTitle.textContent = ev.title;
                 statBody.innerHTML = eventDetail(ev);
             } else {
-                const m = (allMatches || []).find((x) => String(x.id) === String(statDetail.id));
+                // Both lists, not just the matches: a saved organization is
+                // kept precisely because it may no longer be a match, so
+                // looking only there would fail to open the very rows this
+                // view exists to hold.
+                const m = (allMatches || []).find((x) => String(x.id) === String(statDetail.id))
+                    || (savedLeads || []).find((x) => String(x.id) === String(statDetail.id));
                 if (!m) { statDetail = null; return renderStat(); }
                 statTitle.textContent = m.name;
                 statBody.innerHTML = matchDetail(m);
@@ -945,6 +955,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             statBody.innerHTML = events.length
                 ? `<div class="stat-list">${events.map(eventRow).join('')}</div>`
                 : emptyState('No meetings scheduled yet. Use Add Event to create one.');
+            return;
+        }
+
+        if (statView === 'saved') {
+            statTitle.textContent = VIEW_TITLES.saved;
+            if (savedError) {
+                statBody.innerHTML = emptyState(savedError);
+                return;
+            }
+            if (savedLeads === null) {
+                statBody.innerHTML = emptyState('Loading...');
+                return;
+            }
+            statTitle.textContent = `${VIEW_TITLES.saved} (${savedLeads.length})`;
+            statBody.innerHTML = savedLeads.length
+                ? `<div class="stat-list">${savedLeads.map(matchRow).join('')}</div>`
+                : emptyState('Nothing saved yet. Use the bookmark on a match in '
+                    + 'Search to keep it here — saved organizations stay on this '
+                    + 'list even if your profile changes and they stop matching.');
             return;
         }
 
@@ -988,6 +1017,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderStat();
     }
 
+    // Same lazy shape as ensureMatches: the card shows the count from the
+    // dashboard payload, and the organizations behind it are only fetched
+    // once someone opens the list.
+    async function ensureSaved() {
+        if (savedLeads !== null || savedError) return;
+        try {
+            const data = await window.api('/api/saved');
+            savedLeads = data.saved || [];
+        } catch (error) {
+            savedError = error.message || 'Could not load your saved list.';
+        }
+        renderStat();
+    }
+
     function openStat(view, detail) {
         if (!statModal) return;
         // Not overwritten when the dialog is already open: drilling from a
@@ -1003,6 +1046,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.style.overflow = 'hidden';
         renderStat();
         if (view === 'matches' || view === 'mutual') ensureMatches();
+        if (view === 'saved') ensureSaved();
     }
 
     function closeStat() {
