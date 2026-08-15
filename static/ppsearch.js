@@ -28,6 +28,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentPage = 1;
     let mutualOnly = false;
 
+    // --- Shortlist --------------------------------------------------------
+    // Which organizations are saved, and (when the shortlist is being shown)
+    // the organizations themselves. Kept as a Set because the only question
+    // the cards ask is "is this one saved", once per card per render.
+    //
+    // The shortlist is fetched separately rather than filtered out of
+    // allMatches: saving is a decision, and matches move as either side edits
+    // its profile. An organization that has stopped matching is exactly the
+    // one worth keeping hold of, and filtering the match list would drop it.
+    const savedToggle = document.getElementById('savedToggle');
+    const savedCount = document.getElementById('savedCount');
+    const detailSaveBtn = document.getElementById('detailSaveBtn');
+    const detailSaveLabel = document.getElementById('detailSaveLabel');
+
+    let savedIds = new Set();
+    let savedList = [];
+    let viewMode = 'matches';   // 'matches' | 'saved'
+
     // Adding a partner by hand is gone: organizations create themselves by
     // registering and completing onboarding. Leaving a form that writes rows
     // nobody owns would reintroduce exactly the orphaned-profile problem the
@@ -64,6 +82,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             allMatches = data.matches || [];
             exampleMatches = data.examples || [];
+            // Rides along with the matches, so the stars are right on the
+            // first paint rather than filling in a moment later.
+            savedIds = new Set(data.saved_ids || []);
+            updateSavedCount();
         } catch (error) {
             partnersGrid.removeAttribute('aria-busy');
             if (error.status === 409 && error.data && error.data.needs_onboarding) {
@@ -84,9 +106,72 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyView();
     }
 
+    // Loaded on first use rather than with the page: most visits never open
+    // the shortlist, and the star states already arrive with the matches.
+    async function loadSaved() {
+        partnersGrid.setAttribute('aria-busy', 'true');
+        renderSkeletonCards(3);
+        try {
+            const data = await window.api('/api/saved');
+            savedList = data.saved || [];
+            savedIds = new Set(savedList.map((s) => s.id));
+        } catch (error) {
+            partnersGrid.removeAttribute('aria-busy');
+            partnersGrid.innerHTML =
+                `<p class="empty-state">${esc(error.message)}</p>`;
+            updatePagination(0);
+            return false;
+        }
+        partnersGrid.removeAttribute('aria-busy');
+        updateSavedCount();
+        return true;
+    }
+
+    function updateSavedCount() {
+        if (!savedCount) return;
+        const n = savedIds.size;
+        savedCount.textContent = n;
+        savedCount.hidden = n === 0;
+    }
+
+    async function setViewMode(mode) {
+        viewMode = mode;
+        if (savedToggle) {
+            savedToggle.setAttribute('aria-pressed', String(mode === 'saved'));
+            savedToggle.classList.toggle('active', mode === 'saved');
+        }
+        // Re-fetched on every switch back in, not just the first: scores are
+        // computed against the current profile, and the shortlist is where a
+        // stale one would be least obvious.
+        if (mode === 'saved' && !(await loadSaved())) return;
+        currentPage = 1;
+        applyView();
+    }
+
+    if (savedToggle) {
+        savedToggle.addEventListener('click', () => {
+            setViewMode(viewMode === 'saved' ? 'matches' : 'saved');
+        });
+    }
+
     function applyView() {
         const q = (searchInput.value || '').toLowerCase().trim();
         const norm = (v) => (v || '').toLowerCase();
+
+        if (viewMode === 'saved') {
+            showingExamples = false;
+            displayed = q
+                ? savedList.filter((m) =>
+                    norm(m.name).includes(q) ||
+                    norm(m.organization_type).includes(q) ||
+                    norm(m.location).includes(q) ||
+                    (m.offers_labels || []).some((l) => norm(l).includes(q)) ||
+                    (m.needs_labels || []).some((l) => norm(l).includes(q)))
+                : [...savedList];
+            currentPage = 1;
+            render();
+            return;
+        }
 
         // No real matches yet, but seeded examples exist: show those instead
         // of an empty page. They are visibly flagged and cannot be proposed to.
@@ -116,11 +201,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (currentPage > pages) currentPage = pages;
 
         if (displayed.length === 0) {
-            partnersGrid.innerHTML = mutualOnly
-                ? '<p class="empty-state">No two-way matches yet. Turn off the ' +
-                  'two-way filter to see one-directional matches.</p>'
-                : '<p class="empty-state">No matches yet. Adding more needs and ' +
-                  'offers to your profile widens the search.</p>';
+            let message;
+            if (viewMode === 'saved') {
+                message = savedList.length === 0
+                    ? 'Nothing saved yet. Use the bookmark on a match to keep ' +
+                      'it here — saved organizations stay on this list even if ' +
+                      'your profile changes and they stop matching.'
+                    : 'No saved organizations match that search.';
+            } else {
+                message = mutualOnly
+                    ? 'No two-way matches yet. Turn off the two-way filter to ' +
+                      'see one-directional matches.'
+                    : 'No matches yet. Adding more needs and offers to your ' +
+                      'profile widens the search.';
+            }
+            partnersGrid.innerHTML = `<p class="empty-state">${esc(message)}</p>`;
             updatePagination(pages);
             return;
         }
@@ -145,8 +240,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const reasons = (m.reasons || [])
                 .map((r) => `<li>${esc(r)}</li>`).join('');
 
+            // Examples have no owner and nothing to follow up on, so they get
+            // no bookmark -- the same line the Propose button draws.
+            const isSaved = savedIds.has(m.id);
+            const saveBtn = m.is_demo ? '' : `
+                <button type="button" class="card-save${isSaved ? ' saved' : ''}"
+                        data-save-id="${m.id}"
+                        aria-pressed="${isSaved}"
+                        title="${isSaved ? 'Remove from saved' : 'Save for later'}"
+                        aria-label="${isSaved ? 'Remove' : 'Save'} ${esc(m.name)}">
+                    <i class='bx ${isSaved ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
+                </button>`;
+
             card.innerHTML = `
                 <div class="partner-score">${m.match_score}</div>
+                ${saveBtn}
                 <div class="partner-content">
                     ${badge}
                     <h3>${esc(m.name)}</h3>
@@ -241,11 +349,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (badge) badge.classList.toggle('hidden', !detail.mutual);
 
         // Examples cannot be proposed to (they have no owner), so the button is
-        // hidden and a short note takes its place.
+        // hidden and a short note takes its place. Saving one leads nowhere
+        // for the same reason, so that goes too.
         const proposeBtn = document.getElementById('proposeBtn');
         const exampleNote = document.getElementById('detailExampleNote');
         if (proposeBtn) proposeBtn.classList.toggle('hidden', Boolean(m.is_demo));
         if (exampleNote) exampleNote.classList.toggle('hidden', !m.is_demo);
+        if (detailSaveBtn) {
+            detailSaveBtn.classList.toggle('hidden', Boolean(m.is_demo));
+            paintDetailSave(savedIds.has(m.id));
+        }
 
         // The shareable profile, for sending to someone without an account.
         const profileLink = document.getElementById('viewProfileBtn');
@@ -254,6 +367,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openModal(detailModal);
+    }
+
+    function paintDetailSave(isSaved) {
+        if (!detailSaveBtn) return;
+        detailSaveBtn.classList.toggle('saved', isSaved);
+        detailSaveBtn.setAttribute('aria-pressed', String(isSaved));
+        if (detailSaveLabel) detailSaveLabel.textContent = isSaved ? 'Saved' : 'Save';
+        const icon = detailSaveBtn.querySelector('i');
+        if (icon) icon.className = `bx ${isSaved ? 'bxs-bookmark' : 'bx-bookmark'}`;
+    }
+
+    if (detailSaveBtn) {
+        detailSaveBtn.addEventListener('click', async () => {
+            if (!detailTarget) return;
+            const id = detailTarget.id;
+            const wantSaved = !savedIds.has(id);
+            detailSaveBtn.disabled = true;
+            const ok = await toggleSaved(id, wantSaved);
+            detailSaveBtn.disabled = false;
+            if (!ok) return;
+            paintDetailSave(wantSaved);
+            // The card behind the dialog carries the same state.
+            applyView();
+        });
     }
 
     function fillList(id, labels, highlighted) {
@@ -274,7 +411,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    partnersGrid.addEventListener('click', (e) => {
+    // Save or unsave. Returns whether it worked, so callers can leave the
+    // control showing the truth when it did not.
+    async function toggleSaved(id, wantSaved) {
+        try {
+            if (wantSaved) {
+                await window.api('/api/saved', {
+                    method: 'POST',
+                    body: { organization_id: id },
+                });
+                savedIds.add(id);
+            } else {
+                await window.api(`/api/saved/${encodeURIComponent(id)}`, {
+                    method: 'DELETE',
+                });
+                savedIds.delete(id);
+                // Drop it from the shortlist too, so the list this is
+                // rendering from does not still contain what was just removed.
+                savedList = savedList.filter((s) => s.id !== id);
+            }
+            updateSavedCount();
+            return true;
+        } catch (error) {
+            window.toast(
+                error.message || 'Could not update your saved list.',
+                'error',
+            );
+            return false;
+        }
+    }
+
+    partnersGrid.addEventListener('click', async (e) => {
+        // The bookmark sits inside the card, and the card opens the detail
+        // dialog -- without this, saving would also open it.
+        const save = e.target.closest('.card-save[data-save-id]');
+        if (save) {
+            e.stopPropagation();
+            const id = Number(save.dataset.saveId);
+            const wantSaved = !savedIds.has(id);
+            save.disabled = true;
+            const ok = await toggleSaved(id, wantSaved);
+            save.disabled = false;
+            if (!ok) return;
+            if (viewMode === 'saved') {
+                // Removing the last thing on screen should not leave an empty
+                // grid with stale pagination.
+                applyView();
+            } else {
+                save.classList.toggle('saved', wantSaved);
+                save.setAttribute('aria-pressed', String(wantSaved));
+                save.title = wantSaved ? 'Remove from saved' : 'Save for later';
+                const icon = save.querySelector('i');
+                if (icon) icon.className = `bx ${wantSaved ? 'bxs-bookmark' : 'bx-bookmark'}`;
+            }
+            return;
+        }
+
         const card = e.target.closest('.partner-card');
         if (!card) return;
         const m = displayed[Number(card.dataset.index)];

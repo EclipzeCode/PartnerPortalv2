@@ -32,7 +32,7 @@ from db import SessionLocal
 from links import LinkError, parse_links
 from matching import find_matches, score_pair
 from moderation import name_problem
-from models import Event, Organization, Partnership
+from models import Event, Organization, Partnership, SavedLead
 from notifications import (
     notify_email_verification, notify_password_changed, notify_password_reset,
     notify_proposal_created, notify_proposal_responded,
@@ -1115,13 +1115,129 @@ def get_matches(org, db):
     if not matches:
         examples = find_matches(db, org, mutual_only=mutual_only, demo_only=True)
 
+    # So the star on each card starts in the right state. Sent as one list of
+    # ids rather than a flag per match: the client already holds the matches
+    # and only needs to know which of them are on the shortlist, and this way
+    # the answer stays correct for the examples too without touching either
+    # list.
+    saved_ids = _saved_ids(db, org)
+
     return jsonify({
         "matches": matches,
         "count": len(matches),
         "mutual_count": sum(1 for m in matches if m["match_detail"]["mutual"]),
         "examples": examples,
         "example_count": len(examples),
+        "saved_ids": sorted(saved_ids),
     })
+
+
+# --- Saved leads ------------------------------------------------------------
+# A private shortlist. Matching answers "who could work with me", and that
+# answer moves as either side edits its profile and as the directory grows --
+# so it is a poor place to keep a decision. Saving records that someone picked
+# an organization out, and keeps it reachable afterwards whatever the ranking
+# does. Never visible to the organization saved: this is a bookmark, not an
+# approach.
+def _saved_ids(db, org):
+    """The set of organization ids `org` has shortlisted."""
+    rows = db.query(SavedLead.saved_organization_id).filter(
+        SavedLead.organization_id == org.id
+    ).all()
+    return {row[0] for row in rows}
+
+
+@app.route("/api/saved", methods=["GET"])
+@login_required
+def list_saved(org, db):
+    """The shortlist, most recently saved first.
+
+    Scored fresh on every read rather than stored: a saved organization is a
+    decision, but the reason it looked promising is a live comparison of two
+    profiles, and either may have changed since. Serving a remembered score
+    would quietly show a number that is no longer true.
+
+    Deliberately not filtered by whether they still match. Dropping an
+    organization from someone's own shortlist because the ranking moved is
+    exactly the loss this table exists to prevent -- if it no longer overlaps
+    it simply scores low, and stays where it was put.
+    """
+    rows = db.query(SavedLead).filter(
+        SavedLead.organization_id == org.id
+    ).order_by(SavedLead.created_at.desc()).all()
+
+    saved = []
+    for row in rows:
+        other = row.saved_organization
+        # An org that has since un-finished its profile would otherwise be
+        # rendered as a card with nothing in it.
+        if other is None or not other.onboarding_complete:
+            continue
+        data = other.public_dict()
+        score, reasons, detail = score_pair(org, other)
+        data.update({
+            "match_score": score,
+            "reasons": reasons,
+            "match_detail": detail,
+            "saved_at": row.created_at.isoformat() if row.created_at else None,
+        })
+        saved.append(data)
+
+    return jsonify({"saved": saved, "count": len(saved)})
+
+
+@app.route("/api/saved", methods=["POST"])
+@login_required
+def create_saved(org, db):
+    data = request.get_json(silent=True) or {}
+    try:
+        target_id = int(data.get("organization_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Which organization is this for?"}), 400
+
+    if target_id == org.id:
+        return jsonify({"error": "You cannot save your own organization."}), 400
+
+    other = db.get(Organization, target_id)
+    if other is None or not other.onboarding_complete:
+        return jsonify({"error": "Organization not found."}), 404
+    if other.is_demo:
+        # Same line create_proposal draws: example organizations have no owner
+        # and nothing to follow up on, so a shortlist of them leads nowhere.
+        return jsonify({
+            "error": "Example organizations cannot be saved. They are here to "
+                     "show how matching works.",
+        }), 400
+
+    existing = db.query(SavedLead).filter(
+        SavedLead.organization_id == org.id,
+        SavedLead.saved_organization_id == target_id,
+    ).one_or_none()
+    # Idempotent rather than a 409: this backs a toggle, and a double-clicked
+    # star means "saved", not "error". uq_saved_leads_pair is what makes the
+    # race between two in-flight saves land on one row either way.
+    if existing is None:
+        db.add(SavedLead(organization_id=org.id, saved_organization_id=target_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
+    return jsonify({"message": "Saved", "organization_id": target_id}), 201
+
+
+@app.route("/api/saved/<int:org_id>", methods=["DELETE"])
+@login_required
+def delete_saved(org, db, org_id):
+    row = db.query(SavedLead).filter(
+        SavedLead.organization_id == org.id,
+        SavedLead.saved_organization_id == org_id,
+    ).one_or_none()
+    # Also idempotent: unsaving something already gone is the state asked for.
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return jsonify({"message": "Removed", "organization_id": org_id})
 
 
 @app.route("/api/organizations/<int:org_id>", methods=["GET"])

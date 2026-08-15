@@ -14,7 +14,7 @@ from datetime import date as date_type, datetime, time as time_type
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index, String,
-    Text, Time, func, text,
+    Text, Time, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -523,3 +523,58 @@ class Event(Base):
             "description": self.description or "",
             "location": self.location or "",
         }
+
+
+class SavedLead(Base):
+    """An organization one org has shortlisted to come back to.
+
+    Matching answers "who could work with me", which changes as either side
+    edits its profile and as the directory grows. That makes it a poor place
+    to keep a decision: an org someone meant to follow up on could drift down
+    the ranking, or out of it entirely, with nothing recording that anyone
+    had picked it out.
+
+    Deliberately one-directional and private. Being saved is not visible to
+    the organization saved, is not a proposal, and says nothing to anyone
+    else -- it is a bookmark, and treating it as a signal to the other side
+    would turn a private shortlist into an unsolicited approach.
+    """
+
+    __tablename__ = "saved_leads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # The org doing the saving.
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The org being saved. CASCADE as well, so a shortlist never outlives the
+    # profile it points at and cannot resurrect a deleted organization.
+    saved_organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    saved_organization = relationship(
+        "Organization", foreign_keys=[saved_organization_id], lazy="joined"
+    )
+
+    __table_args__ = (
+        # Saving twice is the same shortlist, not two entries. The route
+        # relies on this to stay idempotent under a double-clicked star.
+        UniqueConstraint(
+            "organization_id", "saved_organization_id", name="uq_saved_leads_pair"
+        ),
+        CheckConstraint(
+            "organization_id <> saved_organization_id",
+            name="ck_saved_leads_not_self",
+        ),
+        # Every read is "my shortlist, most recently saved first".
+        Index("ix_saved_leads_organization", "organization_id", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<SavedLead {self.organization_id}->{self.saved_organization_id}>"

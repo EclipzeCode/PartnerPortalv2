@@ -1558,3 +1558,111 @@ button {
     width: 45%;
     margin-bottom: 0;
 }
+
+/* --- Saved leads --------------------------------------------------------- */
+/* A private shortlist. The bookmark sits on the card, the toggle above the
+   grid swaps the same grid between ranked matches and what has been kept. */
+
+/* Containing block for the bookmark below. The score is position:relative and
+   keeps its layout space, so this does not disturb it. */
+.partner-card {
+    position: relative;
+}
+
+/* Top-right. The score badge reads as top-right but is actually laid out at
+   the card's left edge (position: relative, nudged down and in), so the free
+   corner is this one -- measured, after the first attempt landed on top of
+   the score. */
+.card-save {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 4;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #e6e8f0;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--text-light, #8d99ae);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.card-save:hover {
+    color: var(--primary, #4361ee);
+    border-color: var(--primary, #4361ee);
+}
+
+.card-save.saved {
+    color: var(--primary, #4361ee);
+    border-color: var(--primary, #4361ee);
+    background: rgba(67, 97, 238, 0.1);
+}
+
+.card-save:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.card-save:focus-visible {
+    outline: 2px solid var(--primary, #4361ee);
+    outline-offset: 2px;
+}
+
+/* The toggle reads as pressed while the shortlist is showing, so it is clear
+   the grid is no longer the full match list. */
+#savedToggle {
+    background: #fff;
+    color: var(--text, #2b2d42);
+    border: 1px solid #e6e8f0;
+}
+
+#savedToggle:hover {
+    background: #fff;
+    color: var(--primary, #4361ee);
+    border-color: var(--primary, #4361ee);
+}
+
+#savedToggle.active {
+    background: var(--primary, #4361ee);
+    color: #fff;
+    border-color: var(--primary, #4361ee);
+}
+
+.saved-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    border-radius: 62.4375rem;
+    background: rgba(67, 97, 238, 0.12);
+    color: var(--primary, #4361ee);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+/* Needed alongside the attribute: this element's own display would otherwise
+   beat the browser's default [hidden] { display: none } rule. */
+.saved-count[hidden] {
+    display: none;
+}
+
+#savedToggle.active .saved-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+/* The dialog's save button, which mirrors the card bookmark's state. */
+#detailSaveBtn.saved {
+    color: var(--primary, #4361ee);
+    border-color: var(--primary, #4361ee);
+    background: rgba(67, 97, 238, 0.08);
+}

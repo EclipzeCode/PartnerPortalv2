@@ -68,6 +68,14 @@
                     <input type="text" id="searchInput" placeholder="Search partners...">
                 </div>
                 <div class="action-buttons">
+                    <!-- Switches the grid between ranked matches and the
+                         shortlist. aria-pressed rather than a second page:
+                         it is the same grid, search box and pagination
+                         showing a different list. ppsearch.js fills the
+                         count once the shortlist has loaded. -->
+                    <button id="savedToggle" class="btn-action" type="button" aria-pressed="false">
+                        <i class='bx bx-bookmark'></i> Saved <span id="savedCount" class="saved-count" hidden></span>
+                    </button>
                     <button id="filter-btn" class="btn-action">
                         <i class='bx bx-filter-alt'></i> Filters
                     </button>
@@ -180,6 +188,11 @@
                 <div class="form-actions">
                     <button type="button" id="proposeBtn" class="btn-primary">
                         <i class='bx bx-handshake'></i> Propose Partnership
+                    </button>
+                    <!-- Label and icon are set by ppsearch.js from whether
+                         this organization is already on the shortlist. -->
+                    <button type="button" id="detailSaveBtn" class="btn-ghost">
+                        <i class='bx bx-bookmark'></i> <span id="detailSaveLabel">Save</span>
                     </button>
                     <!-- href filled in by ppsearch.js as the modal opens. -->
                     <a id="viewProfileBtn" class="btn-ghost" href="#" target="_blank" rel="noopener">
