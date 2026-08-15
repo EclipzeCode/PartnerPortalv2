@@ -578,3 +578,45 @@ class SavedLead(Base):
 
     def __repr__(self):
         return f"<SavedLead {self.organization_id}->{self.saved_organization_id}>"
+
+
+class ProfileView(Base):
+    """One recorded look at an organization's public profile.
+
+    Rows exist to be counted, never to be listed. Deliberately no display of
+    who visited: "someone looked at you" is a count, and turning it into
+    identities would publish the browsing of people who never agreed to be
+    seen doing it -- including signed-out visitors who have no account here
+    at all.
+
+    viewer_key is a salted digest, not an address. It exists so that
+    refreshing a page five times is one view rather than five, and it is
+    never shown, joined against, or reversed -- the salt is the app secret,
+    so the rows say nothing about who a visitor was even to whoever holds the
+    database.
+    """
+
+    __tablename__ = "profile_views"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Whose profile was looked at.
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+
+    viewer_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    viewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        # Both reads are "this org's views", either all of them or since a
+        # date; the dedup check adds viewer_key on top of the same prefix.
+        Index("ix_profile_views_org_seen", "organization_id", "viewed_at"),
+        Index("ix_profile_views_dedup", "organization_id", "viewer_key", "viewed_at"),
+    )
+
+    def __repr__(self):
+        return f"<ProfileView org={self.organization_id} at={self.viewed_at}>"

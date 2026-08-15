@@ -179,11 +179,11 @@ a.btn-action {
    3-across at in-between widths and strand a card on its own row, so the
    cards share the row width instead of dictating it.
 
-   Three across above 75em, where there is room for it -- with five cards two
-   columns would leave the last one alone on a third row, and 3+2 fills both
-   rows it uses. Below that the count drops to two (see the 75em block), where
-   three would squeeze the icon and label together long before the compacting
-   rules at 48em take over. */
+   Three across above 75em, where there is room for it; two below (see the
+   75em block), where three would squeeze the icon and label together long
+   before the compacting rules at 48em take over. Six cards divide evenly
+   either way -- 3+3 or 2+2+2 -- so neither width strands one on a row of its
+   own, which is what the fifth card had to be reasoned around. */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1221,10 +1221,9 @@ button.view-all {
         grid-template-columns: 1fr;
     }
 
-    /* Two across from here down. The fifth card ends up alone on the last
-       row, which is the lesser of the two problems -- three columns at this
-       width leaves each card too narrow for its icon and label to sit side
-       by side. */
+    /* Two across from here down: three columns at this width leaves each card
+       too narrow for its icon and label to sit side by side. Six divides into
+       it evenly, so nothing is left stranded. */
     .stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }

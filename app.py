@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re
@@ -32,7 +33,9 @@ from db import SessionLocal
 from links import LinkError, parse_links
 from matching import find_matches, score_pair
 from moderation import name_problem
-from models import Event, Organization, Partnership, SavedLead
+from models import (
+    Event, Organization, Partnership, ProfileView, SavedLead,
+)
 from notifications import (
     notify_email_verification, notify_password_changed, notify_password_reset,
     notify_proposal_created, notify_proposal_responded,
@@ -1132,6 +1135,78 @@ def get_matches(org, db):
     })
 
 
+# --- Profile views ----------------------------------------------------------
+# Counted, never itemised. An organization is told how often its public
+# profile was opened; it is not told by whom. Naming visitors would publish
+# the browsing of people who never agreed to be seen doing it -- most of them
+# signed-out, with no account here and no way to opt out.
+VIEW_DEDUP_WINDOW = timedelta(hours=24)
+
+
+def _viewer_key(viewer_org):
+    """A stable, opaque handle for whoever is looking.
+
+    Salted with the app secret and never stored in the clear, because the
+    only question it answers is "is this the same visitor as a moment ago".
+    A signed-in viewer is keyed by account, so the same organization opening
+    a profile from a laptop and a phone is one viewer rather than two;
+    everyone else is keyed by address and user agent, which is the closest
+    thing available without setting a tracking cookie on a public page.
+    """
+    if viewer_org is not None:
+        basis = f"org:{viewer_org.id}"
+    else:
+        basis = f"anon:{client_ip()}:{request.headers.get('User-Agent', '')}"
+    return hashlib.sha256(
+        f"{app.secret_key}:{basis}".encode("utf-8")
+    ).hexdigest()
+
+
+def _record_profile_view(db, target):
+    """Record that `target`'s profile was opened, at most once per viewer per day.
+
+    Never lets a counting problem break the page it is counting: the profile
+    is what the visitor asked for, and a failed insert here is not worth a
+    500. Rolled back and dropped instead.
+    """
+    try:
+        viewer = current_org(db)
+        # An organization checking its own public profile -- which the
+        # dashboard and settings both link to -- is not an audience.
+        if viewer is not None and viewer.id == target.id:
+            return
+
+        key = _viewer_key(viewer)
+        since = datetime.now(timezone.utc) - VIEW_DEDUP_WINDOW
+        already = db.query(ProfileView.id).filter(
+            ProfileView.organization_id == target.id,
+            ProfileView.viewer_key == key,
+            ProfileView.viewed_at >= since,
+        ).first()
+        # Reloading a profile, or coming back to it twice in an afternoon, is
+        # one organization taking an interest rather than several.
+        if already is not None:
+            return
+
+        db.add(ProfileView(organization_id=target.id, viewer_key=key))
+        db.commit()
+    except Exception:
+        db.rollback()
+        app.logger.exception("Could not record a profile view")
+
+
+def _profile_view_counts(db, org):
+    total = db.query(ProfileView.id).filter(
+        ProfileView.organization_id == org.id
+    ).count()
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+    recent = db.query(ProfileView.id).filter(
+        ProfileView.organization_id == org.id,
+        ProfileView.viewed_at >= since,
+    ).count()
+    return total, recent
+
+
 # --- Saved leads ------------------------------------------------------------
 # A private shortlist. Matching answers "who could work with me", and that
 # answer moves as either side edits its profile and as the directory grows --
@@ -1273,6 +1348,12 @@ def public_organization(org_id):
         other = db.get(Organization, org_id)
         if other is None or not other.onboarding_complete:
             return jsonify({"error": "Organization not found."}), 404
+        # Counted here rather than on the /organization.html route: this is
+        # what organization.js fetches on every profile load, signed in or
+        # not, and exactly once. Link-preview crawlers (Slack, iMessage,
+        # Twitter) request the HTML and never run its script, so an unfurled
+        # link cannot inflate the number.
+        _record_profile_view(db, other)
         return jsonify({"organization": other.public_profile()})
     finally:
         db.close()
@@ -1293,6 +1374,7 @@ def get_dashboard(org, db):
     # organizations themselves when it is opened, the same way the matches
     # views do.
     saved_count = len(_saved_ids(db, org))
+    views_total, views_recent = _profile_view_counts(db, org)
 
     if not org.onboarding_complete:
         return jsonify({
@@ -1302,6 +1384,10 @@ def get_dashboard(org, db):
                 "total_matches": 0, "mutual_matches": 0,
                 "needs_count": 0, "offers_count": 0,
                 "saved": saved_count,
+                # Zero until the profile is finished -- it has no public URL
+                # to be looked at yet -- but reported rather than assumed.
+                "profile_views": views_total,
+                "profile_views_recent": views_recent,
             },
             "top_matches": [],
             "events": events,
@@ -1335,6 +1421,8 @@ def get_dashboard(org, db):
             ),
             "agreed": sum(1 for p in proposals if p["status"] == "accepted"),
             "saved": saved_count,
+            "profile_views": views_total,
+            "profile_views_recent": views_recent,
         },
         "top_matches": matches[:5],
         "recent_proposals": proposals[:5],

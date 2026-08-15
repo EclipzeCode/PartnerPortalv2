@@ -110,6 +110,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             `${stats.needs_count} needs · ${stats.offers_count} offers`);
     setStat('savedLeadsCount', stats.saved || 0, 'Saved',
             stats.saved ? 'shortlisted' : 'none yet');
+    setStat('profileViews', stats.profile_views || 0, 'Profile views',
+            stats.profile_views
+                ? `${stats.profile_views_recent || 0} in the last 30 days`
+                : 'none yet');
 
     function setStat(id, value, label, changeText) {
         const el = document.getElementById(id);
@@ -775,7 +779,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         mutual: 'Two-way matches',
         events: 'Upcoming meetings',
         tags: 'Profile tags',
-        saved: 'Saved'
+        saved: 'Saved',
+        views: 'Profile views'
     };
 
     function sortedEvents() {
@@ -922,6 +927,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>`;
     }
 
+    // A summary, not a list. Every other view here itemises what it counts;
+    // this one deliberately cannot, because the rows behind it record that
+    // somebody looked, not who -- most visitors are signed out and have no
+    // account here to be named from. Says so plainly rather than leaving the
+    // absence to be read as a gap.
+    function viewsView() {
+        const s = (dashboard && dashboard.stats) || {};
+        const total = s.profile_views || 0;
+        const recent = s.profile_views_recent || 0;
+        if (!total) {
+            return emptyState('No one has opened your public profile yet. '
+                + 'Sharing its link is what puts it in front of people — the '
+                + 'Copy link button is on the profile itself.');
+        }
+        return `
+            <div class="stat-detail-grid">
+                ${field('All time', String(total))}
+                ${field('Last 30 days', String(recent))}
+            </div>
+            <p class="stat-detail-note">
+                Counted once per visitor per day, so a reload is not a second
+                view. Your own visits are not counted. Who looked is not
+                recorded — most people opening a public profile are not signed
+                in, so there is no one to name.
+            </p>`;
+    }
+
     function renderStat() {
         if (!statModal) return;
 
@@ -974,6 +1006,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : emptyState('Nothing saved yet. Use the bookmark on a match in '
                     + 'Search to keep it here — saved organizations stay on this '
                     + 'list even if your profile changes and they stop matching.');
+            return;
+        }
+
+        if (statView === 'views') {
+            const s = (dashboard && dashboard.stats) || {};
+            statTitle.textContent =
+                `${VIEW_TITLES.views} (${s.profile_views || 0})`;
+            statBody.innerHTML = viewsView();
             return;
         }
 
