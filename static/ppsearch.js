@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchInput = document.getElementById('searchInput');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
+    const showAllBtn = document.getElementById('showAllBtn');
     const pageIndicator = document.getElementById('pageIndicator');
 
     const filterBtn = document.getElementById('filter-btn');
@@ -18,8 +19,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const filterForm = document.getElementById('filterForm');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
-    const PAGE_SIZE = 9;
     const esc = window.escapeHtml;
+
+    // How many cards a page holds, matched to the column count the grid is
+    // actually using (see the breakpoints in ppsearch.css). Kept even at
+    // every width so a page never ends on a half-filled row: three across
+    // fills two rows of three, two across fills two rows of two.
+    const PAGE_SIZES = [
+        { query: '(min-width: 64em)', size: 6 },   // 3 columns
+        { query: '(min-width: 40em)', size: 4 },   // 2 columns
+    ];
+    const NARROW_PAGE_SIZE = 4;                    // 1 column
+
+    function pageSize() {
+        if (showAll) return Infinity;
+        const hit = PAGE_SIZES.find((p) => window.matchMedia(p.query).matches);
+        return hit ? hit.size : NARROW_PAGE_SIZE;
+    }
+
+    // Everything at once, for when paging through is the slower way to find
+    // something. Off by default so the first screen is the strongest matches
+    // rather than the whole directory.
+    let showAll = false;
 
     let allMatches = [];
     let exampleMatches = [];
@@ -210,7 +231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const banner = document.getElementById('exampleBanner');
         if (banner) banner.classList.toggle('hidden', !showingExamples);
 
-        const pages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
+        const size = pageSize();
+        const pages = Math.max(1, Math.ceil(displayed.length / size));
         if (currentPage > pages) currentPage = pages;
 
         if (displayed.length === 0) {
@@ -239,8 +261,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const start = (currentPage - 1) * PAGE_SIZE;
-        displayed.slice(start, start + PAGE_SIZE).forEach((m, offset) => {
+        const start = showAll ? 0 : (currentPage - 1) * size;
+        const slice = showAll ? displayed : displayed.slice(start, start + size);
+        slice.forEach((m, offset) => {
             const card = document.createElement('div');
             card.className = 'partner-card'
                 + (m.match_detail.mutual ? ' mutual' : '')
@@ -271,15 +294,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <i class='bx ${isSaved ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
                 </button>`;
 
+            // Every region below is given a fixed height in CSS, and the
+            // badge gets a slot whether or not there is one to put in it.
+            // Without that, a card with no badge or a one-line name pulled
+            // everything under it upwards, so "Why match" started at a
+            // different height on each card and the tallest card in a row
+            // stretched the rest to match it.
             card.innerHTML = `
                 <div class="partner-score">${m.match_score}</div>
                 ${saveBtn}
                 <div class="partner-content">
-                    ${badge}
+                    <div class="card-badge-slot">${badge}</div>
                     <h3>${esc(m.name)}</h3>
-                    <p><strong>Type:</strong> ${esc(m.organization_type)}</p>
-                    <p><strong>Location:</strong> ${esc(m.location)}</p>
-                    <p><strong>Offers:</strong> ${esc((m.offers_labels || []).join(', '))}</p>
+                    <p class="card-line card-type"><strong>Type:</strong> ${esc(m.organization_type)}</p>
+                    <p class="card-line card-location"><strong>Location:</strong> ${esc(m.location)}</p>
+                    <p class="card-line card-offers"><strong>Offers:</strong> ${esc((m.offers_labels || []).join(', '))}</p>
                     <div class="match-reasons">
                         <strong>Why match:</strong>
                         <ul>${reasons}</ul>
@@ -289,25 +318,53 @@ document.addEventListener('DOMContentLoaded', async () => {
             partnersGrid.appendChild(card);
         });
 
+        markTruncated();
         updatePagination(pages);
+    }
+
+    // The reason lists are clipped to a fixed height so every card is the
+    // same size, which means some cards are hiding text. CSS cannot tell
+    // which, so this measures after layout and marks only those that
+    // actually overflow -- a fade drawn over a half-empty box would suggest
+    // there is more to read when there is not. The full text is in the
+    // dialog the card already opens.
+    function markTruncated() {
+        partnersGrid.querySelectorAll('.match-reasons').forEach((block) => {
+            const list = block.querySelector('ul');
+            if (!list) return;
+            block.classList.toggle(
+                'is-truncated', list.scrollHeight > list.clientHeight + 1,
+            );
+        });
     }
 
     function updatePagination(pages) {
         const count = displayed.length;
+        const size = pageSize();
         if (count === 0) {
             pageIndicator.textContent = 'No results';
+        } else if (showAll) {
+            pageIndicator.textContent = `Showing all ${count}`;
         } else {
-            const first = (currentPage - 1) * PAGE_SIZE + 1;
-            const last = Math.min(currentPage * PAGE_SIZE, count);
+            const first = (currentPage - 1) * size + 1;
+            const last = Math.min(currentPage * size, count);
             pageIndicator.textContent =
                 `Page ${currentPage} of ${pages}  ·  ${first}-${last} of ${count}`;
         }
-        prevBtn.disabled = currentPage <= 1;
-        nextBtn.disabled = currentPage >= pages;
+        // The arrows are meaningless while everything is on screen, and a
+        // page count is not a thing to step through when there is one page.
+        prevBtn.disabled = showAll || currentPage <= 1;
+        nextBtn.disabled = showAll || currentPage >= pages;
+        if (showAllBtn) {
+            showAllBtn.textContent = showAll ? 'Show pages' : 'Show all';
+            showAllBtn.setAttribute('aria-pressed', String(showAll));
+            // Nothing to expand when a single page already holds everything.
+            showAllBtn.hidden = count <= size && !showAll;
+        }
     }
 
     function goToPage(page) {
-        const pages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
+        const pages = Math.max(1, Math.ceil(displayed.length / pageSize()));
         currentPage = Math.min(Math.max(1, page), pages);
         render();
         partnersGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -736,6 +793,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     prevBtn.addEventListener('click', () => goToPage(currentPage - 1));
     nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
     searchInput.addEventListener('input', applyView);
+
+    if (showAllBtn) {
+        showAllBtn.addEventListener('click', () => {
+            showAll = !showAll;
+            // Back to the first page on collapse, so turning paging back on
+            // does not land on a page number that no longer exists.
+            currentPage = 1;
+            render();
+            partnersGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    // The page holds a different number of cards at each column count, so a
+    // window crossing a breakpoint has to be re-paged -- otherwise a page
+    // built for three columns keeps showing six cards in two.
+    //
+    // Listening to the queries themselves rather than to `resize`: these
+    // fire once, when a breakpoint is actually crossed, instead of on every
+    // pixel of a drag with a debounce guessing at when it stopped.
+    PAGE_SIZES.forEach(({ query }) => {
+        const mql = window.matchMedia(query);
+        const onChange = () => {
+            // A page number from the previous width can point past the end of
+            // the list once the page holds more.
+            currentPage = 1;
+            if (displayed.length) render();
+        };
+        if (mql.addEventListener) mql.addEventListener('change', onChange);
+        else mql.addListener(onChange);   // Safari < 14
+    });
 
     // Arriving from the dashboard's "Two-way matches" card, which links to
     // ppsearch.html?mutual=1. The filter UI is synced too, so the state is

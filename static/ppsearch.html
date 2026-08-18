@@ -98,12 +98,17 @@
             </div>
             
             <div class="pagination">
-                <button id="prevBtn" class="btn-pagination" disabled>
+                <button id="prevBtn" class="btn-pagination" aria-label="Previous page" disabled>
                     <i class='bx bx-chevron-left'></i>
                 </button>
                 <span id="pageIndicator">Page 1 of 1</span>
-                <button id="nextBtn" class="btn-pagination">
+                <button id="nextBtn" class="btn-pagination" aria-label="Next page">
                     <i class='bx bx-chevron-right'></i>
+                </button>
+                <!-- Escape hatch from paging. ppsearch.js hides it when a
+                     single page already holds everything. -->
+                <button type="button" id="showAllBtn" class="btn-show-all" aria-pressed="false" hidden>
+                    Show all
                 </button>
             </div>
         </div>

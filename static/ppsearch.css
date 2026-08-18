@@ -1718,3 +1718,165 @@ button {
 .detail-focus-chips span.shared i {
     font-size: 0.95rem;
 }
+
+/* --- Fixed-size partner cards -------------------------------------------- */
+/* Cards used to size themselves to their content, so one organization with
+   six offers and eight reasons stretched every other card in its row to
+   match, and "Why match" began at a different height on each. Every region
+   now gets a fixed height, whether or not there is content to fill it, so
+   the labels line up across a row and the cards are identical.
+ *
+ * Nothing is lost to the clipping: the card opens a dialog with the whole
+ * thing, and .is-truncated (set from JS, which is the only place that can
+ * measure it) fades the bottom of a list that really is cut off.
+ */
+.partners-grid {
+    /* Explicit column counts rather than auto-fill: the page size in
+       ppsearch.js is 6 / 4 / 4 to match these, and it can only stay in step
+       with a number of columns that is actually known. */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 63.99em) {
+    .partners-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 39.99em) {
+    .partners-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.partner-card {
+    /* One place the line heights are defined, so the fixed heights below and
+       the clamp counts cannot drift apart. */
+    --line: 1.35rem;        /* .partner-card p: 0.9rem x 1.5 */
+    --line-title: 1.69rem;  /* h3: 1.3rem x 1.3 */
+    --line-reason: 1.36rem; /* .match-reasons: 0.85rem x 1.6 */
+    display: flex;
+    flex-direction: column;
+}
+
+.partner-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Reserved whether or not this card has a badge. An absent badge used to
+   pull the name and everything under it up by its height. */
+.card-badge-slot {
+    height: 1.85rem;
+    flex-shrink: 0;
+}
+
+.partner-card h3 {
+    line-height: 1.3;
+    height: calc(var(--line-title) * 2);
+    margin-bottom: 0.75rem;
+    flex-shrink: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Type, location and offers: one, two and three lines. The height is fixed
+   rather than capped, so a one-line location still occupies two lines' worth
+   and the row below it starts at the same place on every card. */
+.partner-card .card-line {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
+.partner-card .card-type {
+    -webkit-line-clamp: 1;
+    height: var(--line);
+}
+
+.partner-card .card-location {
+    -webkit-line-clamp: 2;
+    height: calc(var(--line) * 2);
+}
+
+.partner-card .card-offers {
+    -webkit-line-clamp: 3;
+    height: calc(var(--line) * 3);
+}
+
+.match-reasons {
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* Twelve lines of reasons. Clipped on height rather than line-clamped: this
+   is a list, and -webkit-box would collapse the bullets into one run of
+   text. */
+.match-reasons ul {
+    height: calc(var(--line-reason) * 12);
+    overflow: hidden;
+    /* Padding, not margin: the global reset zeroes list padding, so the
+       markers sit outside the content box -- which `overflow: hidden` above
+       then clips away entirely. Indenting with padding brings them back
+       inside the box that is doing the clipping. */
+    margin-left: 0;
+    padding-left: 1.1rem;
+}
+
+/* Only drawn when something is actually cut off -- see markTruncated(). */
+.match-reasons.is-truncated::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2.5rem;
+    background: linear-gradient(to bottom, rgba(240, 244, 255, 0), #f0f4ff 85%);
+    pointer-events: none;
+}
+
+.match-reasons.is-truncated::before {
+    content: 'Click for the full list';
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.35rem;
+    z-index: 1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* --- Show all ------------------------------------------------------------ */
+.btn-show-all {
+    padding: 0.5rem 1.1rem;
+    border-radius: 62.4375rem;
+    border: 1px solid #e0e4f0;
+    background: #fff;
+    color: var(--text-light);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.btn-show-all:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.btn-show-all[aria-pressed="true"] {
+    background: rgba(67, 97, 238, 0.1);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.btn-show-all[hidden] {
+    display: none;
+}

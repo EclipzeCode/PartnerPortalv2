@@ -376,8 +376,12 @@ body {
 /* What this organization works on. Plain chips, no scoring or ranking: these
    are self-declared and unverified, and styling them as badges would imply a
    standing the data does not support. */
+/* Bottom margin matters as much as the top one: .org-exchange below sets no
+   margin-top of its own, so without this the chips ran straight into the
+   offer/need boxes. 2rem matches the gap .org-bio and .org-exchange already
+   keep, so this block sits in the same rhythm as everything around it. */
 .org-focus {
-    margin: 1.5rem 0 0;
+    margin: 0 0 2rem;
 }
 
 .org-focus h2 {
