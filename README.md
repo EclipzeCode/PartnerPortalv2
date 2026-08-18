@@ -72,6 +72,25 @@ python app.py
 
 Flask serves the frontend as well as the API, so there is nothing else to run.
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+They cover the rules that would otherwise break quietly: the matching
+invariants (a two-way match outranks a one-sided one; shared causes rank but
+never create a match), what one organization can and cannot learn about
+another, which rows it may act on, how a profile view is counted, and what
+the server does with input it does not recognise.
+
+The suite runs against the database in `DATABASE_URL` and leaves nothing
+behind: each test runs inside a transaction that is rolled back when it
+finishes, and everything it creates is named `pytest-*` so anything that did
+escape is obvious. The models use Postgres `ARRAY` columns, so there is no
+SQLite mode to fall back to.
+
 ## Project layout
 
 | File | Purpose |
@@ -84,6 +103,7 @@ Flask serves the frontend as well as the API, so there is nothing else to run.
 | `seed.py` | Demo organizations |
 | `migrations/` | Alembic migrations — the schema's source of truth |
 | `static/` | The entire frontend — HTML, CSS, JS |
+| `tests/` | pytest suite — matching, privacy, ownership, validation |
 | `render.yaml` | Deployment blueprint |
 
 Pages, all under `static/`: `index.html` (landing), `onboarding.html`,

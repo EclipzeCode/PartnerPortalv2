@@ -1,0 +1,5 @@
+# Test-only dependencies. Kept out of requirements.txt because render.yaml
+# installs that file to build the production image, which has no use for a
+# test runner.
+-r requirements.txt
+pytest==9.1.1
