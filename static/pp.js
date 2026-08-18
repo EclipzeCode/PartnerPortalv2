@@ -259,16 +259,20 @@ document.addEventListener('DOMContentLoaded', () => {
 // hand one modal the other's close button.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+    // Focus is common.js's dialogOpened/dialogClosed: trapped inside while
+    // open, returned to whatever opened it on close.
     function openModal(modal) {
         if (!modal) return;
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        window.dialogOpened(modal);
     }
 
     function closeModal(modal) {
         if (!modal) return;
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        window.dialogClosed(modal);
     }
 
     document.querySelectorAll('.modal').forEach((modal) => {

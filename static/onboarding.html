@@ -393,10 +393,10 @@
 
   <!-- Clearing wipes every selection, so it asks first. -->
   <div id="clearConfirmModal" class="modal">
-    <div class="modal-container">
+    <div class="modal-container" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2>Clear the whole form?</h2>
-        <span class="close-modal">&times;</span>
+        <button type="button" class="close-modal" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <p class="confirm-text">

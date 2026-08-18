@@ -136,19 +136,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('deleteEmailLabel').textContent = me.email || '';
 
-    // What to focus when a modal closes, so focus is never left on a hidden
-    // element.
-    let lastFocus = null;
-
+    // Focus is common.js's dialogOpened/dialogClosed. The focusTarget.focus()
+    // that used to be here never actually moved focus: .modal is
+    // `visibility: hidden` under a transition, so nothing inside it can take
+    // focus in the tick the class lands. The helper retries until it can, and
+    // traps Tab inside the dialog meanwhile.
     function openModal(modal, focusTarget) {
-        lastFocus = document.activeElement;
         modal.classList.add('active');
-        if (focusTarget) focusTarget.focus();
+        window.dialogOpened(modal, focusTarget);
     }
 
     function closeModal(modal) {
         modal.classList.remove('active');
-        if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+        window.dialogClosed(modal);
     }
 
     function openModals() {
@@ -179,7 +179,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
-        confirmModal.classList.remove('active');
+        // closeModal, not a bare classList.remove: hiding the first step
+        // directly left its focus trap installed, so both dialogs were
+        // trapping Tab at once, and the second step then recorded a button
+        // inside a hidden dialog as the control to return to -- which cannot
+        // take focus, stranding it. Closing properly hands focus back to
+        // "Delete my account" first, which is what the second step should
+        // return to when it is dismissed.
+        closeModal(confirmModal);
         clearFieldError(passwordInput);
         passwordInput.value = '';
         openModal(passwordModal, passwordInput);

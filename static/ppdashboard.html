@@ -252,7 +252,7 @@
          clicked. One dialog for all four, with a second level for a single
          meeting or match; the back button returns to the list. -->
     <div id="statModal" class="modal">
-        <div class="modal-container modal-wide">
+        <div class="modal-container modal-wide" role="dialog" aria-modal="true">
             <div class="modal-header">
                 <div class="modal-heading">
                     <button type="button" class="stat-back" id="statBack" hidden aria-label="Back to list">
@@ -270,10 +270,10 @@
 
     <!-- Respond to a partnership proposal -->
     <div id="respondModal" class="modal">
-        <div class="modal-container">
+        <div class="modal-container" role="dialog" aria-modal="true">
             <div class="modal-header">
                 <h2 id="respondTitle">Respond</h2>
-                <span class="close-modal">&times;</span>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="respondTerms" class="respond-terms"></div>
@@ -294,10 +294,10 @@
 
     <!-- Add Event Modal -->
     <div id="eventModal" class="modal">
-        <div class="modal-container">
+        <div class="modal-container" role="dialog" aria-modal="true">
             <div class="modal-header">
                 <h2>Add New Event</h2>
-                <span class="close-modal">&times;</span>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <!-- novalidate: the browser's own bubble ("Please select an item

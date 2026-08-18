@@ -470,41 +470,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         return formatTime(`${endHours}:${String(endMinutes).padStart(2, '0')}`);
     }
 
-    // What to put focus back on when a dialog closes. Without this, closing
-    // one drops the caret at the top of the document and a keyboard visitor
-    // has to tab all the way back to where they were -- settings.js has done
-    // this since the delete-account flow was built; these two had not.
-    // Separate variables per dialog: the stat dialog can be opened from a row
-    // inside a page that the event dialog also covers, and sharing one slot
-    // would send focus back to whichever opened last.
-    let lastEventFocus = null;
-    let lastStatFocus = null;
-
+    // Focus is handled by common.js's dialogOpened/dialogClosed, which trap
+    // Tab inside the dialog and put focus back on the control that opened it.
     function openModal() {
         if (!modal) return;
-        lastEventFocus = document.activeElement;
         // Errors from a previous attempt should not greet a fresh one.
         if (eventForm) clearEventErrors();
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
-        // No focus() into the form here: .modal is `visibility: hidden` under
-        // a transition, so nothing inside it is focusable in the tick the
-        // class lands and the call would silently do nothing (measured -- it
-        // is why the same line in settings.js has never moved focus either).
-        // Moving focus in properly means trapping it too, which is a larger
-        // change than this; what matters below is that closing puts it back.
+        window.dialogOpened(modal, document.getElementById('eventTitle'));
     }
 
     function closeModal() {
         if (!modal) return;
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
-        // document.contains: the opener can be gone by now -- removing a
-        // meeting from the dialog repaints the list that its row was in.
-        if (lastEventFocus && document.contains(lastEventFocus)) {
-            lastEventFocus.focus();
-        }
-        lastEventFocus = null;
+        window.dialogClosed(modal);
     }
 
     if (addEventBtn) addEventBtn.addEventListener('click', openModal);
@@ -1073,18 +1054,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function openStat(view, detail) {
         if (!statModal) return;
-        // Not overwritten when the dialog is already open: drilling from a
-        // row into its detail calls nothing here, but a stat card clicked
-        // while another view is showing should still return to the first
-        // opener rather than to a row that has since been repainted away.
-        if (!statModal.classList.contains('active')) {
-            lastStatFocus = document.activeElement;
-        }
+        const wasOpen = statModal.classList.contains('active');
         statView = view;
         statDetail = detail || null;
         statModal.classList.add('active');
         document.body.style.overflow = 'hidden';
         renderStat();
+        // Only on the way in: reopening a view while the dialog is already
+        // up would otherwise record a row that is about to be repainted away
+        // as the control to return to.
+        if (!wasOpen) {
+            window.dialogOpened(statModal, document.getElementById('statClose'));
+        }
         if (view === 'matches' || view === 'mutual') ensureMatches();
         if (view === 'saved') ensureSaved();
     }
@@ -1094,10 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         statModal.classList.remove('active');
         document.body.style.overflow = 'auto';
         statDetail = null;
-        if (lastStatFocus && document.contains(lastStatFocus)) {
-            lastStatFocus.focus();
-        }
-        lastStatFocus = null;
+        window.dialogClosed(statModal);
     }
 
     document.querySelectorAll('.stat-card[data-stat]').forEach((card) => {

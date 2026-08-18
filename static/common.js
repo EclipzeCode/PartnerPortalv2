@@ -160,6 +160,124 @@ function drainToastHandoff() {
     }
 }
 
+// --- Dialogs -----------------------------------------------------------
+// Focus handling for the eight modals across this site, in one place because
+// each of them had been getting some part of it wrong.
+//
+// Two problems this fixes. Focus never moved into a dialog when it opened,
+// so the caret stayed on the button behind it and Tab walked the page
+// underneath rather than the form on top -- and every attempt to fix that
+// locally failed silently, because .modal is `visibility: hidden` under a
+// transition and nothing inside it can take focus in the tick the class
+// lands. And focus was not put back on close, so a keyboard visitor was
+// returned to the top of the document each time.
+//
+// Callers keep their own .active toggling; these only handle focus, and are
+// called immediately after the class goes on or comes off.
+const FOCUSABLE_SELECTOR = [
+    'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+    'select:not([disabled])', 'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const openDialogs = new Map();
+
+function focusableIn(container) {
+    // getClientRects rather than offsetParent: the latter is null for
+    // position: fixed elements, which is most of what a dialog contains.
+    // Elements hidden with [hidden] or display:none have no rects and drop
+    // out here.
+    //
+    // visibility is checked separately because those elements *do* keep
+    // their rects, and focus() on one silently does nothing -- which would
+    // leave the wrap below pointing at an element that can never take focus.
+    // It also covers the fade-in: everything inside reads as hidden until
+    // the transition starts, which is exactly when there is nothing to focus
+    // yet and focusInto should keep waiting.
+    return [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter(
+        (el) => el.getClientRects().length > 0
+            && window.getComputedStyle(el).visibility !== 'hidden',
+    );
+}
+
+// Tries to put focus inside, and keeps trying until the fade-in has
+// progressed far enough for that to be possible. Gives up rather than
+// looping forever: a dialog with nothing focusable in it is not an error.
+function focusInto(modal, preferred) {
+    let settled = false;
+    const timers = [];
+
+    const finish = () => {
+        settled = true;
+        timers.forEach(clearTimeout);
+        modal.removeEventListener('transitionend', attempt);
+    };
+
+    function attempt() {
+        if (settled) return;
+        const target = (preferred && preferred.getClientRects().length > 0)
+            ? preferred
+            : focusableIn(modal)[0];
+        if (!target) return;
+        target.focus();
+        if (modal.contains(document.activeElement)) finish();
+    }
+
+    attempt();                                  // already visible?
+    if (settled) return;
+    modal.addEventListener('transitionend', attempt);
+    requestAnimationFrame(() => requestAnimationFrame(attempt));
+    // Backstop for the cases the two above miss: a browser that coalesces
+    // the frames, or a tab that is not painting at all.
+    [60, 180, 400].forEach((ms) => timers.push(setTimeout(attempt, ms)));
+    timers.push(setTimeout(finish, 600));
+}
+
+// Call right after the dialog is shown. `preferred` is the control focus
+// should land on when it is not simply the first one in the markup.
+window.dialogOpened = function dialogOpened(modal, preferred) {
+    if (!modal || openDialogs.has(modal)) return;
+
+    const onKeydown = (e) => {
+        if (e.key !== 'Tab') return;
+        const list = focusableIn(modal);
+        if (list.length === 0) {
+            // Nothing to move to, but Tab must still not escape into the
+            // page behind the dialog.
+            e.preventDefault();
+            return;
+        }
+        const first = list[0];
+        const last = list[list.length - 1];
+        const active = document.activeElement;
+        const outside = !modal.contains(active);
+        if (e.shiftKey && (active === first || outside)) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && (active === last || outside)) {
+            e.preventDefault();
+            first.focus();
+        }
+    };
+
+    // Capture phase, so the trap runs before any page-level Tab handling.
+    document.addEventListener('keydown', onKeydown, true);
+    openDialogs.set(modal, { opener: document.activeElement, onKeydown });
+    focusInto(modal, preferred);
+};
+
+// Call right after the dialog is hidden.
+window.dialogClosed = function dialogClosed(modal) {
+    const state = modal && openDialogs.get(modal);
+    if (!state) return;
+    document.removeEventListener('keydown', state.onKeydown, true);
+    openDialogs.delete(modal);
+    // document.contains: the opener is routinely gone by the time a dialog
+    // closes -- confirming a proposal or removing a meeting re-renders the
+    // list its button was in.
+    if (state.opener && document.contains(state.opener)) state.opener.focus();
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Mobile navigation ---------------------------------------------
     const menuIcon = document.getElementById('menu-icon');

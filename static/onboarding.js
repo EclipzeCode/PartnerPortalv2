@@ -589,11 +589,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   function openClearModal() {
     clearModal.classList.add('active');
     document.body.style.overflow = 'hidden';
+    // Focus lands on Cancel, not the destructive confirm: this dialog exists
+    // because clearing cannot be undone, so a stray Enter should do nothing.
+    window.dialogOpened(clearModal, document.getElementById('clearCancelBtn'));
   }
 
   function closeClearModal() {
     clearModal.classList.remove('active');
     document.body.style.overflow = 'auto';
+    window.dialogClosed(clearModal);
   }
 
   function doClear() {

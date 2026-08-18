@@ -371,16 +371,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Modals ---------------------------------------------------------
-    function openModal(modal) {
+    // All three dialogs on this page share these, and focus for all three is
+    // common.js's dialogOpened/dialogClosed: trapped inside while open,
+    // returned to whatever opened it on close.
+    function openModal(modal, preferred) {
         if (!modal) return;
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        window.dialogOpened(modal, preferred);
     }
 
     function closeModal(modal) {
         if (!modal) return;
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        window.dialogClosed(modal);
     }
 
     document.querySelectorAll('.modal').forEach((modal) => {
