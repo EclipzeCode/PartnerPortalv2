@@ -18,7 +18,7 @@ to explain the result to the user.
 
 from sqlalchemy import or_, select
 
-from categories import labels_for
+from categories import focus_labels_for, labels_for
 
 # Weights. Kept as named constants so tuning is a visible, reviewable change.
 POINTS_PER_THEY_GIVE = 12   # each category they offer that I need
@@ -27,6 +27,14 @@ MUTUAL_BONUS = 30           # both directions satisfied at all
 SAME_LOCATION = 10
 REMOTE_COMPATIBLE = 4
 COMPLEMENTARY_TYPE = 5
+# Working on the same thing. Kept small, and capped below, on purpose: a
+# shared cause makes a partnership easier to talk about, but it is not itself
+# an exchange, and this file's whole claim is that a partnership works when
+# both sides get something. Uncapped, an organization ticking eight of the
+# same boxes could outscore one that actually has what you need, which would
+# invert exactly the ranking the weights above exist to produce.
+SHARED_FOCUS = 6
+MAX_FOCUS_BONUS = 12
 
 MAX_SCORE = 100
 
@@ -92,12 +100,25 @@ def score_pair(me, them):
             f"Different kind of organization ({them.organization_type})"
         )
 
+    # Shared focus areas rank candidates; they never create one. Nothing here
+    # widens the pool -- find_matches still selects on needs/offers overlap,
+    # so two organizations that care about the same cause but have nothing to
+    # exchange are still not a match, which is the same line the rest of this
+    # file draws.
+    shared_focus = _overlap(me.focus_areas, them.focus_areas)
+    if shared_focus:
+        score += min(SHARED_FOCUS * len(shared_focus), MAX_FOCUS_BONUS)
+        labels = focus_labels_for(shared_focus)
+        reasons.append("You both work on " + _join(labels))
+
     return min(score, MAX_SCORE), reasons, {
         "they_give": they_give,
         "they_give_labels": labels_for(they_give),
         "i_give": i_give,
         "i_give_labels": labels_for(i_give),
         "mutual": mutual,
+        "shared_focus": shared_focus,
+        "shared_focus_labels": focus_labels_for(shared_focus),
     }
 
 

@@ -890,3 +890,23 @@ body {
     animation: none;
   }
 }
+
+/* --- Focus areas --------------------------------------------------------- */
+/* A flat picker, unlike the needs/offers ones: the focus vocabulary has no
+   groups, so there are no headings to lay out around. */
+.focus-intro {
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--text-light, #6c757d);
+    margin: 0.35rem 0 0.75rem;
+}
+
+.focus-picker {
+    max-height: none;
+}
+
+.focus-picker .category-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}

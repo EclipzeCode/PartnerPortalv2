@@ -128,6 +128,16 @@
                             </span>
                         </label>
                     </div>
+                    <div class="form-group checkbox-row">
+                        <label class="checkbox-label" for="sharedFocusInput">
+                            <input type="checkbox" id="sharedFocusInput">
+                            <span>
+                                <strong>Shared focus areas only</strong>
+                                <em>Organizations working on at least one of the
+                                same things you do</em>
+                            </span>
+                        </label>
+                    </div>
                     <div class="form-actions">
                         <button type="submit" class="btn-primary">Apply</button>
                         <button type="button" id="clearFiltersBtn" class="btn-ghost">Clear</button>
@@ -175,6 +185,14 @@
                             <h4><i class='bx bx-up-arrow-alt'></i> They are looking for</h4>
                             <ul id="partnerDetailNeeds"></ul>
                         </div>
+                    </div>
+
+                    <!-- Filled by ppsearch.js; hidden when this organization
+                         has listed nothing it works on. Shared causes are
+                         marked, the rest shown plainly. -->
+                    <div class="detail-focus hidden" id="detailFocusBlock">
+                        <h4><i class='bx bx-heart'></i> What they work on</h4>
+                        <div class="detail-focus-chips" id="partnerDetailFocus"></div>
                     </div>
 
                     <div class="detail-contact">

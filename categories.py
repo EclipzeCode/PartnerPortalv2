@@ -70,6 +70,45 @@ CATEGORY_LABELS = {
 
 VALID_CATEGORIES = frozenset(CATEGORY_LABELS)
 
+# What an organization works on, as opposed to what it needs or offers.
+#
+# A separate vocabulary from CATEGORY_GROUPS on purpose. Needs and offers are
+# two sides of one exchange and are drawn from the same list, which is what
+# makes an overlap between them meaningful. A focus area is neither -- "we
+# work on food security" is not something anyone trades, it is who the
+# organization is -- so putting it in that list would let it be picked as a
+# need or an offer and quietly corrupt matching.
+#
+# Deliberately causes rather than credentials. Nothing here is verified, and
+# nothing here is scored: these say what an organization works on, and the
+# only thing done with them is showing two organizations where they overlap.
+# Counting them into a rating would turn a list of self-declared ticks into
+# something that reads as a measure of how much good a group actually does,
+# which is a claim this data cannot support.
+FOCUS_AREAS = [
+    ("environment_climate", "Environment & climate"),
+    ("food_security", "Food security & hunger"),
+    ("housing_homelessness", "Housing & homelessness"),
+    ("education_youth", "Education & youth"),
+    ("health_wellbeing", "Health & wellbeing"),
+    ("mental_health", "Mental health"),
+    ("racial_equity", "Racial equity"),
+    ("disability_inclusion", "Disability & accessibility"),
+    ("gender_equality", "Gender equality"),
+    ("lgbtq_inclusion", "LGBTQ+ inclusion"),
+    ("immigrants_refugees", "Immigrants & refugees"),
+    ("seniors_aging", "Seniors & aging"),
+    ("veterans", "Veterans & military families"),
+    ("arts_culture", "Arts & culture"),
+    ("animal_welfare", "Animal welfare"),
+    ("economic_opportunity", "Jobs & economic opportunity"),
+    ("civic_engagement", "Civic engagement"),
+    ("digital_inclusion", "Digital inclusion"),
+]
+
+FOCUS_AREA_LABELS = dict(FOCUS_AREAS)
+VALID_FOCUS_AREAS = frozenset(FOCUS_AREA_LABELS)
+
 # How long a proposed partnership is meant to run. Slugs are stored; labels are
 # display-only, same rule as categories.
 TIMELINE_OPTIONS = [
@@ -115,6 +154,17 @@ def clean_categories(values):
     return seen
 
 
+def clean_focus_areas(values):
+    """Same filtering as clean_categories, against the focus vocabulary."""
+    if not isinstance(values, (list, tuple)):
+        return []
+    seen = []
+    for value in values:
+        if isinstance(value, str) and value in VALID_FOCUS_AREAS and value not in seen:
+            seen.append(value)
+    return seen
+
+
 def label_for(slug):
     """Display label for a slug, falling back to the slug itself."""
     return CATEGORY_LABELS.get(slug, slug)
@@ -122,3 +172,11 @@ def label_for(slug):
 
 def labels_for(slugs):
     return [label_for(s) for s in slugs or []]
+
+
+def focus_label_for(slug):
+    return FOCUS_AREA_LABELS.get(slug, slug)
+
+
+def focus_labels_for(slugs):
+    return [focus_label_for(s) for s in slugs or []]

@@ -26,8 +26,8 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from categories import (
-    CATEGORY_GROUPS, ORGANIZATION_TYPES, TIMELINE_OPTIONS, VALID_TIMELINES,
-    clean_categories,
+    CATEGORY_GROUPS, FOCUS_AREAS, ORGANIZATION_TYPES, TIMELINE_OPTIONS,
+    VALID_TIMELINES, clean_categories, clean_focus_areas,
 )
 from db import SessionLocal
 from links import LinkError, parse_links
@@ -429,6 +429,12 @@ def get_categories():
         "organization_types": ORGANIZATION_TYPES,
         "timelines": [
             {"slug": slug, "label": label} for slug, label in TIMELINE_OPTIONS
+        ],
+        # A separate list from `groups`, not a sixth group in it: these are
+        # what an organization works on, never something it needs or offers,
+        # and merging them would let one be picked as either.
+        "focus_areas": [
+            {"slug": slug, "label": label} for slug, label in FOCUS_AREAS
         ],
     })
 
@@ -1033,6 +1039,10 @@ def save_onboarding(org, db):
     location = (data.get("location") or "").strip()
     needs = clean_categories(data.get("needs"))
     offers = clean_categories(data.get("offers"))
+    # Optional, unlike needs and offers: an organization that would rather not
+    # categorise what it works on still gets matched on the exchange, which is
+    # what the score is actually built from.
+    focus_areas = clean_focus_areas(data.get("focus_areas"))
 
     # Mirrors the minimums the onboarding form enforces. A single character
     # passes a presence check while telling a prospective partner nothing, and
@@ -1074,6 +1084,7 @@ def save_onboarding(org, db):
     org.remote_friendly = bool(data.get("remote_friendly"))
     org.needs = needs
     org.offers = offers
+    org.focus_areas = focus_areas
     org.needs_note = (data.get("needs_note") or "").strip() or None
     org.offers_note = (data.get("offers_note") or "").strip() or None
     org.partnership_goals = (data.get("partnership_goals") or "").strip() or None

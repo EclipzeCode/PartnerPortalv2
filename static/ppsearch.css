@@ -1666,3 +1666,55 @@ button {
     border-color: var(--primary, #4361ee);
     background: rgba(67, 97, 238, 0.08);
 }
+
+/* --- Focus areas --------------------------------------------------------- */
+/* What an organization works on. Shared ones are marked, because the overlap
+   is the reason this block is worth reading; the rest stay visible so the
+   list is their profile and not just the flattering half. */
+.detail-focus {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #eef0f6;
+}
+
+.detail-focus h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.detail-focus h4 i {
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.detail-focus-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.detail-focus-chips span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 62.4375rem;
+    background: #f1f3f9;
+    color: var(--text-light, #6c757d);
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+.detail-focus-chips span.shared {
+    background: rgba(67, 97, 238, 0.12);
+    color: var(--primary, #4361ee);
+    font-weight: 600;
+}
+
+.detail-focus-chips span.shared i {
+    font-size: 0.95rem;
+}

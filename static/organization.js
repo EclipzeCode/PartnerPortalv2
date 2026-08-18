@@ -178,6 +178,16 @@
             ? `<p class="org-bio">${esc(org.description)}</p>`
             : ''}
 
+        ${(org.focus_area_labels || []).length
+            ? `<section class="org-focus">
+                   <h2>What they work on</h2>
+                   <div class="org-focus-chips">${
+                       org.focus_area_labels
+                           .map((l) => `<span>${esc(l)}</span>`).join('')
+                   }</div>
+               </section>`
+            : ''}
+
         <div class="org-exchange">
             <section class="org-side">
                 <h2><i class='bx bx-up-arrow-alt'></i> What they offer</h2>

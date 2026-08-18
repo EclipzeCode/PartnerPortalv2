@@ -27,6 +27,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let displayed = [];
     let currentPage = 1;
     let mutualOnly = false;
+    // Applied in the browser rather than as another query parameter: the
+    // overlap is already in every match's detail, so this is a filter over
+    // data the page holds, not a different question for the server.
+    let sharedFocusOnly = false;
 
     // --- Shortlist --------------------------------------------------------
     // Which organizations are saved, and (when the shortlist is being shown)
@@ -176,7 +180,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // No real matches yet, but seeded examples exist: show those instead
         // of an empty page. They are visibly flagged and cannot be proposed to.
         showingExamples = allMatches.length === 0 && exampleMatches.length > 0;
-        const source = showingExamples ? exampleMatches : allMatches;
+        let source = showingExamples ? exampleMatches : allMatches;
+
+        // Only the match list. The shortlist is what someone chose to keep,
+        // and quietly hiding part of it behind a search filter would be a
+        // different promise than the one that view makes.
+        if (sharedFocusOnly) {
+            source = source.filter(
+                (m) => ((m.match_detail || {}).shared_focus || []).length > 0,
+            );
+        }
 
         displayed = q
             ? source.filter((m) =>
@@ -209,11 +222,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                       'your profile changes and they stop matching.'
                     : 'No saved organizations match that search.';
             } else {
-                message = mutualOnly
-                    ? 'No two-way matches yet. Turn off the two-way filter to ' +
-                      'see one-directional matches.'
-                    : 'No matches yet. Adding more needs and offers to your ' +
-                      'profile widens the search.';
+                if (sharedFocusOnly) {
+                    message = 'No matches work on the same things you do. '
+                        + 'Clear the focus filter to see the rest, or add more '
+                        + 'focus areas to your profile.';
+                } else if (mutualOnly) {
+                    message = 'No two-way matches yet. Turn off the two-way '
+                        + 'filter to see one-directional matches.';
+                } else {
+                    message = 'No matches yet. Adding more needs and offers to '
+                        + 'your profile widens the search.';
+                }
             }
             partnersGrid.innerHTML = `<p class="empty-state">${esc(message)}</p>`;
             updatePagination(pages);
@@ -347,6 +366,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const badge = document.getElementById('partnerDetailMutual');
         if (badge) badge.classList.toggle('hidden', !detail.mutual);
+
+        // What they work on, with anything you also work on marked. The
+        // shared ones are the point -- the rest are shown so the list is
+        // their profile rather than only the part that flatters the match.
+        const focusBlock = document.getElementById('detailFocusBlock');
+        const focusChips = document.getElementById('partnerDetailFocus');
+        const focusLabels = m.focus_area_labels || [];
+        if (focusBlock && focusChips) {
+            focusBlock.classList.toggle('hidden', focusLabels.length === 0);
+            const sharedFocus = new Set(detail.shared_focus_labels || []);
+            focusChips.innerHTML = focusLabels.map((label) => `
+                <span class="${sharedFocus.has(label) ? 'shared' : ''}">${
+                    sharedFocus.has(label) ? "<i class='bx bx-check'></i> " : ''
+                }${esc(label)}</span>`).join('');
+        }
 
         // Examples cannot be proposed to (they have no owner), so the button is
         // hidden and a short note takes its place. Saving one leads nowhere
@@ -664,15 +698,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Filters --------------------------------------------------------
+    // One place that knows how many filters are on, so the count on the
+    // button cannot drift out of step with the checkboxes behind it.
+    function paintFilterButton() {
+        if (!filterBtn) return;
+        const active = [mutualOnly, sharedFocusOnly].filter(Boolean).length;
+        filterBtn.classList.toggle('has-filters', active > 0);
+        filterBtn.innerHTML = active
+            ? `<i class='bx bx-filter-alt'></i> Filters (${active})`
+            : `<i class='bx bx-filter-alt'></i> Filters`;
+    }
+
     if (filterForm) {
         filterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const box = document.getElementById('mutualOnlyInput');
+            const focusBox = document.getElementById('sharedFocusInput');
             mutualOnly = Boolean(box && box.checked);
-            filterBtn.classList.toggle('has-filters', mutualOnly);
-            filterBtn.innerHTML = mutualOnly
-                ? `<i class='bx bx-filter-alt'></i> Filters (1)`
-                : `<i class='bx bx-filter-alt'></i> Filters`;
+            sharedFocusOnly = Boolean(focusBox && focusBox.checked);
+            paintFilterButton();
             closeModal(filterModal);
             await loadMatches();
         });
@@ -682,8 +726,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearFiltersBtn.addEventListener('click', async () => {
             filterForm.reset();
             mutualOnly = false;
-            filterBtn.classList.remove('has-filters');
-            filterBtn.innerHTML = `<i class='bx bx-filter-alt'></i> Filters`;
+            sharedFocusOnly = false;
+            paintFilterButton();
             closeModal(filterModal);
             await loadMatches();
         });
@@ -701,10 +745,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         mutualOnly = true;
         const box = document.getElementById('mutualOnlyInput');
         if (box) box.checked = true;
-        if (filterBtn) {
-            filterBtn.classList.add('has-filters');
-            filterBtn.innerHTML = `<i class='bx bx-filter-alt'></i> Filters (1)`;
-        }
+        paintFilterButton();
     }
 
     await loadMatches();

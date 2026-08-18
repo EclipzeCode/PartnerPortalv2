@@ -54,7 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Selected category slugs. These, not the free-text notes, are what matching
   // actually runs on.
-  const selected = { needs: new Set(), offers: new Set() };
+  const selected = { needs: new Set(), offers: new Set(), focus: new Set() };
+
+  // Its own picker, not a third entry in `pickers` above: that loop renders
+  // the grouped needs/offers vocabulary, and focus areas are a flat list from
+  // a separate one. Sharing the loop would mean pretending they are the same
+  // kind of thing.
+  const focusPicker = document.getElementById('focusPicker');
 
   const trackedKeys = ['organizationName', 'organizationType', 'location', 'description'];
 
@@ -185,6 +191,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateProgress();
       });
     });
+
+    // Focus areas: one flat list, no group headings, because the vocabulary
+    // has none -- these are causes, not a taxonomy of things to trade.
+    if (focusPicker) {
+      focusPicker.innerHTML = '';
+      const list = document.createElement('div');
+      list.className = 'category-options';
+      (data.focus_areas || []).forEach((area) => {
+        const id = `focus-${area.slug}`;
+        const label = document.createElement('label');
+        label.className = 'category-chip';
+        label.setAttribute('for', id);
+        label.innerHTML = `
+          <input type="checkbox" id="${id}" value="${window.escapeHtml(area.slug)}">
+          <span>${window.escapeHtml(area.label)}</span>
+        `;
+        list.appendChild(label);
+      });
+      focusPicker.appendChild(list);
+
+      focusPicker.addEventListener('change', (e) => {
+        const box = e.target.closest('input[type="checkbox"]');
+        if (!box) return;
+        if (box.checked) selected.focus.add(box.value);
+        else selected.focus.delete(box.value);
+        box.closest('.category-chip').classList.toggle('checked', box.checked);
+        updateProgress();
+      });
+    }
   }
 
   // ---- Prefill ----------------------------------------------------------
@@ -238,7 +273,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     fields.linksPublic.checked = Boolean(me.links_public);
     updateLinksVisibilityNote();
 
-    [['needs', me.needs], ['offers', me.offers]].forEach(([side, slugs]) => {
+    [['needs', me.needs], ['offers', me.offers], ['focus', me.focus_areas]]
+      .forEach(([side, slugs]) => {
       (slugs || []).forEach((slug) => {
         const box = document.getElementById(`${side}-${slug}`);
         if (box) {
@@ -393,7 +429,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    ['needs', 'offers'].forEach((side) => {
+    ['needs', 'offers', 'focus'].forEach((side) => {
       if (selected[side].size > 0) return;
       const picker = pickers[side];
       picker.classList.add('input-error');
@@ -432,6 +468,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       remote_friendly: fields.remoteFriendly.checked,
       needs: [...selected.needs],
       offers: [...selected.offers],
+      focus_areas: [...selected.focus],
       needs_note: fields.needsNote.value.trim(),
       offers_note: fields.offersNote.value.trim(),
       partnership_goals: fields.partnershipGoals.value.trim(),
@@ -494,7 +531,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else label = '100% — ready to match';
     strengthLabel.textContent = label;
 
-    ['needs', 'offers'].forEach((side) => {
+    ['needs', 'offers', 'focus'].forEach((side) => {
       const counter = document.querySelector(`.picker-count[data-for="${side}"]`);
       if (!counter) return;
       const n = selected[side].size;

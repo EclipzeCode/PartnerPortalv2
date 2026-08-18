@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from categories import TIMELINE_LABELS, labels_for
+from categories import TIMELINE_LABELS, focus_labels_for, labels_for
 
 
 class Base(DeclarativeBase):
@@ -58,6 +58,16 @@ class Organization(Base):
     offers: Mapped[list[str]] = mapped_column(
         ARRAY(String), nullable=False, server_default="{}"
     )
+    # What this organization works on. Not part of the needs/offers exchange
+    # -- a cause is not something anyone trades -- so it has its own
+    # vocabulary (categories.FOCUS_AREAS) and its own column. Matching reads
+    # it to show two organizations where their work overlaps; it never widens
+    # who is considered a match, because shared concerns are not by
+    # themselves a partnership.
+    focus_areas: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, server_default="{}"
+    )
+
     # Free text kept alongside the structured lists -- useful context for a
     # human reading a profile, never used for matching.
     needs_note: Mapped[str | None] = mapped_column(Text)
@@ -192,6 +202,8 @@ class Organization(Base):
             "offers": list(self.offers or []),
             "needs_labels": labels_for(self.needs),
             "offers_labels": labels_for(self.offers),
+            "focus_areas": list(self.focus_areas or []),
+            "focus_area_labels": focus_labels_for(self.focus_areas),
             "needs_note": self.needs_note,
             "offers_note": self.offers_note,
             "partnership_goals": self.partnership_goals,
@@ -240,6 +252,8 @@ class Organization(Base):
             "description": self.description,
             "needs_labels": labels_for(self.needs),
             "offers_labels": labels_for(self.offers),
+            "focus_areas": list(self.focus_areas or []),
+            "focus_area_labels": focus_labels_for(self.focus_areas),
             "needs_note": self.needs_note,
             "offers_note": self.offers_note,
             "partnership_goals": self.partnership_goals,
