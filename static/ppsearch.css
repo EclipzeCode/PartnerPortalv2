@@ -1671,8 +1671,13 @@ button {
 /* What an organization works on. Shared ones are marked, because the overlap
    is the reason this block is worth reading; the rest stay visible so the
    list is their profile and not just the flattering half. */
+/* Bottom margin matters as much as the top: whatever follows in the scroll
+   region -- the note block, or the contact box -- sets no margin-top of its
+   own, so without this the chips ran straight into it. 1.25rem matches the
+   gap .detail-exchange keeps above them. */
 .detail-focus {
     margin-top: 1.5rem;
+    margin-bottom: 1.25rem;
     padding-top: 1.25rem;
     border-top: 1px solid #eef0f6;
 }
@@ -1829,27 +1834,44 @@ button {
     padding-left: 1.1rem;
 }
 
-/* Only drawn when something is actually cut off -- see markTruncated(). */
+/* Only drawn when something is actually cut off -- see markTruncated().
+ *
+ * Two layers rather than one. The label sits on its own fully opaque strip
+ * along the bottom, so no clipped line can ever show through it -- reading
+ * it over a half-faded sentence was the problem with drawing it straight
+ * onto the gradient. The fade then sits directly above that strip and ends
+ * at the same colour, so the two meet without a visible seam.
+ *
+ * Both ignore pointer events: the card underneath is the click target, and
+ * the label is describing that, not offering a second one. */
 .match-reasons.is-truncated::after {
     content: '';
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 0;
-    height: 2.5rem;
-    background: linear-gradient(to bottom, rgba(240, 244, 255, 0), #f0f4ff 85%);
+    bottom: 1.35rem;
+    height: 2.25rem;
+    background: linear-gradient(to bottom, rgba(240, 244, 255, 0), #f0f4ff);
     pointer-events: none;
 }
 
 .match-reasons.is-truncated::before {
     content: 'Click for the full list';
     position: absolute;
-    right: 0.5rem;
-    bottom: 0.35rem;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 1;
+    height: 1.35rem;
+    padding-right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    background: #f0f4ff;
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--primary);
+    pointer-events: none;
 }
 
 /* --- Show all ------------------------------------------------------------ */
@@ -1909,8 +1931,11 @@ button {
 }
 
 /* --- Note in the detail dialog ------------------------------------------- */
+/* Same reasoning as .detail-focus above: .detail-contact follows this and
+   sets no margin-top. */
 .detail-note {
     margin-top: 1.5rem;
+    margin-bottom: 1.25rem;
     padding-top: 1.25rem;
     border-top: 1px solid #eef0f6;
 }
