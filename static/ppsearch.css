@@ -1880,3 +1880,91 @@ button {
 .btn-show-all[hidden] {
     display: none;
 }
+
+/* --- Shortlist notes ----------------------------------------------------- */
+/* Shown on cards in the saved view only, and then on every card in it, so
+   the fixed heights that keep a row uniform still hold. Two lines, clipped
+   like the rest -- the whole note is in the dialog the card opens. */
+.card-note {
+    --line-note: 1.28rem;   /* 0.8rem x 1.6 */
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed #e0e4f0;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--text);
+    height: calc(var(--line-note) * 2 + 1.2rem);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+/* Still occupies its slot when there is nothing in it, so a card with a note
+   and one without stay the same height. */
+.card-note.empty {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* --- Note in the detail dialog ------------------------------------------- */
+.detail-note {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #eef0f6;
+}
+
+.detail-note h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.detail-note h4 i {
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.detail-note-hint {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 0.6rem;
+}
+
+.detail-note textarea {
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid #e0e4f0;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text);
+    resize: vertical;
+}
+
+.detail-note textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.detail-note-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+}
+
+.detail-note-status {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-light);
+}
+
+.detail-note-status.ok { color: #2a9d5c; }
+.detail-note-status.error { color: #e63946; }

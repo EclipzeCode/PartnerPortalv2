@@ -67,8 +67,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const detailSaveBtn = document.getElementById('detailSaveBtn');
     const detailSaveLabel = document.getElementById('detailSaveLabel');
 
+    const detailNoteBlock = document.getElementById('detailNoteBlock');
+    const detailNote = document.getElementById('detailNote');
+    const detailNoteSave = document.getElementById('detailNoteSave');
+    const detailNoteStatus = document.getElementById('detailNoteStatus');
+
     let savedIds = new Set();
     let savedList = [];
+    // id -> note, so a card in the shortlist and the dialog behind it read
+    // the same text without either having to re-fetch.
+    let savedNotes = new Map();
     let viewMode = 'matches';   // 'matches' | 'saved'
 
     // Adding a partner by hand is gone: organizations create themselves by
@@ -140,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await window.api('/api/saved');
             savedList = data.saved || [];
             savedIds = new Set(savedList.map((s) => s.id));
+            savedNotes = new Map(savedList.map((s) => [s.id, s.note || '']));
         } catch (error) {
             partnersGrid.removeAttribute('aria-busy');
             partnersGrid.innerHTML =
@@ -294,6 +303,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <i class='bx ${isSaved ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
                 </button>`;
 
+            // Only in the shortlist, and then on every card in it, so the
+            // fixed heights stay consistent within the view. Adding it to
+            // matches too would spend a slot on something none of them have.
+            const noteSlot = viewMode === 'saved'
+                ? `<div class="card-note${savedNotes.get(m.id) ? '' : ' empty'}">${
+                      savedNotes.get(m.id)
+                          ? esc(savedNotes.get(m.id))
+                          : 'No note yet — open this card to add one.'
+                  }</div>`
+                : '';
+
             // Every region below is given a fixed height in CSS, and the
             // badge gets a slot whether or not there is one to put in it.
             // Without that, a card with no badge or a one-line name pulled
@@ -313,6 +333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <strong>Why match:</strong>
                         <ul>${reasons}</ul>
                     </div>
+                    ${noteSlot}
                 </div>
             `;
             partnersGrid.appendChild(card);
@@ -455,6 +476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             detailSaveBtn.classList.toggle('hidden', Boolean(m.is_demo));
             paintDetailSave(savedIds.has(m.id));
         }
+        paintDetailNote(m.id);
 
         // The shareable profile, for sending to someone without an account.
         const profileLink = document.getElementById('viewProfileBtn');
@@ -463,6 +485,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openModal(detailModal);
+    }
+
+    // The note only has somewhere to live once the organization is saved,
+    // so the whole block follows that state rather than sitting there
+    // inert.
+    function paintDetailNote(id) {
+        if (!detailNoteBlock) return;
+        const isSaved = savedIds.has(id);
+        detailNoteBlock.classList.toggle('hidden', !isSaved);
+        if (detailNoteStatus) detailNoteStatus.textContent = '';
+        if (isSaved && detailNote) detailNote.value = savedNotes.get(id) || '';
     }
 
     function paintDetailSave(isSaved) {
@@ -484,8 +517,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             detailSaveBtn.disabled = false;
             if (!ok) return;
             paintDetailSave(wantSaved);
+            paintDetailNote(id);
             // The card behind the dialog carries the same state.
             applyView();
+        });
+    }
+
+    if (detailNoteSave) {
+        detailNoteSave.addEventListener('click', async () => {
+            if (!detailTarget) return;
+            const id = detailTarget.id;
+            const note = detailNote.value.trim();
+            detailNoteSave.disabled = true;
+            detailNoteStatus.textContent = 'Saving…';
+            detailNoteStatus.className = 'detail-note-status';
+            try {
+                const data = await window.api(
+                    `/api/saved/${encodeURIComponent(id)}`,
+                    { method: 'PATCH', body: { note } },
+                );
+                savedNotes.set(id, data.note || '');
+                // The shortlist entry carries the note too, so the card
+                // behind this dialog does not go stale.
+                const entry = savedList.find((sv) => sv.id === id);
+                if (entry) entry.note = data.note || '';
+                detailNoteStatus.textContent = 'Saved.';
+                detailNoteStatus.className = 'detail-note-status ok';
+                applyView();
+            } catch (error) {
+                detailNoteStatus.textContent =
+                    error.message || 'Could not save that note.';
+                detailNoteStatus.className = 'detail-note-status error';
+            } finally {
+                detailNoteSave.disabled = false;
+            }
         });
     }
 
@@ -525,6 +590,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Drop it from the shortlist too, so the list this is
                 // rendering from does not still contain what was just removed.
                 savedList = savedList.filter((s) => s.id !== id);
+                // The server drops the note with the row; this keeps the
+                // page from showing one for something no longer saved.
+                savedNotes.delete(id);
             }
             updateSavedCount();
             return true;

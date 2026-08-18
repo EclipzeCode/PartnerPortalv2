@@ -572,6 +572,12 @@ class SavedLead(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    # Why this one was worth keeping. Private to the org that wrote it and
+    # never shown to the organization it is about -- the same rule the row
+    # itself follows. A shortlist that cannot say what it is for is a list of
+    # names someone has to remember the reasons for.
+    note: Mapped[str | None] = mapped_column(Text)
+
     saved_organization = relationship(
         "Organization", foreign_keys=[saved_organization_id], lazy="joined"
     )

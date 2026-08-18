@@ -1266,6 +1266,7 @@ def list_saved(org, db):
             "reasons": reasons,
             "match_detail": detail,
             "saved_at": row.created_at.isoformat() if row.created_at else None,
+            "note": row.note or "",
         })
         saved.append(data)
 
@@ -1310,6 +1311,39 @@ def create_saved(org, db):
             db.rollback()
 
     return jsonify({"message": "Saved", "organization_id": target_id}), 201
+
+
+# Length cap on a shortlist note. Generous enough for the reason someone
+# saved an organization, short enough that this stays a note rather than a
+# document nobody will reread.
+MAX_SAVED_NOTE = 500
+
+
+@app.route("/api/saved/<int:org_id>", methods=["PATCH"])
+@login_required
+def update_saved(org, db, org_id):
+    """Set or clear the private note on a shortlisted organization."""
+    row = db.query(SavedLead).filter(
+        SavedLead.organization_id == org.id,
+        SavedLead.saved_organization_id == org_id,
+    ).one_or_none()
+    # Deliberately not created here: a note is something written about a
+    # shortlist entry, so saving has to have happened first. Otherwise a
+    # stale tab could resurrect a row that was just removed.
+    if row is None:
+        return jsonify({"error": "That organization is not on your saved list."}), 404
+
+    data = request.get_json(silent=True) or {}
+    note = (data.get("note") or "").strip()
+    if len(note) > MAX_SAVED_NOTE:
+        return jsonify({
+            "error": f"Keep the note under {MAX_SAVED_NOTE} characters.",
+        }), 400
+
+    # Empty means cleared, not an empty string sitting in the column.
+    row.note = note or None
+    db.commit()
+    return jsonify({"message": "Note saved", "note": row.note or ""})
 
 
 @app.route("/api/saved/<int:org_id>", methods=["DELETE"])

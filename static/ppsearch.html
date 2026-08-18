@@ -200,6 +200,23 @@
                         <div class="detail-focus-chips" id="partnerDetailFocus"></div>
                     </div>
 
+                    <!-- Only shown once this organization is on the
+                         shortlist: a note about something you have not kept
+                         has nowhere to be stored. ppsearch.js reveals it. -->
+                    <div class="detail-note hidden" id="detailNoteBlock">
+                        <h4><i class='bx bx-notepad'></i> Your note</h4>
+                        <p class="detail-note-hint">
+                            Private to you. The organization you saved never
+                            sees this.
+                        </p>
+                        <textarea id="detailNote" rows="3" maxlength="500"
+                                  placeholder="Why is this one worth coming back to?"></textarea>
+                        <div class="detail-note-actions">
+                            <button type="button" class="btn-ghost" id="detailNoteSave">Save note</button>
+                            <span class="detail-note-status" id="detailNoteStatus" role="status"></span>
+                        </div>
+                    </div>
+
                     <div class="detail-contact">
                         <h4>Contact</h4>
                         <p><i class='bx bx-envelope'></i> <span id="partnerDetailEmail"></span></p>
