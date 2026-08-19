@@ -81,9 +81,13 @@ pytest
 
 They cover the rules that would otherwise break quietly: the matching
 invariants (a two-way match outranks a one-sided one; shared causes rank but
-never create a match), what one organization can and cannot learn about
-another, which rows it may act on, how a profile view is counted, and what
-the server does with input it does not recognise.
+never create a match), the proposal lifecycle (who may accept, decline or
+withdraw, and what a settled proposal refuses), what one organization can and
+cannot learn about another, which rows it may act on, how a profile view is
+counted, and what the server does with input it does not recognise.
+
+Outbound email is stubbed for the whole suite, so a test that creates a
+proposal records what would have been sent instead of posting it to Resend.
 
 The suite runs against the database in `DATABASE_URL` and leaves nothing
 behind: each test runs inside a transaction that is rolled back when it

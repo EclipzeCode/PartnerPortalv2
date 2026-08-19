@@ -32,6 +32,39 @@ from models import Organization  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def no_outbound_email(monkeypatch):
+    """Stop the suite sending real mail, and record what it would have sent.
+
+    RESEND_API_KEY is set in .env and notifications.py reads it fresh on every
+    call, so an unpatched test that creates a proposal really does post to
+    Resend -- addressed to a pytest-*@example.com account that does not exist.
+    Patching the names app.py imported is enough to keep every send inside
+    the process.
+
+    Autouse rather than opt-in: forgetting it on one test is all it takes,
+    and the failure is invisible from here.
+    """
+    sent = []
+
+    def _record(kind):
+        def _fn(*args, **kwargs):
+            sent.append((kind, args, kwargs))
+        return _fn
+
+    for name in ("notify_proposal_created", "notify_proposal_responded",
+                 "notify_email_verification", "notify_password_changed",
+                 "notify_password_reset"):
+        monkeypatch.setattr(app_module, name, _record(name))
+    return sent
+
+
+@pytest.fixture
+def outbox(no_outbound_email):
+    """What the app tried to send during this test."""
+    return no_outbound_email
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limits():
     """Clear the in-memory rate limiter between tests.
 
