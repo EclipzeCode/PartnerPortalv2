@@ -95,6 +95,13 @@ finishes, and everything it creates is named `pytest-*` so anything that did
 escape is obvious. The models use Postgres `ARRAY` columns, so there is no
 SQLite mode to fall back to.
 
+Locally that means it points at your own Neon database, and most of its
+runtime is network round trips. CI does not: `.github/workflows/tests.yml`
+runs Postgres in the runner, builds the schema from zero with
+`alembic upgrade head`, and runs the same suite against that -- which also
+means a migration that only applies to an already-migrated database fails
+there rather than on someone's first deploy.
+
 ## Project layout
 
 | File | Purpose |

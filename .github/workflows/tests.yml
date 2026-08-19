@@ -1,0 +1,68 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    # Postgres in the runner rather than the project's own Neon database.
+    # The suite isolates by transaction rollback, which is safe but still
+    # points at whatever DATABASE_URL names -- pointing CI at a shared
+    # database would mean every branch's tests running against the data the
+    # app is using. A throwaway container also removes the network round
+    # trips that are almost all of the suite's runtime locally.
+    #
+    # 18 matches what the Neon project runs, so the schema these migrations
+    # build here is the schema they build there.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: partnerportal_test
+        ports:
+          - 5432:5432
+        # Without this the first migration can start before Postgres is
+        # accepting connections.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/partnerportal_test
+      # app.py generates a throwaway key when this is unset and warns about
+      # it; setting one keeps the log clean and the sessions stable across
+      # the run.
+      SECRET_KEY: github-actions-test-key
+      # Deliberately absent: RESEND_API_KEY. The suite stubs outbound email
+      # anyway, and an unset key means notifications.py falls back to writing
+      # to stderr even if something slips past the stub.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches render.yaml's PYTHON_VERSION, so CI is not testing a
+          # different interpreter than production runs.
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Build the schema
+        # From zero, exactly as a new deployment does -- which also means a
+        # migration that only works against an already-migrated database
+        # fails here rather than on someone's first deploy.
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest

@@ -74,22 +74,39 @@ def test_views_of_an_unfinished_profile_are_not_recorded(client, login, make_org
     assert _views(client) == 0
 
 
-def test_the_stored_row_holds_no_address(session, client, login, make_org):
-    """viewer_key is a salted digest kept for de-duplication, not a record of
-    who visited."""
+def test_the_stored_row_identifies_no_one(session, client, login, make_org):
+    """viewer_key exists so a reload can be told from a second visit, and for
+    nothing else.
+
+    An earlier version of this test asserted that the viewer's id did not
+    appear as a substring of the digest, which is not a property of anything:
+    a two-digit id turns up in a 64-character hex string about half the time.
+    It passed against a database whose ids were three digits long and failed
+    the first time it met a freshly migrated one.
+    """
+    import hashlib
+
     from models import ProfileView
 
     me = make_org(needs=["web_development"], offers=["grant_writing"])
     viewer = make_org(needs=["grant_writing"], offers=["web_development"])
+    other = make_org(needs=["grant_writing"], offers=["web_development"])
 
-    login(viewer)
-    client.get(f"/api/organizations/{me.id}/public")
+    for org in (viewer, other):
+        login(org)
+        client.get(f"/api/organizations/{me.id}/public")
+        client.post("/logout")
 
-    rows = session.query(ProfileView).filter(
-        ProfileView.organization_id == me.id).all()
-    assert len(rows) == 1
-    key = rows[0].viewer_key
-    assert len(key) == 64 and all(c in "0123456789abcdef" for c in key)
-    # Nothing recoverable about the viewer is sitting in the column.
-    assert str(viewer.id) not in key
-    assert "127.0.0.1" not in key
+    keys = [row.viewer_key for row in session.query(ProfileView).filter(
+        ProfileView.organization_id == me.id).all()]
+
+    assert len(keys) == 2
+    for key in keys:
+        assert len(key) == 64 and all(c in "0123456789abcdef" for c in key)
+    # Two visitors, two keys: enough to count them separately, which is all
+    # the column is for.
+    assert keys[0] != keys[1]
+    # Salted with the app secret, so holding the table is not enough to
+    # rehash candidate organization ids and recover who looked.
+    unsalted = hashlib.sha256(f"org:{viewer.id}".encode()).hexdigest()
+    assert unsalted not in keys
