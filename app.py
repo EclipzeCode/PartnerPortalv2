@@ -2582,9 +2582,15 @@ def list_proposals(org, db):
 def _annotate_message_counts(db, org, rows, payloads):
     """Add message and unread counts to a list of serialised proposals.
 
-    Two grouped queries for the whole list rather than two per proposal --
-    this runs on every load of the proposals page and the dashboard, and a
-    per-row count is what turns a page of twelve into twenty-five queries.
+    Two grouped queries for the whole list, whatever its length. This runs on
+    every load of the proposals page and of the dashboard, and counting per
+    row is what turns a page of a dozen proposals into twenty-five round
+    trips to a database that is a network hop away.
+
+    Unread is per viewer and the marker to compare against depends on which
+    side of each proposal this org is on, which is why it joins partnerships
+    and asks both cases in one WHERE rather than looping. It is the same
+    condition _unread_message_count uses, grouped instead of totalled.
     """
     ids = [row.id for row in rows]
     if not ids:
@@ -2596,18 +2602,24 @@ def _annotate_message_counts(db, org, rows, payloads):
         .group_by(Message.partnership_id).all()
     )
 
-    # Unread is per viewer, so the read marker to compare against depends on
-    # which side of each proposal this org is on.
-    unread = {}
-    for row in rows:
-        since = row.last_read_at_for(org.id)
-        query = db.query(func.count(Message.id)).filter(
-            Message.partnership_id == row.id,
+    unread = dict(
+        db.query(Message.partnership_id, func.count(Message.id))
+        .join(Partnership, Message.partnership_id == Partnership.id)
+        .filter(
+            Message.partnership_id.in_(ids),
+            or_(
+                and_(Partnership.proposer_id == org.id,
+                     or_(Partnership.proposer_last_read_at.is_(None),
+                         Message.created_at > Partnership.proposer_last_read_at)),
+                and_(Partnership.recipient_id == org.id,
+                     or_(Partnership.recipient_last_read_at.is_(None),
+                         Message.created_at > Partnership.recipient_last_read_at)),
+            ),
+            # Your own messages are not waiting on you.
             or_(Message.sender_id.is_(None), Message.sender_id != org.id),
         )
-        if since is not None:
-            query = query.filter(Message.created_at > since)
-        unread[row.id] = query.scalar() or 0
+        .group_by(Message.partnership_id).all()
+    )
 
     for payload in payloads:
         payload["message_count"] = totals.get(payload["id"], 0)

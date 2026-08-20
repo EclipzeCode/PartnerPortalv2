@@ -13,8 +13,6 @@ side hold the other in place by never answering.
 
 import pytest
 
-from models import Partnership
-
 PASSWORD = "Test1234!verify"
 
 
@@ -254,9 +252,8 @@ def test_a_declined_proposal_still_has_no_public_page(client, login, make_org):
 
     login(recipient)
     client.post(f"/api/proposals/{pid}/decline", json={})
-    from db import SessionLocal  # noqa: F401  (documents where tokens live)
-    # A declined proposal never had a token minted, so there is nothing to ask
-    # for -- which is the check that matters.
+    # A declined proposal never had a token minted, so there is nothing to
+    # ask for -- which is the check that matters.
     assert client.get(f"/api/proposals/{pid}").get_json()[
         "proposal"]["share_token"] is None
 

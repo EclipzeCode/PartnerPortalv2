@@ -10,8 +10,6 @@ meant to move: the login becomes an address they do not own, and the reset
 link goes to an inbox that does not exist.
 """
 
-from models import Organization
-
 PASSWORD = "Test1234!verify"
 NEW = "pytest-moved@example.com"
 

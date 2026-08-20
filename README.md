@@ -81,10 +81,25 @@ pytest
 
 They cover the rules that would otherwise break quietly: the matching
 invariants (a two-way match outranks a one-sided one; shared causes rank but
-never create a match), the proposal lifecycle (who may accept, decline or
-withdraw, and what a settled proposal refuses), what one organization can and
-cannot learn about another, which rows it may act on, how a profile view is
-counted, and what the server does with input it does not recognise.
+never create a match; two organizations with nothing to exchange score zero
+however much else they have in common), the proposal lifecycle (who may
+accept, decline, withdraw, complete or end one, and what a settled proposal
+refuses), what one organization can and cannot learn about another, which
+rows it may act on, how a profile view is counted, and what the server does
+with input it does not recognise.
+
+Several of them exist because the answer is a promise the product makes in
+prose. That neither side can be committed to something it never listed. That
+an accepted partnership outlives the other organization closing its account,
+and that the survivor's own pages still load when it does. That a delivery
+verdict and the reason a partnership ended stay between the two parties and
+never reach the public summary. That a message thread closes when the
+proposal does. That signup costs the same whether or not the address is
+taken.
+
+A few tests scope their assertions with a `pytest-` prefix rather than
+assuming an empty database: the suite runs against whatever `DATABASE_URL`
+names, and the directory endpoint deliberately returns everything.
 
 Outbound email is stubbed for the whole suite, so a test that creates a
 proposal records what would have been sent instead of posting it to Resend.
@@ -106,20 +121,30 @@ there rather than on someone's first deploy.
 
 | File | Purpose |
 | --- | --- |
-| `app.py` | Routes: auth, onboarding, matching, proposals, static frontend |
-| `models.py` | `Organization` and `Partnership` |
+| `app.py` | Routes: auth, onboarding, matching, directory, proposals, messages, static frontend |
+| `models.py` | `Organization`, `Partnership`, `Message`, `Event`, `SavedLead`, `ProfileView` |
 | `matching.py` | Bidirectional scoring and the reasons shown to users |
-| `categories.py` | The shared need/offer vocabulary and timeline options |
+| `categories.py` | The shared need/offer vocabulary, focus areas and timelines |
+| `links.py` | Normalising and validating the four profile links |
+| `moderation.py` | Blocking inappropriate organization names |
+| `notifications.py` | Transactional email, and the dry-run fallback without a key |
 | `db.py` | Engine and session setup |
 | `seed.py` | Demo organizations |
 | `migrations/` | Alembic migrations — the schema's source of truth |
 | `static/` | The entire frontend — HTML, CSS, JS |
-| `tests/` | pytest suite — matching, privacy, ownership, validation |
+| `tests/` | pytest suite — see below |
 | `render.yaml` | Deployment blueprint |
 
-Pages, all under `static/`: `index.html` (landing), `onboarding.html`,
-`ppsearch.html` (matches), `proposals.html` (partnerships),
-`ppdashboard.html`, `partnership.html` (public agreement summary).
+Pages, all under `static/`: `index.html` (landing), `pplogin.html`,
+`onboarding.html`, `ppsearch.html` (matches, directory and shortlist),
+`ppdashboard.html` (dashboard, partnerships and messages), `settings.html`,
+`organization.html` (public profile), `partnership.html` (public agreement
+summary), and the four token landing pages — `verify-email.html`,
+`forgot-password.html`, `reset-password.html`, `confirm-email.html` — plus
+`404.html` and `500.html`.
+
+There is no `proposals.html`: `proposals.js` renders the partnerships list
+and the message threads inside `ppdashboard.html`.
 
 Flask serves `static/` at the site root, so `/ppsearch.html` maps to
 `static/ppsearch.html`. The frontend lives in its own directory rather than at
@@ -141,11 +166,32 @@ are recruiting, which they can claim later.
 
 ## Status
 
-Working: accounts and sessions, onboarding, bidirectional matching, partnership
-proposals with mutual confirmation, and public agreement summaries.
+Working: accounts and sessions (including changing the sign-in address, which
+only moves once a link sent to the new one is opened); onboarding;
+bidirectional matching; a browsable directory with server-side search,
+filters and paging; a private shortlist; public organization profiles;
+partnership proposals with mutual confirmation; the lifecycle after that --
+completing takes both sides, ending takes one, and each side records whether
+the other delivered; shareable agreement summaries whose link can be rotated
+or revoked; message threads on a proposal; meetings; and transactional email
+for all of it.
 
-Not built yet: in-app messaging, email notifications, and public organization
-profile pages.
+Two things are switched off rather than missing, both waiting on a verified
+sending domain:
+
+- `REQUIRE_EMAIL_VERIFICATION` is off. The gate is only fair once verification
+  mail reliably arrives; on Resend's sandbox sender it reaches nobody but the
+  account owner, so enforcing would stop signups rather than spam.
+- Signup still answers "that email is already registered". Hiding it means
+  answering a taken address exactly as a new one and mailing the existing
+  address to say somebody tried — which needs that same working channel. What
+  is in place meanwhile is in `app.py` under `MAX_EXISTENCE_DISCLOSURES`: both
+  answers cost the same hash and the same write, and one connection is told
+  twice an hour before the endpoint closes for every address.
+
+Not built: a block or report on message threads. Exposure is bounded while
+threads only exist on a proposal somebody sent you and close when it settles,
+but that stops being true if messaging is ever opened up to the directory.
 
 ## License
 

@@ -15,7 +15,6 @@ extra when it stops answering.
 import time
 
 import bcrypt
-import pytest
 
 import app as app_module
 from models import Organization
