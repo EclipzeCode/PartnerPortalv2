@@ -27,7 +27,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from categories import (
     CATEGORY_GROUPS, FOCUS_AREAS, ORGANIZATION_TYPES, TIMELINE_OPTIONS,
-    VALID_TIMELINES, clean_categories, clean_focus_areas,
+    VALID_TIMELINES, clean_categories, clean_focus_areas, labels_for,
 )
 from db import SessionLocal
 from links import LinkError, parse_links
@@ -37,8 +37,8 @@ from models import (
     Event, Organization, Partnership, ProfileView, SavedLead,
 )
 from notifications import (
-    notify_email_verification, notify_password_changed, notify_password_reset,
-    notify_proposal_created, notify_proposal_responded,
+    notify_contact_message, notify_email_verification, notify_password_changed,
+    notify_password_reset, notify_proposal_created, notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -73,6 +73,26 @@ if not os.environ.get("SECRET_KEY"):
         "a restart. Set SECRET_KEY in .env."
     )
 
+# Every link this app mails out -- verification, password reset, "review this
+# proposal" -- is built from APP_BASE_URL. Unset, notifications.py falls back
+# to http://127.0.0.1:5001, which is correct locally and useless anywhere
+# else: the mail still sends, still looks right, and every link in it points
+# at the reader's own machine. Nothing downstream can detect that, so it is
+# said once here, loudly, at the only moment it is still cheap to fix.
+if os.environ.get("FLASK_ENV") == "production":
+    if not os.environ.get("APP_BASE_URL"):
+        app.logger.warning(
+            "APP_BASE_URL is not set. Links in outgoing email will point at "
+            "http://127.0.0.1:5001 and will not work for anyone who receives "
+            "them. Set APP_BASE_URL to this site's public URL."
+        )
+    if not os.environ.get("RESEND_API_KEY"):
+        app.logger.warning(
+            "RESEND_API_KEY is not set. Email is not being sent -- messages "
+            "are written to the log instead, so nobody is told a proposal is "
+            "waiting."
+        )
+
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,   # JavaScript cannot read the cookie
     SESSION_COOKIE_SAMESITE="Lax",  # not sent on cross-site POSTs
@@ -85,6 +105,53 @@ app.config.update(
 # older versions, so the limit is enforced explicitly rather than surfacing as
 # a 500 for whoever picks a very long passphrase.
 MAX_PASSWORD_BYTES = 72
+
+# --- Field lengths --------------------------------------------------------
+# Ceilings for the String() columns in models.py, checked here rather than
+# left to Postgres. A value one character over the column width reaches the
+# driver as StringDataRightTruncation, which arrives as a DataError -- not an
+# IntegrityError, so nothing below catches it -- and surfaces as a 500 for
+# someone who typed a long organization name or a phone number with an
+# extension. Checked up front so the answer names the field instead.
+#
+# The Text columns (description, the notes, a proposal message) have no width
+# to overflow and are not listed; they are capped separately below by what is
+# reasonable to read, not by what the column holds.
+MAX_LENGTHS = {
+    "name": 255,
+    "organization_type": 120,
+    "location": 255,
+    "contact_email": 255,
+    "contact_phone": 32,
+}
+
+# What each key is called in a message written for the person filling the form.
+_FIELD_LABELS = {
+    "name": "Organization name",
+    "organization_type": "Organization type",
+    "location": "Location",
+    "contact_email": "Contact email",
+    "contact_phone": "Contact phone",
+}
+
+
+def length_problem(field, value):
+    """None if `value` fits its column, otherwise why it does not."""
+    limit = MAX_LENGTHS[field]
+    if len(value or "") <= limit:
+        return None
+    return (f"{_FIELD_LABELS[field]} is too long "
+            f"({limit} characters maximum).")
+
+
+# Caps for the Text columns. Nothing about the column stops these growing --
+# the ceiling is what a person will read on a profile card, not what Postgres
+# will hold. Generous enough that no honest profile hits them.
+MAX_DESCRIPTION = 2000
+MAX_NOTE = 1000
+# A proposal message and the note attached to accepting or declining one.
+MAX_PROPOSAL_MESSAGE = 2000
+
 
 # --- Signup validation --------------------------------------------------
 # Deliberately not a full RFC 5322 pattern -- those accept addresses no mail
@@ -395,6 +462,26 @@ def not_found(error):
     return send_from_directory(STATIC_DIR, "404.html"), 404
 
 
+@app.errorhandler(405)
+def method_not_allowed(error):
+    """The same JSON/HTML split not_found() makes, for the wrong-method case.
+
+    Not a duplicate of it. Flask's static route is mounted at the site root
+    (static_url_path=""), so an unrouted /api/ path is not unrouted at all --
+    it matches that route, which serves GET and HEAD only. A GET therefore
+    lands on the 404 handler above as intended, but a POST to a path that has
+    no API route reaches here instead, and Flask's default 405 is an HTML
+    document. common.js's api() calls res.json() on it, the parse throws, and
+    the caller shows a bare "(405)" instead of anything a person could read.
+
+    That is exactly the failure /api/contact produced before it existed as a
+    route: the homepage form reported a status code rather than a problem.
+    """
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found."}), 405
+    return send_from_directory(STATIC_DIR, "404.html"), 405
+
+
 @app.errorhandler(500)
 def internal_error(error):
     """Serve the real 500 page, but never to something expecting JSON.
@@ -439,6 +526,70 @@ def get_categories():
     })
 
 
+# --- Contact ----------------------------------------------------------------
+# The homepage's "Request a demo" form. It has posted here since it was
+# written; the route did not exist, so every message was lost -- and because
+# the static route claims /api/contact for GET, the failure arrived as an
+# HTML 405 that common.js could not even parse into a message.
+#
+# Delivered by email rather than stored: there is no inbox in this schema and
+# no admin view to read one from, so a table would only move the messages
+# somewhere nobody looks. CONTACT_EMAIL is where they go.
+MAX_CONTACT_MESSAGE = 4000
+
+
+@app.route("/api/contact", methods=["POST"])
+def contact():
+    data = request.get_json(silent=True) or {}
+
+    # Same honeypot as /register, and the same reasoning: a field a
+    # form-filler cannot resist and a person never sees. Answered as a success
+    # without sending anything, so a bot learns nothing from the response.
+    if (data.get("website") or "").strip():
+        return jsonify({"message": "Message sent"}), 200
+
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    phone = (data.get("phone") or "").strip()
+    message = (data.get("message") or "").strip()
+
+    # Per-IP, and tighter than /register: this endpoint puts mail in an inbox
+    # that a person reads by hand, so the cost of abuse is somebody's morning
+    # rather than a database row.
+    if rate_limited("contact", client_ip(), max_attempts=5, window_seconds=3600):
+        return jsonify({
+            "error": "Too many messages from this connection recently. "
+                     "Please try again in a while.",
+        }), 429
+
+    problems = []
+    if not name:
+        problems.append("your name")
+    if not email:
+        problems.append("your email address")
+    if not message:
+        problems.append("a message")
+    if problems:
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+
+    if not is_valid_email(email):
+        return jsonify({
+            "error": "Please enter a valid email address.",
+            "field": "email",
+        }), 400
+    if len(message) > MAX_CONTACT_MESSAGE:
+        return jsonify({
+            "error": f"Keep your message under {MAX_CONTACT_MESSAGE} "
+                     f"characters.",
+            "field": "message",
+        }), 400
+    if len(name) > 255 or len(phone) > 64:
+        return jsonify({"error": "That is longer than this field allows."}), 400
+
+    notify_contact_message(name=name, email=email, phone=phone, message=message)
+    return jsonify({"message": "Message sent"}), 200
+
+
 # --- Auth -------------------------------------------------------------------
 @app.route("/register", methods=["POST"])
 def register():
@@ -471,7 +622,14 @@ def register():
     problem = name_problem(name)
     if problem:
         return jsonify({"error": "Please provide " + problem + "."}), 400
+    problem = length_problem("name", name)
+    if problem:
+        return jsonify({"error": problem, "field": "name"}), 400
     if not is_valid_email(email):
+        return jsonify({"error": "Please enter a valid email address."}), 400
+    if length_problem("contact_email", email):
+        # The same column width the profile's contact address is held to --
+        # checked here because email is written on this path too.
         return jsonify({"error": "Please enter a valid email address."}), 400
     domain = email.rsplit("@", 1)[-1]
     if domain in DISPOSABLE_EMAIL_DOMAINS:
@@ -1070,6 +1228,39 @@ def save_onboarding(org, db):
     if problems:
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
 
+    # Widths, once the fields are known to be present. Reported one at a time
+    # and with the field named, rather than folded into the "please provide"
+    # list above: that list asks for something missing, and these are about
+    # something already typed, which the form should point at.
+    contact_email = (data.get("contact_email") or "").strip()
+    contact_phone = (data.get("contact_phone") or "").strip()
+    for field, value in (
+        ("name", name),
+        ("organization_type", organization_type),
+        ("location", location),
+        ("contact_email", contact_email),
+        ("contact_phone", contact_phone),
+    ):
+        problem = length_problem(field, value)
+        if problem:
+            return jsonify({"error": problem, "field": field}), 400
+
+    # The free-text blocks land in Text columns, so there is no width to
+    # overflow -- but nothing capped them either, and an unbounded value is
+    # stored in full and then rendered into every card and profile that shows
+    # it. Capped at what someone will actually read.
+    for field, limit in (
+        ("description", MAX_DESCRIPTION),
+        ("needs_note", MAX_NOTE),
+        ("offers_note", MAX_NOTE),
+        ("partnership_goals", MAX_NOTE),
+    ):
+        if len((data.get(field) or "").strip()) > limit:
+            return jsonify({
+                "error": f"That is too long ({limit} characters maximum).",
+                "field": field,
+            }), 400
+
     # All four are optional; parse_links returns None for anything left blank.
     # Errors name the field so the form can point at the right input rather
     # than dropping a generic message at the top of the page.
@@ -1089,8 +1280,8 @@ def save_onboarding(org, db):
     org.offers_note = (data.get("offers_note") or "").strip() or None
     org.partnership_goals = (data.get("partnership_goals") or "").strip() or None
     org.description = description or None
-    org.contact_email = (data.get("contact_email") or "").strip() or org.email
-    org.contact_phone = (data.get("contact_phone") or "").strip() or None
+    org.contact_email = contact_email or org.email
+    org.contact_phone = contact_phone or None
     org.website_url = links["website_url"]
     org.instagram_url = links["instagram_url"]
     org.x_url = links["x_url"]
@@ -1636,9 +1827,50 @@ def create_proposal(org, db):
                      "you are asking for."
         }), 400
 
+    # Neither side may be committed to something it has not listed as an
+    # offer. clean_categories only checks the slug is real -- it knows nothing
+    # about who can supply what -- so without this the vocabulary itself is
+    # the only limit, and a proposal can commit the recipient to anything in
+    # it. ppsearch.js already builds both pickers from exactly these two
+    # lists, so the form cannot produce a rejection here; the endpoint is what
+    # makes that a rule rather than a habit of one client.
+    #
+    # The recipient's side is the one that matters: what lands in the
+    # agreement, in the email, and on the public summary is a claim that this
+    # organization agreed to provide something, and it should never be
+    # possible to write one it never said it could.
+    my_offers = set(org.offers or [])
+    their_offers = set(recipient.offers or [])
+    for gives, offers, whose in (
+        (proposer_gives, my_offers, "you"),
+        (recipient_gives, their_offers, "they"),
+    ):
+        unlisted = [slug for slug in gives if slug not in offers]
+        if unlisted:
+            named = ", ".join(labels_for(unlisted))
+            return jsonify({
+                "error": (
+                    f"You cannot commit to {named} -- that is not on your "
+                    f"list of offers. Add it to your profile first."
+                    if whose == "you" else
+                    f"You cannot ask them for {named} -- that is not on "
+                    f"their list of offers."
+                ),
+                "field": ("proposer_gives" if whose == "you"
+                          else "recipient_gives"),
+            }), 400
+
     timeline = (data.get("timeline") or "").strip()
     if timeline and timeline not in VALID_TIMELINES:
         return jsonify({"error": "That is not a valid timeline."}), 400
+
+    message = (data.get("message") or "").strip()
+    if len(message) > MAX_PROPOSAL_MESSAGE:
+        return jsonify({
+            "error": f"Keep your message under {MAX_PROPOSAL_MESSAGE} "
+                     f"characters.",
+            "field": "message",
+        }), 400
 
     proposal = Partnership(
         proposer_id=org.id,
@@ -1647,7 +1879,7 @@ def create_proposal(org, db):
         proposer_gives=proposer_gives,
         recipient_gives=recipient_gives,
         timeline=timeline or None,
-        message=(data.get("message") or "").strip() or None,
+        message=message or None,
     )
     db.add(proposal)
     try:
@@ -1733,9 +1965,17 @@ def accept_proposal(org, db, proposal_id):
         }), 409
 
     data = request.get_json(silent=True) or {}
+    response_message = (data.get("message") or "").strip()
+    if len(response_message) > MAX_PROPOSAL_MESSAGE:
+        return jsonify({
+            "error": f"Keep your message under {MAX_PROPOSAL_MESSAGE} "
+                     f"characters.",
+            "field": "message",
+        }), 400
+
     proposal.status = Partnership.ACCEPTED
     proposal.responded_at = datetime.now(timezone.utc)
-    proposal.response_message = (data.get("message") or "").strip() or None
+    proposal.response_message = response_message or None
     # Minted only now: agreement by both sides is what makes a summary worth
     # sharing, and a token on a pending proposal would leak an unagreed one.
     proposal.share_token = secrets.token_urlsafe(24)
@@ -1765,9 +2005,17 @@ def decline_proposal(org, db, proposal_id):
         }), 409
 
     data = request.get_json(silent=True) or {}
+    response_message = (data.get("message") or "").strip()
+    if len(response_message) > MAX_PROPOSAL_MESSAGE:
+        return jsonify({
+            "error": f"Keep your message under {MAX_PROPOSAL_MESSAGE} "
+                     f"characters.",
+            "field": "message",
+        }), 400
+
     proposal.status = Partnership.DECLINED
     proposal.responded_at = datetime.now(timezone.utc)
-    proposal.response_message = (data.get("message") or "").strip() or None
+    proposal.response_message = response_message or None
     db.commit()
 
     notify_proposal_responded(proposal)

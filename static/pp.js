@@ -336,7 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: document.getElementById('contactName').value.trim(),
                 email: document.getElementById('contactEmail').value.trim(),
                 phone: document.getElementById('contactPhone').value.trim(),
-                message: document.getElementById('contactMessage').value.trim()
+                message: document.getElementById('contactMessage').value.trim(),
+                website: document.getElementById('contactWebsite').value
             };
 
             setFormMessage(contactForm, '');

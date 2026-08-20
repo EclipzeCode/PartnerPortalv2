@@ -332,23 +332,8 @@ button {
     border: 1px solid rgba(22, 163, 74, 0.2);
 }
 
-/* --- Honeypot -------------------------------------------------------------
-   Off-canvas rather than display:none -- some bots skip fields hidden the
-   obvious way. A real visitor, sighted or on a screen reader, never
-   encounters it: aria-hidden removes it from the accessibility tree and
-   tabindex="-1" takes it out of tab order, so it is not just invisible but
-   unreachable. */
-.hp-field {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
+/* The honeypot's .hp-field lives in shared.css -- the contact form uses it
+   too, and index.html does not load this file. */
 
 /* --- Password strength meter ---------------------------------------------
    Advisory: how strong the password is beyond the minimum. The checklist

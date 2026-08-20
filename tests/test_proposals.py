@@ -97,7 +97,15 @@ def test_the_reverse_direction_is_a_separate_proposal(client, login, pair):
     client.post("/logout")
 
     login(recipient)
-    assert _propose(client, proposer).status_code == 201
+    # The terms have to be swapped along with the direction: each side may
+    # only commit to what it actually offers, and in this direction the
+    # proposer is the org offering web_development. The default payload above
+    # is written for the first direction, and passing it here used to work
+    # only because nothing checked -- it described an exchange neither
+    # organization could have produced through the form.
+    assert _propose(client, proposer,
+                    proposer_gives=["web_development"],
+                    recipient_gives=["grant_writing"]).status_code == 201
     assert len(client.get("/api/proposals").get_json()["proposals"]) == 2
 
 

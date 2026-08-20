@@ -47,18 +47,30 @@ def _config():
         # local development stays self-contained.
         "app_url": (os.environ.get("APP_BASE_URL") or
                     "http://127.0.0.1:5001").rstrip("/"),
+        # Where the homepage contact form is delivered. No default: guessing
+        # an address would send someone's message to a stranger, and the
+        # sender below would rather log a message it cannot deliver than
+        # deliver it to the wrong inbox.
+        "contact_to": os.environ.get("CONTACT_EMAIL", "").strip(),
     }
 
 
-def _send_via_resend(cfg, to_addr, subject, html, text):
+def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None):
     """POST to Resend. Raises on non-2xx so the caller can log it."""
-    body = json.dumps({
+    payload = {
         "from": cfg["from_addr"],
         "to": [to_addr],
         "subject": subject,
         "html": html,
         "text": text,
-    }).encode("utf-8")
+    }
+    # Only the contact form sets this. The From address has to stay a verified
+    # sender -- putting a visitor's address there is what gets a domain
+    # rejected -- so the address they typed goes here instead, and Reply
+    # reaches them rather than the sending domain.
+    if reply_to:
+        payload["reply_to"] = reply_to
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         RESEND_ENDPOINT,
         data=body,
@@ -75,7 +87,7 @@ def _send_via_resend(cfg, to_addr, subject, html, text):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _send(to_addr, subject, html, text):
+def _send(to_addr, subject, html, text, reply_to=None):
     """Actual sender. Called on a background thread so the request returns
     without waiting for Resend.
     """
@@ -99,7 +111,7 @@ def _send(to_addr, subject, html, text):
         return
 
     try:
-        result = _send_via_resend(cfg, to_addr, subject, html, text)
+        result = _send_via_resend(cfg, to_addr, subject, html, text, reply_to)
         log.info("email sent to %s (id=%s)", to_addr, result.get("id"))
     except urllib.error.HTTPError as e:
         # A 401 means a bad or missing key; a 403 usually means the from
@@ -114,10 +126,10 @@ def _send(to_addr, subject, html, text):
         log.exception("email to %s failed: %s", to_addr, e)
 
 
-def _dispatch(to_addr, subject, html, text):
+def _dispatch(to_addr, subject, html, text, reply_to=None):
     """Send in a background thread so the request handler returns promptly."""
     Thread(
-        target=_send, args=(to_addr, subject, html, text), daemon=True,
+        target=_send, args=(to_addr, subject, html, text, reply_to), daemon=True,
     ).start()
 
 
@@ -401,6 +413,54 @@ def notify_password_changed(org):
         f"password right away: {reset_url}\n"
     )
     _dispatch(org.email, "Your PartnerPortal password was changed", html, text)
+
+
+def notify_contact_message(*, name, email, phone, message):
+    """The homepage "Request a demo" form, delivered to CONTACT_EMAIL.
+
+    Loud when it cannot deliver, unlike every other sender in this file. The
+    rest of them are about something already recorded in the database -- a
+    proposal exists whether or not its email arrives, and the recipient will
+    see it on their dashboard. This one has no row behind it: the form is the
+    only copy, and the page it was typed on promises "we read every message".
+
+    So a missing CONTACT_EMAIL logs the whole thing at WARNING rather than
+    dropping it, and the same is true of the no-API-key path in _send below.
+    A message in the logs is a poor inbox, but it is recoverable, and silence
+    is not.
+    """
+    cfg = _config()
+    detail = (
+        f"from: {name} <{email}>\n"
+        f"phone: {phone or '(none given)'}\n"
+        f"--- message ---\n{message}\n---------------"
+    )
+
+    if not cfg["contact_to"]:
+        log.warning(
+            "contact form: CONTACT_EMAIL is not set, so this message could "
+            "not be delivered. Recording it here instead:\n%s", detail,
+        )
+        return
+
+    subject = f"PartnerPortal contact: {name}"
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>New message from the site</h1>
+  <p class="meta">{escape(name)} &lt;{escape(email)}&gt;{
+      f" &middot; {escape(phone)}" if phone else ""
+  }</p>
+
+  <div class="quote">{escape(message)}</div>
+
+  <p class="foot">Sent from the contact form on PartnerPortal. Replying to
+  this message goes to {escape(email)}.</p>
+</div></body></html>
+"""
+    text = f"New message from the PartnerPortal contact form.\n\n{detail}\n"
+    # reply_to, not from: the From address must stay a verified sender.
+    _dispatch(cfg["contact_to"], subject, html, text, reply_to=email)
 
 
 def _label(slug):

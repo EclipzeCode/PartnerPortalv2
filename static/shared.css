@@ -360,3 +360,26 @@ textarea:focus-visible {
         max-width: none;
     }
 }
+
+/* --- Honeypot -------------------------------------------------------------
+   Off-canvas rather than display:none -- some bots skip fields hidden the
+   obvious way. A real visitor, sighted or on a screen reader, never
+   encounters it: aria-hidden removes it from the accessibility tree and
+   tabindex="-1" takes it out of tab order, so it is not just invisible but
+   unreachable.
+
+   Lives here rather than in pplogin.css because two forms use it now -- the
+   signup form and the homepage contact form -- and index.html does not load
+   pplogin.css. Defined there, the homepage's honeypot would simply be a
+   visible input asking people to leave it blank. */
+.hp-field {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

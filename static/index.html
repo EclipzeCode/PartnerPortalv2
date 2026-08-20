@@ -400,20 +400,30 @@
                 <form id="contactForm">
                     <div class="form-group">
                         <label for="contactName">Your name</label>
-                        <input type="text" id="contactName" required>
+                        <input type="text" id="contactName" maxlength="255" required>
                     </div>
                     <div class="form-group">
                         <label for="contactEmail">Email</label>
-                        <input type="email" id="contactEmail" required>
+                        <input type="email" id="contactEmail" maxlength="255" required>
                     </div>
                     <div class="form-group">
                         <label for="contactPhone">Phone <span class="optional">(optional)</span></label>
-                        <input type="tel" id="contactPhone">
+                        <input type="tel" id="contactPhone" maxlength="64">
                     </div>
                     <div class="form-group">
                         <label for="contactMessage">What are you looking for?</label>
-                        <textarea id="contactMessage" rows="4" required></textarea>
+                        <textarea id="contactMessage" rows="4" maxlength="4000" required></textarea>
                     </div>
+                    <!-- Honeypot, same as the signup form: named to look worth
+                         filling in to a bot, hidden from real visitors by
+                         position rather than display:none (see .hp-field in
+                         forms.css), and never touched by a person. Any value
+                         here means a script filled every field it found. -->
+                    <div class="hp-field" aria-hidden="true">
+                        <label for="contactWebsite">Leave this field blank</label>
+                        <input type="text" id="contactWebsite" name="website" tabindex="-1" autocomplete="off">
+                    </div>
+
                     <button type="submit" class="btn-primary">Send message</button>
                 </form>
             </div>

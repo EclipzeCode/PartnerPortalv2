@@ -109,7 +109,7 @@
               <div class="form-grid">
                 <div class="form-group">
                   <label for="organizationName">Organization Name <span class="req">*</span></label>
-                  <input type="text" id="organizationName" placeholder="Bridgewater Youth Outreach" required />
+                  <input type="text" id="organizationName" placeholder="Bridgewater Youth Outreach" maxlength="255" required />
                 </div>
 
                 <div class="form-group">
@@ -123,7 +123,7 @@
 
                 <div class="form-group">
                   <label for="location">Location <span class="req">*</span></label>
-                  <input type="text" id="location" placeholder="Somerville, NJ" required />
+                  <input type="text" id="location" placeholder="Somerville, NJ" maxlength="255" required />
                 </div>
 
                 <div class="form-group checkbox-group">
@@ -168,6 +168,7 @@
                   <span class="picker-count" data-for="needs">None selected</span>
                   <textarea
                     id="needsNote"
+                    maxlength="1000"
                     class="textarea-sm"
                     placeholder="Anything more specific? (optional)"
                   ></textarea>
@@ -182,6 +183,7 @@
                   <span class="picker-count" data-for="offers">None selected</span>
                   <textarea
                     id="offersNote"
+                    maxlength="1000"
                     class="textarea-sm"
                     placeholder="Anything more specific? (optional)"
                   ></textarea>
@@ -223,13 +225,14 @@
                   <input
                     type="email"
                     id="contactEmail"
+                    maxlength="255"
                     placeholder="Defaults to your login email"
                   />
                 </div>
 
                 <div class="form-group">
                   <label for="contactPhone">Contact phone</label>
-                  <input type="tel" id="contactPhone" placeholder="Optional" />
+                  <input type="tel" id="contactPhone" placeholder="Optional" maxlength="32" />
                 </div>
               </div>
 
@@ -237,6 +240,7 @@
                 <label for="partnershipGoals">Partnership Goals</label>
                 <textarea
                   id="partnershipGoals"
+                  maxlength="1000"
                   class="textarea-sm"
                   placeholder="Examples: co-host events, gain sponsors, build community reach, share resources"
                 ></textarea>
@@ -246,6 +250,7 @@
                 <label for="description">Short Description</label>
                 <textarea
                   id="description"
+                  maxlength="2000"
                   class="textarea-sm"
                   placeholder="Tell us a little about your organization and what kind of collaboration would be valuable."
                 ></textarea>

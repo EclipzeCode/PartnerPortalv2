@@ -38,3 +38,34 @@ services:
         sync: false
       - key: SECRET_KEY
         sync: false
+
+      # Every link this app mails out is built from APP_BASE_URL. Unset, it
+      # falls back to http://127.0.0.1:5001 -- so verification links, password
+      # resets and proposal notifications all go out pointing at the
+      # recipient's own machine, and none of them work. Declared here so it is
+      # part of the blueprint rather than something to remember.
+      - key: APP_BASE_URL
+        value: https://partnerportal-j6x1.onrender.com
+
+      # Outbound mail. Without RESEND_API_KEY the app logs what it would have
+      # sent instead of sending it, which is the right behaviour locally and
+      # the wrong one here: nobody is told a proposal is waiting. sync:false
+      # so the key is entered once and stored as a secret.
+      - key: RESEND_API_KEY
+        sync: false
+      # Must be a verified sender at resend.com/domains. Until a domain is
+      # verified, Resend's sandbox sender only delivers to the address that
+      # owns the Resend account -- which is why REQUIRE_EMAIL_VERIFICATION
+      # below stays off.
+      - key: EMAIL_FROM
+        value: PartnerPortal <onboarding@resend.dev>
+      # Where the homepage contact form is delivered. Unset, those messages
+      # are written to the logs rather than sent anywhere.
+      - key: CONTACT_EMAIL
+        sync: false
+
+      # Turn on once EMAIL_FROM is a verified domain and verification mail
+      # actually reaches people. Enforcing before that does not stop spam, it
+      # stops signups -- see the note in app.py.
+      - key: REQUIRE_EMAIL_VERIFICATION
+        value: "false"
