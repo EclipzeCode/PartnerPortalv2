@@ -108,7 +108,16 @@
     display: none;
 }
 
+/* Written to render identically whether the element is a <div> or a <button>.
+   It should be a button -- it is a control, and as a div it is not focusable,
+   answers neither Enter nor Space, and carries an aria-expanded that means
+   nothing without a role to hang it on, which leaves the drawer unreachable
+   by keyboard. The three resets below are what a button needs to look the
+   same as the div did, so a page can be converted without touching CSS. */
 #menu-icon {
+    background: none;
+    border: 0;
+    padding: 0;
     font-size: 2rem;
     color: var(--text, #2b2d42);
     cursor: pointer;

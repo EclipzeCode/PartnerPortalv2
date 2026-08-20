@@ -4,12 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="pplogin.css">
     <link rel="stylesheet" href="shared.css">
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="nav.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- Poppins is the site's typeface and every other page loads it. This one
+         did not, so sign-in and sign-up rendered in the browser's default sans
+         -- a visible change of face between the landing page someone arrives
+         from and the onboarding they go to next.
+
+         Font Awesome used to be loaded above this. Nothing in the project uses
+         an fa- class; the icons here and everywhere else are Boxicons, which
+         loads on the line above. It was a render-blocking request to a third
+         CDN, on the critical path of the first page a new organization sees,
+         for a stylesheet nothing referenced. -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>Partner Portal - Login</title>
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
@@ -24,7 +36,8 @@
     <!-- Navigation Bar -->
     <header class="header">
         <a href="index.html" class="logo">PartnerPortal</a>
-        <div class="bx bx-menu" id="menu-icon"></div>
+        <button type="button" class="bx bx-menu" id="menu-icon"
+                aria-label="Menu" aria-expanded="false"></button>
         <nav class="navbar">
             <a href="index.html">Home</a>
             <a href="ppsearch.html">Search</a>
@@ -67,17 +80,28 @@
 
                 <p class="form-banner" id="registerBanner" hidden></p>
 
+                <!-- Every input below carries a real label. These forms were
+                     labelled by placeholder alone, which names nothing: a
+                     placeholder is a hint, it is not exposed as the control's
+                     name, and it is gone the moment someone starts typing.
+                     .sr-only (shared.css) is the same treatment ppdashboard's
+                     message box uses -- the label is in the accessibility
+                     tree and off the screen, so the card's layout is
+                     unchanged. -->
                 <div class="field">
+                    <label class="sr-only" for="register-name">Organization name</label>
                     <input type="text" id="register-name" placeholder="Organization name" autocomplete="organization">
                     <p class="field-error" id="register-name-error"></p>
                 </div>
 
                 <div class="field">
+                    <label class="sr-only" for="register-email">Email</label>
                     <input type="email" id="register-email" placeholder="Email" autocomplete="email">
                     <p class="field-error" id="register-email-error"></p>
                 </div>
 
                 <div class="field">
+                    <label class="sr-only" for="register-password">Password</label>
                     <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
                     <p class="field-error" id="register-password-error"></p>
 
@@ -125,11 +149,13 @@
                 <p class="form-banner" id="loginBanner" hidden></p>
 
                 <div class="field">
+                    <label class="sr-only" for="login-email">Email</label>
                     <input type="email" id="login-email" placeholder="Email" autocomplete="email">
                     <p class="field-error" id="login-email-error"></p>
                 </div>
 
                 <div class="field">
+                    <label class="sr-only" for="login-password">Password</label>
                     <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
                     <p class="field-error" id="login-password-error"></p>
                 </div>
