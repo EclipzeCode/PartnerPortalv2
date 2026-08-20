@@ -136,6 +136,25 @@ class Organization(Base):
         DateTime(timezone=True)
     )
 
+    # A requested new login address, held here until it is confirmed.
+    #
+    # Not written straight to `email`, because the address someone typed is
+    # the one thing that cannot be checked by looking at it. A typo applied
+    # immediately locks them out of the account it was meant to move -- the
+    # login is the new address, the reset link goes to an inbox that does not
+    # exist, and there is no way back. So the change lands only when a link
+    # sent to the new address is opened, which is the same proof registration
+    # asks for and the only proof that matters here.
+    #
+    # The old address stays live and stays the login until that happens.
+    pending_email: Mapped[str | None] = mapped_column(String(255))
+    pending_email_token: Mapped[str | None] = mapped_column(
+        String(64), unique=True
+    )
+    pending_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # Same shape as the pair above -- unhashed, single-use, cleared once spent
     # -- but shorter-lived (checked against a 1-hour window in app.py, not 7
     # days): this token alone is enough to set a new password, so it grants
@@ -272,6 +291,9 @@ class Organization(Base):
             "has_password": self.password_hash is not None,
             "email_verified": self.email_verified,
             "email_notifications": self.email_notifications,
+            # So the settings page can say a change is waiting rather than
+            # showing the old address with no sign anything is in flight.
+            "pending_email": self.pending_email,
         })
         return data
 

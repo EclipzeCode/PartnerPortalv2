@@ -184,6 +184,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         href="partnership.html?token=${encodeURIComponent(p.share_token)}">
                         View agreement</a>`);
                 actions.push('<button class="btn-ghost" data-act="copy">Copy link</button>');
+                // The link used to be permanent, so anyone ever sent it kept
+                // it. These are the way back from that.
+                actions.push('<button class="btn-ghost" data-act="rotate">New link</button>');
+                actions.push('<button class="btn-ghost" data-act="unshare">Remove link</button>');
+            } else if (['accepted', 'completed', 'ended'].includes(p.status)) {
+                actions.push('<button class="btn-ghost" data-act="rotate">Create link</button>');
             }
             // On every proposal, open or settled: a closed thread is still
             // the record of what the two of you said, and it is the only
@@ -393,6 +399,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (act === 'messages') {
             await openThread(proposal);
+            return;
+        }
+
+        // Rotating and revoking both change what a URL somebody else may be
+        // holding does, so both confirm rather than firing on one click.
+        if (act === 'rotate' || act === 'unshare') {
+            const isNew = act === 'rotate';
+            const hadLink = Boolean(proposal.share_token);
+            const ok = window.confirm(
+                isNew
+                    ? (hadLink
+                        ? `Create a new link for your partnership with ${
+                            proposal.counterpart.name}?\n\nThe current link `
+                          + 'will stop working for everyone who has it, '
+                          + 'including them.'
+                        : `Create a public link for your partnership with ${
+                            proposal.counterpart.name}?\n\nAnyone with the `
+                          + 'link will be able to read the agreement summary.')
+                    : `Remove the public link for your partnership with ${
+                        proposal.counterpart.name}?\n\nIt will stop working `
+                      + 'for everyone who has it. The agreement itself stays, '
+                      + 'and either of you can create a new link later.');
+            if (!ok) return;
+
+            btn.disabled = true;
+            try {
+                await window.api(`/api/proposals/${id}/share`,
+                    { method: isNew ? 'POST' : 'DELETE' });
+                await load();
+                window.toast(isNew
+                    ? 'New link created. The previous one no longer works.'
+                    : 'Public link removed.');
+            } catch (error) {
+                btn.disabled = false;
+                window.toast(error.message || 'Could not change that link.',
+                    'error');
+            }
             return;
         }
 

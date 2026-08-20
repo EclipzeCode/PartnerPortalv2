@@ -429,6 +429,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         return data.event;
     }
 
+    async function patchEvent(id, payload) {
+        const data = await window.api(`/api/events/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: payload,
+        });
+        events = events.map((ev) => (String(ev.id) === String(id) ? data.event : ev));
+        return data.event;
+    }
+
     async function removeEvent(id) {
         await window.api(`/api/events/${encodeURIComponent(id)}`, {
             method: 'DELETE',
@@ -511,10 +520,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Focus is handled by common.js's dialogOpened/dialogClosed, which trap
     // Tab inside the dialog and put focus back on the control that opened it.
-    function openModal() {
+    // Which meeting the dialog is editing, or null when it is adding one.
+    // A meeting could only be created and deleted before, so moving one by
+    // half an hour meant deleting it and retyping all six fields -- and
+    // losing the description on the way, since there was nothing left to
+    // copy it from.
+    let editingEventId = null;
+
+    function openModal(event) {
         if (!modal) return;
         // Errors from a previous attempt should not greet a fresh one.
         if (eventForm) clearEventErrors();
+
+        editingEventId = event ? event.id : null;
+        const title = document.getElementById('eventModalTitle');
+        if (title) title.textContent = event ? 'Edit meeting' : 'Add New Event';
+        if (eventSubmitBtn) {
+            eventSubmitBtn.textContent = event ? 'Save changes' : 'Save Event';
+        }
+
+        if (event) {
+            document.getElementById('eventTitle').value = event.title || '';
+            document.getElementById('eventDate').value = event.date || '';
+            document.getElementById('eventTime').value = event.time || '';
+            document.getElementById('eventDuration').value = event.duration ?? 1;
+            document.getElementById('eventDescription').value = event.description || '';
+            document.getElementById('eventLocation').value = event.location || '';
+
+            // The partner dropdown only lists organizations you can still
+            // arrange a meeting with, and a saved meeting may name one that
+            // has since dropped off it -- an ended partnership, a closed
+            // account. Re-added so editing the time does not silently
+            // rewrite who the meeting is with.
+            const select = document.getElementById('eventPartner');
+            // Drop any placeholder left by a previous edit, or they pile up
+            // one per meeting whose partner is no longer on the list.
+            [...select.options]
+                .filter((o) => o.value.startsWith('kept:'))
+                .forEach((o) => o.remove());
+            const known = [...select.options].some((o) => o.text === event.partner);
+            if (!known && event.partner) {
+                const opt = document.createElement('option');
+                opt.value = `kept:${event.partner}`;
+                opt.textContent = event.partner;
+                select.appendChild(opt);
+            }
+            select.value = [...select.options]
+                .find((o) => o.text === event.partner)?.value || '';
+        } else {
+            eventForm.reset();
+        }
+
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, document.getElementById('eventTitle'));
@@ -527,7 +583,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.dialogClosed(modal);
     }
 
-    if (addEventBtn) addEventBtn.addEventListener('click', openModal);
+    // Wrapped: the handler receives a MouseEvent, which would arrive as the
+    // meeting to edit.
+    if (addEventBtn) addEventBtn.addEventListener('click', () => openModal());
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
     if (modal) {
         modal.addEventListener('click', (e) => {
@@ -588,6 +646,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <p>With ${esc(event.partner)}</p>
                 <span class="event-time"><i class='bx bx-time'></i> ${timeLabel}</span>
             </div>
+            <button class="btn-event" title="Edit meeting" data-edit-event-id="${event.id}">
+                <i class='bx bx-pencil'></i>
+            </button>
             <button class="btn-event" title="Remove event" data-event-id="${event.id}">
                 <i class='bx bx-trash'></i>
             </button>
@@ -632,6 +693,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (eventsList) {
         eventsList.addEventListener('click', async (e) => {
+            const edit = e.target.closest('.btn-event[data-edit-event-id]');
+            if (edit) {
+                const found = loadEvents().find(
+                    (ev) => String(ev.id) === String(edit.dataset.editEventId));
+                if (found) openModal(found);
+                return;
+            }
+
             const btn = e.target.closest('.btn-event[data-event-id]');
             if (btn) {
                 // Disabled while the request is in flight: the row stays put
@@ -781,7 +850,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 eventSubmitBtn.textContent = 'Saving…';
             }
             try {
-                await addEvent(payload);
+                if (editingEventId !== null) await patchEvent(editingEventId, payload);
+                else await addEvent(payload);
             } catch (error) {
                 showEventFormError(
                     error.message || 'Could not save that meeting. Please try again.',

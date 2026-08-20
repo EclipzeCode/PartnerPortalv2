@@ -121,6 +121,46 @@
                     </div>
                 </dl>
 
+                <!-- Shown by settings.js when a change is waiting on the new
+                     address. Without it the page shows the old email with no
+                     sign that anything is in flight, which reads as the
+                     request having silently failed. -->
+                <div class="pending-email" id="pendingEmailBlock" hidden>
+                    <i class='bx bx-time-five' aria-hidden="true"></i>
+                    <p>
+                        Waiting for <strong id="pendingEmailValue"></strong> to be
+                        confirmed. You still sign in with your current address
+                        until then.
+                    </p>
+                    <button type="button" class="btn-ghost" id="cancelEmailBtn">Cancel</button>
+                </div>
+
+                <details class="email-change" id="emailChange">
+                    <summary>Change your sign-in email</summary>
+                    <form id="emailForm" novalidate>
+                        <p class="email-change-note">
+                            We send a link to the new address. Nothing changes
+                            until you open it, so a typo cannot lock you out.
+                        </p>
+                        <div class="form-group">
+                            <label for="newEmail">New email address</label>
+                            <input type="email" id="newEmail" maxlength="255"
+                                   autocomplete="email">
+                            <p class="field-error" id="newEmail-error"></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="emailPassword">Your password</label>
+                            <input type="password" id="emailPassword"
+                                   autocomplete="current-password">
+                            <p class="field-error" id="emailPassword-error"></p>
+                        </div>
+                        <p class="setting-status" id="emailStatus" role="status" hidden></p>
+                        <button type="submit" class="btn-primary" id="emailSubmitBtn">
+                            Send confirmation link
+                        </button>
+                    </form>
+                </details>
+
                 <!-- Shown only while unverified; settings.js unhides it. This
                      is the one place a new link can be requested, which is why
                      the dashboard notice points here rather than repeating the

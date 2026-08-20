@@ -42,6 +42,105 @@ document.addEventListener('DOMContentLoaded', async () => {
     const publicLink = document.getElementById('viewPublicProfile');
     publicLink.href = `organization.html?id=${encodeURIComponent(me.id)}`;
 
+    // --- Changing the sign-in email ----------------------------------------
+    // Nothing moves here. The request holds the new address on the account
+    // and sends it a link; the change lands when that link is opened. An
+    // address cannot be checked by looking at it, and applying a typo
+    // straight away locks somebody out of the account the change was for.
+    const pendingBlock = document.getElementById('pendingEmailBlock');
+    const emailForm = document.getElementById('emailForm');
+    const emailStatus = document.getElementById('emailStatus');
+    const emailSubmitBtn = document.getElementById('emailSubmitBtn');
+    const newEmail = document.getElementById('newEmail');
+    const emailPassword = document.getElementById('emailPassword');
+
+    function paintPendingEmail(pending) {
+        if (!pendingBlock) return;
+        pendingBlock.hidden = !pending;
+        if (pending) {
+            document.getElementById('pendingEmailValue').textContent = pending;
+        }
+    }
+
+    function setEmailFieldError(id, message) {
+        const field = document.getElementById(id);
+        const note = document.getElementById(`${id}-error`);
+        if (field) field.classList.toggle('input-error', Boolean(message));
+        if (field) field.setAttribute('aria-invalid', message ? 'true' : 'false');
+        if (note) note.textContent = message || '';
+    }
+
+    function clearEmailErrors() {
+        ['newEmail', 'emailPassword'].forEach((id) => setEmailFieldError(id, ''));
+        if (emailStatus) emailStatus.hidden = true;
+    }
+
+    paintPendingEmail(me.pending_email);
+
+    if (emailForm) {
+        emailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearEmailErrors();
+
+            const address = newEmail.value.trim();
+            if (!address) {
+                setEmailFieldError('newEmail', 'Enter the new email address.');
+                newEmail.focus();
+                return;
+            }
+            if (!emailPassword.value) {
+                setEmailFieldError('emailPassword', 'Enter your password.');
+                emailPassword.focus();
+                return;
+            }
+
+            emailSubmitBtn.disabled = true;
+            emailSubmitBtn.textContent = 'Sending...';
+            try {
+                const result = await window.api('/api/account/email', {
+                    method: 'POST',
+                    body: { email: address, password: emailPassword.value },
+                });
+                paintPendingEmail(result.pending_email);
+                emailForm.reset();
+                document.getElementById('emailChange').open = false;
+                window.toast(`Check ${result.pending_email} for the `
+                    + 'confirmation link.');
+            } catch (error) {
+                // The endpoint names the field it rejected, so the message
+                // lands on the input rather than at the top of the form.
+                const field = error.data && error.data.field;
+                if (field === 'email') setEmailFieldError('newEmail', error.message);
+                else if (field === 'password') {
+                    setEmailFieldError('emailPassword', error.message);
+                } else {
+                    emailStatus.textContent = error.message;
+                    emailStatus.className = 'setting-status error';
+                    emailStatus.hidden = false;
+                }
+            } finally {
+                emailSubmitBtn.disabled = false;
+                emailSubmitBtn.textContent = 'Send confirmation link';
+            }
+        });
+    }
+
+    const cancelEmailBtn = document.getElementById('cancelEmailBtn');
+    if (cancelEmailBtn) {
+        cancelEmailBtn.addEventListener('click', async () => {
+            cancelEmailBtn.disabled = true;
+            try {
+                await window.api('/api/account/email', { method: 'DELETE' });
+                paintPendingEmail(null);
+                window.toast('Email change cancelled.');
+            } catch (error) {
+                window.toast(error.message || 'Could not cancel that.', 'error');
+            } finally {
+                cancelEmailBtn.disabled = false;
+            }
+        });
+    }
+
     // --- Email verification ------------------------------------------------
     const verifyPrompt = document.getElementById('verifyPrompt');
     const verifyStatus = document.getElementById('verifyStatus');

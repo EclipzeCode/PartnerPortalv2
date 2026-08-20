@@ -619,3 +619,78 @@ body {
         text-align: left;
     }
 }
+
+/* --- Changing the sign-in email -------------------------------------------
+   Collapsed by default. Most visits to this page are about notifications or
+   a password; moving the account to a different address is rare and worth a
+   deliberate click rather than a form sitting open under the one thing
+   nobody should change by accident. */
+.email-change {
+    margin-top: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0.6rem;
+}
+
+.email-change > summary {
+    padding: 0.7rem 0.9rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary);
+    list-style: none;
+}
+
+.email-change > summary::-webkit-details-marker { display: none; }
+
+.email-change > summary::before {
+    content: '\203A';
+    display: inline-block;
+    margin-right: 0.5rem;
+    transition: transform 0.15s ease;
+}
+
+.email-change[open] > summary::before { transform: rotate(90deg); }
+
+.email-change > summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    border-radius: 0.6rem;
+}
+
+.email-change form {
+    padding: 0 0.9rem 1rem;
+}
+
+.email-change-note {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+/* A change waiting on the new address. Without this the page shows the old
+   email with nothing to say a request is in flight, which reads as the
+   request having silently failed. */
+.pending-email {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 0.6rem;
+    background: rgba(251, 191, 36, 0.08);
+}
+
+.pending-email[hidden] { display: none; }
+
+.pending-email > i {
+    font-size: 1.3rem;
+    color: #b45309;
+    flex-shrink: 0;
+}
+
+.pending-email p {
+    margin: 0;
+    flex: 1 1 14rem;
+    font-size: 0.88rem;
+}

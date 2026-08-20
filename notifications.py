@@ -526,6 +526,126 @@ def notify_password_reset(org, token):
     _dispatch(org.email, "Reset your PartnerPortal password", html, text)
 
 
+def notify_share_link_changed(proposal, actor, revoked):
+    """The other party's copy of the share link has stopped working.
+
+    Either side can rotate or revoke, and the reason to is usually that the
+    link has gone somewhere neither of them intended. That is not a decision
+    to need permission for -- but the other organization may have the old URL
+    in a board pack or a grant application, and finding out it 404s from a
+    funder is worse than finding out here.
+    """
+    other = proposal.counterpart(actor.id)
+    if other is None or not other.email_notifications:
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    url = f"{cfg['app_url']}/proposals.html#agreed"
+
+    what = ("revoked the public link for" if revoked
+            else "created a new public link for")
+    detail = (
+        "The agreement is unchanged and you can both still see it here. There "
+        "is no public link at the moment; either of you can create a new one."
+        if revoked else
+        "The agreement is unchanged. The previous link no longer works, so "
+        "anyone you sent it to will need the new one."
+    )
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(actor.name)} {escape(what)} your partnership</h1>
+  <p class="meta">{escape(detail)}</p>
+
+  <a class="cta" href="{escape(url)}">Open your partnerships</a>
+
+  <p class="foot">You are receiving this because you and
+  {escape(actor.name)} have an agreed partnership on PartnerPortal.</p>
+</div></body></html>
+"""
+    text = (
+        f"{actor.name} {what} your partnership on PartnerPortal.\n\n"
+        f"{detail}\n\n{url}\n"
+    )
+    _dispatch(to_addr, f"{actor.name} changed your partnership's public link",
+              html, text)
+
+
+def notify_email_change_requested(org, token):
+    """The confirmation link, sent to the address being moved to.
+
+    Deliberately ignores email_notifications, like the other account-security
+    mail: this is how somebody proves they own the address, and an account
+    that opted out of partnership mail could otherwise never finish a change
+    it had started.
+    """
+    cfg = _config()
+    confirm_url = f"{cfg['app_url']}/confirm-email.html?token={token}"
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Confirm your new email address</h1>
+  <p class="meta">{escape(org.name)} asked to sign in with this address on
+  PartnerPortal. Nothing changes until you open the link below.</p>
+
+  <a class="cta" href="{escape(confirm_url)}">Confirm this address</a>
+
+  <p class="foot">Until then the account keeps signing in with
+  {escape(org.email)}. If you were not expecting this, ignore this message --
+  the link expires and nothing moves.</p>
+</div></body></html>
+"""
+    text = (
+        f"{org.name} asked to sign in with this address on PartnerPortal.\n"
+        f"Confirm it here: {confirm_url}\n\n"
+        f"Until then the account keeps signing in with {org.email}. If you "
+        f"were not expecting this, ignore this message.\n"
+    )
+    _dispatch(org.pending_email, "Confirm your new PartnerPortal email", html, text)
+
+
+def notify_email_change_notice(org):
+    """Tells the *old* address that a change was requested.
+
+    The one message that has to go to the address being moved away from.
+    Changing the login moves where every future password reset goes, so if
+    this was not the account holder, nothing else will ever reach them --
+    the confirmation link goes to the new inbox and so does everything after
+    it. This is the only warning that lands somewhere they still read.
+    """
+    cfg = _config()
+    settings_url = f"{cfg['app_url']}/settings.html"
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Someone asked to change your email address</h1>
+  <p class="meta">A request was made to move {escape(org.name)} from
+  {escape(org.email)} to {escape(org.pending_email or '')}.</p>
+
+  <p>It does not take effect until the new address is confirmed. If that was
+  you, there is nothing to do here -- open the link in the message sent to
+  the new address.</p>
+
+  <p class="foot">If it was not you, someone has your password. Sign in and
+  change it now, and cancel the pending change from your settings.</p>
+
+  <a class="cta" href="{escape(settings_url)}">Open settings</a>
+</div></body></html>
+"""
+    text = (
+        f"A request was made to move {org.name} from {org.email} to "
+        f"{org.pending_email}.\n\n"
+        f"It does not take effect until the new address is confirmed.\n\n"
+        f"If it was not you, someone has your password. Sign in, change it, "
+        f"and cancel the pending change: {settings_url}\n"
+    )
+    _dispatch(org.email, "A change to your PartnerPortal email was requested",
+              html, text)
+
+
 def notify_password_changed(org):
     """Sent by /api/account/password after a successful change.
 

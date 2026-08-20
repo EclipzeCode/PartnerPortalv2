@@ -37,10 +37,12 @@ from models import (
     Event, Message, Organization, Partnership, ProfileView, SavedLead,
 )
 from notifications import (
-    notify_completion_marked, notify_contact_message, notify_email_verification,
-    notify_message_received, notify_partnership_completed,
-    notify_partnership_ended, notify_password_changed, notify_password_reset,
-    notify_proposal_created, notify_proposal_responded,
+    notify_completion_marked, notify_contact_message, notify_share_link_changed,
+    notify_email_change_notice, notify_email_change_requested,
+    notify_email_verification, notify_message_received,
+    notify_partnership_completed, notify_partnership_ended,
+    notify_password_changed, notify_password_reset, notify_proposal_created,
+    notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1175,6 +1177,196 @@ def change_password(org, db):
     return jsonify({"message": "Password changed"}), 200
 
 
+# The same week a verification link gets. This one is less dangerous than a
+# password reset -- it cannot take over an account, only finish a change the
+# account holder started while holding a valid session -- so it does not need
+# the tighter hour.
+EMAIL_CHANGE_TOKEN_LIFETIME = timedelta(days=7)
+
+
+@app.route("/api/account/email", methods=["POST"])
+@login_required
+def change_email(org, db):
+    """Start moving the account to a different login address.
+
+    Nothing changes here. The new address is held on the row and a link goes
+    to it; the change lands when that link is opened. An address is the one
+    field that cannot be checked by looking at it, and writing a typo straight
+    into `email` locks somebody out of the account the change was meant to
+    move -- the login becomes an address they do not own, and the reset link
+    goes to an inbox that does not exist.
+
+    The current password is required, like /api/account/password and
+    /api/account: a session cookie on a borrowed browser should not be enough
+    to point someone else's account at an attacker's inbox.
+    """
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+    new_email = (data.get("email") or "").strip().lower()
+
+    if not password:
+        return jsonify({
+            "error": "Enter your current password.", "field": "password",
+        }), 400
+    if not new_email:
+        return jsonify({
+            "error": "Enter the new email address.", "field": "email",
+        }), 400
+    if not is_valid_email(new_email) or length_problem("contact_email", new_email):
+        return jsonify({
+            "error": "Please enter a valid email address.", "field": "email",
+        }), 400
+    if new_email.rsplit("@", 1)[-1] in DISPOSABLE_EMAIL_DOMAINS:
+        return jsonify({
+            "error": "Please use a permanent email address -- that one looks "
+                     "like a temporary inbox provider.",
+            "field": "email",
+        }), 400
+    if new_email == org.email:
+        return jsonify({
+            "error": "That is already your email address.", "field": "email",
+        }), 400
+
+    if rate_limited("change_email", str(org.id), max_attempts=5,
+                    window_seconds=3600):
+        return jsonify({
+            "error": "Too many attempts. Please wait a few minutes and try "
+                     "again.",
+        }), 429
+
+    if not org.password_hash:
+        return jsonify({
+            "error": "This account has no password set. Please contact "
+                     "support.",
+            "field": "password",
+        }), 400
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
+        password.encode("utf-8"), org.password_hash.encode("utf-8")
+    ):
+        return jsonify({
+            "error": "Your current password is incorrect.", "field": "password",
+        }), 403
+
+    # Checked before sending, so somebody does not confirm a link only to be
+    # told the address was taken. Still re-checked at confirmation time,
+    # because the gap between the two is days long.
+    taken = db.query(Organization.id).filter(
+        Organization.email == new_email, Organization.id != org.id
+    ).first()
+    if taken is not None:
+        # Deliberately the same answer /register gives. This endpoint needs a
+        # password, so it is not an enumeration route in the way signup is,
+        # and telling the account holder plainly is what lets them act on it.
+        return jsonify({
+            "error": "That email is already registered to another account.",
+            "field": "email",
+        }), 409
+
+    org.pending_email = new_email
+    org.pending_email_token = secrets.token_urlsafe(32)
+    org.pending_email_sent_at = datetime.now(timezone.utc)
+    db.commit()
+
+    notify_email_change_requested(org, org.pending_email_token)
+    # The old address is told as well. This is the one change that moves where
+    # every future reset link goes, so if it was not the account holder who
+    # started it, this message is the only thing that will reach them.
+    notify_email_change_notice(org)
+
+    return jsonify({
+        "message": "Check your new address for a confirmation link.",
+        "pending_email": org.pending_email,
+    }), 202
+
+
+@app.route("/api/account/email", methods=["DELETE"])
+@login_required
+def cancel_email_change(org, db):
+    """Drop a pending change. No password: this only ever undoes something."""
+    org.pending_email = None
+    org.pending_email_token = None
+    org.pending_email_sent_at = None
+    db.commit()
+    return jsonify({"message": "Email change cancelled"}), 200
+
+
+@app.route("/api/account/email/confirm", methods=["POST"])
+def confirm_email_change():
+    """The other end of the link. Unauthenticated, like the other token
+    routes -- the link is opened in whatever browser reads the new inbox,
+    which is routinely not the one holding the session.
+    """
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if not token:
+        return jsonify({"error": "This link is missing its token."}), 400
+
+    db = get_db()
+    try:
+        org = db.query(Organization).filter(
+            Organization.pending_email_token == token
+        ).one_or_none()
+        if org is None or not org.pending_email:
+            return jsonify({
+                "error": "This link is invalid or has already been used.",
+            }), 404
+
+        if org.pending_email_sent_at and (
+            datetime.now(timezone.utc) - org.pending_email_sent_at
+            > EMAIL_CHANGE_TOKEN_LIFETIME
+        ):
+            return jsonify({
+                "error": "This link has expired. Request the change again "
+                         "from your settings.",
+            }), 410
+
+        # Re-checked here, not just when it was requested: the two are days
+        # apart, and somebody else may have registered the address since.
+        taken = db.query(Organization.id).filter(
+            Organization.email == org.pending_email,
+            Organization.id != org.id,
+        ).first()
+        if taken is not None:
+            org.pending_email = None
+            org.pending_email_token = None
+            org.pending_email_sent_at = None
+            db.commit()
+            return jsonify({
+                "error": "That address has been registered to another account "
+                         "since you asked for the change. Your email is "
+                         "unchanged.",
+            }), 409
+
+        previous = org.email
+        org.email = org.pending_email
+        # Opening a link sent to this address is exactly what verification
+        # asks for, so it arrives verified rather than needing a second
+        # round trip to prove the same thing.
+        org.email_verified = True
+        org.email_verify_token = None
+        org.pending_email = None
+        org.pending_email_token = None
+        org.pending_email_sent_at = None
+        try:
+            db.commit()
+        except IntegrityError:
+            # The unique index caught a registration that landed between the
+            # check above and this write.
+            db.rollback()
+            return jsonify({
+                "error": "That address has just been registered to another "
+                         "account. Your email is unchanged.",
+            }), 409
+
+        return jsonify({
+            "message": "Email updated",
+            "previous_email": previous,
+            "email": org.email,
+        }), 200
+    finally:
+        db.close()
+
+
 @app.route("/api/account", methods=["DELETE"])
 @login_required
 def delete_account(org, db):
@@ -2010,6 +2202,93 @@ def create_event(org, db):
     return jsonify({"message": "Meeting saved", "event": event.to_dict()}), 201
 
 
+@app.route("/api/events/<int:event_id>", methods=["PATCH"])
+@login_required
+def update_event(org, db, event_id):
+    """Change a meeting.
+
+    A meeting could be created and deleted and nothing else, so moving one by
+    half an hour meant deleting it and typing all six fields again -- and
+    losing the description in the process, because there was nothing to copy
+    it from once the row was gone.
+
+    Only fields actually present in the body are touched, the same rule
+    /api/settings follows: this is a partial update of one row, and a client
+    that knows about the time should not be able to blank the description by
+    not mentioning it.
+    """
+    event = db.query(Event).filter(
+        Event.id == event_id,
+        # Scoped to the caller, so another org's meeting cannot be edited --
+        # or probed for existence -- through this route.
+        Event.organization_id == org.id,
+    ).one_or_none()
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    problems = []
+
+    if "title" in data:
+        title = (data.get("title") or "").strip()
+        if not title:
+            problems.append("a title")
+        elif len(title) > 200:
+            return jsonify({"error": "That is longer than this field allows."}), 400
+        else:
+            event.title = title
+
+    if "partner" in data:
+        partner = (data.get("partner") or "").strip()
+        if not partner:
+            problems.append("who the meeting is with")
+        elif len(partner) > 255:
+            return jsonify({"error": "That is longer than this field allows."}), 400
+        else:
+            event.partner_name = partner
+
+    if "date" in data:
+        try:
+            event.date = datetime.strptime(data.get("date") or "", "%Y-%m-%d").date()
+        except ValueError:
+            problems.append("a valid date")
+
+    if "time" in data:
+        try:
+            event.time = datetime.strptime(data.get("time") or "", "%H:%M").time()
+        except ValueError:
+            problems.append("a valid start time")
+
+    if "duration" in data:
+        try:
+            duration = float(data.get("duration"))
+        except (TypeError, ValueError):
+            duration = None
+        if duration is None or duration <= 0 or duration > 24:
+            problems.append("a length between 0 and 24 hours")
+        else:
+            event.duration = duration
+
+    if "location" in data:
+        location = (data.get("location") or "").strip()
+        if len(location) > 255:
+            return jsonify({"error": "That is longer than this field allows."}), 400
+        event.location = location or None
+
+    if "description" in data:
+        event.description = (data.get("description") or "").strip() or None
+
+    if problems:
+        # Nothing is written: the assignments above are on the session, and
+        # this returns before the commit, so a partly-valid edit does not
+        # half-apply.
+        db.rollback()
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+
+    db.commit()
+    return jsonify({"message": "Meeting updated", "event": event.to_dict()})
+
+
 @app.route("/api/events/<int:event_id>", methods=["DELETE"])
 @login_required
 def delete_event(org, db, event_id):
@@ -2487,6 +2766,65 @@ def end_proposal(org, db, proposal_id):
         "message": "Partnership ended",
         "proposal": proposal.to_dict(viewer_id=org.id),
     })
+
+
+@app.route("/api/proposals/<int:proposal_id>/share", methods=["POST"])
+@login_required
+def rotate_share_link(org, db, proposal_id):
+    """Issue a new share link, retiring the old one.
+
+    A share token was minted once, on acceptance, and lived forever. Anyone
+    who was ever sent the link kept it -- a funder who is no longer involved,
+    a mailing list it was forwarded to, a board pack that went further than
+    intended -- and there was nothing an organization could do about that
+    short of asking support to edit the row.
+
+    Either party may do this. The agreement is equally theirs, and the reason
+    to reach for it is that the link has gone somewhere neither of them
+    intended -- which is not a thing one side should have to get the other's
+    permission to stop.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+    if proposal.status not in Partnership.PUBLIC:
+        return jsonify({
+            "error": "This proposal has no public link.",
+        }), 409
+
+    proposal.share_token = secrets.token_urlsafe(24)
+    db.commit()
+
+    # The other party is told, because their copy of the link has just
+    # stopped working and nothing else would say why.
+    notify_share_link_changed(proposal, org, revoked=False)
+
+    return jsonify({
+        "message": "New link created. The previous one no longer works.",
+        "share_token": proposal.share_token,
+        "share_url": f"/partnership.html?token={proposal.share_token}",
+    })
+
+
+@app.route("/api/proposals/<int:proposal_id>/share", methods=["DELETE"])
+@login_required
+def revoke_share_link(org, db, proposal_id):
+    """Take the agreement off the web entirely.
+
+    Unlike rotating, this leaves no link at all: the summary stops resolving
+    for anybody. The agreement itself is untouched -- both organizations
+    still see it, and a new link can be issued later.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+
+    if proposal.share_token is not None:
+        proposal.share_token = None
+        db.commit()
+        notify_share_link_changed(proposal, org, revoked=True)
+
+    return jsonify({"message": "Public link revoked"})
 
 
 # --- Messages ---------------------------------------------------------------
