@@ -172,35 +172,64 @@ document.addEventListener('DOMContentLoaded', async () => {
                 at: p.created_at
             });
 
+            // The response, whatever it was. A partnership that later
+            // completed or ended was still agreed on this date, and that is
+            // its own event -- keying every closer off `status` dropped the
+            // agreement from the feed the moment it finished.
             if (p.status !== 'pending' && p.responded_at) {
-                const closers = {
-                    accepted: {
+                const agreedOrRefused = ['accepted', 'completed', 'ended']
+                    .includes(p.status)
+                    ? {
                         icon: 'bx-check-circle',
-                        text: `Partnership with ${who} agreed`
-                    },
-                    declined: {
-                        icon: 'bx-x-circle',
-                        text: incoming
-                            ? `You declined the proposal from ${who}`
-                            : `${who} declined your proposal`
-                    },
-                    withdrawn: {
-                        icon: 'bx-undo',
-                        text: incoming
-                            ? `${who} withdrew their proposal`
-                            : `You withdrew your proposal to ${who}`
+                        text: `Partnership with ${who} agreed`,
+                        variant: 'accepted'
                     }
-                };
-                const closer = closers[p.status];
-                if (closer) {
-                    items.push({
-                        kind: 'proposal',
-                        variant: p.status,
-                        icon: closer.icon,
-                        text: closer.text,
-                        at: p.responded_at
-                    });
-                }
+                    : p.status === 'declined'
+                        ? {
+                            icon: 'bx-x-circle',
+                            variant: 'declined',
+                            text: incoming
+                                ? `You declined the proposal from ${who}`
+                                : `${who} declined your proposal`
+                        }
+                        : {
+                            icon: 'bx-undo',
+                            variant: 'withdrawn',
+                            text: incoming
+                                ? `${who} withdrew their proposal`
+                                : `You withdrew your proposal to ${who}`
+                        };
+                items.push({
+                    kind: 'proposal',
+                    variant: agreedOrRefused.variant,
+                    icon: agreedOrRefused.icon,
+                    text: agreedOrRefused.text,
+                    at: p.responded_at
+                });
+            }
+
+            // How it finished, on its own date rather than the date it was
+            // agreed -- responded_at is when the recipient accepted, which
+            // for a partnership that ran for a year is nowhere near when it
+            // closed.
+            if (p.status === 'completed' && p.completed_at) {
+                items.push({
+                    kind: 'proposal',
+                    variant: 'completed',
+                    icon: 'bx-check-double',
+                    text: `Partnership with ${who} completed`,
+                    at: p.completed_at
+                });
+            } else if (p.status === 'ended' && p.ended_at) {
+                items.push({
+                    kind: 'proposal',
+                    variant: 'ended',
+                    icon: 'bx-stop-circle',
+                    text: p.ended_by_you
+                        ? `You ended your partnership with ${who}`
+                        : `${who} ended your partnership`,
+                    at: p.ended_at
+                });
             }
         });
 
@@ -371,6 +400,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // an accepted partnership no longer implies there is anyone left
             // to meet. The agreement still shows on the partnerships page;
             // it just is not something to put in the diary.
+            // 'accepted' only: a completed or ended partnership is a record
+            // rather than someone you are still arranging meetings with.
             .filter((p) => p.status === 'accepted' && !p.counterpart.deleted)
             .forEach((p) => addOption(p.counterpart.id, p.counterpart.name));
         (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));

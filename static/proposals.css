@@ -323,3 +323,72 @@
     text-transform: uppercase;
     vertical-align: middle;
 }
+
+/* --- Lifecycle ------------------------------------------------------------
+   Where a partnership stands, in the cases the status pill cannot carry on
+   its own: waiting on one side to confirm, or finished with each side's
+   account of whether the other delivered. */
+.lifecycle-note {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin: 0.75rem 0 0;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(67, 97, 238, 0.06);
+    font-size: 0.87rem;
+    color: var(--text);
+}
+
+.lifecycle-note.delivery {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* Says plainly that this is not published, next to the thing it is about --
+   the reassurance is worth nothing on a settings page nobody opens. */
+.lifecycle-private {
+    color: var(--text-light);
+    font-size: 0.8rem;
+}
+
+.status-pill.status-completed {
+    background: rgba(74, 222, 128, 0.18);
+    color: #15803d;
+}
+
+.status-pill.status-ended {
+    background: rgba(0, 0, 0, 0.07);
+    color: #52525b;
+}
+
+/* --- The delivery question ------------------------------------------------
+   Asked when a partnership is marked complete, because that is the moment it
+   is answerable -- and only about the other side. */
+.delivery-ask {
+    margin: 1rem 0 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 0.6rem;
+}
+
+.delivery-ask legend {
+    padding: 0 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.delivery-ask label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-right: 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.delivery-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}

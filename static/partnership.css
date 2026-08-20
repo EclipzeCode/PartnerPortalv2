@@ -199,3 +199,27 @@ body {
     text-transform: uppercase;
     vertical-align: middle;
 }
+
+/* --- Outcome --------------------------------------------------------------
+   A partnership that has finished says so. The record is more useful for it,
+   not less: whoever was sent this link is better served by "this ran its
+   course in March" than by a page that still reads as though it is live. */
+.agreement-outcome {
+    margin: -0.25rem 0 1.25rem;
+    text-align: center;
+    color: var(--text-light, #8d99ae);
+    font-size: 0.92rem;
+}
+
+.agreement-badge.complete {
+    background: rgba(74, 222, 128, 0.15);
+    color: #15803d;
+}
+
+/* Neutral rather than red. Ending a partnership is an ordinary outcome, and
+   this page cannot say whose decision it was or why -- colouring it as a
+   failure would imply an answer it does not have. */
+.agreement-badge.ended {
+    background: rgba(0, 0, 0, 0.06);
+    color: #52525b;
+}

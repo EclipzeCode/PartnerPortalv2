@@ -62,10 +62,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return proposals.filter(
                     (p) => p.direction === 'outgoing' && p.status === 'pending');
             case 'agreed':
+                // Live agreements only. A partnership that has run its course
+                // sat here indefinitely, so this tab slowly became a list of
+                // everything ever agreed rather than what is actually running.
                 return proposals.filter((p) => p.status === 'accepted');
             default:
-                return proposals.filter(
-                    (p) => p.status === 'declined' || p.status === 'withdrawn');
+                return proposals.filter((p) => ['declined', 'withdrawn',
+                    'completed', 'ended'].includes(p.status));
         }
     }
 
@@ -89,6 +92,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }
 
+    // Where a partnership stands, in the cases the status pill cannot carry
+    // on its own: waiting on one side to confirm, or finished with each
+    // side's account of whether the other delivered.
+    function lifecycleNote(p) {
+        const parts = [];
+
+        if (p.status === 'accepted' && (p.you_marked_complete || p.they_marked_complete)) {
+            parts.push(p.you_marked_complete
+                ? '<p class="lifecycle-note"><i class=\'bx bx-time-five\'></i> '
+                  + 'You marked this complete. It closes once '
+                  + esc(p.counterpart.name) + ' confirms.</p>'
+                : '<p class="lifecycle-note"><i class=\'bx bx-bell\'></i> '
+                  + esc(p.counterpart.name) + ' marked this complete. '
+                  + 'Confirm from your side to close it.</p>');
+        }
+
+        if (p.status === 'ended') {
+            parts.push('<p class="lifecycle-note">'
+                + (p.ended_by_you
+                    ? 'You ended this partnership.'
+                    : esc(p.counterpart.name) + ' ended this partnership.')
+                + '</p>');
+            if (p.end_reason) {
+                parts.push('<blockquote class="proposal-message">'
+                    + esc(p.end_reason) + '</blockquote>');
+            }
+        }
+
+        // Only once it is over: a verdict on a partnership still running is
+        // not a verdict yet, and both sides record theirs at the same moment.
+        if (p.status === 'completed') {
+            const said = (verdict, who) => verdict === null || verdict === undefined
+                ? `${who} did not say`
+                : (verdict ? `${who} delivered` : `${who} did not deliver`);
+            parts.push('<p class="lifecycle-note delivery">'
+                + '<i class=\'bx bx-check-double\'></i> '
+                + esc(said(p.counterpart_delivered, p.counterpart.name))
+                + ' &middot; '
+                + esc(said(p.you_delivered, 'You'))
+                + ' <span class="lifecycle-private">(between the two of you)</span>'
+                + '</p>');
+        }
+
+        return parts.join('');
+    }
+
     function render() {
         const items = forTab(activeTab);
         list.innerHTML = '';
@@ -98,8 +147,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 incoming: 'No proposals waiting on you.',
                 outgoing: 'You have not sent any proposals yet. ' +
                           'Open a match and propose a partnership.',
-                agreed: 'No agreed partnerships yet.',
-                closed: 'Nothing declined or withdrawn.'
+                agreed: 'No partnerships running right now.',
+                closed: 'Nothing closed yet — this is where partnerships go '
+                        + 'once they finish, and where declined and withdrawn '
+                        + 'proposals are kept.'
             };
             list.innerHTML =
                 `<p class="empty-state">${esc(messages[activeTab])}` +
@@ -127,12 +178,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (p.can_withdraw) {
                 actions.push('<button class="btn-ghost" data-act="withdraw">Withdraw</button>');
             }
-            if (p.status === 'accepted' && p.share_token) {
+            if (p.share_token) {
                 actions.push(
                     `<a class="btn-primary" target="_blank" rel="noopener"
                         href="partnership.html?token=${encodeURIComponent(p.share_token)}">
                         View agreement</a>`);
                 actions.push('<button class="btn-ghost" data-act="copy">Copy link</button>');
+            }
+            if (p.can_complete) {
+                actions.push(
+                    '<button class="btn-ghost" data-act="complete">Mark complete</button>');
+            }
+            if (p.can_end) {
+                actions.push('<button class="btn-ghost" data-act="end">End partnership</button>');
             }
 
             card.innerHTML = `
@@ -162,6 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${p.response_message
                     ? `<blockquote class="proposal-message reply"><strong>Reply:</strong> ${esc(p.response_message)}</blockquote>`
                     : ''}
+                ${lifecycleNote(p)}
                 ${actions.length
                     ? `<div class="proposal-actions" data-id="${p.id}">${actions.join('')}</div>`
                     : ''}
@@ -203,7 +262,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         respondTitle.textContent = {
             accept: `Accept partnership with ${proposal.counterpart.name}?`,
             decline: `Decline proposal from ${proposal.counterpart.name}?`,
-            withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`
+            withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`,
+            complete: `Mark your partnership with ${proposal.counterpart.name} complete?`,
+            end: `End your partnership with ${proposal.counterpart.name}?`
         }[act];
 
         // Every branch says something: withdrawing used to leave a blank gap
@@ -213,6 +274,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 '<p class="respond-note">Accepting creates a shareable summary ' +
                 'that anyone with the link can read. It contains both ' +
                 'organization names and these terms, but no contact details.</p>';
+        } else if (act === 'complete') {
+            // The delivery question is asked here because this is the moment
+            // it is answerable, and only of the other side -- nobody grades
+            // their own homework.
+            respondTerms.innerHTML = termsBlock(proposal) +
+                `<p class="respond-note">This closes once `
+                + `${esc(proposal.counterpart.name)} confirms too. The shared `
+                + `summary stays available and will say the partnership is `
+                + `complete.</p>`
+                + `<fieldset class="delivery-ask">
+                       <legend>Did ${esc(proposal.counterpart.name)} provide
+                       what they committed to?</legend>
+                       <label><input type="radio" name="delivered" value="yes">
+                           <span>Yes</span></label>
+                       <label><input type="radio" name="delivered" value="no">
+                           <span>No</span></label>
+                       <label><input type="radio" name="delivered" value=""
+                           checked><span>Rather not say</span></label>
+                       <p class="delivery-note">Your answer is shown to
+                       ${esc(proposal.counterpart.name)} and to no one else. It
+                       never appears on the public summary, on either profile,
+                       or in any total.</p>
+                   </fieldset>`;
+        } else if (act === 'end') {
+            respondTerms.innerHTML =
+                `<p class="respond-note">This stops the partnership now, `
+                + `without waiting for ${esc(proposal.counterpart.name)} to `
+                + `agree. They are told that you ended it, along with your `
+                + `note below if you add one. The record of what was agreed `
+                + `stays available, and you can propose again later.</p>`;
         } else if (act === 'withdraw') {
             respondTerms.innerHTML =
                 `<p class="respond-note">This takes the proposal back before ` +
@@ -226,12 +317,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `with it.</p>`;
         }
 
+        // Completing takes no note -- the delivery answer is the message --
+        // and withdrawing reaches nobody, so neither offers the box.
         respondMessage.parentElement.style.display =
-            act === 'withdraw' ? 'none' : '';
+            (act === 'withdraw' || act === 'complete') ? 'none' : '';
+        const messageLabel = respondMessage.parentElement.querySelector('label');
+        if (messageLabel) {
+            messageLabel.textContent = act === 'end'
+                ? 'Why are you ending it? (optional)'
+                : 'Add a note (optional)';
+        }
         respondConfirm.textContent = {
-            accept: 'Accept partnership', decline: 'Decline', withdraw: 'Withdraw'
+            accept: 'Accept partnership', decline: 'Decline', withdraw: 'Withdraw',
+            complete: 'Mark complete', end: 'End partnership'
         }[act];
-        respondConfirm.className = act === 'accept' ? 'btn-primary' : 'btn-danger';
+        respondConfirm.className =
+            (act === 'accept' || act === 'complete') ? 'btn-primary' : 'btn-danger';
         respondMessage.value = '';
         openModal();
     });
@@ -244,18 +345,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { action, name } = pending;
         respondConfirm.disabled = true;
         try {
-            await window.api(`/api/proposals/${pending.id}/${pending.action}`, {
-                method: 'POST',
-                body: { message: respondMessage.value.trim() }
-            });
+            // Each endpoint takes the field it actually reads. Sending a
+            // `message` to /complete or a `reason` to /decline would be
+            // silently dropped, which is how a note someone typed goes
+            // missing without anything saying so.
+            let body;
+            if (action === 'complete') {
+                const picked = respondTerms.querySelector(
+                    'input[name="delivered"]:checked');
+                const value = picked ? picked.value : '';
+                // "Rather not say" is an empty value and stays absent, so
+                // "no answer" is distinguishable from "no".
+                body = value ? { delivered: value === 'yes' } : {};
+            } else if (action === 'end') {
+                body = { reason: respondMessage.value.trim() };
+            } else {
+                body = { message: respondMessage.value.trim() };
+            }
+
+            const result = await window.api(
+                `/api/proposals/${pending.id}/${pending.action}`,
+                { method: 'POST', body });
             closeModal();
             // Land on the tab where the result now lives.
             if (action === 'accept') activateTab('agreed');
+            if (action === 'end') activateTab('closed');
+            // Completing only moves it once both sides have confirmed.
+            if (action === 'complete' && !result.awaiting_other_side) {
+                activateTab('closed');
+            }
             await load();
             // The list re-renders underneath, and on accept the card also
             // changes tab -- easy to miss that anything happened at all, so
             // this says which of the three actions actually went through.
             window.toast({
+                complete: result && result.awaiting_other_side
+                    ? `Marked complete. It closes once ${name} confirms.`
+                    : `Partnership with ${name} is complete.`,
+                end: `Your partnership with ${name} has ended.`,
                 accept: `Partnership with ${name} accepted.`,
                 decline: `Proposal from ${name} declined.`,
                 withdraw: `Your proposal to ${name} was withdrawn.`

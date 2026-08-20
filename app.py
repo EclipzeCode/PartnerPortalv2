@@ -37,8 +37,10 @@ from models import (
     Event, Organization, Partnership, ProfileView, SavedLead,
 )
 from notifications import (
-    notify_contact_message, notify_email_verification, notify_password_changed,
-    notify_password_reset, notify_proposal_created, notify_proposal_responded,
+    notify_completion_marked, notify_contact_message, notify_email_verification,
+    notify_partnership_completed, notify_partnership_ended,
+    notify_password_changed, notify_password_reset, notify_proposal_created,
+    notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -461,7 +463,7 @@ def partnership_page():
             proposal = db.query(Partnership).filter(
                 Partnership.share_token == token
             ).one_or_none()
-            if proposal is not None and proposal.status == Partnership.ACCEPTED:
+            if proposal is not None and proposal.status in Partnership.PUBLIC:
                 summary = proposal.public_summary()
                 p1, p2 = summary["parties"][0]["name"], summary["parties"][1]["name"]
                 title = f"{p1} & {p2} | Partnership Agreement"
@@ -1901,7 +1903,13 @@ def get_dashboard(org, db):
                 1 for p in proposals
                 if p["direction"] == "outgoing" and p["status"] == "pending"
             ),
+            # Live agreements only. Counting completed and ended ones here
+            # would make the number climb forever and stop meaning "how many
+            # partnerships do I have running".
             "agreed": sum(1 for p in proposals if p["status"] == "accepted"),
+            "completed": sum(
+                1 for p in proposals if p["status"] == Partnership.COMPLETED
+            ),
             "saved": saved_count,
             "profile_views": views_total,
             "profile_views_recent": views_recent,
@@ -2179,6 +2187,12 @@ def list_proposals(org, db):
                 if p["direction"] == "outgoing" and p["status"] == "pending"
             ),
             "accepted": sum(1 for p in proposals if p["status"] == "accepted"),
+            "completed": sum(
+                1 for p in proposals if p["status"] == Partnership.COMPLETED
+            ),
+            "ended": sum(
+                1 for p in proposals if p["status"] == Partnership.ENDED
+            ),
         },
     })
 
@@ -2308,6 +2322,132 @@ def withdraw_proposal(org, db, proposal_id):
     })
 
 
+@app.route("/api/proposals/<int:proposal_id>/complete", methods=["POST"])
+@login_required
+def complete_proposal(org, db, proposal_id):
+    """Mark this side of an agreed partnership finished.
+
+    Mutual, the same way accepting is. One organization deciding alone that a
+    partnership is complete is a claim about what the other one received, and
+    nothing else in this model lets either side make a claim like that by
+    itself. So the first call records that this side is done and leaves the
+    status alone; the second, from the other organization, is what closes it.
+
+    The caller also records whether the *other* side provided what it
+    committed to. Nobody grades their own homework, and this is the one moment
+    the question is actually answerable.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+    if proposal.status != Partnership.ACCEPTED:
+        return jsonify({
+            "error": f"This partnership is {proposal.status}, so it cannot be "
+                     f"marked complete.",
+        }), 409
+    if proposal.completed_at_for(org.id) is not None:
+        # Idempotent in effect rather than an error: the other side has simply
+        # not answered yet, which is a state, not a mistake.
+        return jsonify({
+            "error": "You have already marked this complete. It closes once "
+                     "the other organization does too.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    delivered = data.get("delivered")
+    if delivered is not None and not isinstance(delivered, bool):
+        return jsonify({
+            "error": "Delivered must be true or false.",
+            "field": "delivered",
+        }), 400
+
+    now = datetime.now(timezone.utc)
+    if proposal.proposer_id == org.id:
+        proposal.proposer_completed_at = now
+        # Named for the side being judged: the proposer answers about the
+        # recipient.
+        if delivered is not None:
+            proposal.recipient_delivered = delivered
+    else:
+        proposal.recipient_completed_at = now
+        if delivered is not None:
+            proposal.proposer_delivered = delivered
+
+    both_done = (proposal.proposer_completed_at is not None
+                 and proposal.recipient_completed_at is not None)
+    if both_done:
+        proposal.status = Partnership.COMPLETED
+        proposal.completed_at = now
+
+    db.commit()
+
+    other = proposal.counterpart(org.id)
+    if both_done:
+        # To whoever marked it first: they are the one who has been waiting,
+        # and the caller already knows -- they just did it.
+        notify_partnership_completed(proposal, other)
+    else:
+        # The mutual half does not work without this. Nothing else on the
+        # site would tell the other organization a confirmation is waiting on
+        # it, so the agreement would sit half-closed indefinitely.
+        notify_completion_marked(proposal, org)
+
+    return jsonify({
+        "message": ("Partnership completed" if both_done
+                    else "Marked complete on your side"),
+        "awaiting_other_side": not both_done,
+        "proposal": proposal.to_dict(viewer_id=org.id),
+    })
+
+
+# A reason is shown to the other organization and to nobody else, so it is
+# capped at what someone will read rather than at what the column holds.
+MAX_END_REASON = 1000
+
+
+@app.route("/api/proposals/<int:proposal_id>/end", methods=["POST"])
+@login_required
+def end_proposal(org, db, proposal_id):
+    """Stop an agreed partnership. Either side, on its own.
+
+    Unlike completing, this deliberately does not need the other side to
+    agree. Requiring that would mean an organization could be held to a
+    partnership it wants out of by the other one simply never answering, and
+    there is no version of this product where that is the right outcome.
+
+    What it costs is that ending is one side's account. The reason goes to the
+    other organization, and never onto the public page -- see public_summary.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+    if proposal.status != Partnership.ACCEPTED:
+        return jsonify({
+            "error": f"This partnership is already {proposal.status}.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if len(reason) > MAX_END_REASON:
+        return jsonify({
+            "error": f"Keep the reason under {MAX_END_REASON} characters.",
+            "field": "reason",
+        }), 400
+
+    proposal.status = Partnership.ENDED
+    proposal.ended_at = datetime.now(timezone.utc)
+    proposal.ended_by_id = org.id
+    proposal.end_reason = reason or None
+    db.commit()
+
+    notify_partnership_ended(proposal, org)
+
+    return jsonify({
+        "message": "Partnership ended",
+        "proposal": proposal.to_dict(viewer_id=org.id),
+    })
+
+
 @app.route("/api/partnerships/<token>", methods=["GET"])
 def public_partnership(token):
     """The shareable summary. Deliberately unauthenticated.
@@ -2321,7 +2461,12 @@ def public_partnership(token):
         proposal = db.query(Partnership).filter(
             Partnership.share_token == token
         ).one_or_none()
-        if proposal is None or proposal.status != Partnership.ACCEPTED:
+        # Completed and ended agreements still resolve. The link was shared
+        # on the strength of what two organizations agreed, and that remains
+        # true after it finishes -- answering 404 the day it closes would
+        # break every reference to it and tell the reader nothing. The page
+        # says which it is.
+        if proposal is None or proposal.status not in Partnership.PUBLIC:
             return jsonify({"error": "Partnership not found."}), 404
         return jsonify({"partnership": proposal.public_summary()})
     finally:

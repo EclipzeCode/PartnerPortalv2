@@ -294,7 +294,22 @@ class Partnership(Base):
     ACCEPTED = "accepted"
     DECLINED = "declined"
     WITHDRAWN = "withdrawn"
-    STATUSES = (PENDING, ACCEPTED, DECLINED, WITHDRAWN)
+    # What happens after both sides said yes. "accepted" used to be the end of
+    # the line, which left every agreement ever made looking equally live --
+    # a partnership that ran its course last year sat in the same list, with
+    # the same public page, as one starting next week. For an app whose claim
+    # is that both sides actually get something, never recording whether they
+    # did is the more awkward half of that.
+    COMPLETED = "completed"
+    ENDED = "ended"
+    STATUSES = (PENDING, ACCEPTED, DECLINED, WITHDRAWN, COMPLETED, ENDED)
+
+    # Statuses where the partnership is over, whichever way it went.
+    SETTLED = (DECLINED, WITHDRAWN, COMPLETED, ENDED)
+    # Statuses that resolve at the public share link. A spent agreement is
+    # still a true record of what was agreed, and a funder holding the link
+    # is better served by "this finished in March" than by a 404.
+    PUBLIC = (ACCEPTED, COMPLETED, ENDED)
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -360,6 +375,51 @@ class Partnership(Base):
     # funder. Null until accepted, so a pending proposal has no public URL.
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
 
+    # --- Completion --------------------------------------------------------
+    # Completing is mutual, the same way accepting is. One organization
+    # deciding on its own that a partnership is finished is a claim about
+    # what the other one received, and this whole model is built on neither
+    # side being able to make that claim alone -- a proposal needs the
+    # recipient to accept, so an agreement needs both to close it. The first
+    # of these to be set marks that side as done and changes nothing else;
+    # the second is what moves the status to completed.
+    proposer_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    recipient_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Whether each side actually provided what it committed to.
+    #
+    # Named for the side being judged, not the side recording it:
+    # proposer_delivered is the *recipient's* answer about the proposer, and
+    # vice versa. Nobody grades their own homework, which is also why these
+    # can only be written by the other party.
+    #
+    # Private to the two organizations. It never reaches public_summary, and
+    # there is no aggregate anywhere: an unverified, undisputed "they did not
+    # deliver" published against a named real organization is a reputation
+    # system with no appeal, which is a different and much heavier product
+    # than this one. Between the two parties it is a record; published it
+    # would be an accusation.
+    proposer_delivered: Mapped[bool | None] = mapped_column(Boolean)
+    recipient_delivered: Mapped[bool | None] = mapped_column(Boolean)
+
+    # --- Ending ------------------------------------------------------------
+    # Unilateral, unlike completing. Requiring the other side to agree before
+    # you may stop would mean an organization could be held to a partnership
+    # it wants out of by the other one simply not answering.
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    # Shown to the other party, never on the public page. Ending is one
+    # organization's account of why, given without the other one having a say
+    # in how it is worded.
+    end_reason: Mapped[str | None] = mapped_column(Text)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -378,7 +438,8 @@ class Partnership(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'accepted', 'declined', 'withdrawn')",
+            "status IN ('pending', 'accepted', 'declined', 'withdrawn', "
+            "'completed', 'ended')",
             name="ck_partnerships_status",
         ),
         # An org proposing to itself is always a mistake, and the matching
@@ -512,6 +573,25 @@ class Partnership(Base):
              else self.proposer_gives) or []
         )
 
+    def completed_at_for(self, org_id):
+        """When `org_id` marked its side complete, if it has."""
+        return (self.proposer_completed_at if self.proposer_id == org_id
+                else self.recipient_completed_at)
+
+    def counterpart_completed_at(self, org_id):
+        return (self.recipient_completed_at if self.proposer_id == org_id
+                else self.proposer_completed_at)
+
+    def delivered_by(self, org_id):
+        """Whether `org_id` delivered, as judged by the other side."""
+        return (self.proposer_delivered if self.proposer_id == org_id
+                else self.recipient_delivered)
+
+    def delivered_by_counterpart(self, org_id):
+        """Whether the other side delivered, as judged by `org_id`."""
+        return (self.recipient_delivered if self.proposer_id == org_id
+                else self.proposer_delivered)
+
     def to_dict(self, viewer_id=None):
         data = {
             "id": self.id,
@@ -524,6 +604,10 @@ class Partnership(Base):
             "responded_at": (
                 self.responded_at.isoformat() if self.responded_at else None
             ),
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "share_token": self.share_token,
             # Same keys as before, plus `deleted`. Read through the accessors
             # rather than off self.proposer/self.recipient directly, which are
@@ -554,6 +638,31 @@ class Partnership(Base):
                 "can_withdraw": (
                     self.status == self.PENDING and self.proposer_id == viewer_id
                 ),
+                # Either party may close a live agreement. Completing needs
+                # both, so the button goes once this side has marked it;
+                # ending needs one, so it stays until the status changes.
+                "can_complete": (
+                    self.status == self.ACCEPTED
+                    and self.completed_at_for(viewer_id) is None
+                ),
+                "can_end": self.status == self.ACCEPTED,
+                "you_marked_complete": (
+                    self.completed_at_for(viewer_id) is not None
+                ),
+                "they_marked_complete": (
+                    self.counterpart_completed_at(viewer_id) is not None
+                ),
+                # Both verdicts, to both parties. Showing one side what the
+                # other recorded about it is the point of recording it --
+                # a private note the subject cannot see would be a rating,
+                # not a record between two organizations.
+                "counterpart_delivered": self.delivered_by_counterpart(viewer_id),
+                "you_delivered": self.delivered_by(viewer_id),
+                "end_reason": self.end_reason,
+                "ended_by_you": (
+                    self.ended_by_id is not None
+                    and self.ended_by_id == viewer_id
+                ),
             })
         return data
 
@@ -562,6 +671,16 @@ class Partnership(Base):
         return {
             "status": self.status,
             "agreed_at": self.responded_at.isoformat() if self.responded_at else None,
+            # How it finished, if it has. Deliberately just the fact and the
+            # date: who ended it, why, and either side's verdict on whether
+            # the other delivered all stay between the two organizations.
+            # This page is read by people with no account and no stake, and
+            # an unanswerable claim about a named organization is not
+            # something to publish on their behalf.
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "timeline": self.timeline,
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
             "message": self.message,

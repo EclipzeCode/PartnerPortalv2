@@ -61,8 +61,40 @@
         `;
     }
 
+    // What the badge and the date line say depends on where the partnership
+    // got to. A page that still reads "Agreed partnership" a year after it
+    // finished is telling whoever was sent the link something that is no
+    // longer true -- and the record is more useful, not less, for saying so.
+    const finished = {
+        completed: {
+            cls: 'complete',
+            icon: 'bx-check-double',
+            label: 'Completed partnership',
+            line: (d) => `Both organizations confirmed this ran its course${
+                d ? ' on ' + esc(d) : ''}.`,
+        },
+        ended: {
+            cls: 'ended',
+            icon: 'bx-stop-circle',
+            label: 'Ended partnership',
+            // Deliberately silent on who ended it and why. Those are one
+            // organization's account, and this page is read by people with
+            // no account, no stake and no way to hear the other side.
+            line: (d) => `This partnership ended${d ? ' on ' + esc(d) : ''}.`,
+        },
+    }[partnership.status];
+
+    const finishedOn = (partnership.completed_at || partnership.ended_at)
+        ? new Date(partnership.completed_at || partnership.ended_at)
+            .toLocaleDateString('en-US',
+                { year: 'numeric', month: 'long', day: 'numeric' })
+        : '';
+
     card.innerHTML = `
-        <div class="agreement-badge"><i class='bx bx-check-shield'></i> Agreed partnership</div>
+        <div class="agreement-badge${finished ? ' ' + finished.cls : ''}">
+            <i class='bx ${finished ? finished.icon : 'bx-check-shield'}'></i>
+            ${finished ? finished.label : 'Agreed partnership'}
+        </div>
         <h1>${esc(partnership.parties[0].name)} &amp; ${esc(partnership.parties[1].name)}</h1>
         <p class="agreement-date">
             Confirmed by both organizations${agreed ? ' on ' + esc(agreed) : ''}${
@@ -71,6 +103,9 @@
                     : ''
             }
         </p>
+        ${finished
+            ? `<p class="agreement-outcome">${finished.line(finishedOn)}</p>`
+            : ''}
 
         <div class="parties">
             ${partyBlock(partnership.parties[0])}

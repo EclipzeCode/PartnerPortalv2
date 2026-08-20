@@ -291,6 +291,115 @@ def notify_proposal_responded(proposal):
     _dispatch(to_addr, subject, html, text)
 
 
+def notify_completion_marked(proposal, actor):
+    """One side marked an agreement complete; the other has to confirm.
+
+    Without this the mutual half of completing does not work at all. Nothing
+    on the site tells an organization that a partnership is waiting on its
+    confirmation, so it would sit half-closed indefinitely -- the same reason
+    notify_proposal_created exists for the propose step.
+    """
+    other = proposal.counterpart(actor.id)
+    if other is None or not other.email_notifications:
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    review_url = f"{cfg['app_url']}/proposals.html#agreed"
+
+    subject = f"{actor.name} marked your partnership complete"
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(actor.name)} marked your partnership complete</h1>
+  <p class="meta">It closes once you confirm from your side.</p>
+
+  <p>Confirming records that this partnership ran its course. You can also
+  say whether {escape(actor.name)} provided what they committed to --
+  that stays between the two of you.</p>
+
+  <a class="cta" href="{escape(review_url)}">Review and confirm</a>
+
+  <p class="foot">You are receiving this because you and
+  {escape(actor.name)} agreed a partnership through PartnerPortal.</p>
+</div></body></html>
+"""
+    text = (
+        f"{actor.name} marked your partnership complete on PartnerPortal.\n"
+        f"It closes once you confirm from your side: {review_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text)
+
+
+def notify_partnership_completed(proposal, other):
+    """Both sides have now confirmed. Tells whoever marked it first."""
+    if other is None or not other.email_notifications:
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    url = (f"{cfg['app_url']}/partnership.html?token={proposal.share_token}"
+           if proposal.share_token
+           else f"{cfg['app_url']}/proposals.html#agreed")
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Partnership complete</h1>
+  <p class="meta">Both organizations have confirmed it ran its course.</p>
+
+  <a class="cta" href="{escape(url)}">View the record</a>
+
+  <p class="foot">The shared summary stays available and now says the
+  partnership is complete.</p>
+</div></body></html>
+"""
+    text = (
+        "Both organizations have confirmed your partnership is complete on "
+        f"PartnerPortal.\nThe shared summary stays available: {url}\n"
+    )
+    _dispatch(to_addr, "Your partnership is complete", html, text)
+
+
+def notify_partnership_ended(proposal, actor):
+    """One side stopped an agreed partnership.
+
+    Ending does not need the other side's agreement, which is exactly why it
+    needs to reach them: otherwise the first they learn of it is a status
+    changing on a page they may not open for weeks.
+    """
+    other = proposal.counterpart(actor.id)
+    if other is None or not other.email_notifications:
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    url = f"{cfg['app_url']}/proposals.html#closed"
+
+    reason_html = (f'<div class="quote">{escape(proposal.end_reason)}</div>'
+                   if proposal.end_reason else "")
+    reason_text = (f'\nTheir note: "{proposal.end_reason}"\n'
+                   if proposal.end_reason else "")
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(actor.name)} ended your partnership</h1>
+  <p class="meta">It is no longer active on PartnerPortal.</p>
+
+  {reason_html}
+
+  <a class="cta" href="{escape(url)}">See the details</a>
+
+  <p class="foot">The record of what was agreed stays available. You can
+  propose a new partnership with {escape(actor.name)} at any time.</p>
+</div></body></html>
+"""
+    text = (
+        f"{actor.name} ended your partnership on PartnerPortal.\n"
+        + reason_text
+        + f"\nThe record of what was agreed stays available: {url}\n"
+    )
+    _dispatch(to_addr, f"{actor.name} ended your partnership", html, text)
+
+
 def notify_email_verification(org, token):
     """Sent after registration, and again on request from the settings page.
 
