@@ -623,6 +623,20 @@ button.view-all {
     border-bottom: none;
 }
 
+/* A meeting that has already happened. Still listed -- it is the only record
+   of it anyone has -- but visibly not one of the ones coming up, so the
+   heading above the list and the count on the stat card stay true to what
+   the reader sees. Dimmed rather than hidden, and not so far that the text
+   stops being readable. */
+.event-item.is-past {
+    opacity: 0.55;
+}
+
+.event-item.is-past .event-date {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-light);
+}
+
 .event-date {
     background: rgba(67, 97, 238, 0.1);
     color: var(--primary);

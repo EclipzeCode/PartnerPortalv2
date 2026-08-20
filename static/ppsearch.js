@@ -188,9 +188,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function applyView() {
+    // `keepPage` is for renders caused by something the reader did to one
+    // card -- bookmarking it, writing a note on it. Those used to send the
+    // grid back to page 1, so acting on a card on page 4 meant losing your
+    // place and paging back to find where you were. A new search or a
+    // different view really is a different list and still starts at the top.
+    function applyView({ keepPage = false } = {}) {
         const q = (searchInput.value || '').toLowerCase().trim();
         const norm = (v) => (v || '').toLowerCase();
+        const page = currentPage;
 
         if (viewMode === 'saved') {
             showingExamples = false;
@@ -202,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     (m.offers_labels || []).some((l) => norm(l).includes(q)) ||
                     (m.needs_labels || []).some((l) => norm(l).includes(q)))
                 : [...savedList];
-            currentPage = 1;
+            currentPage = keepPage ? page : 1;
             render();
             return;
         }
@@ -230,7 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (m.needs_labels || []).some((l) => norm(l).includes(q)))
             : [...source];
 
-        currentPage = 1;
+        currentPage = keepPage ? page : 1;
         render();
     }
 
@@ -519,7 +525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             paintDetailSave(wantSaved);
             paintDetailNote(id);
             // The card behind the dialog carries the same state.
-            applyView();
+            applyView({ keepPage: true });
         });
     }
 
@@ -543,7 +549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (entry) entry.note = data.note || '';
                 detailNoteStatus.textContent = 'Saved.';
                 detailNoteStatus.className = 'detail-note-status ok';
-                applyView();
+                applyView({ keepPage: true });
             } catch (error) {
                 detailNoteStatus.textContent =
                     error.message || 'Could not save that note.';
@@ -620,7 +626,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (viewMode === 'saved') {
                 // Removing the last thing on screen should not leave an empty
                 // grid with stale pagination.
-                applyView();
+                applyView({ keepPage: true });
             } else {
                 save.classList.toggle('saved', wantSaved);
                 save.setAttribute('aria-pressed', String(wantSaved));
@@ -848,6 +854,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             sharedFocusOnly = Boolean(focusBox && focusBox.checked);
             paintFilterButton();
             closeModal(filterModal);
+            // Both filters describe the match list, and the shortlist is
+            // deliberately not filtered by either -- it is what someone chose
+            // to keep. Applying one from inside the saved view used to reload
+            // the matches and then render the shortlist unchanged, so the
+            // button claimed a filter the visible list did not have. Asking
+            // for a filter is asking to see the list it applies to.
+            if (viewMode === 'saved') {
+                await setViewMode('matches');
+            }
             await loadMatches();
         });
     }
@@ -859,13 +874,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             sharedFocusOnly = false;
             paintFilterButton();
             closeModal(filterModal);
+            if (viewMode === 'saved') {
+                await setViewMode('matches');
+            }
             await loadMatches();
         });
     }
 
     prevBtn.addEventListener('click', () => goToPage(currentPage - 1));
     nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
-    searchInput.addEventListener('input', applyView);
+    // Wrapped rather than passed directly: the handler receives an Event,
+    // which would arrive here as applyView's options object.
+    searchInput.addEventListener('input', () => applyView());
 
     if (showAllBtn) {
         showAllBtn.addEventListener('click', () => {

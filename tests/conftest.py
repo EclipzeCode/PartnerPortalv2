@@ -79,9 +79,15 @@ def reset_rate_limits():
     behaviour under test elsewhere, and makes each test independent of how
     many ran before it.
     """
+    # The sweep timer goes with the buckets. Left alone, a test that pushed
+    # it into the future would silently disable eviction for everything that
+    # ran after it -- the same cross-test dependence this fixture exists to
+    # remove.
     app_module._rate_buckets.clear()
+    app_module._rate_sweep_after = 0.0
     yield
     app_module._rate_buckets.clear()
+    app_module._rate_sweep_after = 0.0
 
 
 @pytest.fixture

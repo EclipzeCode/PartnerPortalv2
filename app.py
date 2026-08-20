@@ -260,6 +260,37 @@ def password_problem(password, *, email="", name=""):
 # worth the operational cost it would add.
 _rate_buckets = defaultdict(list)
 
+# Nothing removed a key from _rate_buckets once it appeared. Every address
+# that ever hit a limited endpoint, and every address ever typed into
+# /forgot-password -- which is keyed by email, so it is attacker-chosen and
+# unbounded -- left an entry behind for the life of the process. The lists
+# themselves are trimmed on each call, so what accumulated was mostly empty
+# lists under keys nobody would ask about again: a slow leak, and a cheap way
+# for anyone to grow the process by naming new keys.
+#
+# Swept on a timer rather than on every call. The sweep walks the whole dict,
+# and doing that per request would make the common case pay for the rare one.
+RATE_SWEEP_INTERVAL = 300
+# The longest window any caller passes. A key whose newest attempt is older
+# than this cannot affect any limit, whichever bucket it belongs to.
+RATE_MAX_WINDOW = 3600
+_rate_sweep_after = 0.0
+
+
+def _sweep_rate_buckets(now):
+    """Drop keys that can no longer affect any limit."""
+    global _rate_sweep_after
+    if now < _rate_sweep_after:
+        return
+    _rate_sweep_after = now + RATE_SWEEP_INTERVAL
+    cutoff = now - RATE_MAX_WINDOW
+    stale = [
+        key for key, attempts in _rate_buckets.items()
+        if not attempts or attempts[-1] < cutoff
+    ]
+    for key in stale:
+        del _rate_buckets[key]
+
 
 def rate_limited(bucket, key, max_attempts, window_seconds):
     """True (and records nothing further) if `key` has hit the limit in
@@ -267,6 +298,7 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
     and returns False.
     """
     now = time.time()
+    _sweep_rate_buckets(now)
     attempts = _rate_buckets[(bucket, key)]
     cutoff = now - window_seconds
     while attempts and attempts[0] < cutoff:
@@ -1036,6 +1068,16 @@ def update_settings(org, db):
     """
     data = request.get_json(silent=True) or {}
 
+    # Every key this endpoint understands. A body naming none of them used to
+    # commit nothing and answer "Settings saved", which is a success message
+    # for an action that did not happen -- and the one case where that is not
+    # pedantic is a client sending a setting this version has never heard of,
+    # where "saved" is exactly the wrong answer.
+    if not any(field in data for field in ("email_notifications",)):
+        return jsonify({
+            "error": "No known setting was included in that request.",
+        }), 400
+
     if "email_notifications" in data:
         value = data["email_notifications"]
         # Strictly a boolean rather than truthiness: "false" and 0 are both
@@ -1344,6 +1386,23 @@ def get_matches(org, db):
 # signed-out, with no account here and no way to opt out.
 VIEW_DEDUP_WINDOW = timedelta(hours=24)
 
+# What _viewer_key is salted with. Its own value rather than app.secret_key,
+# which is what this used before, for two reasons.
+#
+# Without SECRET_KEY set the app runs on a key regenerated every restart, so
+# every returning visitor hashed to a new key and counted again -- the dedup
+# this table exists for quietly did nothing, and the numbers on the dashboard
+# were restarts as much as visitors. And rotating SECRET_KEY is a thing
+# someone should be able to do after a leak without also, permanently,
+# double-counting everyone who has ever visited.
+#
+# Falls back to the secret key so nothing has to be configured for this to
+# work; set PROFILE_VIEW_SALT to any fixed string to pin it. Changing it only
+# affects which repeat visits are recognised as repeats.
+PROFILE_VIEW_SALT = (
+    os.environ.get("PROFILE_VIEW_SALT", "").strip() or app.secret_key
+)
+
 
 def _viewer_key(viewer_org):
     """A stable, opaque handle for whoever is looking.
@@ -1360,7 +1419,7 @@ def _viewer_key(viewer_org):
     else:
         basis = f"anon:{client_ip()}:{request.headers.get('User-Agent', '')}"
     return hashlib.sha256(
-        f"{app.secret_key}:{basis}".encode("utf-8")
+        f"{PROFILE_VIEW_SALT}:{basis}".encode("utf-8")
     ).hexdigest()
 
 
@@ -2071,4 +2130,10 @@ def public_partnership(token):
 
 if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
-    app.run(debug=debug, port=int(os.environ.get("PORT", 5000)))
+    # 5001, not 5000: everything else here already assumes it -- the README,
+    # .env.example, and notifications.py's APP_BASE_URL fallback -- and on
+    # macOS port 5000 is taken by AirPlay Receiver, which is what moved this
+    # project off it in the first place (see the note in common.js). The
+    # default disagreeing with the docs meant following the README landed on
+    # a page that was not there.
+    app.run(debug=debug, port=int(os.environ.get("PORT", 5001)))

@@ -467,7 +467,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const total = hours * 60 + minutes + Math.round(hoursToAdd * 60);
         const endHours = Math.floor(total / 60) % 24;
         const endMinutes = total % 60;
-        return formatTime(`${endHours}:${String(endMinutes).padStart(2, '0')}`);
+        const label = formatTime(`${endHours}:${String(endMinutes).padStart(2, '0')}`);
+        // A meeting starting at 23:00 and running two hours ended at
+        // "1:00 AM" with nothing to say which day that was -- which reads as
+        // a meeting that finished twenty-two hours before it started.
+        return total >= 24 * 60 ? `${label} (+1 day)` : label;
     }
 
     // Focus is handled by common.js's dialogOpened/dialogClosed, which trap
@@ -508,6 +512,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return new Date(year, month - 1, day);
     }
 
+    // Whether a meeting has already finished. The card is headed "Upcoming"
+    // and the stat card counts what it holds, but nothing looked at the date
+    // -- so a meeting from March was still being counted and shown as
+    // something coming up. Measured from the end of the meeting rather than
+    // its start, so one that is running right now still counts as upcoming.
+    function isPastEvent(ev) {
+        const end = eventDateTime(ev);
+        if (!end) return false;
+        const finishes = new Date(end);
+        finishes.setMinutes(
+            finishes.getMinutes() + Math.round((Number(ev.duration) || 0) * 60),
+        );
+        return finishes.getTime() < Date.now();
+    }
+
     function eventTimeLabel(event) {
         const endTime = addHours(event.time, event.duration);
         return endTime
@@ -521,7 +540,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const timeLabel = eventTimeLabel(event);
 
         const item = document.createElement('div');
-        item.className = 'event-item';
+        item.className = 'event-item' + (isPastEvent(event) ? ' is-past' : '');
         // Opens the same dialog the Upcoming stat card does.
         item.dataset.eventId = event.id;
         item.innerHTML = `
@@ -548,16 +567,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const events = loadEvents().sort((a, b) =>
             `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)
         );
+        // Split rather than filtered: a meeting that has happened is still
+        // worth seeing, and dropping it would lose the only record anyone
+        // has of it. It just is not "upcoming", so it sorts below everything
+        // that is -- most recent first, since a meeting last week is more
+        // interesting than one last year -- and is marked as past.
+        const upcoming = events.filter((ev) => !isPastEvent(ev));
+        const past = events.filter(isPastEvent).reverse();
 
         if (events.length === 0) {
             eventsList.innerHTML =
                 '<p class="empty-state">No meetings scheduled yet.</p>';
         } else {
-            events.forEach((event) => eventsList.appendChild(renderEvent(event)));
+            [...upcoming, ...past].forEach(
+                (event) => eventsList.appendChild(renderEvent(event)));
         }
 
+        // Counts what the card is headed with. This used to be every meeting
+        // ever saved, so one from March still read as something coming up.
         const counter = document.getElementById('upcomingEvents');
-        if (counter) counter.textContent = events.length;
+        if (counter) counter.textContent = upcoming.length;
 
         // Meetings are one of the feed's sources, so adding or removing one
         // has to reach the activity list too.
