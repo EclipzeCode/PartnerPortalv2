@@ -254,6 +254,29 @@ def password_problem(password, *, email="", name=""):
     return None
 
 
+# How many times one connection may be told an address is already registered,
+# per hour. Tighter than the signup limit itself, and deliberately separate
+# from it.
+#
+# /register cannot be made to keep this secret. Answering "that email is
+# already registered" is an oracle, and the only reply that is not one is the
+# reply a brand new signup gets -- which means accepting the attempt, showing
+# a success, and mailing the existing address to say somebody tried. Without
+# a channel to that address the person is shown a success for an account they
+# do not have, cannot sign in, and is told nothing anywhere. That is worse
+# than the disclosure.
+#
+# So the disclosure stays, and what changes is how much of it one connection
+# can collect. Spending the budget closes /register for that address
+# entirely, for everybody and both answers, rather than switching the reply
+# on the taken path -- a different reply for taken addresses is the same
+# oracle wearing a different status code.
+#
+# Someone signing up who already has an account does this once, maybe twice.
+# A script working down a list does it every time.
+MAX_EXISTENCE_DISCLOSURES = 2
+EXISTENCE_DISCLOSURE_WINDOW = 3600
+
 # --- Rate limiting --------------------------------------------------------
 # In-process and per-worker: gunicorn runs this app with 2 workers (see
 # render.yaml), so the real ceiling on any of these limits is up to 2x what
@@ -311,6 +334,20 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
         return True
     attempts.append(now)
     return False
+
+
+def rate_limit_reached(bucket, key, max_attempts, window_seconds):
+    """Whether `key` is already at the limit, without recording an attempt.
+
+    rate_limited() answers the same question but counts the asking, which is
+    wrong for a budget that gates an endpoint rather than one that meters
+    each call: checking would spend the thing being checked.
+    """
+    attempts = _rate_buckets.get((bucket, key))
+    if not attempts:
+        return False
+    cutoff = time.time() - window_seconds
+    return sum(1 for t in attempts if t >= cutoff) >= max_attempts
 
 
 def client_ip():
@@ -653,6 +690,20 @@ def register():
                      "Please try again in a while.",
         }), 429
 
+    # Checked before anything is looked up, and answered the same way whatever
+    # was asked for. A connection that has already been told twice that an
+    # address is taken gets nothing further out of this endpoint -- not a
+    # different message for taken addresses, which would be the same oracle
+    # with a new status code, but the same closed door for every address.
+    if rate_limit_reached("register_exists", client_ip(),
+                          MAX_EXISTENCE_DISCLOSURES,
+                          EXISTENCE_DISCLOSURE_WINDOW):
+        return jsonify({
+            "error": "Too many sign-up attempts from this connection recently. "
+                     "Please try again in a while, or sign in if you already "
+                     "have an account.",
+        }), 429
+
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
     problem = name_problem(name)
@@ -678,25 +729,54 @@ def register():
     if problem:
         return jsonify({"error": problem}), 400
 
+    # Hashed before the insert is attempted, so both answers cost the same.
+    #
+    # This is the oracle that survives changing the message. bcrypt at the
+    # default cost is most of what a signup spends, and returning early on a
+    # taken address skipped it -- measured at ~490ms faster than a successful
+    # signup, which is not a subtle side channel but a reliable one anybody
+    # can read off a stopwatch. Any wording chosen for the two cases is
+    # irrelevant while the clock distinguishes them.
+    #
+    # The cost is one bcrypt on a request that will be refused. That is the
+    # same work a successful signup does, so the worst case is unchanged.
+    password_hash = bcrypt.hashpw(
+        password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
     db = get_db()
     try:
-        existing = db.query(Organization).filter(
-            Organization.email == email
-        ).one_or_none()
-        if existing is not None:
-            return jsonify({"error": "That email is already registered."}), 409
-
+        # No "is this address taken" query first. The insert is attempted and
+        # the unique index decides, which is both the correct way to do this
+        # and the one that does not tell the clock which answer is coming.
+        #
+        # Checking first meant a taken address cost one SELECT and a free one
+        # cost a SELECT plus an INSERT -- a round trip to the database that
+        # only ever happened for addresses nobody had registered, and worth
+        # about 250ms of it. Answering both with one write leaves nothing in
+        # the shape of the work to read.
+        #
+        # It also removes the gap between checking and inserting, where two
+        # signups for the same address could both pass the check and the
+        # second would come back as a 500.
         org = Organization(
             email=email,
             name=name,
-            password_hash=bcrypt.hashpw(
-                password.encode("utf-8"), bcrypt.gensalt()
-            ).decode("utf-8"),
+            password_hash=password_hash,
             email_verify_token=secrets.token_urlsafe(32),
             email_verify_sent_at=datetime.now(timezone.utc),
         )
         db.add(org)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            # Recorded here rather than at the top: the budget is spent by
+            # being told something, not by asking.
+            rate_limited("register_exists", client_ip(),
+                         max_attempts=MAX_EXISTENCE_DISCLOSURES,
+                         window_seconds=EXISTENCE_DISCLOSURE_WINDOW)
+            return jsonify({"error": "That email is already registered."}), 409
 
         notify_email_verification(org, org.email_verify_token)
 
@@ -1234,6 +1314,18 @@ def change_email(org, db):
                      "again.",
         }), 429
 
+    # The same budget /register keeps, for the same reason: "that address is
+    # already registered" is the same disclosure here, and a signed-in
+    # account asking it repeatedly is doing what a script does, not what
+    # somebody moving their own email does. Keyed by account rather than
+    # address, because that is what has to be held to get this far at all.
+    if rate_limit_reached("change_email_exists", str(org.id),
+                          MAX_EXISTENCE_DISCLOSURES,
+                          EXISTENCE_DISCLOSURE_WINDOW):
+        return jsonify({
+            "error": "Too many attempts. Please wait a while and try again.",
+        }), 429
+
     if not org.password_hash:
         return jsonify({
             "error": "This account has no password set. Please contact "
@@ -1254,9 +1346,14 @@ def change_email(org, db):
         Organization.email == new_email, Organization.id != org.id
     ).first()
     if taken is not None:
-        # Deliberately the same answer /register gives. This endpoint needs a
-        # password, so it is not an enumeration route in the way signup is,
-        # and telling the account holder plainly is what lets them act on it.
+        # Telling the account holder plainly is what lets them act on it --
+        # they have proven the password and are moving their own address, and
+        # "it did not work" with no reason is a dead end. What is metered is
+        # how often one account may be told, which is the line between
+        # somebody changing their email and somebody working down a list.
+        rate_limited("change_email_exists", str(org.id),
+                     max_attempts=MAX_EXISTENCE_DISCLOSURES,
+                     window_seconds=EXISTENCE_DISCLOSURE_WINDOW)
         return jsonify({
             "error": "That email is already registered to another account.",
             "field": "email",
