@@ -2,22 +2,6 @@
    Deliberately mirrors ppdashboard.css: same tokens, same section header +
    underline, same white card treatment, same .btn-action. */
 
-:root {
-  --primary: #4361ee;
-  --primary-dark: #20348f;
-  --secondary: #3f37c9;
-  --dark: #1a1a2e;
-  --light: #f8f9fa;
-  --accent: #4cc9f0;
-  --text: #2b2d42;
-  --text-light: #8d99ae;
-  --success: #16a34a;
-  --warning: #fbbf24;
-  --error: #dc2626;
-  --border: #e0e0e0;
-  --bg-light: #f5f7ff;
-}
-
 * {
   margin: 0;
   padding: 0;
@@ -710,7 +694,6 @@ body {
   margin-bottom: 0.5rem;
 }
 
-
 /* Group headings stay visible while the picker scrolls, so the categories
    never lose their context. */
 .category-picker .category-group h4 {
@@ -727,7 +710,6 @@ body {
   padding-top: 0;
   border-top: none;
 }
-
 
 /* ---------- Links ---------- */
 /* Set apart from the fields above it so the "signed-in only" note clearly

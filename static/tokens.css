@@ -1,0 +1,78 @@
+/* The palette, in one place.
+ *
+ * Every stylesheet used to declare its own :root. Fourteen of them did, and
+ * eight tokens disagreed across those copies -- so which value a page got was
+ * decided by which <link> happened to come last, not by anything anyone chose.
+ *
+ * That is not a tidiness problem. ppdashboard.html loads ppdashboard.css and
+ * then proposals.css, and both defined --success at the same specificity; the
+ * accepted-status pill pairs a hardcoded rgba(22,163,74,.12) background with
+ * color: var(--success), and read correctly only because proposals.css won the
+ * race. Swapping those two link tags -- an edit nobody would think twice about
+ * -- dropped that pill to 1.53:1 against its own background.
+ *
+ * So: this file is loaded first by every page, and no other stylesheet
+ * declares a palette token. forms.css keeps its --ctl-* block, which is
+ * genuinely scoped to form controls rather than a copy of anything here.
+ *
+ * Where the copies disagreed, the value kept is noted. Three were settled on
+ * contrast rather than on headcount -- the losing value failed WCAG AA badly
+ * enough that "more files happened to say it" was not a reason to keep it.
+ */
+
+:root {
+    /* --- Brand ---------------------------------------------------------- */
+    --primary: #4361ee;         /* unanimous across all 13 that declared it */
+    /* Almost always the hover/active state under a --primary button. Was
+       #20348f on the eight app pages and #3a56d4 on the five error, reset
+       and settings pages. Kept the app's value: it is the majority, it is
+       what the product looks like today, and at 10.77:1 it is the stronger
+       of the two. The five peripheral pages get a darker hover. */
+    --primary-dark: #20348f;
+    --secondary: #3f37c9;
+    --accent: #4cc9f0;
+    --primary-light: rgba(67, 97, 238, 0.1);
+
+    /* --- Neutrals -------------------------------------------------------- */
+    --dark: #1a1a2e;
+    --light: #f8f9fa;
+    --text: #2b2d42;            /* unanimous */
+    /* Twelve files said #8d99ae and settings.css alone said #6c757d, so this
+       is the one token where the majority was the wrong answer: #8d99ae is
+       2.88:1 on white and fails AA for body text, while #6c757d is 4.69:1
+       and passes. settings.css was the only page getting it right.
+       Consolidating down to the majority would have spread the failure to
+       the one page without it, so the minority value wins here. Every page
+       but settings gets slightly darker, more neutral secondary text --
+       captions, meta lines, hints, footers -- and all thirteen now pass. */
+    --text-light: #6c757d;
+    --border: #e6e8f0;          /* 7 files; was #e0e0e0 on 2, #e9ecef on 1 */
+    --bg: #f5f7ff;              /* 6 files; was #f8f9fa in settings.css */
+    /* The same colour under the name onboarding.css and ppdashboard.css use.
+       An alias rather than a rename, so nine call sites stay as they are. */
+    --bg-light: #f5f7ff;
+
+    /* --- Semantic -------------------------------------------------------- */
+    /* All three were split between a light Tailwind-400 tone and a darker
+       -600/700 one, and all three are used almost entirely as `color:` on
+       text. The light values are unreadable on white -- 1.74:1, 1.67:1 and
+       2.77:1 -- so the darker value wins each one even where it was in the
+       minority. In practice almost nothing moves: every page that uses
+       --warning already resolved to #d97706, and --success as a light green
+       survived on exactly one border. */
+    --success: #16a34a;         /* not #4ade80 -- 1.74:1 on white */
+    --warning: #d97706;         /* not #fbbf24 -- 1.67:1 on white */
+    --error: #dc2626;           /* not #f87171 -- 2.77:1 on white */
+    /* pplogin.css already wrote var(--error, #dc2626) at three call sites
+       while its own :root said #f87171, so the fallback never fired and the
+       intent never took effect. It does now. */
+    --danger: #dc2626;          /* was #e63946 in settings.css alone */
+    --danger-dark: #c92c39;
+
+    /* --- Legacy aliases --------------------------------------------------- */
+    /* pplogin.css refers to the brand colour and its card background under
+       these two names. Kept as aliases so that file's call sites are left
+       alone; prefer --primary and a plain white above in anything new. */
+    --main-color: #4361ee;
+    --bg-color: #ffffff;
+}
