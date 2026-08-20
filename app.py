@@ -1178,9 +1178,11 @@ def delete_account(org, db):
     session: this is the one action with no undo, and a session cookie on a
     borrowed or unattended browser should not be enough to destroy an account.
 
-    Partnerships pointing at this org go with it -- both foreign keys are
-    ON DELETE CASCADE -- so no proposal is left referencing a row that is no
-    longer there.
+    What happens to this org's partnerships is split by whether they ever
+    became agreements -- see _detach_partnerships below. Everything else it
+    owns (its meetings, its shortlist, the views recorded against its
+    profile, and any shortlist entry pointing at it) goes with it, still by
+    ON DELETE CASCADE.
     """
     data = request.get_json(silent=True) or {}
     password = data.get("password") or ""
@@ -1217,10 +1219,47 @@ def delete_account(org, db):
             "field": "password",
         }), 403
 
+    _detach_partnerships(db, org)
     db.delete(org)
     db.commit()
     session.clear()
     return jsonify({"message": "Account deleted"}), 200
+
+
+def _detach_partnerships(db, org):
+    """Decide what survives `org` deleting its account.
+
+    An accepted partnership is a record of something two organizations
+    agreed, and the other side may have shared its link with a board or a
+    funder. It is not this org's alone to destroy, so it stays: the foreign
+    key is ON DELETE SET NULL and the agreement carries a snapshot of who
+    each side was, which is what lets the public summary still render.
+
+    Anything that never became an agreement goes. A pending proposal from an
+    organization that no longer exists can never be accepted and would sit in
+    the recipient's list as a request from nobody; a declined or withdrawn one
+    is a record of something that did not happen, kept for the parties rather
+    than for its own sake. Deleted outright rather than left with a null
+    party, so neither shows up as a ghost.
+
+    An accepted partnership whose *other* side has already gone is deleted
+    too. Keeping it would leave a public agreement page for two organizations
+    that have both left, which nobody remains to be accountable for or to ask
+    to take it down -- the record survives while there is still a party to it.
+    """
+    rows = db.query(Partnership).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id)
+    ).all()
+
+    for proposal in rows:
+        if proposal.status != Partnership.ACCEPTED:
+            db.delete(proposal)
+            continue
+        other_id = (proposal.recipient_id if proposal.proposer_id == org.id
+                    else proposal.proposer_id)
+        if other_id is None:
+            db.delete(proposal)
 
 
 # --- Onboarding -------------------------------------------------------------
@@ -1939,6 +1978,15 @@ def create_proposal(org, db):
         recipient_gives=recipient_gives,
         timeline=timeline or None,
         message=message or None,
+        # Filled properly by snapshot_parties() below, once the relationships
+        # are attached. Set here because both columns are NOT NULL and the
+        # flush happens before that call can run.
+        proposer_name=org.name,
+        proposer_type=org.organization_type,
+        proposer_location=org.location,
+        recipient_name=recipient.name,
+        recipient_type=recipient.organization_type,
+        recipient_location=recipient.location,
     )
     db.add(proposal)
     try:
@@ -2035,6 +2083,10 @@ def accept_proposal(org, db, proposal_id):
     proposal.status = Partnership.ACCEPTED
     proposal.responded_at = datetime.now(timezone.utc)
     proposal.response_message = response_message or None
+    # Re-recorded here, not just at creation: this is the moment the proposal
+    # becomes an agreement, and the names on an agreement should be the ones
+    # each side was using when it agreed.
+    proposal.snapshot_parties()
     # Minted only now: agreement by both sides is what makes a summary worth
     # sharing, and a token on a pending proposal would leak an unagreed one.
     proposal.share_token = secrets.token_urlsafe(24)

@@ -305,3 +305,21 @@
     height: 4.5rem;
     border-radius: 0.5rem;
 }
+
+/* An organization that has closed its account, on an agreement that outlived
+   it. Deliberately quiet -- it is a footnote about one party, not a warning
+   about the agreement, which is still exactly as valid as the day both sides
+   confirmed it. */
+.party-closed {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.06);
+    color: #8d99ae;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}

@@ -367,7 +367,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         (dashboard.recent_proposals || [])
-            .filter((p) => p.status === 'accepted')
+            // An agreement outlives the other side closing its account, so
+            // an accepted partnership no longer implies there is anyone left
+            // to meet. The agreement still shows on the partnerships page;
+            // it just is not something to put in the diary.
+            .filter((p) => p.status === 'accepted' && !p.counterpart.deleted)
             .forEach((p) => addOption(p.counterpart.id, p.counterpart.name));
         (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));
     }

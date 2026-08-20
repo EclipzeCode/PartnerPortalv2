@@ -47,7 +47,11 @@
             || '<li class="none">Nothing listed</li>';
         return `
             <section class="party">
-                <h3>${esc(p.name)}</h3>
+                <h3>${esc(p.name)}${
+                    p.deleted
+                        ? '<span class="party-closed">account closed</span>'
+                        : ''
+                }</h3>
                 <p class="party-meta">${esc(p.organization_type || '')}${
                     p.location ? ' · ' + esc(p.location) : ''
                 }</p>

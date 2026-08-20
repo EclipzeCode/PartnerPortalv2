@@ -141,7 +141,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <span class="proposal-direction">${
                             p.direction === 'incoming' ? 'From' : 'To'
                         }</span>
-                        <h3>${esc(other.name)}</h3>
+                        <h3>${esc(other.name)}${
+                            other.deleted
+                                ? '<span class="party-closed">account closed</span>'
+                                : ''
+                        }</h3>
                         <p class="proposal-meta">${esc(other.organization_type || '')}${
                             other.location ? ' · ' + esc(other.location) : ''
                         } · ${esc(when)}</p>

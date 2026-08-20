@@ -298,12 +298,44 @@ class Partnership(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    proposer_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    # SET NULL rather than CASCADE, and nullable to allow it.
+    #
+    # Under CASCADE, one organization deleting its account destroyed every
+    # partnership it was party to -- including agreements the *other* side had
+    # confirmed and may have sent to a board or a funder. The counterpart was
+    # not asked, was not told, and the public link they had shared started
+    # answering 404. One side's decision to leave should not reach into the
+    # other side's record of what was agreed.
+    #
+    # So an accepted partnership outlives either party, and the columns below
+    # keep enough of each side to render the agreement once the row it pointed
+    # at is gone. Proposals that never became agreements are a different case
+    # and are removed outright -- see delete_account in app.py.
+    proposer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
     )
-    recipient_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    recipient_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
     )
+
+    # Who each side was, recorded on the agreement itself.
+    #
+    # Same reasoning as Event.partner_name: this is a record of something that
+    # happened between two organizations, and it has to still read correctly
+    # when one of them is no longer there. Written when the proposal is
+    # created and refreshed when it is accepted, so the name on an agreement
+    # is the name that side was using at the moment it agreed.
+    #
+    # These are a fallback, not the source: every accessor below prefers the
+    # live organization while it exists, so an organization that renames
+    # itself is shown under its current name rather than a stale copy. The
+    # snapshot is what is left once there is nothing live to prefer.
+    proposer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    proposer_type: Mapped[str | None] = mapped_column(String(120))
+    proposer_location: Mapped[str | None] = mapped_column(String(255))
+    recipient_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipient_type: Mapped[str | None] = mapped_column(String(120))
+    recipient_location: Mapped[str | None] = mapped_column(String(255))
 
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=PENDING
@@ -373,8 +405,98 @@ class Partnership(Base):
                 f"{self.status}>")
 
     def counterpart(self, org_id):
-        """The other organization, from `org_id`'s point of view."""
+        """The other organization, from `org_id`'s point of view.
+
+        None when that organization has deleted its account. Callers that
+        render a party want counterpart_party() instead, which falls back to
+        the snapshot rather than disappearing.
+        """
         return self.recipient if self.proposer_id == org_id else self.proposer
+
+    def snapshot_parties(self):
+        """Record who each side is, from the live rows.
+
+        Called when the proposal is created and again when it is accepted, so
+        an agreement carries the names both sides were using at the moment
+        they agreed to it.
+        """
+        if self.proposer is not None:
+            self.proposer_name = self.proposer.name
+            self.proposer_type = self.proposer.organization_type
+            self.proposer_location = self.proposer.location
+        if self.recipient is not None:
+            self.recipient_name = self.recipient.name
+            self.recipient_type = self.recipient.organization_type
+            self.recipient_location = self.recipient.location
+
+    @staticmethod
+    def _party(org, name, org_type, location):
+        """One side of the agreement, live if it still exists.
+
+        The live row is preferred so an organization that renames itself is
+        shown under the name it uses now. The snapshot is what is left once
+        there is no live row to prefer, and `deleted` says which of the two
+        this is -- the frontend needs to know not to offer a profile link or
+        a meeting with an organization that is no longer there.
+        """
+        if org is not None:
+            return {
+                "id": org.id,
+                "name": org.name,
+                "organization_type": org.organization_type,
+                "location": org.location,
+                "deleted": False,
+            }
+        return {
+            "id": None,
+            "name": name,
+            "organization_type": org_type,
+            "location": location,
+            "deleted": True,
+        }
+
+    def proposer_party(self):
+        return self._party(self.proposer, self.proposer_name,
+                           self.proposer_type, self.proposer_location)
+
+    def recipient_party(self):
+        return self._party(self.recipient, self.recipient_name,
+                           self.recipient_type, self.recipient_location)
+
+    def counterpart_party(self, org_id):
+        """The other side, from `org_id`'s point of view, deleted or not."""
+        return (self.recipient_party() if self.proposer_id == org_id
+                else self.proposer_party())
+
+    def counterpart_dict(self, org_id):
+        """What the proposal lists render the other side from.
+
+        public_dict() while that organization exists, so nothing about a
+        normal proposal changes. Once it is gone there is no profile to serve
+        -- the row is deleted, not hidden -- so this is the party snapshot
+        padded out with the empty lists the templates iterate over, rather
+        than a missing key that would take the page down with it.
+        """
+        other = self.counterpart(org_id)
+        if other is not None:
+            return other.public_dict()
+
+        party = self.counterpart_party(org_id)
+        return {
+            **party,
+            "remote_friendly": False,
+            "description": None,
+            "needs": [], "offers": [],
+            "needs_labels": [], "offers_labels": [],
+            "focus_areas": [], "focus_area_labels": [],
+            "needs_note": None, "offers_note": None,
+            "partnership_goals": None,
+            "contact_email": None, "contact_phone": None,
+            "website_url": None, "instagram_url": None,
+            "x_url": None, "linkedin_url": None,
+            "links_public": False,
+            "is_demo": False,
+        }
 
     def gives_for(self, org_id):
         """What `org_id` committed to providing."""
@@ -403,16 +525,11 @@ class Partnership(Base):
                 self.responded_at.isoformat() if self.responded_at else None
             ),
             "share_token": self.share_token,
-            "proposer": {
-                "id": self.proposer.id, "name": self.proposer.name,
-                "organization_type": self.proposer.organization_type,
-                "location": self.proposer.location,
-            },
-            "recipient": {
-                "id": self.recipient.id, "name": self.recipient.name,
-                "organization_type": self.recipient.organization_type,
-                "location": self.recipient.location,
-            },
+            # Same keys as before, plus `deleted`. Read through the accessors
+            # rather than off self.proposer/self.recipient directly, which are
+            # None once that organization has closed its account.
+            "proposer": self.proposer_party(),
+            "recipient": self.recipient_party(),
             "proposer_gives": list(self.proposer_gives or []),
             "proposer_gives_labels": labels_for(self.proposer_gives),
             "recipient_gives": list(self.recipient_gives or []),
@@ -420,12 +537,11 @@ class Partnership(Base):
         }
 
         if viewer_id is not None:
-            other = self.counterpart(viewer_id)
             data.update({
                 "direction": (
                     "outgoing" if self.proposer_id == viewer_id else "incoming"
                 ),
-                "counterpart": other.public_dict(),
+                "counterpart": self.counterpart_dict(viewer_id),
                 "you_give": self.gives_for(viewer_id),
                 "you_give_labels": labels_for(self.gives_for(viewer_id)),
                 "you_receive": self.receives_for(viewer_id),
@@ -449,18 +565,18 @@ class Partnership(Base):
             "timeline": self.timeline,
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
             "message": self.message,
+            # The reason the row outlives its parties. A funder holding this
+            # link can still read what was agreed after either organization
+            # has closed its account -- which is what deleting one used to
+            # take away from the other, without asking or telling them.
             "parties": [
                 {
-                    "name": self.proposer.name,
-                    "organization_type": self.proposer.organization_type,
-                    "location": self.proposer.location,
+                    **self.proposer_party(),
                     "gives": labels_for(self.proposer_gives),
                     "receives": labels_for(self.recipient_gives),
                 },
                 {
-                    "name": self.recipient.name,
-                    "organization_type": self.recipient.organization_type,
-                    "location": self.recipient.location,
+                    **self.recipient_party(),
                     "gives": labels_for(self.recipient_gives),
                     "receives": labels_for(self.proposer_gives),
                 },
