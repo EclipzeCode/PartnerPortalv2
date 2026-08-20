@@ -2076,3 +2076,65 @@ button {
     gap: 0.75rem;
     flex-wrap: wrap;
 }
+
+/* --- Browse ---------------------------------------------------------------
+   The directory rather than the match list, so it says so above the grid.
+   The sort control lives here because it is the only one of the three views
+   with an order worth choosing -- matches are ordered by fit and the
+   shortlist by when each entry was saved. */
+.browse-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+    padding: 0.7rem 1rem;
+    border-radius: 0.6rem;
+    background: rgba(67, 97, 238, 0.05);
+}
+
+.browse-bar.hidden { display: none; }
+
+.browse-note {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--text-light);
+}
+
+.browse-sort {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.browse-sort select {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0.4rem;
+    background: #fff;
+    font: inherit;
+    color: var(--text);
+}
+
+/* The filter button is hidden while browsing -- both filters describe a
+   match, and the directory is not a list of matches. */
+#filter-btn.hidden { display: none; }
+
+/* An organization with nothing to exchange with you. It is a real listing,
+   which is the point of browsing, so the badge steps back rather than
+   announcing a zero. */
+.partner-score.none {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-light);
+    box-shadow: none;
+}
+
+.match-reasons li.none {
+    color: var(--text-light);
+    font-style: italic;
+    list-style: none;
+    margin-left: 0;
+}

@@ -72,12 +72,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const detailNoteSave = document.getElementById('detailNoteSave');
     const detailNoteStatus = document.getElementById('detailNoteStatus');
 
+    // --- Browse -----------------------------------------------------------
+    // The directory, paged by the server rather than sliced in the browser.
+    // Matches and the shortlist are both lists this page holds in full, so
+    // paging them is arithmetic on an array. Browse cannot work that way --
+    // the whole point is that it is not capped at fifty and not restricted
+    // to organizations that already overlap with you -- so its page number
+    // is a request parameter and its total comes back with the results.
+    const browseState = { page: 1, pages: 1, total: 0, sort: 'name' };
+    let browseTimer = null;
+    const browseToggle = document.getElementById('browseToggle');
+    const browseBar = document.getElementById('browseBar');
+    const browseSort = document.getElementById('browseSort');
+
     let savedIds = new Set();
     let savedList = [];
     // id -> note, so a card in the shortlist and the dialog behind it read
     // the same text without either having to re-fetch.
     let savedNotes = new Map();
-    let viewMode = 'matches';   // 'matches' | 'saved'
+    let viewMode = 'matches';   // 'matches' | 'browse' | 'saved'
 
     // Adding a partner by hand is gone: organizations create themselves by
     // registering and completing onboarding. Leaving a form that writes rows
@@ -161,6 +174,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         return true;
     }
 
+    async function loadBrowse() {
+        partnersGrid.setAttribute('aria-busy', 'true');
+        renderSkeletonCards();
+        const params = new URLSearchParams({
+            page: String(browseState.page),
+            sort: browseState.sort,
+            per_page: String(browsePageSize()),
+        });
+        const term = searchQuery();
+        if (term) params.set('q', term);
+
+        try {
+            const data = await window.api(`/api/organizations?${params}`);
+            displayed = data.organizations || [];
+            browseState.page = data.page;
+            browseState.pages = data.pages;
+            browseState.total = data.total;
+            // The star states ride along, so they are right on first paint
+            // rather than filling in after a second request.
+            savedIds = new Set(data.saved_ids || []);
+            updateSavedCount();
+        } catch (error) {
+            partnersGrid.removeAttribute('aria-busy');
+            partnersGrid.innerHTML =
+                `<div class="empty-state"><p>${esc(error.message)}</p></div>`;
+            updatePagination(1);
+            return;
+        }
+        partnersGrid.removeAttribute('aria-busy');
+        render();
+    }
+
+    // Asked for whole pages so the grid never ends on a half-filled row, the
+    // same reason the client-side page sizes are even numbers.
+    function browsePageSize() {
+        const size = pageSize();
+        return Number.isFinite(size) ? size * 2 : 24;
+    }
+
     function updateSavedCount() {
         if (!savedCount) return;
         const n = savedIds.size;
@@ -174,17 +226,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             savedToggle.setAttribute('aria-pressed', String(mode === 'saved'));
             savedToggle.classList.toggle('active', mode === 'saved');
         }
+        if (browseToggle) {
+            browseToggle.setAttribute('aria-pressed', String(mode === 'browse'));
+            browseToggle.classList.toggle('active', mode === 'browse');
+        }
+        if (browseBar) browseBar.classList.toggle('hidden', mode !== 'browse');
+        // The two filters are properties of a match -- two-way, shared cause
+        // -- and the directory is not a list of matches. Applying them to a
+        // server-paged list would filter only the page on screen, which is a
+        // filter that lies. Hidden here rather than left to do that.
+        if (filterBtn) filterBtn.classList.toggle('hidden', mode === 'browse');
+        if (searchInput) {
+            searchInput.placeholder = mode === 'browse'
+                ? 'Search every organization...'
+                : 'Search partners...';
+        }
+
+        currentPage = 1;
+        if (mode === 'browse') {
+            browseState.page = 1;
+            await loadBrowse();
+            return;
+        }
         // Re-fetched on every switch back in, not just the first: scores are
         // computed against the current profile, and the shortlist is where a
         // stale one would be least obvious.
         if (mode === 'saved' && !(await loadSaved())) return;
-        currentPage = 1;
         applyView();
     }
 
     if (savedToggle) {
         savedToggle.addEventListener('click', () => {
             setViewMode(viewMode === 'saved' ? 'matches' : 'saved');
+        });
+    }
+
+    if (browseToggle) {
+        browseToggle.addEventListener('click', () => {
+            setViewMode(viewMode === 'browse' ? 'matches' : 'browse');
+        });
+    }
+
+    if (browseSort) {
+        browseSort.addEventListener('change', () => {
+            browseState.sort = browseSort.value;
+            browseState.page = 1;
+            loadBrowse();
         });
     }
 
@@ -197,6 +284,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const q = (searchInput.value || '').toLowerCase().trim();
         const norm = (v) => (v || '').toLowerCase();
         const page = currentPage;
+
+        // Browse is already exactly the page the server was asked for.
+        // Filtering it again here would hide rows out of a page whose size
+        // and total the pagination has already been told, so the count and
+        // the grid would disagree.
+        if (viewMode === 'browse') {
+            render();
+            return;
+        }
 
         if (viewMode === 'saved') {
             showingExamples = false;
@@ -252,9 +348,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const banner = document.getElementById('exampleBanner');
         if (banner) banner.classList.toggle('hidden', !showingExamples);
 
+        const browsing = viewMode === 'browse';
         const size = pageSize();
-        const pages = Math.max(1, Math.ceil(displayed.length / size));
-        if (currentPage > pages) currentPage = pages;
+        const pages = browsing
+            ? browseState.pages
+            : Math.max(1, Math.ceil(displayed.length / size));
+        if (!browsing && currentPage > pages) currentPage = pages;
 
         if (displayed.length === 0) {
             // An empty state should say what to do next, not only that there
@@ -266,7 +365,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             let action = '';
             const searching = Boolean(searchQuery());
 
-            if (viewMode === 'saved') {
+            if (viewMode === 'browse') {
+                message = searching
+                    ? 'No organization here matches that search. It looks at '
+                      + 'names, locations and descriptions.'
+                    : 'No organizations have finished a profile yet.';
+                if (searching) {
+                    action = '<button type="button" class="btn-ghost" '
+                        + 'data-empty-action="clear-search">Clear the search</button>';
+                }
+            } else if (viewMode === 'saved') {
                 message = savedList.length === 0
                     ? 'Nothing saved yet. Use the bookmark on a match to keep '
                       + 'it here — saved organizations stay on this list even '
@@ -306,8 +414,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const start = showAll ? 0 : (currentPage - 1) * size;
-        const slice = showAll ? displayed : displayed.slice(start, start + size);
+        // Browse already holds exactly one page; slicing it again would
+        // show a fraction of what the server was asked for and what the
+        // pagination below has been told about.
+        const start = (browsing || showAll) ? 0 : (currentPage - 1) * size;
+        const slice = (browsing || showAll)
+            ? displayed
+            : displayed.slice(start, start + size);
         slice.forEach((m, offset) => {
             const card = document.createElement('div');
             card.className = 'partner-card'
@@ -324,8 +437,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
                     : '');
 
+            // Browse lists organizations that have nothing to exchange with
+            // you, which matches never did. A bare "0" in the score badge
+            // reads as a judgement on them rather than on the pairing, and
+            // "Why match" over an empty list reads as a page that failed to
+            // load. Both say what is actually true instead.
+            const noOverlap = !m.match_score
+                && !(m.match_detail.they_give || []).length
+                && !(m.match_detail.i_give || []).length;
+
             const reasons = (m.reasons || [])
-                .map((r) => `<li>${esc(r)}</li>`).join('');
+                .map((r) => `<li>${esc(r)}</li>`).join('')
+                || '<li class="none">Nothing either of you has listed lines '
+                   + 'up yet.</li>';
 
             // Examples have no owner and nothing to follow up on, so they get
             // no bookmark -- the same line the Propose button draws.
@@ -357,7 +481,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // different height on each card and the tallest card in a row
             // stretched the rest to match it.
             card.innerHTML = `
-                <div class="partner-score">${m.match_score}</div>
+                <div class="partner-score${noOverlap ? ' none' : ''}"${
+                    noOverlap ? ' title="No overlap with your profile yet"' : ''
+                }>${noOverlap ? '&mdash;' : m.match_score}</div>
                 ${saveBtn}
                 <div class="partner-content">
                     <div class="card-badge-slot">${badge}</div>
@@ -366,7 +492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <p class="card-line card-location"><strong>Location:</strong> ${esc(m.location)}</p>
                     <p class="card-line card-offers"><strong>Offers:</strong> ${esc((m.offers_labels || []).join(', '))}</p>
                     <div class="match-reasons">
-                        <strong>Why match:</strong>
+                        <strong>${noOverlap ? 'Overlap:' : 'Why match:'}</strong>
                         <ul>${reasons}</ul>
                     </div>
                     ${noteSlot}
@@ -396,6 +522,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updatePagination(pages) {
+        if (viewMode === 'browse') {
+            const { page, total } = browseState;
+            const per = browsePageSize();
+            if (total === 0) {
+                pageIndicator.textContent = 'No results';
+            } else {
+                const first = (page - 1) * per + 1;
+                const last = Math.min(page * per, total);
+                pageIndicator.textContent =
+                    `Page ${page} of ${browseState.pages}  ·  ${first}-${last} of ${total}`;
+            }
+            prevBtn.disabled = page <= 1;
+            nextBtn.disabled = page >= browseState.pages;
+            // Show-all is arithmetic over a list this page holds; the
+            // directory is not that list and could be any size.
+            if (showAllBtn) showAllBtn.hidden = true;
+            return;
+        }
+
         const count = displayed.length;
         const size = pageSize();
         if (count === 0) {
@@ -421,6 +566,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function goToPage(page) {
+        if (viewMode === 'browse') {
+            const wanted = Math.min(Math.max(1, page), browseState.pages);
+            if (wanted === browseState.page) return;
+            browseState.page = wanted;
+            loadBrowse().then(() => {
+                partnersGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            return;
+        }
         const pages = Math.max(1, Math.ceil(displayed.length / pageSize()));
         currentPage = Math.min(Math.max(1, page), pages);
         render();
@@ -710,7 +864,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (emptyAction) {
             if (emptyAction.dataset.emptyAction === 'clear-search') {
                 searchInput.value = '';
-                applyView();
+                if (viewMode === 'browse') {
+                    browseState.page = 1;
+                    await loadBrowse();
+                } else {
+                    applyView();
+                }
                 searchInput.focus();
             } else {
                 mutualOnly = false;
@@ -970,7 +1129,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
     // Wrapped rather than passed directly: the handler receives an Event,
     // which would arrive here as applyView's options object.
-    searchInput.addEventListener('input', () => applyView());
+    //
+    // Browsing searches the whole directory, which means a request rather
+    // than a filter over what is already here -- debounced, because that is
+    // one request per keystroke otherwise.
+    searchInput.addEventListener('input', () => {
+        if (viewMode !== 'browse') {
+            applyView();
+            return;
+        }
+        clearTimeout(browseTimer);
+        browseTimer = setTimeout(() => {
+            browseState.page = 1;
+            loadBrowse();
+        }, 300);
+    });
 
     if (showAllBtn) {
         showAllBtn.addEventListener('click', () => {
@@ -996,6 +1169,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // A page number from the previous width can point past the end of
             // the list once the page holds more.
             currentPage = 1;
+            if (viewMode === 'browse') {
+                // per_page is a request parameter here, so a new width means
+                // a new request rather than a re-slice.
+                browseState.page = 1;
+                loadBrowse();
+                return;
+            }
             if (displayed.length) render();
         };
         if (mql.addEventListener) mql.addEventListener('change', onChange);

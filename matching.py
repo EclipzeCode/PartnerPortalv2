@@ -68,6 +68,28 @@ def score_pair(me, them):
     they_give = _overlap(them.offers, me.needs)
     i_give = _overlap(me.offers, them.needs)
 
+    # No exchange in either direction is not a weak match, it is not a match.
+    #
+    # Everything below the two overlap terms -- same location, different
+    # organization type, shared causes -- separates candidates that already
+    # have something to trade. On their own they described a pair with
+    # nothing to exchange as a 5, and "5% match" is a claim about a
+    # partnership that has no basis at all.
+    #
+    # This never arose while find_matches was the only caller: its SQL selects
+    # on `offers && needs` in one direction or the other, so every candidate
+    # it scored had already passed this test. The directory scores everyone,
+    # which is what made an unearned score visible.
+    if not they_give and not i_give:
+        return 0, [], {
+            "they_give": [], "they_give_labels": [],
+            "i_give": [], "i_give_labels": [],
+            "mutual": False,
+            "shared_focus": [], "shared_focus_labels": [],
+            "breakdown": [], "raw_score": 0, "capped": False,
+            "max_score": MAX_SCORE,
+        }
+
     score = 0
     reasons = []
     # The same components as `reasons`, carrying the points each one

@@ -21,7 +21,7 @@ from flask import (
     Flask, jsonify, request, session, send_from_directory
 )
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -1414,6 +1414,154 @@ def get_matches(org, db):
         "mutual_count": sum(1 for m in matches if m["match_detail"]["mutual"]),
         "examples": examples,
         "example_count": len(examples),
+        "saved_ids": sorted(saved_ids),
+    })
+
+
+# --- Directory --------------------------------------------------------------
+# Deliberately a different question from /api/matches, not a variation on it.
+#
+# find_matches answers "who could work with me": it only considers
+# organizations that overlap with the caller in one direction or the other,
+# ranks them by fit, and stops at 50. That is the right answer to that
+# question and the wrong one to "who is on here" -- an organization whose
+# needs and offers happen to overlap with nobody saw an empty product and had
+# no way to look at the directory it had just joined, and nobody could find an
+# organization outside their own match set however specifically they searched
+# for it. The search box only ever filtered the fifty already on the page.
+#
+# So this endpoint includes everyone with a finished profile, filters in SQL,
+# and pages in SQL. It does not rank by score: sorting by a number computed in
+# Python cannot be combined with LIMIT/OFFSET without loading the whole table
+# first, and a directory is something you browse rather than something ranked
+# at you. Each row still carries its match score, computed for the current
+# page only, so fit is visible without this pretending to be ranked by it.
+DIRECTORY_PAGE_SIZE = 12
+DIRECTORY_MAX_PAGE_SIZE = 48
+
+# name: alphabetical, the order a directory is normally read in.
+# newest: who has joined lately, which is the other reason to browse.
+DIRECTORY_SORTS = ("name", "newest")
+
+# LIKE treats these as syntax. A search for "50%" or "a_b" would otherwise
+# quietly mean something other than what was typed.
+_LIKE_SPECIALS = str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})
+
+
+def _contains(column, term):
+    return column.ilike("%" + term.translate(_LIKE_SPECIALS) + "%", escape="\\")
+
+
+def _slug_list(raw):
+    """Category slugs from a comma-separated query parameter."""
+    return clean_categories([part.strip() for part in (raw or "").split(",")])
+
+
+@app.route("/api/organizations", methods=["GET"])
+@login_required
+def list_organizations(org, db):
+    args = request.args
+
+    query = db.query(Organization).filter(
+        Organization.onboarding_complete.is_(True),
+        Organization.id != org.id,
+    )
+
+    # Seeded examples are excluded by default, exactly as they are from
+    # matches -- they have no owner and nothing to follow up on. Available on
+    # request so the directory can still demonstrate itself while it is small.
+    if args.get("include_examples") != "1":
+        query = query.filter(Organization.is_demo.is_(False))
+
+    term = (args.get("q") or "").strip()
+    if term:
+        # Name, location and description: the three things someone types into
+        # a directory search. Not the notes -- those are long free text, and
+        # matching them would return organizations for reasons the reader
+        # cannot see on the card.
+        query = query.filter(or_(
+            _contains(Organization.name, term),
+            _contains(Organization.location, term),
+            _contains(Organization.description, term),
+        ))
+
+    # "Who can give me X" and "who is looking for Y" -- the two questions the
+    # category vocabulary exists to answer, asked directly rather than only
+    # through the caller's own profile.
+    offers = _slug_list(args.get("offers"))
+    if offers:
+        query = query.filter(Organization.offers.overlap(offers))
+    needs = _slug_list(args.get("needs"))
+    if needs:
+        query = query.filter(Organization.needs.overlap(needs))
+
+    org_type = (args.get("type") or "").strip()
+    if org_type:
+        query = query.filter(Organization.organization_type == org_type)
+
+    location = (args.get("location") or "").strip()
+    if location:
+        query = query.filter(_contains(Organization.location, location))
+
+    if args.get("remote") == "1":
+        query = query.filter(Organization.remote_friendly.is_(True))
+
+    if args.get("focus"):
+        focus = clean_focus_areas(
+            [part.strip() for part in args.get("focus").split(",")]
+        )
+        if focus:
+            query = query.filter(Organization.focus_areas.overlap(focus))
+
+    # Counted before paging, so the page control can say how many there are
+    # rather than only how many are on screen.
+    total = query.count()
+
+    sort = args.get("sort") if args.get("sort") in DIRECTORY_SORTS else "name"
+    if sort == "newest":
+        query = query.order_by(Organization.created_at.desc(), Organization.id.desc())
+    else:
+        # Case-insensitive, or "acme" sorts after "Zebra" and the directory
+        # looks unordered to anyone reading it.
+        query = query.order_by(func.lower(Organization.name), Organization.id)
+
+    try:
+        per_page = int(args.get("per_page", DIRECTORY_PAGE_SIZE))
+    except (TypeError, ValueError):
+        per_page = DIRECTORY_PAGE_SIZE
+    per_page = max(1, min(per_page, DIRECTORY_MAX_PAGE_SIZE))
+
+    try:
+        page = int(args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    pages = max(1, -(-total // per_page))   # ceiling division
+    # Clamped rather than 404: a page number can go stale simply because
+    # somebody else's profile stopped matching the filters between requests.
+    page = max(1, min(page, pages))
+
+    rows = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    saved_ids = _saved_ids(db, org)
+    organizations = []
+    for other in rows:
+        data = other.public_dict()
+        score, reasons, detail = score_pair(org, other)
+        data.update({
+            "match_score": score,
+            "reasons": reasons,
+            "match_detail": detail,
+            "saved": other.id in saved_ids,
+        })
+        organizations.append(data)
+
+    return jsonify({
+        "organizations": organizations,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+        "sort": sort,
         "saved_ids": sorted(saved_ids),
     })
 

@@ -174,3 +174,40 @@ def test_every_reason_has_a_matching_component(make_org):
 
     _score, reasons, detail = score_pair(me, them)
     assert len(reasons) == len(detail["breakdown"])
+
+def test_nothing_to_exchange_scores_nothing(make_org):
+    """The bonuses separate candidates; they cannot create one.
+
+    Two organizations in the same city, of different types, working on the
+    same cause, with nothing either one needs from the other. That collected
+    location, type and focus points and reported a partnership worth 21 where
+    there was no exchange at all. It stayed hidden while find_matches was the
+    only caller -- its SQL only ever selected organizations that already
+    overlap -- and the directory, which scores everyone, is what surfaced it.
+    """
+    me = make_org(needs=["web_development"], offers=["event_space"],
+                  location="Austin, TX", organization_type="Non-profit",
+                  focus_areas=["food_security"])
+    them = make_org(needs=["legal"], offers=["kitchen_facilities"],
+                    location="Austin, TX", organization_type="Small Business",
+                    focus_areas=["food_security"])
+
+    score, reasons, detail = score_pair(me, them)
+    assert score == 0
+    assert reasons == []
+    assert detail["breakdown"] == []
+    assert detail["mutual"] is False
+
+
+def test_one_direction_of_overlap_still_collects_the_bonuses(make_org):
+    """The rule is about having nothing to trade, not about being one-sided.
+    A one-way match is still a match and still earns its context points."""
+    me = make_org(needs=["web_development"], offers=["event_space"],
+                  location="Austin, TX", organization_type="Non-profit")
+    them = make_org(needs=["legal"], offers=["web_development"],
+                    location="Austin, TX", organization_type="Small Business")
+
+    score, _reasons, detail = score_pair(me, them)
+    assert detail["mutual"] is False
+    assert score > 0
+    assert any(p["label"] == "Same location" for p in detail["breakdown"])

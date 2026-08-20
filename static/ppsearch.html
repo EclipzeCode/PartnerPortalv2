@@ -73,11 +73,19 @@
                     <input type="text" id="searchInput" placeholder="Search partners...">
                 </div>
                 <div class="action-buttons">
-                    <!-- Switches the grid between ranked matches and the
-                         shortlist. aria-pressed rather than a second page:
-                         it is the same grid, search box and pagination
-                         showing a different list. ppsearch.js fills the
-                         count once the shortlist has loaded. -->
+                    <!-- Three lists in one grid, chosen here.
+                         Matches answers "who could work with me" and is
+                         ranked by fit. Browse is the directory: everyone with
+                         a finished profile, searched and paged by the server,
+                         so an organization that overlaps with nobody can
+                         still see who is here and be found by someone looking
+                         for exactly what it does. Saved is the shortlist.
+                         aria-pressed rather than three pages: it is the same
+                         grid, search box and pagination showing a different
+                         list. -->
+                    <button id="browseToggle" class="btn-action" type="button" aria-pressed="false">
+                        <i class='bx bx-grid-alt'></i> Browse all
+                    </button>
                     <button id="savedToggle" class="btn-action" type="button" aria-pressed="false">
                         <i class='bx bx-bookmark'></i> Saved <span id="savedCount" class="saved-count" hidden></span>
                     </button>
@@ -87,6 +95,21 @@
                 </div>
             </div>
             
+            <!-- Browse only. Matches are ordered by fit and the shortlist by
+                 when you saved each one; neither is something to re-sort. -->
+            <div class="browse-bar hidden" id="browseBar">
+                <p class="browse-note">
+                    Everyone with a finished profile — not only your matches.
+                </p>
+                <label class="browse-sort">
+                    <span>Sort</span>
+                    <select id="browseSort">
+                        <option value="name">Name (A–Z)</option>
+                        <option value="newest">Recently joined</option>
+                    </select>
+                </label>
+            </div>
+
             <!-- Shown only when a new org has no real matches yet. -->
             <div id="exampleBanner" class="example-banner hidden">
                 <i class='bx bx-info-circle'></i>
