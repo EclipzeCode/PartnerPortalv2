@@ -1,10 +1,16 @@
 """What survives an organization closing its account.
 
 Both foreign keys on partnerships were ON DELETE CASCADE, so one side leaving
-destroyed every partnership it was party to. The case that matters is an
-accepted one: the other organization confirmed it, may have sent its public
-link to a board or a funder, was not asked, was not told, and the link simply
-began answering 404.
+destroyed every partnership it was party to. The case that matters is one the
+two organizations actually agreed: the other side confirmed it, may have sent
+its public link to a board or a funder, was not asked, was not told, and the
+link simply began answering 404.
+
+That covers every status in Partnership.PUBLIC, not only `accepted`. Fixing
+the foreign key left a second copy of the same bug in _detach_partnerships,
+which kept accepted agreements and deleted completed and ended ones -- so
+finishing a partnership properly and then closing your account destroyed it,
+while leaving one open preserved it. The last two tests here are that case.
 """
 
 from models import Partnership
@@ -119,6 +125,79 @@ def test_an_agreement_goes_once_both_parties_have_left(client, login, make_org,
     assert client.get(f"/api/partnerships/{token}").status_code == 404
     assert session.query(Partnership).filter(
         Partnership.share_token == token).one_or_none() is None
+
+
+def _complete(client, login, first, second, proposal_id):
+    """Close a partnership from both sides. Completing is mutual."""
+    login(first)
+    assert client.post(f"/api/proposals/{proposal_id}/complete",
+                       json={"delivered": True}).status_code == 200
+    client.post("/logout")
+
+    login(second)
+    done = client.post(f"/api/proposals/{proposal_id}/complete",
+                       json={"delivered": True})
+    assert done.status_code == 200
+    assert done.get_json()["proposal"]["status"] == Partnership.COMPLETED
+    client.post("/logout")
+
+
+def test_a_completed_agreement_outlives_the_other_party(client, login, make_org):
+    """A partnership that ran its course is more of a record than one still
+    in progress, not less. This kept only `accepted`, so finishing a
+    partnership and then closing your account destroyed it -- and took the
+    survivor's history and their public link with it."""
+    leaver, stayer = _pair(make_org)
+    token = _accepted_partnership(client, login, leaver, stayer)
+
+    login(leaver)
+    proposal_id = client.get("/api/proposals").get_json()["proposals"][0]["id"]
+    client.post("/logout")
+    _complete(client, login, leaver, stayer, proposal_id)
+
+    login(leaver)
+    assert client.delete(
+        "/api/account", json={"password": PASSWORD}).status_code == 200
+
+    # The link the other side may have sent to a funder still resolves.
+    response = client.get(f"/api/partnerships/{token}")
+    assert response.status_code == 200
+    assert response.get_json()["partnership"]["status"] == Partnership.COMPLETED
+
+    # And the survivor still has it in their own history.
+    login(stayer)
+    proposals = client.get("/api/proposals").get_json()["proposals"]
+    assert len(proposals) == 1
+    assert proposals[0]["status"] == Partnership.COMPLETED
+    assert proposals[0]["counterpart"]["deleted"] is True
+
+
+def test_an_ended_agreement_outlives_the_other_party(client, login, make_org):
+    """Ended is the other half of the same rule. The partnership stopped, but
+    the two organizations did agree it, and the public page says which it
+    is -- so it is a record to keep rather than one to erase."""
+    leaver, stayer = _pair(make_org)
+    token = _accepted_partnership(client, login, leaver, stayer)
+
+    login(leaver)
+    proposal_id = client.get("/api/proposals").get_json()["proposals"][0]["id"]
+    ended = client.post(f"/api/proposals/{proposal_id}/end",
+                        json={"reason": "pytest ran out of scope"})
+    assert ended.status_code == 200
+    assert ended.get_json()["proposal"]["status"] == Partnership.ENDED
+
+    assert client.delete(
+        "/api/account", json={"password": PASSWORD}).status_code == 200
+
+    response = client.get(f"/api/partnerships/{token}")
+    assert response.status_code == 200
+    summary = response.get_json()["partnership"]
+    assert summary["status"] == Partnership.ENDED
+    # The reason stays between the two parties, deleted account or not.
+    assert "pytest ran out of scope" not in response.get_data(as_text=True)
+
+    login(stayer)
+    assert len(client.get("/api/proposals").get_json()["proposals"]) == 1
 
 
 def test_a_rename_still_shows_the_current_name(client, login, make_org, session):

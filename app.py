@@ -1524,11 +1524,20 @@ def delete_account(org, db):
 def _detach_partnerships(db, org):
     """Decide what survives `org` deleting its account.
 
-    An accepted partnership is a record of something two organizations
-    agreed, and the other side may have shared its link with a board or a
-    funder. It is not this org's alone to destroy, so it stays: the foreign
-    key is ON DELETE SET NULL and the agreement carries a snapshot of who
-    each side was, which is what lets the public summary still render.
+    An agreement two organizations actually reached is a record of something
+    that happened, and the other side may have shared its link with a board
+    or a funder. It is not this org's alone to destroy, so it stays: the
+    foreign key is ON DELETE SET NULL and the agreement carries a snapshot of
+    who each side was, which is what lets the public summary still render.
+
+    That means every status in Partnership.PUBLIC -- accepted, and also
+    completed and ended. A partnership that ran its course is more of a
+    record than one still in progress, not less, and public_partnership()
+    resolves all three for exactly that reason: the link was shared on the
+    strength of what two organizations agreed, and that stays true after it
+    finishes. Keeping only `accepted` here undid that from the other end --
+    the agreements with the most behind them were the ones deleting an
+    account destroyed, and the survivor lost them from its own history too.
 
     Anything that never became an agreement goes. A pending proposal from an
     organization that no longer exists can never be accepted and would sit in
@@ -1537,10 +1546,10 @@ def _detach_partnerships(db, org):
     than for its own sake. Deleted outright rather than left with a null
     party, so neither shows up as a ghost.
 
-    An accepted partnership whose *other* side has already gone is deleted
-    too. Keeping it would leave a public agreement page for two organizations
-    that have both left, which nobody remains to be accountable for or to ask
-    to take it down -- the record survives while there is still a party to it.
+    An agreement whose *other* side has already gone is deleted too. Keeping
+    it would leave a public agreement page for two organizations that have
+    both left, which nobody remains to be accountable for or to ask to take
+    it down -- the record survives while there is still a party to it.
     """
     rows = db.query(Partnership).filter(
         or_(Partnership.proposer_id == org.id,
@@ -1548,7 +1557,7 @@ def _detach_partnerships(db, org):
     ).all()
 
     for proposal in rows:
-        if proposal.status != Partnership.ACCEPTED:
+        if proposal.status not in Partnership.PUBLIC:
             db.delete(proposal)
             continue
         other_id = (proposal.recipient_id if proposal.proposer_id == org.id
