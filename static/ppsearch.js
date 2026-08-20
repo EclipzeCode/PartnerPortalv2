@@ -80,6 +80,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // to organizations that already overlap with you -- so its page number
     // is a request parameter and its total comes back with the results.
     const browseState = { page: 1, pages: 1, total: 0, sort: 'name' };
+
+    // The directory's own filters, mirroring what /api/organizations accepts.
+    // Sets rather than arrays for the three category pickers: every read is
+    // "is this slug chosen", once per checkbox per render.
+    const browseFilters = {
+        offers: new Set(),
+        needs: new Set(),
+        focus: new Set(),
+        type: '',
+        location: '',
+        remote: false,
+    };
     let browseTimer = null;
     const browseToggle = document.getElementById('browseToggle');
     const browseBar = document.getElementById('browseBar');
@@ -185,6 +197,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const term = searchQuery();
         if (term) params.set('q', term);
 
+        // Only what is actually set. An empty parameter is not the same as an
+        // absent one to a reader of the URL, and the endpoint would have to
+        // treat "" as "any" for every field rather than simply not being
+        // asked about it.
+        if (browseFilters.offers.size) {
+            params.set('offers', [...browseFilters.offers].join(','));
+        }
+        if (browseFilters.needs.size) {
+            params.set('needs', [...browseFilters.needs].join(','));
+        }
+        if (browseFilters.focus.size) {
+            params.set('focus', [...browseFilters.focus].join(','));
+        }
+        if (browseFilters.type) params.set('type', browseFilters.type);
+        if (browseFilters.location) params.set('location', browseFilters.location);
+        if (browseFilters.remote) params.set('remote', '1');
+
         try {
             const data = await window.api(`/api/organizations?${params}`);
             displayed = data.organizations || [];
@@ -231,11 +260,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             browseToggle.classList.toggle('active', mode === 'browse');
         }
         if (browseBar) browseBar.classList.toggle('hidden', mode !== 'browse');
-        // The two filters are properties of a match -- two-way, shared cause
-        // -- and the directory is not a list of matches. Applying them to a
-        // server-paged list would filter only the page on screen, which is a
-        // filter that lies. Hidden here rather than left to do that.
-        if (filterBtn) filterBtn.classList.toggle('hidden', mode === 'browse');
+        // The dialog now carries a set of filters for each list and shows the
+        // set that applies, so the button stays available in every view. The
+        // two match filters are still never applied to the directory: they
+        // are answered by comparing two profiles, and most of the directory
+        // is organizations you do not match with at all.
+        paintFilterSections();
+        paintFilterButton();
         if (searchInput) {
             searchInput.placeholder = mode === 'browse'
                 ? 'Search every organization...'
@@ -612,7 +643,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.modal.active').forEach((m) => closeModal(m));
     });
 
-    if (filterBtn) filterBtn.addEventListener('click', () => openModal(filterModal));
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            paintFilterSections();
+            openModal(filterModal);
+        });
+    }
 
     // --- Detail ---------------------------------------------------------
     function showDetail(m) {
@@ -909,6 +945,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const proposeSelected = { proposerGives: new Set(), recipientGives: new Set() };
     let me = null;
     let categoryGroups = [];
+    // The same payload already carries these two; the filter dialog builds
+    // its type list and focus picker from them rather than making a second
+    // request for a vocabulary this page has already been told.
+    let organizationTypes = [];
+    let focusAreas = [];
 
     try {
         const [meData, catData] = await Promise.all([
@@ -917,6 +958,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
         me = meData.organization;
         categoryGroups = catData.groups;
+        organizationTypes = catData.organization_types || [];
+        focusAreas = catData.focus_areas || [];
         catData.timelines.forEach((t) => {
             const opt = document.createElement('option');
             opt.value = t.slug;
@@ -1079,25 +1122,159 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Filters --------------------------------------------------------
     // One place that knows how many filters are on, so the count on the
-    // button cannot drift out of step with the checkboxes behind it.
+    // button cannot drift out of step with the controls behind it. Which
+    // filters count depends on which list is on screen -- the match filters
+    // do nothing to the directory and the directory filters do nothing to
+    // the match list, so counting both would advertise filters that are not
+    // being applied to what the reader is looking at.
+    function activeFilterCount() {
+        if (viewMode === 'browse') {
+            return [
+                browseFilters.offers.size > 0,
+                browseFilters.needs.size > 0,
+                browseFilters.focus.size > 0,
+                Boolean(browseFilters.type),
+                Boolean(browseFilters.location),
+                browseFilters.remote,
+            ].filter(Boolean).length;
+        }
+        return [mutualOnly, sharedFocusOnly].filter(Boolean).length;
+    }
+
     function paintFilterButton() {
         if (!filterBtn) return;
-        const active = [mutualOnly, sharedFocusOnly].filter(Boolean).length;
+        const active = activeFilterCount();
         filterBtn.classList.toggle('has-filters', active > 0);
         filterBtn.innerHTML = active
             ? `<i class='bx bx-filter-alt'></i> Filters (${active})`
             : `<i class='bx bx-filter-alt'></i> Filters`;
     }
 
+    // Built once, the first time the dialog is opened while browsing. The
+    // vocabulary is the same one the propose dialog fetched at load, so this
+    // costs no request.
+    let filterPickersBuilt = false;
+
+    function buildFilterPickers() {
+        if (filterPickersBuilt || !categoryGroups.length) return;
+        filterPickersBuilt = true;
+
+        const typeSelect = document.getElementById('filterType');
+        if (typeSelect && organizationTypes.length) {
+            organizationTypes.forEach((label) => {
+                const opt = document.createElement('option');
+                opt.value = label;
+                opt.textContent = label;
+                typeSelect.appendChild(opt);
+            });
+        }
+
+        const build = (containerId, options, key, prefix) => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            options.forEach((group) => {
+                const entries = group.categories || group.items;
+                if (!entries || !entries.length) return;
+                const wrap = document.createElement('div');
+                wrap.className = 'category-group';
+                if (group.name) wrap.innerHTML = `<h4>${esc(group.name)}</h4>`;
+                const row = document.createElement('div');
+                row.className = 'category-options';
+                entries.forEach((c) => {
+                    const id = `${prefix}-${c.slug}`;
+                    const label = document.createElement('label');
+                    label.className = 'category-chip';
+                    label.setAttribute('for', id);
+                    label.innerHTML = `
+                        <input type="checkbox" id="${id}" value="${esc(c.slug)}">
+                        <span>${esc(c.label)}</span>`;
+                    row.appendChild(label);
+                });
+                wrap.appendChild(row);
+                container.appendChild(wrap);
+            });
+
+            // Selections are read on Apply rather than tracked per click:
+            // these do nothing until the form is submitted, so the set and
+            // the checkboxes cannot drift apart in between.
+            container.addEventListener('change', (e) => {
+                const box = e.target.closest('input[type="checkbox"]');
+                if (!box) return;
+                box.closest('.category-chip').classList.toggle('checked', box.checked);
+                paintFilterCounts();
+            });
+        };
+
+        build('filterOffersPicker', categoryGroups, 'offers', 'filter-offers');
+        build('filterNeedsPicker', categoryGroups, 'needs', 'filter-needs');
+        // Focus areas are a flat list, wrapped so the same builder handles it.
+        build('filterFocusPicker', [{ name: '', categories: focusAreas }],
+              'focus', 'filter-focus');
+        paintFilterCounts();
+    }
+
+    // How many are ticked inside each collapsed section, so a section that is
+    // doing something says so without having to be opened.
+    function paintFilterCounts() {
+        [['filterOffersPicker', 'filterOffersCount'],
+         ['filterNeedsPicker', 'filterNeedsCount'],
+         ['filterFocusPicker', 'filterFocusCount']].forEach(([pickerId, countId]) => {
+            const picker = document.getElementById(pickerId);
+            const badge = document.getElementById(countId);
+            if (!picker || !badge) return;
+            const n = picker.querySelectorAll('input:checked').length;
+            badge.textContent = n ? String(n) : '';
+            badge.hidden = n === 0;
+        });
+    }
+
+    function readFilterPicker(pickerId) {
+        const picker = document.getElementById(pickerId);
+        if (!picker) return new Set();
+        return new Set([...picker.querySelectorAll('input:checked')]
+            .map((box) => box.value));
+    }
+
+    // The dialog shows the filters that apply to the list on screen.
+    function paintFilterSections() {
+        const browsing = viewMode === 'browse';
+        const match = document.getElementById('filterMatchSection');
+        const browse = document.getElementById('filterBrowseSection');
+        if (match) match.hidden = browsing;
+        if (browse) browse.hidden = !browsing;
+        if (browsing) buildFilterPickers();
+    }
+
     if (filterForm) {
         filterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            closeModal(filterModal);
+
+            if (viewMode === 'browse') {
+                browseFilters.offers = readFilterPicker('filterOffersPicker');
+                browseFilters.needs = readFilterPicker('filterNeedsPicker');
+                browseFilters.focus = readFilterPicker('filterFocusPicker');
+                const typeSel = document.getElementById('filterType');
+                const locInput = document.getElementById('filterLocation');
+                const remoteBox = document.getElementById('filterRemote');
+                browseFilters.type = typeSel ? typeSel.value : '';
+                browseFilters.location = locInput ? locInput.value.trim() : '';
+                browseFilters.remote = Boolean(remoteBox && remoteBox.checked);
+                paintFilterButton();
+                // Back to the first page: the filters just changed what the
+                // pages are, so page four of the previous result set is not a
+                // place in this one.
+                browseState.page = 1;
+                await loadBrowse();
+                return;
+            }
+
             const box = document.getElementById('mutualOnlyInput');
             const focusBox = document.getElementById('sharedFocusInput');
             mutualOnly = Boolean(box && box.checked);
             sharedFocusOnly = Boolean(focusBox && focusBox.checked);
             paintFilterButton();
-            closeModal(filterModal);
             // Both filters describe the match list, and the shortlist is
             // deliberately not filtered by either -- it is what someone chose
             // to keep. Applying one from inside the saved view used to reload
@@ -1113,11 +1290,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', async () => {
+            // form.reset() returns the checkboxes to their markup defaults but
+            // leaves the .checked class the chip styling is drawn from, so the
+            // pickers would still look ticked.
             filterForm.reset();
+            filterForm.querySelectorAll('.category-chip.checked')
+                .forEach((chip) => chip.classList.remove('checked'));
+            paintFilterCounts();
+            closeModal(filterModal);
+
+            if (viewMode === 'browse') {
+                browseFilters.offers.clear();
+                browseFilters.needs.clear();
+                browseFilters.focus.clear();
+                browseFilters.type = '';
+                browseFilters.location = '';
+                browseFilters.remote = false;
+                paintFilterButton();
+                browseState.page = 1;
+                await loadBrowse();
+                return;
+            }
+
             mutualOnly = false;
             sharedFocusOnly = false;
             paintFilterButton();
-            closeModal(filterModal);
             if (viewMode === 'saved') {
                 await setViewMode('matches');
             }

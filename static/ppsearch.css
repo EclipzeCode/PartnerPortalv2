@@ -2138,3 +2138,67 @@ button {
     list-style: none;
     margin-left: 0;
 }
+
+/* --- Directory filters ----------------------------------------------------
+   Three category pickers is most of the dialog if they are all open at once,
+   and the common case is filtering by type or location -- so each collapses,
+   with a count so a section that is doing something says so while shut. */
+.filter-picker {
+    margin-bottom: 0.9rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0.6rem;
+    overflow: hidden;
+}
+
+.filter-picker > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text);
+    list-style: none;
+}
+
+.filter-picker > summary::-webkit-details-marker { display: none; }
+
+.filter-picker > summary::before {
+    content: '\203A';
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.filter-picker[open] > summary::before { transform: rotate(90deg); }
+
+.filter-picker > summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+/* Sits hard right so the counts line up down the three summaries. */
+.filter-count {
+    margin-left: auto;
+    min-width: 1.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+.filter-count[hidden] { display: none; }
+
+.filter-hint {
+    margin: 0;
+    padding: 0 0.9rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.filter-picker .category-picker {
+    max-height: 15rem;
+    overflow-y: auto;
+    padding: 0 0.9rem 0.9rem;
+}

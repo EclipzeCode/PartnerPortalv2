@@ -159,26 +159,98 @@
             </div>
             <div class="modal-body">
                 <form id="filterForm">
-                    <div class="form-group checkbox-row">
-                        <label class="checkbox-label" for="mutualOnlyInput">
-                            <input type="checkbox" id="mutualOnlyInput">
-                            <span>
-                                <strong>Two-way matches only</strong>
-                                <em>Organizations where you each have something
-                                the other needs</em>
-                            </span>
-                        </label>
+                    <!-- Two sets of filters for two different lists, and only
+                         the set that applies to the list on screen is shown.
+                         Both of these are properties of a *match* -- they are
+                         answered by comparing two profiles -- so they mean
+                         nothing against the directory, where most rows are not
+                         matches at all. Showing them there would be a control
+                         that silently does nothing. ppsearch.js swaps the
+                         sections with the view. -->
+                    <div id="filterMatchSection">
+                        <div class="form-group checkbox-row">
+                            <label class="checkbox-label" for="mutualOnlyInput">
+                                <input type="checkbox" id="mutualOnlyInput">
+                                <span>
+                                    <strong>Two-way matches only</strong>
+                                    <em>Organizations where you each have something
+                                    the other needs</em>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="form-group checkbox-row">
+                            <label class="checkbox-label" for="sharedFocusInput">
+                                <input type="checkbox" id="sharedFocusInput">
+                                <span>
+                                    <strong>Shared focus areas only</strong>
+                                    <em>Organizations working on at least one of the
+                                    same things you do</em>
+                                </span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="form-group checkbox-row">
-                        <label class="checkbox-label" for="sharedFocusInput">
-                            <input type="checkbox" id="sharedFocusInput">
-                            <span>
-                                <strong>Shared focus areas only</strong>
-                                <em>Organizations working on at least one of the
-                                same things you do</em>
-                            </span>
-                        </label>
+
+                    <!-- The directory's own filters. These ask about the other
+                         organization on its own terms rather than relative to
+                         yours, which is the only kind of question that makes
+                         sense across a list that includes people you do not
+                         match with. -->
+                    <div id="filterBrowseSection" hidden>
+                        <div class="form-group">
+                            <label for="filterType">Organization type</label>
+                            <select id="filterType">
+                                <option value="">Any type</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filterLocation">Location</label>
+                            <input type="text" id="filterLocation" maxlength="255"
+                                   placeholder="Any location — try a city or state">
+                        </div>
+
+                        <div class="form-group checkbox-row">
+                            <label class="checkbox-label" for="filterRemote">
+                                <input type="checkbox" id="filterRemote">
+                                <span>
+                                    <strong>Open to remote partnerships only</strong>
+                                    <em>Organizations that said distance is not a
+                                    barrier</em>
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- Collapsed: thirty-three categories twice over is
+                             most of the dialog, and the common case is
+                             filtering by type or location. -->
+                        <details class="filter-picker">
+                            <summary>
+                                What they can offer
+                                <span class="filter-count" id="filterOffersCount"></span>
+                            </summary>
+                            <p class="filter-hint">Show organizations offering any of these.</p>
+                            <div class="category-picker" id="filterOffersPicker"></div>
+                        </details>
+
+                        <details class="filter-picker">
+                            <summary>
+                                What they are looking for
+                                <span class="filter-count" id="filterNeedsCount"></span>
+                            </summary>
+                            <p class="filter-hint">Show organizations that need any of these.</p>
+                            <div class="category-picker" id="filterNeedsPicker"></div>
+                        </details>
+
+                        <details class="filter-picker">
+                            <summary>
+                                What they work on
+                                <span class="filter-count" id="filterFocusCount"></span>
+                            </summary>
+                            <p class="filter-hint">Show organizations working on any of these causes.</p>
+                            <div class="category-picker focus-picker" id="filterFocusPicker"></div>
+                        </details>
                     </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn-primary">Apply</button>
                         <button type="button" id="clearFiltersBtn" class="btn-ghost">Clear</button>
