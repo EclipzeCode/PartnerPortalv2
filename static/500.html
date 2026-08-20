@@ -3,6 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Warm the connections to the two third-party origins every page uses,
+         before the local stylesheets below start downloading. Both the
+         boxicons stylesheet and the Poppins stylesheet are render-blocking
+         and are discovered late, at the bottom of this head -- so without
+         these the browser pays a DNS lookup plus a TLS handshake to each
+         before it can even ask for them. gstatic serves the font files
+         themselves and is fetched in CORS mode, which is what crossorigin
+         matches; the other two are ordinary stylesheet requests. -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <title>Something went wrong | PartnerPortal</title>
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
