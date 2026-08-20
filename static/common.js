@@ -431,10 +431,12 @@ async function updateNavForSession() {
 
     let me = null;
     let pendingProposals = 0;
+    let unreadMessages = 0;
     try {
         const data = await window.api('/api/me', { allowUnauthenticated: true });
         me = data && data.organization;
         pendingProposals = (data && data.pending_proposals) || 0;
+        unreadMessages = (data && data.unread_messages) || 0;
     } catch {
         // Signed out, or the server is down. The signed-out call to action is
         // the honest thing to show in both cases.
@@ -461,14 +463,35 @@ async function updateNavForSession() {
 
     slot.dataset.state = 'in';
     wireAccountMenu();
-    updateProposalBadge(pendingProposals);
+    // Both land on the same badge: from the nav's point of view they are the
+    // same question -- is there something on the dashboard waiting for me --
+    // and two competing numbers on one link would only make it ambiguous
+    // which one the reader is meant to act on.
+    updateProposalBadge(pendingProposals + unreadMessages);
 }
 
+// Re-reads the counts without redrawing the account menu. For pages that
+// change what the badge is counting -- reading a thread, answering a
+// proposal -- so the nav stops claiming something is waiting the moment it
+// stops being true, rather than at the next navigation.
+window.refreshNavCounts = async function refreshNavCounts() {
+    try {
+        const data = await window.api('/api/me', { allowUnauthenticated: true });
+        updateProposalBadge(
+            ((data && data.pending_proposals) || 0)
+            + ((data && data.unread_messages) || 0));
+    } catch {
+        // Signed out or offline. The badge keeps whatever it last knew,
+        // which is no worse than the page it is sitting on.
+    }
+};
+
 // The badge on the nav's Dashboard link. Proposals waiting on this org to
-// respond were otherwise invisible outside of email -- the dashboard is the
-// only place they can be acted on, and nothing on the rest of the site said
-// one was there. Hidden entirely rather than shown as "0", the same "nothing
-// here" treatment the rest of the nav uses.
+// respond, and messages it has not read, were otherwise invisible outside of
+// email -- the dashboard is the only place either can be acted on, and
+// nothing on the rest of the site said one was there. Hidden entirely rather
+// than shown as "0", the same "nothing here" treatment the rest of the nav
+// uses.
 function updateProposalBadge(count) {
     const badge = document.getElementById('navProposalBadge');
     if (!badge) return;

@@ -429,11 +429,28 @@ class Partnership(Base):
     )
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # --- Messages ----------------------------------------------------------
+    # When each side last opened the thread, so "how many are waiting on me"
+    # is one indexed comparison rather than a read flag per message per
+    # party. Null means never opened, which is what a brand new proposal is.
+    proposer_last_read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    recipient_last_read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     proposer = relationship(
         "Organization", foreign_keys=[proposer_id], lazy="joined"
     )
     recipient = relationship(
         "Organization", foreign_keys=[recipient_id], lazy="joined"
+    )
+    messages = relationship(
+        "Message",
+        back_populates="partnership",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
     )
 
     __table_args__ = (
@@ -573,6 +590,21 @@ class Partnership(Base):
              else self.proposer_gives) or []
         )
 
+    def last_read_at_for(self, org_id):
+        return (self.proposer_last_read_at if self.proposer_id == org_id
+                else self.recipient_last_read_at)
+
+    def messages_open(self):
+        """Whether this thread still accepts new messages.
+
+        A live proposal or a running partnership: the two states where the
+        two organizations still have something to arrange. Once it is
+        settled the thread stays readable and stops accepting posts --
+        declining is a no, and a channel that stays open after a no is the
+        unsolicited approach this model is careful about everywhere else.
+        """
+        return self.status in (self.PENDING, self.ACCEPTED)
+
     def completed_at_for(self, org_id):
         """When `org_id` marked its side complete, if it has."""
         return (self.proposer_completed_at if self.proposer_id == org_id
@@ -659,6 +691,7 @@ class Partnership(Base):
                 "counterpart_delivered": self.delivered_by_counterpart(viewer_id),
                 "you_delivered": self.delivered_by(viewer_id),
                 "end_reason": self.end_reason,
+                "messages_open": self.messages_open(),
                 "ended_by_you": (
                     self.ended_by_id is not None
                     and self.ended_by_id == viewer_id
@@ -700,6 +733,72 @@ class Partnership(Base):
                     "receives": labels_for(self.proposer_gives),
                 },
             ],
+        }
+
+
+class Message(Base):
+    """One message in the thread attached to a proposal.
+
+    Threads hang off a partnership rather than off a pair of organizations,
+    which is the whole access rule in one line: you can write to an
+    organization because there is a live proposal between you, not because
+    you found them in the directory. Everything else here already draws that
+    line -- proposing is the sanctioned way to approach a stranger, and a
+    saved lead is deliberately invisible to the organization saved, because a
+    bookmark is not an approach. An open inbox would undo both.
+
+    Before this, a proposal carried exactly one message and one reply. Two
+    organizations working out what "event space" actually means had to leave
+    the site and use the contact email on the card, which is also the point
+    at which the agreement stops being written down anywhere.
+    """
+
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    partnership_id: Mapped[int] = mapped_column(
+        ForeignKey("partnerships.id", ondelete="CASCADE"), nullable=False
+    )
+    # SET NULL, like the partnership's own party keys: an organization
+    # closing its account must not delete its half of a conversation the
+    # other side is still party to. The name is snapshotted for the same
+    # reason the agreement snapshots its parties -- see Partnership.
+    sender_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    sender_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    partnership = relationship("Partnership", back_populates="messages")
+    sender = relationship("Organization", foreign_keys=[sender_id], lazy="joined")
+
+    __table_args__ = (
+        # Every read is "this thread, oldest first", and the unread count is
+        # the same prefix with a timestamp comparison on top.
+        Index("ix_messages_partnership", "partnership_id", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<Message {self.id} partnership={self.partnership_id}>"
+
+    def to_dict(self, viewer_id=None):
+        return {
+            "id": self.id,
+            "body": self.body,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            # Live name while the organization exists, snapshot once it does
+            # not -- the same rule the agreement's parties follow.
+            "sender_name": (self.sender.name if self.sender is not None
+                            else self.sender_name),
+            "sender_id": self.sender_id,
+            "mine": viewer_id is not None and self.sender_id == viewer_id,
+            "sender_deleted": self.sender is None,
         }
 
 

@@ -185,6 +185,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                         View agreement</a>`);
                 actions.push('<button class="btn-ghost" data-act="copy">Copy link</button>');
             }
+            // On every proposal, open or settled: a closed thread is still
+            // the record of what the two of you said, and it is the only
+            // place that record lives.
+            if (p.message_count > 0 || p.messages_open) {
+                const label = p.unread_count > 0
+                    ? `Messages <span class="msg-unread">${p.unread_count}</span>`
+                    : (p.message_count > 0
+                        ? `Messages (${p.message_count})`
+                        : 'Messages');
+                actions.push(
+                    `<button class="btn-ghost msg-open" data-act="messages">${label}</button>`);
+            }
             if (p.can_complete) {
                 actions.push(
                     '<button class="btn-ghost" data-act="complete">Mark complete</button>');
@@ -229,6 +241,147 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // --- Messages -------------------------------------------------------
+    // A proposal carried one message and one reply, so anything that needed
+    // working out moved to email -- and what two organizations settle in
+    // email is not written down anywhere this site can show them later.
+    const messageModal = document.getElementById('messageModal');
+    const messageThread = document.getElementById('messageThread');
+    const messageForm = document.getElementById('messageForm');
+    const messageBody = document.getElementById('messageBody');
+    const messageSend = document.getElementById('messageSend');
+    const messageError = document.getElementById('messageError');
+    const messageClosed = document.getElementById('messageClosed');
+    const messageTitle = document.getElementById('messageTitle');
+
+    let openThreadId = null;
+
+    function messageDate(iso) {
+        const at = new Date(iso);
+        if (Number.isNaN(at.getTime())) return '';
+        const sameDay = at.toDateString() === new Date().toDateString();
+        return sameDay
+            ? at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            : at.toLocaleString('en-US', {
+                month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit',
+            });
+    }
+
+    function renderThread(messages) {
+        if (messages.length === 0) {
+            messageThread.innerHTML =
+                '<p class="empty-state">No messages yet. Anything you agree '
+                + 'here stays with the proposal.</p>';
+            return;
+        }
+        messageThread.innerHTML = messages.map((m) => `
+            <div class="message${m.mine ? ' mine' : ''}">
+                <p class="message-meta">
+                    <strong>${esc(m.mine ? 'You' : m.sender_name)}</strong>${
+                        m.sender_deleted && !m.mine
+                            ? '<span class="party-closed">account closed</span>'
+                            : ''
+                    }
+                    <span class="message-time">${esc(messageDate(m.created_at))}</span>
+                </p>
+                <p class="message-body">${esc(m.body)}</p>
+            </div>`).join('');
+        // Newest is at the bottom, which is where a thread is read from.
+        messageThread.scrollTop = messageThread.scrollHeight;
+    }
+
+    async function openThread(proposal) {
+        openThreadId = proposal.id;
+        messageTitle.textContent = `Messages with ${proposal.counterpart.name}`;
+        messageThread.setAttribute('aria-busy', 'true');
+        messageThread.innerHTML = '<p class="empty-state">Loading...</p>';
+        messageError.hidden = true;
+        messageBody.value = '';
+
+        messageModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        window.dialogOpened(messageModal, messageBody);
+
+        let data;
+        try {
+            data = await window.api(`/api/proposals/${proposal.id}/messages`);
+        } catch (error) {
+            messageThread.removeAttribute('aria-busy');
+            messageThread.innerHTML =
+                `<p class="empty-state">${esc(error.message)}</p>`;
+            return;
+        }
+        messageThread.removeAttribute('aria-busy');
+        renderThread(data.messages || []);
+
+        // Settled proposals keep the thread readable and stop accepting
+        // posts, so the form is replaced rather than left to fail on submit.
+        messageForm.hidden = !data.open;
+        messageClosed.hidden = data.open;
+        if (!data.open) {
+            messageClosed.textContent =
+                `This proposal was ${proposal.status}, so the conversation is `
+                + `closed. Everything said here stays with it.`;
+        }
+
+        // Opening the thread marked it read, so the badge on the card and in
+        // the nav are both stale until the list is refetched.
+        await load();
+        if (window.refreshNavCounts) window.refreshNavCounts();
+    }
+
+    function closeThread() {
+        openThreadId = null;
+        messageModal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+        window.dialogClosed(messageModal);
+    }
+
+    messageModal.querySelector('.close-modal').addEventListener('click', closeThread);
+    messageModal.addEventListener('click', (e) => {
+        if (e.target === messageModal) closeThread();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && messageModal.classList.contains('active')) {
+            closeThread();
+        }
+    });
+
+    messageForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = messageBody.value.trim();
+        if (!body || openThreadId === null) return;
+
+        messageSend.disabled = true;
+        messageError.hidden = true;
+        try {
+            const result = await window.api(
+                `/api/proposals/${openThreadId}/messages`,
+                { method: 'POST', body: { body } });
+            messageBody.value = '';
+            // Appended rather than refetched: the reply is already in hand,
+            // and a round trip here would blank the thread mid-conversation.
+            const existing = messageThread.querySelector('.empty-state');
+            if (existing) messageThread.innerHTML = '';
+            messageThread.insertAdjacentHTML('beforeend', `
+                <div class="message mine">
+                    <p class="message-meta"><strong>You</strong>
+                        <span class="message-time">${
+                            esc(messageDate(result.sent.created_at))}</span></p>
+                    <p class="message-body">${esc(result.sent.body)}</p>
+                </div>`);
+            messageThread.scrollTop = messageThread.scrollHeight;
+            messageBody.dispatchEvent(new Event('input'));
+            await load();
+        } catch (error) {
+            messageError.textContent = error.message;
+            messageError.hidden = false;
+        } finally {
+            messageSend.disabled = false;
+        }
+    });
+
     // --- Actions --------------------------------------------------------
     list.addEventListener('click', async (e) => {
         const btn = e.target.closest('button[data-act]');
@@ -237,6 +390,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const act = btn.dataset.act;
         const proposal = proposals.find((p) => p.id === id);
         if (!proposal) return;
+
+        if (act === 'messages') {
+            await openThread(proposal);
+            return;
+        }
 
         if (act === 'copy') {
             const url = `${location.origin}/partnership.html?token=${

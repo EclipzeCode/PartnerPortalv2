@@ -21,7 +21,7 @@ from flask import (
     Flask, jsonify, request, session, send_from_directory
 )
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -34,13 +34,13 @@ from links import LinkError, parse_links
 from matching import find_matches, score_pair
 from moderation import name_problem
 from models import (
-    Event, Organization, Partnership, ProfileView, SavedLead,
+    Event, Message, Organization, Partnership, ProfileView, SavedLead,
 )
 from notifications import (
     notify_completion_marked, notify_contact_message, notify_email_verification,
-    notify_partnership_completed, notify_partnership_ended,
-    notify_password_changed, notify_password_reset, notify_proposal_created,
-    notify_proposal_responded,
+    notify_message_received, notify_partnership_completed,
+    notify_partnership_ended, notify_password_changed, notify_password_reset,
+    notify_proposal_created, notify_proposal_responded,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1052,6 +1052,10 @@ def get_me(org, db):
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
         "pending_proposals": pending_proposals,
+        # Same reasoning as pending_proposals above: every page calls this, so
+        # one indexed query here beats a second request per page just to find
+        # out whether anything is waiting.
+        "unread_messages": _unread_message_count(db, org),
     })
 
 
@@ -1885,6 +1889,7 @@ def get_dashboard(org, db):
             Partnership.recipient_id == org.id)
     ).order_by(Partnership.created_at.desc()).all()
     proposals = [p.to_dict(viewer_id=org.id) for p in rows]
+    _annotate_message_counts(db, org, rows, proposals)
 
     return jsonify({
         "organization": org.private_dict(),
@@ -2175,6 +2180,7 @@ def list_proposals(org, db):
     ).order_by(Partnership.created_at.desc()).all()
 
     proposals = [p.to_dict(viewer_id=org.id) for p in rows]
+    _annotate_message_counts(db, org, rows, proposals)
     return jsonify({
         "proposals": proposals,
         "counts": {
@@ -2195,6 +2201,41 @@ def list_proposals(org, db):
             ),
         },
     })
+
+
+def _annotate_message_counts(db, org, rows, payloads):
+    """Add message and unread counts to a list of serialised proposals.
+
+    Two grouped queries for the whole list rather than two per proposal --
+    this runs on every load of the proposals page and the dashboard, and a
+    per-row count is what turns a page of twelve into twenty-five queries.
+    """
+    ids = [row.id for row in rows]
+    if not ids:
+        return
+
+    totals = dict(
+        db.query(Message.partnership_id, func.count(Message.id))
+        .filter(Message.partnership_id.in_(ids))
+        .group_by(Message.partnership_id).all()
+    )
+
+    # Unread is per viewer, so the read marker to compare against depends on
+    # which side of each proposal this org is on.
+    unread = {}
+    for row in rows:
+        since = row.last_read_at_for(org.id)
+        query = db.query(func.count(Message.id)).filter(
+            Message.partnership_id == row.id,
+            or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+        )
+        if since is not None:
+            query = query.filter(Message.created_at > since)
+        unread[row.id] = query.scalar() or 0
+
+    for payload in payloads:
+        payload["message_count"] = totals.get(payload["id"], 0)
+        payload["unread_count"] = unread.get(payload["id"], 0)
 
 
 def _load_party_proposal(db, org, proposal_id):
@@ -2446,6 +2487,182 @@ def end_proposal(org, db, proposal_id):
         "message": "Partnership ended",
         "proposal": proposal.to_dict(viewer_id=org.id),
     })
+
+
+# --- Messages ---------------------------------------------------------------
+# Threads hang off a proposal, which is the access rule in one line: you can
+# write to an organization because there is a live proposal between you, not
+# because you found them in the directory. That is the same line the rest of
+# this file draws -- proposing is what REQUIRE_EMAIL_VERIFICATION gates,
+# because it is the action that puts your name in front of a stranger, and a
+# saved lead is deliberately invisible to the organization saved. An open
+# inbox reachable from the directory would undo both.
+MAX_MESSAGE_BODY = 4000
+
+# How long to wait before emailing the same thread again. A conversation is a
+# handful of messages in a few minutes, and one email per message turns the
+# useful "someone replied" into something people filter. The window resets
+# once the other side has actually read the thread, so a reply to a read
+# conversation still lands.
+MESSAGE_NOTIFY_WINDOW = timedelta(hours=1)
+
+
+def _thread_or_error(db, org, proposal_id):
+    """The proposal, if this org is party to it. Same 404 as everywhere."""
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return None, (jsonify({"error": "Proposal not found."}), 404)
+    return proposal, None
+
+
+@app.route("/api/proposals/<int:proposal_id>/messages", methods=["GET"])
+@login_required
+def list_messages(org, db, proposal_id):
+    """The thread, oldest first. Reading it marks it read.
+
+    Marked here rather than through a separate endpoint the client has to
+    remember to call: opening a thread is what reading it means, and a read
+    marker that depends on a second request is one refresh away from being
+    wrong.
+    """
+    proposal, error = _thread_or_error(db, org, proposal_id)
+    if error:
+        return error
+
+    rows = db.query(Message).filter(
+        Message.partnership_id == proposal.id
+    ).order_by(Message.created_at, Message.id).all()
+
+    now = datetime.now(timezone.utc)
+    if proposal.proposer_id == org.id:
+        proposal.proposer_last_read_at = now
+    else:
+        proposal.recipient_last_read_at = now
+    db.commit()
+
+    return jsonify({
+        "messages": [m.to_dict(viewer_id=org.id) for m in rows],
+        "count": len(rows),
+        "open": proposal.messages_open(),
+        "counterpart": proposal.counterpart_party(org.id),
+    })
+
+
+@app.route("/api/proposals/<int:proposal_id>/messages", methods=["POST"])
+@login_required
+def create_message(org, db, proposal_id):
+    proposal, error = _thread_or_error(db, org, proposal_id)
+    if error:
+        return error
+
+    if not proposal.messages_open():
+        return jsonify({
+            "error": f"This proposal was {proposal.status}, so the "
+                     f"conversation is closed. You can propose again to "
+                     f"reopen one.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    body = (data.get("body") or "").strip()
+    if not body:
+        return jsonify({"error": "Write a message first.", "field": "body"}), 400
+    if len(body) > MAX_MESSAGE_BODY:
+        return jsonify({
+            "error": f"Keep it under {MAX_MESSAGE_BODY} characters.",
+            "field": "body",
+        }), 400
+
+    # Per account rather than per address: this reaches one specific inbox
+    # that one specific organization chose to open a proposal with, and the
+    # thing worth slowing down is flooding that thread.
+    if rate_limited("messages", str(org.id), max_attempts=60,
+                    window_seconds=3600):
+        return jsonify({
+            "error": "You have sent a lot of messages recently. Please wait a "
+                     "few minutes.",
+        }), 429
+
+    message = Message(
+        partnership_id=proposal.id,
+        sender_id=org.id,
+        sender_name=org.name,
+        body=body,
+    )
+    db.add(message)
+
+    # Writing counts as having read what came before it. Without this, a
+    # reply would leave the sender's own thread showing unread messages they
+    # were plainly looking at as they typed.
+    now = datetime.now(timezone.utc)
+    if proposal.proposer_id == org.id:
+        proposal.proposer_last_read_at = now
+    else:
+        proposal.recipient_last_read_at = now
+    db.commit()
+
+    _maybe_notify_message(db, proposal, org, message)
+
+    return jsonify({
+        "message": "Sent",
+        "sent": message.to_dict(viewer_id=org.id),
+    }), 201
+
+
+def _maybe_notify_message(db, proposal, sender, message):
+    """Email the other side, unless they have been told recently.
+
+    One email per message would make a normal back-and-forth unusable, and an
+    address people filter is worse than no notification at all. So: only if
+    nothing has been sent about this thread within the window, and always if
+    they have read it since -- somebody who is up to date and then receives a
+    reply should hear about it.
+    """
+    other = proposal.counterpart(sender.id)
+    if other is None:
+        return
+
+    their_last_read = proposal.last_read_at_for(other.id)
+    now = datetime.now(timezone.utc)
+
+    previous = db.query(Message).filter(
+        Message.partnership_id == proposal.id,
+        Message.sender_id == sender.id,
+        Message.id != message.id,
+        Message.created_at >= now - MESSAGE_NOTIFY_WINDOW,
+    ).order_by(Message.created_at.desc()).first()
+
+    # A run of messages from the same sender inside the window is one
+    # conversation, and they have already been told about it -- unless they
+    # read the thread in between, which makes this the first thing they have
+    # not seen.
+    if previous is not None and not (
+        their_last_read is not None and their_last_read >= previous.created_at
+    ):
+        return
+
+    notify_message_received(proposal, sender, message)
+
+
+def _unread_message_count(db, org):
+    """How many messages are waiting on `org`, across every thread it is in.
+
+    One query rather than a thread at a time: this rides along with /api/me,
+    which every page calls, so it has to stay cheap.
+    """
+    return db.query(Message.id).join(
+        Partnership, Message.partnership_id == Partnership.id
+    ).filter(
+        or_(
+            and_(Partnership.proposer_id == org.id,
+                 or_(Partnership.proposer_last_read_at.is_(None),
+                     Message.created_at > Partnership.proposer_last_read_at)),
+            and_(Partnership.recipient_id == org.id,
+                 or_(Partnership.recipient_last_read_at.is_(None),
+                     Message.created_at > Partnership.recipient_last_read_at)),
+        ),
+        # Your own messages are not waiting on you.
+        or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+    ).count()
 
 
 @app.route("/api/partnerships/<token>", methods=["GET"])

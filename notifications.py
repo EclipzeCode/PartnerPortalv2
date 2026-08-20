@@ -400,6 +400,50 @@ def notify_partnership_ended(proposal, actor):
     _dispatch(to_addr, f"{actor.name} ended your partnership", html, text)
 
 
+def notify_message_received(proposal, sender, message):
+    """A message arrived in a thread the other side is party to.
+
+    Throttled by the caller rather than here -- see _maybe_notify_message in
+    app.py. One email per message would make an ordinary back-and-forth
+    unusable and teach people to filter the address, which costs more than
+    the notification is worth.
+
+    The body is included. A "you have a new message" with no content is a
+    trip to the site to find out whether it mattered, and everything else
+    this file sends says what happened.
+    """
+    other = proposal.counterpart(sender.id)
+    if other is None or not other.email_notifications:
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    thread_url = f"{cfg['app_url']}/proposals.html#messages-{proposal.id}"
+
+    subject = f"{sender.name} sent you a message"
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(sender.name)} sent you a message</h1>
+  <p class="meta">About your partnership on PartnerPortal.</p>
+
+  <div class="quote">{escape(message.body)}</div>
+
+  <a class="cta" href="{escape(thread_url)}">Reply</a>
+
+  <p class="foot">You are receiving this because you and
+  {escape(sender.name)} have a proposal open on PartnerPortal. Replies to
+  this address are not read -- use the link above.</p>
+</div></body></html>
+"""
+    text = (
+        f"{sender.name} sent you a message about your partnership on "
+        f"PartnerPortal.\n\n"
+        f"{message.body}\n\n"
+        f"Reply here: {thread_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text)
+
+
 def notify_email_verification(org, token):
     """Sent after registration, and again on request from the settings page.
 

@@ -418,3 +418,23 @@ textarea:focus-visible {
 [id="main"]:focus {
     outline: none;
 }
+
+/* Visible to a screen reader, not on screen. For labels that would be
+   redundant next to a placeholder but are still the only thing naming the
+   control to anyone not looking at it -- a placeholder is a hint, not a
+   label, and it disappears the moment typing starts.
+
+   Same technique as .hp-field above, and not display:none for the same
+   reason: that would take the element out of the accessibility tree, which
+   is precisely where this one needs to stay. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

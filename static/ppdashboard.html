@@ -274,6 +274,39 @@
     </div>
 
     <!-- Respond to a partnership proposal -->
+    <!-- The conversation attached to a proposal. A dialog rather than a page:
+         a thread is about one proposal, and the terms it is about are two
+         inches away on the card behind it. -->
+    <div id="messageModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true">
+            <div class="modal-header">
+                <h2 id="messageTitle">Messages</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- aria-live so a reply arriving is announced rather than
+                     silently appended below the fold. polite: it should not
+                     interrupt someone mid-sentence in the box underneath. -->
+                <div class="message-thread" id="messageThread"
+                     role="log" aria-live="polite" aria-busy="true"></div>
+
+                <form id="messageForm">
+                    <label class="sr-only" for="messageBody">Your message</label>
+                    <textarea id="messageBody" rows="3" maxlength="4000"
+                              placeholder="Write a message..."></textarea>
+                    <p class="field-error" id="messageError" hidden></p>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" id="messageSend">Send</button>
+                    </div>
+                </form>
+
+                <!-- Replaces the form once the proposal is settled. The
+                     thread stays readable; it just stops accepting posts. -->
+                <p class="message-closed" id="messageClosed" hidden></p>
+            </div>
+        </div>
+    </div>
+
     <div id="respondModal" class="modal">
         <div class="modal-container" role="dialog" aria-modal="true">
             <div class="modal-header">

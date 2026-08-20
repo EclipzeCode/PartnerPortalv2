@@ -55,7 +55,7 @@ def no_outbound_email(monkeypatch):
                  "notify_email_verification", "notify_password_changed",
                  "notify_password_reset", "notify_contact_message",
                  "notify_completion_marked", "notify_partnership_completed",
-                 "notify_partnership_ended"):
+                 "notify_partnership_ended", "notify_message_received"):
         monkeypatch.setattr(app_module, name, _record(name))
     return sent
 
