@@ -1993,3 +1993,86 @@ button {
 
 .detail-note-status.ok { color: #2a9d5c; }
 .detail-note-status.error { color: #e63946; }
+
+/* --- Score breakdown ------------------------------------------------------
+   A <details>, so it costs one line until someone asks. The number above it
+   is what the whole list is ordered by, and a ranking nobody can interrogate
+   is one they have to take on trust. */
+.detail-score-why {
+    margin: 0 0 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0.6rem;
+    background: rgba(67, 97, 238, 0.03);
+    font-size: 0.85rem;
+}
+
+.detail-score-why.hidden { display: none; }
+
+.detail-score-why > summary {
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    list-style: none;
+}
+
+/* The default marker sits badly against the padding above; this replaces it
+   with one that rotates, so open/closed is readable at a glance. */
+.detail-score-why > summary::-webkit-details-marker { display: none; }
+
+.detail-score-why > summary::before {
+    content: '\203A';
+    display: inline-block;
+    margin-right: 0.5rem;
+    transition: transform 0.15s ease;
+}
+
+.detail-score-why[open] > summary::before { transform: rotate(90deg); }
+
+.detail-score-why > summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    border-radius: 0.6rem;
+}
+
+.score-breakdown {
+    margin: 0;
+    padding: 0 0.85rem;
+    list-style: none;
+}
+
+.score-breakdown li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.3rem 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.score-label { color: var(--text); }
+
+.score-points {
+    color: var(--primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.score-total {
+    margin: 0;
+    padding: 0.5rem 0.85rem 0.7rem;
+    color: var(--text-light);
+    font-size: 0.8rem;
+}
+
+/* The way out of an empty state, next to the sentence explaining it. An
+   empty result is a dead end unless the page also offers the thing that
+   would end it -- clearing the search, dropping the filters, or widening the
+   profile the matches are built from. */
+.empty-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}

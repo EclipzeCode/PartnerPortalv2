@@ -358,3 +358,25 @@ button.btn-action {
     .modal-header { padding: 1rem 1.15rem; }
     .modal-body { padding: 1.15rem; }
 }
+
+/* --- Character counters ---------------------------------------------------
+   Wired by common.js onto every textarea carrying a maxlength, and hidden
+   until the field is most of the way full. Silence is the normal state:
+   these exist to explain a keyboard that is about to stop accepting
+   characters, not to count along with ordinary typing. */
+.char-counter {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-light, #8d99ae);
+    text-align: right;
+}
+
+.char-counter[hidden] {
+    display: none;
+}
+
+.char-counter.warn {
+    color: var(--error, #f87171);
+    font-weight: 600;
+}

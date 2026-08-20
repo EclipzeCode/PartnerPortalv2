@@ -278,7 +278,58 @@ window.dialogClosed = function dialogClosed(modal) {
     if (state.opener && document.contains(state.opener)) state.opener.focus();
 };
 
+// --- Character counters ------------------------------------------------
+// Every textarea with a maxlength gets one, wired here rather than per page
+// so a new field cannot be added without it.
+//
+// The counter appears only once the field is most of the way full. A form
+// with six textareas would otherwise carry six "0 / 2000" labels from the
+// moment it loads -- noise on every field, to warn about a limit almost
+// nobody reaches. Silence until it is close, then a count, then a warning.
+//
+// maxlength stops the typing on its own; what it does not do is explain why
+// the keyboard went dead, which is the actual failure this addresses.
+const COUNTER_SHOW_AT = 0.8;    // of the limit
+const COUNTER_WARN_AT = 0.95;
+
+function wireCharacterCounters(root = document) {
+    root.querySelectorAll('textarea[maxlength]').forEach((field) => {
+        const limit = Number(field.getAttribute('maxlength'));
+        if (!limit || field.dataset.counterWired) return;
+        field.dataset.counterWired = '1';
+
+        const counter = document.createElement('span');
+        counter.className = 'char-counter';
+        // Not a live region: it updates on every keystroke, and announcing
+        // each one would talk over the typing. The limit is in the markup
+        // where a screen reader already reports it.
+        counter.setAttribute('aria-hidden', 'true');
+        counter.hidden = true;
+        field.insertAdjacentElement('afterend', counter);
+
+        const paint = () => {
+            const used = field.value.length;
+            const ratio = used / limit;
+            counter.hidden = ratio < COUNTER_SHOW_AT;
+            if (counter.hidden) return;
+            const left = limit - used;
+            counter.textContent = left === 0
+                ? 'Limit reached'
+                : `${left} character${left === 1 ? '' : 's'} left`;
+            counter.classList.toggle('warn', ratio >= COUNTER_WARN_AT);
+        };
+
+        field.addEventListener('input', paint);
+        // Fields arrive pre-filled when a profile is being edited.
+        paint();
+    });
+}
+
+window.wireCharacterCounters = wireCharacterCounters;
+
 document.addEventListener('DOMContentLoaded', () => {
+    wireCharacterCounters();
+
     // --- Mobile navigation ---------------------------------------------
     const menuIcon = document.getElementById('menu-icon');
     const navbar = document.querySelector('.navbar');

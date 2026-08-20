@@ -17,6 +17,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- First stop for a keyboard or screen-reader visitor. The nav
+         is the same dozen links on every page; without this they are
+         tabbed through again on each one before reaching anything
+         this page is actually for. Visible only when focused. -->
+    <a class="skip-link" href="#main">Skip to main content</a>
   <!-- Navigation Bar -->
   <header class="header">
     <a href="index.html" class="logo">PartnerPortal</a>
@@ -54,7 +59,7 @@
   </header>
 
   <!-- Onboarding Section -->
-  <section class="onboarding-section">
+  <section class="onboarding-section" id="main" tabindex="-1">
     <div class="section-header">
       <!-- Empty on purpose: this page is both first-time onboarding and
            "Edit profile", and only /api/me says which. onboarding.js fills it
@@ -96,6 +101,23 @@
 
       <div id="successMessage" class="alert success hidden"></div>
       <div id="errorMessage" class="alert error hidden"></div>
+
+      <!-- Shown by onboarding.js when this browser is holding unsaved work
+           for this account. Offered rather than applied: a draft can be older
+           than what the server holds, and silently preferring it would revert
+           edits made elsewhere with nothing to say it had. -->
+      <div class="draft-banner" id="draftBanner" role="status" hidden>
+        <i class='bx bx-history' aria-hidden="true"></i>
+        <p>
+          You have unsaved changes to this form from
+          <strong id="draftBannerWhen">earlier</strong>.
+          Nothing was saved to your profile.
+        </p>
+        <div class="draft-banner-actions">
+          <button type="button" class="btn-ghost" id="draftRestoreBtn">Restore them</button>
+          <button type="button" class="btn-ghost" id="draftDiscardBtn">Discard</button>
+        </div>
+      </div>
 
       <form id="onboardingForm" novalidate>
         <div class="onboarding-content">

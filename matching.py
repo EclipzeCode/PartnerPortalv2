@@ -70,32 +70,47 @@ def score_pair(me, them):
 
     score = 0
     reasons = []
+    # The same components as `reasons`, carrying the points each one
+    # contributed. A score is a number this file made up, and "87" on its own
+    # asks the reader to trust it -- which is a lot to ask of the thing the
+    # whole product is ranked by. The arithmetic is already being done here;
+    # this stops it being thrown away before anyone can see it.
+    breakdown = []
+
+    def award(points, label):
+        nonlocal score
+        score += points
+        breakdown.append({"label": label, "points": points})
 
     if they_give:
-        score += POINTS_PER_THEY_GIVE * len(they_give)
         labels = labels_for(they_give)
+        award(POINTS_PER_THEY_GIVE * len(they_give),
+              "They offer " + str(len(they_give))
+              + (" thing" if len(they_give) == 1 else " things") + " you need")
         reasons.append("They offer " + _join(labels) + ", which you need")
 
     if i_give:
-        score += POINTS_PER_I_GIVE * len(i_give)
         labels = labels_for(i_give)
+        award(POINTS_PER_I_GIVE * len(i_give),
+              "You offer " + str(len(i_give))
+              + (" thing" if len(i_give) == 1 else " things") + " they need")
         reasons.append("You offer " + _join(labels) + ", which they need")
 
     mutual = bool(they_give and i_give)
     if mutual:
-        score += MUTUAL_BONUS
+        award(MUTUAL_BONUS, "Two-way match")
         reasons.insert(0, "Two-way match — you each have something the other needs")
 
     if _same_location(me.location, them.location):
-        score += SAME_LOCATION
+        award(SAME_LOCATION, "Same location")
         reasons.append(f"Both based in {them.location}")
     elif me.remote_friendly and them.remote_friendly:
-        score += REMOTE_COMPATIBLE
+        award(REMOTE_COMPATIBLE, "Both open to remote")
         reasons.append("Both open to remote partnerships")
 
     if (me.organization_type and them.organization_type
             and me.organization_type != them.organization_type):
-        score += COMPLEMENTARY_TYPE
+        award(COMPLEMENTARY_TYPE, "Different kind of organization")
         reasons.append(
             f"Different kind of organization ({them.organization_type})"
         )
@@ -107,11 +122,16 @@ def score_pair(me, them):
     # file draws.
     shared_focus = _overlap(me.focus_areas, them.focus_areas)
     if shared_focus:
-        score += min(SHARED_FOCUS * len(shared_focus), MAX_FOCUS_BONUS)
+        award(min(SHARED_FOCUS * len(shared_focus), MAX_FOCUS_BONUS),
+              "Working on the same causes")
         labels = focus_labels_for(shared_focus)
         reasons.append("You both work on " + _join(labels))
 
-    return min(score, MAX_SCORE), reasons, {
+    # The cap is part of the explanation, not something to hide: a breakdown
+    # adding to 118 beside a score of 100 reads as an arithmetic error unless
+    # the page can say the total was capped.
+    total = min(score, MAX_SCORE)
+    return total, reasons, {
         "they_give": they_give,
         "they_give_labels": labels_for(they_give),
         "i_give": i_give,
@@ -119,6 +139,10 @@ def score_pair(me, them):
         "mutual": mutual,
         "shared_focus": shared_focus,
         "shared_focus_labels": focus_labels_for(shared_focus),
+        "breakdown": breakdown,
+        "raw_score": score,
+        "capped": score > MAX_SCORE,
+        "max_score": MAX_SCORE,
     }
 
 

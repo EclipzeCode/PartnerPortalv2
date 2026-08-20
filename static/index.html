@@ -16,6 +16,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- First stop for a keyboard or screen-reader visitor. The nav
+         is the same dozen links on every page; without this they are
+         tabbed through again on each one before reaching anything
+         this page is actually for. Visible only when focused. -->
+    <a class="skip-link" href="#main">Skip to main content</a>
     <!-- Navigation Bar -->
     <header class="header">
         <a href="index.html" class="logo">PartnerPortal</a>
@@ -54,7 +59,7 @@
     </header>
 
     <!-- Hero Section -->
-<section class="hero" id="home">
+<section class="hero" id="main" tabindex="-1">
     <div class="hero-bg" aria-hidden="true">
         <span class="hero-blob blob-1"></span>
         <span class="hero-blob blob-2"></span>

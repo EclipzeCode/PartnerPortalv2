@@ -910,3 +910,48 @@ body {
     flex-wrap: wrap;
     gap: 0.5rem;
 }
+
+/* --- Unsaved-draft banner -------------------------------------------------
+   Informational, not an error: nothing has gone wrong, there is simply work
+   this browser kept that the server never received. Coloured accordingly --
+   a red bar over a form someone is about to fill in reads as a failure they
+   caused. */
+.draft-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid rgba(67, 97, 238, 0.25);
+    border-radius: 0.7rem;
+    background: rgba(67, 97, 238, 0.06);
+}
+
+.draft-banner[hidden] {
+    display: none;
+}
+
+.draft-banner > i {
+    font-size: 1.4rem;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.draft-banner p {
+    margin: 0;
+    flex: 1 1 16rem;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.draft-banner-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.draft-banner-actions .btn-ghost {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+}

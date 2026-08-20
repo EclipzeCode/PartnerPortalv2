@@ -18,6 +18,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- First stop for a keyboard or screen-reader visitor. The nav
+         is the same dozen links on every page; without this they are
+         tabbed through again on each one before reaching anything
+         this page is actually for. Visible only when focused. -->
+    <a class="skip-link" href="#main">Skip to main content</a>
     <!-- Navigation Bar -->
     <header class="header">
         <a href="index.html" class="logo">PartnerPortal</a>
@@ -56,7 +61,7 @@
     </header>
 
     <!-- Dashboard Section -->
-    <section class="dashboard-section">
+    <section class="dashboard-section" id="main" tabindex="-1">
         <div class="section-header">
             <h2>Client <span>Dashboard</span></h2>
             <div class="underline"></div>
@@ -107,7 +112,7 @@
                     </div>
                     <div class="stat-content">
                         <h3>Matches</h3>
-                        <span class="stat-value" id="activePartners">0</span>
+                        <span class="stat-value" id="statMatches">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
@@ -119,7 +124,7 @@
                     </div>
                     <div class="stat-content">
                         <h3>Two-way matches</h3>
-                        <span class="stat-value" id="unreadMessages">0</span>
+                        <span class="stat-value" id="statTwoWay">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
@@ -167,7 +172,7 @@
                     </div>
                     <div class="stat-content">
                         <h3>Profile tags</h3>
-                        <span class="stat-value" id="partnerScore">0</span>
+                        <span class="stat-value" id="statProfileTags">0</span>
                         <span class="stat-change">&mdash;</span>
                     </div>
                     <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>

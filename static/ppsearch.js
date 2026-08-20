@@ -241,6 +241,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Rendering ------------------------------------------------------
+    // Read here rather than passed down from applyView: render() also runs on
+    // paging and on a breakpoint change, where no one recomputed the query.
+    function searchQuery() {
+        return (searchInput.value || '').trim();
+    }
+
     function render() {
         partnersGrid.innerHTML = '';
         const banner = document.getElementById('exampleBanner');
@@ -251,27 +257,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (currentPage > pages) currentPage = pages;
 
         if (displayed.length === 0) {
+            // An empty state should say what to do next, not only that there
+            // is nothing here. Which of these applies is knowable -- a
+            // filter is on, a search matched nothing, or the profile itself
+            // is too narrow to match anyone -- and each has a different
+            // answer, so the action offered is the one that fits.
             let message;
+            let action = '';
+            const searching = Boolean(searchQuery());
+
             if (viewMode === 'saved') {
                 message = savedList.length === 0
-                    ? 'Nothing saved yet. Use the bookmark on a match to keep ' +
-                      'it here — saved organizations stay on this list even if ' +
-                      'your profile changes and they stop matching.'
+                    ? 'Nothing saved yet. Use the bookmark on a match to keep '
+                      + 'it here — saved organizations stay on this list even '
+                      + 'if your profile changes and they stop matching.'
                     : 'No saved organizations match that search.';
+            } else if (searching) {
+                message = 'Nothing here matches that search. It looks at '
+                    + 'names, locations, and what each organization needs and '
+                    + 'offers.';
+                action = '<button type="button" class="btn-ghost" '
+                    + 'data-empty-action="clear-search">Clear the search</button>';
+            } else if (sharedFocusOnly || mutualOnly) {
+                message = sharedFocusOnly
+                    ? 'No matches work on the same things you do.'
+                    : 'No two-way matches yet — nobody currently needs what '
+                      + 'you offer and offers what you need.';
+                action = '<button type="button" class="btn-ghost" '
+                    + 'data-empty-action="clear-filters">Clear filters</button>';
             } else {
-                if (sharedFocusOnly) {
-                    message = 'No matches work on the same things you do. '
-                        + 'Clear the focus filter to see the rest, or add more '
-                        + 'focus areas to your profile.';
-                } else if (mutualOnly) {
-                    message = 'No two-way matches yet. Turn off the two-way '
-                        + 'filter to see one-directional matches.';
-                } else {
-                    message = 'No matches yet. Adding more needs and offers to '
-                        + 'your profile widens the search.';
-                }
+                // The one case that is about the profile rather than the
+                // controls: matching only considers organizations that
+                // overlap in one direction or the other, so a short list of
+                // needs and offers is what makes the result empty.
+                message = 'No matches yet. Every match is built from what you '
+                    + 'need and what you can offer, so the quickest way to '
+                    + 'widen this is to list more of either.';
+                action = '<a class="btn-primary" href="onboarding.html">'
+                    + 'Add to your profile</a>';
             }
-            partnersGrid.innerHTML = `<p class="empty-state">${esc(message)}</p>`;
+
+            partnersGrid.innerHTML =
+                `<div class="empty-state">
+                    <p>${esc(message)}</p>
+                    ${action ? `<div class="empty-actions">${action}</div>` : ''}
+                </div>`;
             updatePagination(pages);
             return;
         }
@@ -456,6 +486,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const badge = document.getElementById('partnerDetailMutual');
         if (badge) badge.classList.toggle('hidden', !detail.mutual);
 
+        paintScoreBreakdown(m, detail);
+
         // What they work on, with anything you also work on marked. The
         // shared ones are the point -- the rest are shown so the list is
         // their profile rather than only the part that flatters the match.
@@ -491,6 +523,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openModal(detailModal);
+    }
+
+    // Where the number came from. matching.py already does this arithmetic to
+    // produce the score; it used to be discarded before anyone could see it,
+    // leaving a bare number to be taken on faith as the basis for the whole
+    // ranking.
+    function paintScoreBreakdown(m, detail) {
+        const block = document.getElementById('detailScoreWhy');
+        const list = document.getElementById('detailScoreBreakdown');
+        const total = document.getElementById('detailScoreTotal');
+        if (!block || !list || !total) return;
+
+        const parts = detail.breakdown || [];
+        // An older payload has no breakdown in it. Hiding the block is
+        // better than showing an empty explanation of a visible number.
+        block.classList.toggle('hidden', parts.length === 0);
+        if (parts.length === 0) return;
+
+        // Closed each time the dialog is opened for someone new: it is a
+        // second question, and it should not be left open from the last card.
+        block.open = false;
+
+        list.innerHTML = parts.map((part) => `
+            <li>
+                <span class="score-label">${esc(part.label)}</span>
+                <span class="score-points">+${esc(part.points)}</span>
+            </li>`).join('');
+
+        // The cap is stated rather than left to look like bad arithmetic:
+        // a breakdown adding to 118 beside a score of 100 otherwise reads as
+        // a bug in the page.
+        total.textContent = detail.capped
+            ? `${detail.raw_score} total, capped at ${detail.max_score}.`
+            : `${m.match_score} out of ${detail.max_score || 100}.`;
     }
 
     // The note only has somewhere to live once the organization is saved,
@@ -633,6 +699,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 save.title = wantSaved ? 'Remove from saved' : 'Save for later';
                 const icon = save.querySelector('i');
                 if (icon) icon.className = `bx ${wantSaved ? 'bxs-bookmark' : 'bx-bookmark'}`;
+            }
+            return;
+        }
+
+        // The empty state offers whichever way out actually applies. These
+        // are rendered into the grid, so they are handled here alongside the
+        // cards rather than bound at load, when they do not exist yet.
+        const emptyAction = e.target.closest('[data-empty-action]');
+        if (emptyAction) {
+            if (emptyAction.dataset.emptyAction === 'clear-search') {
+                searchInput.value = '';
+                applyView();
+                searchInput.focus();
+            } else {
+                mutualOnly = false;
+                sharedFocusOnly = false;
+                if (filterForm) filterForm.reset();
+                paintFilterButton();
+                await loadMatches();
             }
             return;
         }

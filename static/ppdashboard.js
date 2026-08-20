@@ -102,11 +102,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Stat cards. The markup labels are updated too, because "Active Partners"
     // and "Partner Score" described numbers that never existed.
-    setStat('activePartners', stats.total_matches, 'Matches',
+    setStat('statMatches', stats.total_matches, 'Matches',
             stats.mutual_matches ? `${stats.mutual_matches} two-way` : 'no two-way yet');
-    setStat('unreadMessages', stats.mutual_matches, 'Two-way matches',
+    setStat('statTwoWay', stats.mutual_matches, 'Two-way matches',
             'both sides benefit');
-    setStat('partnerScore', stats.needs_count + stats.offers_count, 'Profile tags',
+    setStat('statProfileTags', stats.needs_count + stats.offers_count, 'Profile tags',
             `${stats.needs_count} needs · ${stats.offers_count} offers`);
     setStat('savedLeadsCount', stats.saved || 0, 'Saved',
             stats.saved ? 'shortlisted' : 'none yet');

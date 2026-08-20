@@ -303,6 +303,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (me.onboarding_complete) {
       submitBtn.innerHTML = `<i class='bx bx-save'></i> Update profile`;
     }
+
+    // Only now: the key is per-organization, and until /api/me answers there
+    // is no way to know whose draft this browser is holding. Everything
+    // above has just written the server's version into the form, so this is
+    // also the right moment to ask whether an unsaved one should replace it.
+    draftKey = DRAFT_PREFIX + me.id;
+    offerDraftRestore();
+    watchForDraftChanges();
+  }
+
+  // A banner rather than a silent restore. The draft may be older than what
+  // the server holds, and quietly preferring it would revert edits made
+  // somewhere else with no indication that anything had been substituted.
+  function offerDraftRestore() {
+    const draft = readDraft();
+    if (!draft || !draft.payload) return;
+
+    const banner = document.getElementById('draftBanner');
+    const when = document.getElementById('draftBannerWhen');
+    if (!banner) return;
+
+    if (when && draft.at) {
+      const age = Date.now() - draft.at;
+      const mins = Math.round(age / 60000);
+      when.textContent = mins < 1 ? 'a moment ago'
+        : mins < 60 ? `${mins} minute${mins === 1 ? '' : 's'} ago`
+        : mins < 1440 ? `${Math.round(mins / 60)} hour${Math.round(mins / 60) === 1 ? '' : 's'} ago`
+        : new Date(draft.at).toLocaleDateString('en-US',
+            { month: 'short', day: 'numeric' });
+    }
+
+    banner.hidden = false;
+
+    document.getElementById('draftRestoreBtn').addEventListener('click', () => {
+      applyDraft(draft.payload);
+      banner.hidden = true;
+      window.toast('Unsaved changes restored. Nothing is saved until you '
+        + 'press Save.');
+    });
+
+    document.getElementById('draftDiscardBtn').addEventListener('click', () => {
+      clearDraft();
+      banner.hidden = true;
+    });
+  }
+
+  // Attached after the prefill, not before: prefill writes to every field,
+  // and those writes are the server's answer rather than anything the
+  // visitor typed. Wiring earlier would save that straight back as a draft.
+  function watchForDraftChanges() {
+    onboardingForm.addEventListener('input', scheduleDraftSave);
+    onboardingForm.addEventListener('change', scheduleDraftSave);
   }
 
   // ---- Validation -------------------------------------------------------
@@ -460,6 +512,131 @@ document.addEventListener('DOMContentLoaded', async () => {
     return true;
   }
 
+  // ---- Draft rescue -----------------------------------------------------
+  // This form is the longest thing on the site: three text areas, four links,
+  // and thirty-odd category checkboxes. Nothing held any of it until Save
+  // succeeded, so a closed tab, a dead battery or a session that expired
+  // mid-typing threw all of it away with nothing to go back to.
+  //
+  // Kept in localStorage rather than on the server: a half-filled profile is
+  // not a profile, and writing partial rows would put organizations into the
+  // directory that onboarding_complete exists to keep out. localStorage also
+  // survives the case that actually loses work -- the browser closing --
+  // which a server draft saved on submit would not.
+  //
+  // Keyed by organization so a shared browser cannot show one account's
+  // half-written profile to the next person who signs in.
+  const DRAFT_PREFIX = 'partnerPortalOnboardingDraft:';
+  let draftKey = null;
+  let draftTimer = null;
+
+  function saveDraft() {
+    if (!draftKey) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        at: Date.now(),
+        payload: buildPayload(),
+      }));
+    } catch {
+      // Storage disabled or full. The form still works; only the safety net
+      // is gone, which is where this started.
+    }
+  }
+
+  // Debounced: this serialises the whole form, and doing that on every
+  // keystroke of a 2000-character description is work nobody asked for.
+  function scheduleDraftSave() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 800);
+  }
+
+  function clearDraft() {
+    clearTimeout(draftTimer);
+    if (!draftKey) return;
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      // Nothing to clear.
+    }
+  }
+
+  function readDraft() {
+    if (!draftKey) return null;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Applied only when the visitor asks for it. Restoring automatically would
+  // silently overwrite what the server just sent with something older, and
+  // an organization editing one line of a saved profile would find the rest
+  // of it quietly reverted to a draft they had forgotten writing.
+  function applyDraft(payload) {
+    const text = {
+      organizationName: 'organization_name',
+      organizationType: 'organization_type',
+      location: 'location',
+      needsNote: 'needs_note',
+      offersNote: 'offers_note',
+      partnershipGoals: 'partnership_goals',
+      description: 'description',
+      contactEmail: 'contact_email',
+      contactPhone: 'contact_phone',
+      websiteUrl: 'website_url',
+      instagramUrl: 'instagram_url',
+      xUrl: 'x_url',
+      linkedinUrl: 'linkedin_url',
+    };
+    Object.entries(text).forEach(([field, key]) => {
+      if (fields[field]) fields[field].value = payload[key] || '';
+    });
+    fields.remoteFriendly.checked = Boolean(payload.remote_friendly);
+    fields.linksPublic.checked = Boolean(payload.links_public);
+
+    // The draft replaces the selections rather than adding to them: anything
+    // the prefill ticked and the draft does not have was deliberately
+    // unticked before the tab closed, and leaving it on would restore a
+    // profile the visitor had already edited away from.
+    [['needs', payload.needs], ['offers', payload.offers],
+     ['focus', payload.focus_areas]].forEach(([side, slugs]) => {
+      const container = document.getElementById(`${side}Picker`);
+      if (container) {
+        container.querySelectorAll('input[type="checkbox"]').forEach((box) => {
+          box.checked = false;
+          box.closest('.category-chip').classList.remove('checked');
+        });
+      }
+      selected[side].clear();
+
+      (slugs || []).forEach((slug) => {
+        const box = document.getElementById(`${side}-${slug}`);
+        if (box) {
+          box.checked = true;
+          box.closest('.category-chip').classList.add('checked');
+          selected[side].add(slug);
+        }
+      });
+    });
+
+    // Assigning .value fires nothing, so everything watching these inputs --
+    // the character counters, the progress checklist, the field-error
+    // clearing -- would still be describing the form as it was before the
+    // restore. A real input event is what those are already listening for,
+    // rather than a second path that has to be kept in step with them.
+    //
+    // wireCharacterCounters() is not the fix here: it skips fields it has
+    // already wired, so calling it again repaints nothing.
+    Object.values(fields).forEach((field) => {
+      if (field) field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    updateProgress();
+    updateLinksVisibilityNote();
+  }
+
   function buildPayload() {
     return {
       organization_name: fields.organizationName.value.trim(),
@@ -561,6 +738,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         body: buildPayload()
       });
 
+      // The draft existed to survive losing the page before this point.
+      clearDraft();
       showSuccess('Profile saved. Finding your matches...');
       successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => { window.location.href = 'ppsearch.html'; }, 900);
@@ -601,6 +780,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function doClear() {
+    // Clearing is deliberate and already behind a confirmation. Leaving the
+    // draft behind would offer to undo it on the next visit, which is not
+    // what the confirmation was agreed to.
+    clearDraft();
     onboardingForm.reset();
     Object.values(selected).forEach((set) => set.clear());
     document.querySelectorAll('.category-chip.checked')

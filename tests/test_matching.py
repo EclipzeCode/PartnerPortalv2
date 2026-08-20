@@ -124,3 +124,53 @@ def test_mutual_matches_sort_ahead_of_higher_scoring_one_way(session, make_org):
     mutual_flags = [m["match_detail"]["mutual"] for m in results]
     # Every mutual match appears before every one-way one.
     assert mutual_flags == sorted(mutual_flags, reverse=True)
+
+# --- Explaining the score ---------------------------------------------------
+# The number is what the whole list is ordered by, and the page now shows how
+# it was reached. That only helps if the parts add up to the total -- a
+# breakdown that disagrees with the score beside it is worse than no
+# breakdown, because it makes the ranking look broken rather than opaque.
+
+def test_the_breakdown_adds_up_to_the_score(make_org, session):
+    me = make_org(needs=["web_development", "volunteers"],
+                  offers=["grant_writing"], location="Austin, TX",
+                  focus_areas=["food_security"], organization_type="NGO")
+    them = make_org(needs=["grant_writing"],
+                    offers=["web_development", "volunteers"],
+                    location="austin", focus_areas=["food_security"],
+                    organization_type="Small Business")
+
+    score, _reasons, detail = score_pair(me, them)
+    parts = detail["breakdown"]
+
+    assert parts, "a scoring match should be able to say why"
+    assert sum(p["points"] for p in parts) == detail["raw_score"]
+    assert detail["raw_score"] == score
+    assert detail["capped"] is False
+
+
+def test_a_capped_score_says_so(make_org):
+    """Enough overlap to exceed 100 still displays as 100, so the page has to
+    be able to explain why the parts sum higher than the total."""
+    everything = ["web_development", "design_branding", "marketing_social",
+                  "grant_writing", "legal", "accounting_finance"]
+    me = make_org(needs=everything, offers=everything, location="Austin, TX",
+                  organization_type="NGO")
+    them = make_org(needs=everything, offers=everything, location="Austin, TX",
+                    organization_type="Small Business")
+
+    score, _reasons, detail = score_pair(me, them)
+    assert score == detail["max_score"]
+    assert detail["capped"] is True
+    assert detail["raw_score"] > score
+    assert sum(p["points"] for p in detail["breakdown"]) == detail["raw_score"]
+
+
+def test_every_reason_has_a_matching_component(make_org):
+    """reasons and breakdown describe the same components, so a score cannot
+    name a factor in prose that contributed nothing."""
+    me = make_org(needs=["web_development"], offers=["grant_writing"])
+    them = make_org(needs=["grant_writing"], offers=["web_development"])
+
+    _score, reasons, detail = score_pair(me, them)
+    assert len(reasons) == len(detail["breakdown"])
