@@ -1630,6 +1630,23 @@ def save_onboarding(org, db):
         if problem:
             return jsonify({"error": problem, "field": field}), 400
 
+    # Optional -- an org that leaves it blank is contacted on its sign-in
+    # address (see contact_email below) -- but if one is given it has to be
+    # an address. This was the only field on this endpoint checked for width
+    # and not for shape, so anything under 255 characters was stored and then
+    # rendered straight into a mailto: link on the public profile, where the
+    # one thing the page exists to do is get this organization contacted.
+    #
+    # onboarding.js already refuses it with the same pattern EMAIL_RE uses,
+    # which is exactly why it belongs here too: the form is not the only way
+    # into this endpoint, and every other field on it is checked on both
+    # sides for that reason.
+    if contact_email and not is_valid_email(contact_email):
+        return jsonify({
+            "error": "Please enter a valid contact email address.",
+            "field": "contact_email",
+        }), 400
+
     # The free-text blocks land in Text columns, so there is no width to
     # overflow -- but nothing capped them either, and an unbounded value is
     # stored in full and then rendered into every card and profile that shows

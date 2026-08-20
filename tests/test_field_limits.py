@@ -55,6 +55,41 @@ def test_onboarding_rejects_over_length_fields(client, make_org, login):
     assert response.get_json()["field"] == "description"
 
 
+def test_onboarding_rejects_a_contact_email_that_is_not_an_address(
+        client, make_org, login):
+    """Width was the only thing checked on this field.
+
+    onboarding.js refuses the same values with the same pattern, so the form
+    could not produce one -- but the form is not the only way in, and what
+    got stored went straight into a mailto: link on the public profile.
+    """
+    org = make_org(offers=["volunteers"], needs=["funding_grants"])
+    login(org)
+    base = {
+        "organization_name": "pytest contact email",
+        "organization_type": "NGO",
+        "location": "Testville, TS",
+        "needs": ["funding_grants"],
+        "offers": ["volunteers"],
+    }
+
+    for junk in ("not an address", "missing-at.example.com", "no@tld", "a@b@c.com"):
+        response = client.post("/api/onboarding", json={**base, "contact_email": junk})
+        assert response.status_code == 400, junk
+        assert response.get_json()["field"] == "contact_email"
+
+    # Still optional: left blank it falls back to the sign-in address.
+    response = client.post("/api/onboarding", json={**base, "contact_email": ""})
+    assert response.status_code == 200
+    assert client.get("/api/me").get_json()["organization"]["contact_email"] == org.email
+
+    response = client.post("/api/onboarding", json={
+        **base, "contact_email": "partners@example.org"})
+    assert response.status_code == 200
+    assert client.get("/api/me").get_json()[
+        "organization"]["contact_email"] == "partners@example.org"
+
+
 def test_onboarding_accepts_a_name_at_the_limit(client, make_org, login):
     """The cap is the column width, not one short of it."""
     org = make_org(offers=["volunteers"], needs=["funding_grants"])
