@@ -596,6 +596,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // Which page the arrows step from. Browse keeps its own number, because
+    // its paging is a request parameter rather than a slice of a list this
+    // page already holds -- and `currentPage` is only ever written by the
+    // other branch of goToPage below, so in browse mode it sits at 1 for the
+    // whole visit.
+    //
+    // Reading it there meant Next always asked for page 2: the first click
+    // worked, and every one after it asked for the page already on screen,
+    // which goToPage correctly declines to reload. The button stayed enabled
+    // and did nothing, so the directory stopped at page 2 however many there
+    // were.
+    function activePage() {
+        return viewMode === 'browse' ? browseState.page : currentPage;
+    }
+
     function goToPage(page) {
         if (viewMode === 'browse') {
             const wanted = Math.min(Math.max(1, page), browseState.pages);
@@ -1322,8 +1337,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    prevBtn.addEventListener('click', () => goToPage(currentPage - 1));
-    nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
+    prevBtn.addEventListener('click', () => goToPage(activePage() - 1));
+    nextBtn.addEventListener('click', () => goToPage(activePage() + 1));
     // Wrapped rather than passed directly: the handler receives an Event,
     // which would arrive here as applyView's options object.
     //
