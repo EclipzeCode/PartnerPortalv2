@@ -125,19 +125,6 @@ button {
     z-index: 0;
 }
 
-.hero-image img {
-    max-width: 100%;
-    height: auto;
-    z-index: 1;
-    animation: float 6s ease-in-out infinite;
-}
-
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-    100% { transform: translateY(0px); }
-}
-
 /* About Section */
 .about {
     padding: 5rem 10%;
@@ -2186,4 +2173,27 @@ button {
     max-height: 15rem;
     overflow-y: auto;
     padding: 0 0.9rem 0.9rem;
+}
+
+/* --- Reduced motion ------------------------------------------------------
+   The same targeted treatment shared.css, nav.css and ppdashboard.css give
+   their own animations. Movement only: colour and shadow transitions stay,
+   because reduced motion is a request about things moving, not a request
+   for everything to become instant.
+
+   This is the page with the most of it -- a grid where every card lifts
+   under the pointer, plus the pagination and the buttons above it. The
+   selectors are the ones that actually carry a transform; the hero and
+   about-section rules elsewhere in this file look like candidates but
+   belong to markup ppsearch.html does not have.
+
+   A dialog's entrance is handled once in forms.css, which every page with
+   one loads after this file. */
+@media (prefers-reduced-motion: reduce) {
+    .partner-card:hover,
+    .btn-primary:hover,
+    .btn-action:hover,
+    .btn-pagination:hover {
+        transform: none;
+    }
 }

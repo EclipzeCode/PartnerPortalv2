@@ -378,3 +378,15 @@ button.btn-action {
     color: var(--error, #f87171);
     font-weight: 600;
 }
+
+/* --- Reduced motion ------------------------------------------------------
+   The dialog slides up and scales in as it opens. That is movement nobody
+   asked for on every modal on the site, so it is skipped in favour of the
+   dialog simply being there. Opacity is left to fade: it does not move. */
+@media (prefers-reduced-motion: reduce) {
+    .modal .modal-container,
+    .modal.active .modal-container {
+        transition: none;
+        transform: none;
+    }
+}

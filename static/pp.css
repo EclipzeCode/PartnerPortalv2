@@ -903,30 +903,6 @@ button {
     line-height: 1.6;
 }
 
-.testimonial-carousel {
-    background: white;
-    padding: 3rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    max-width: 37.5rem;
-    margin-left: auto;
-}
-
-.testimonial-content {
-    font-size: 1.5rem;
-    font-weight: 500;
-    line-height: 1.6;
-    color: var(--dark);
-    margin-bottom: 2rem;
-    font-style: italic;
-}
-
-.testimonial-author {
-    display: flex;
-    align-items: center;
-    margin-top: 2rem;
-}
-
 .author-avatar {
     width: 3.75rem;
     height: 3.75rem;
@@ -1013,9 +989,6 @@ button {
         margin: 0 auto;
     }
     
-    .testimonial-carousel {
-        margin: 3rem auto 0;
-    }
 }
 
 @media (max-width: 48em) {
@@ -1064,9 +1037,6 @@ button {
         padding: 4rem 5%;
     }
     
-    .testimonial-content {
-        font-size: 1.25rem;
-    }
 }
 
 /* Modern Modal CSS */
@@ -1268,10 +1238,6 @@ button {
         order: 2;
     }
 
-    .testimonial-carousel {
-        margin-left: 0;
-        max-width: 100%;
-    }
 }
 
 @media (max-width: 48em) {
@@ -1298,10 +1264,6 @@ button {
         grid-template-columns: 1fr;
     }
 
-    .testimonial-carousel {
-        padding: 2rem;
-        margin-left: 0;
-    }
 }
 
 @media (max-width: 36em) {
@@ -1363,9 +1325,6 @@ button {
         flex-direction: column;
     }
 
-    .testimonial-carousel {
-        padding: 1.5rem;
-    }
 }
 /* --- Contact / demo-request form inside the modal ----------------------- */
 /* .btn-primary and .btn-secondary were written for anchors; these fill in the
