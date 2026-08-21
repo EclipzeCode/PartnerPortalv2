@@ -77,7 +77,7 @@ body {
 }
 
 .verify-banner > i {
-    color: #b8730f;
+    color: var(--text-note);
     font-size: 1.4rem;
     flex-shrink: 0;
 }
@@ -89,11 +89,11 @@ body {
     margin: 0;
     font-size: 0.92rem;
     line-height: 1.55;
-    color: #7a5210;
+    color: var(--text-note);
 }
 
 .verify-banner strong {
-    color: #6a4409;
+    color: var(--text-note);
 }
 
 /* White fill so the ghost button reads as a control rather than sinking into
@@ -102,13 +102,13 @@ body {
     flex-shrink: 0;
     background: var(--surface);
     border-color: rgba(240, 173, 78, 0.6);
-    color: #8a5a0b;
+    color: var(--text-note);
 }
 
 .verify-banner .btn-action.ghost:hover {
     background: var(--surface);
     border-color: #b8730f;
-    color: #6a4409;
+    color: var(--text-note);
     box-shadow: 0 0.25rem 0.75rem rgba(184, 115, 15, 0.18);
 }
 
@@ -493,11 +493,11 @@ a.btn-action {
 
 /* Colour-codes the feed by what kind of thing happened, so a decline does not
    read the same as an agreement at a glance. */
-.activity-item.kind-accepted .activity-icon { background: rgba(22, 163, 74, 0.12); color: #16a34a; }
+.activity-item.kind-accepted .activity-icon { background: rgba(22, 163, 74, 0.12); color: var(--text-success); }
 .activity-item.kind-declined .activity-icon,
 .activity-item.kind-withdrawn .activity-icon { background: rgba(141, 153, 174, 0.16); color: var(--text-light); }
-.activity-item.kind-incoming .activity-icon { background: rgba(217, 119, 6, 0.14); color: #d97706; }
-.activity-item.kind-event .activity-icon { background: rgba(76, 201, 240, 0.18); color: #0d8fb5; }
+.activity-item.kind-incoming .activity-icon { background: rgba(217, 119, 6, 0.14); color: var(--text-note); }
+.activity-item.kind-event .activity-icon { background: rgba(76, 201, 240, 0.18); color: var(--text-accent); }
 
 /* Filter control. Built as a pill rather than a bare <select> so it reads as
    a sibling of the .btn-action in the other card's header. */
@@ -1040,7 +1040,7 @@ button.view-all {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #16a34a;
+    color: var(--text-success);
     background: rgba(22, 163, 74, 0.12);
     padding: 0.1rem 0.35rem;
     border-radius: 62.4375rem;
@@ -1066,7 +1066,7 @@ button.view-all {
 }
 
 .stat-tags .needs h3 i { color: var(--primary); }
-.stat-tags .offers h3 i { color: #16a34a; }
+.stat-tags .offers h3 i { color: var(--text-success); }
 
 .tag-chips {
     display: flex;
@@ -1330,9 +1330,9 @@ button.view-all {
        which would mean rewriting these nodes twice per load. */
     background: linear-gradient(
         90deg,
-        #eceef5 25%,
-        #f6f7fb 37%,
-        #eceef5 63%
+        var(--skeleton-base) 25%,
+        var(--skeleton-sheen) 37%,
+        var(--skeleton-base) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;

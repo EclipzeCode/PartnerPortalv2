@@ -124,7 +124,7 @@ button {
 }
 
 .container a{
-    color: #333;
+    color: var(--text);
     font-size: 0.8125rem;
     text-decoration: none;
     margin: 0.9375rem 0 0.625rem;
@@ -304,13 +304,13 @@ button {
 
 .container .form-banner.error {
     background: rgba(220, 38, 38, 0.08);
-    color: #b91c1c;
+    color: var(--text-danger);
     border: 1px solid rgba(220, 38, 38, 0.2);
 }
 
 .container .form-banner.success {
     background: rgba(22, 163, 74, 0.08);
-    color: #15803d;
+    color: var(--text-success);
     border: 1px solid rgba(22, 163, 74, 0.2);
 }
 
@@ -385,11 +385,11 @@ button {
 }
 
 .pw-checklist li.met {
-    color: #15803d;
+    color: var(--text-success);
 }
 
 .pw-checklist li.met i {
-    color: #16a34a;
+    color: var(--text-success);
 }
 
 .form-container{

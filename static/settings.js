@@ -9,6 +9,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     const status = document.getElementById('settingStatus');
     const container = document.querySelector('.settings-container');
 
+    // --- Appearance -------------------------------------------------------
+    // Stored in this browser, not on the account: it describes a screen
+    // rather than an organization, and the same person on a laptop and a
+    // phone may reasonably want different answers. That also means it needs
+    // no request, which is why it is wired before the await below and is
+    // never disabled -- it works while the rest of the page is still loading,
+    // and it works signed out.
+    //
+    // The attribute itself is set twice: here, and by the inline script in
+    // every page's <head>, which runs before the first stylesheet so a dark
+    // visitor never sees a white flash. This half only has to keep the two in
+    // step from the moment the switch is used.
+    const THEME_KEY = 'partnerPortalTheme';
+    const darkToggle = document.getElementById('darkMode');
+
+    if (darkToggle) {
+        const stored = (() => {
+            try { return localStorage.getItem(THEME_KEY); } catch { return null; }
+        })();
+        // Light unless dark was explicitly chosen. The system preference is
+        // deliberately not read: the product ships light, and a dark OS is
+        // not the same thing as asking for a dark app.
+        darkToggle.checked = stored === 'dark';
+
+        darkToggle.addEventListener('change', () => {
+            const dark = darkToggle.checked;
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+            try {
+                localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+            } catch {
+                // Private browsing, or storage disabled. The theme still
+                // applies for this page; it just will not be remembered.
+                window.toast('Dark mode is on for now, but this browser will '
+                             + 'not remember it.', 'error');
+            }
+        });
+    }
+
     // --- Load ------------------------------------------------------------
     // The toggle and the account facts below all come from this request, so
     // they shimmer (settings.css, [data-loading="true"]) until it settles --

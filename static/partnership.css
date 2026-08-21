@@ -183,7 +183,7 @@ body {
     padding: 0.1rem 0.45rem;
     border-radius: 0.35rem;
     background: rgba(0, 0, 0, 0.06);
-    color: #8d99ae;
+    color: var(--text-light);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -204,7 +204,7 @@ body {
 
 .agreement-badge.complete {
     background: rgba(74, 222, 128, 0.15);
-    color: #15803d;
+    color: var(--text-success);
 }
 
 /* Neutral rather than red. Ending a partnership is an ordinary outcome, and
@@ -212,5 +212,5 @@ body {
    failure would imply an answer it does not have. */
 .agreement-badge.ended {
     background: rgba(0, 0, 0, 0.06);
-    color: #52525b;
+    color: var(--text-light);
 }

@@ -232,9 +232,9 @@ textarea:focus-visible {
 .skeleton {
     background: linear-gradient(
         90deg,
-        #eceef5 25%,
-        #f6f7fb 37%,
-        #eceef5 63%
+        var(--skeleton-base) 25%,
+        var(--skeleton-sheen) 37%,
+        var(--skeleton-base) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
@@ -284,7 +284,7 @@ textarea:focus-visible {
     padding: 0.85rem 1rem;
     border-radius: 0.6rem;
     background: var(--surface);
-    color: #2b2d42;
+    color: var(--text);
     font-family: 'Poppins', system-ui, -apple-system, sans-serif;
     font-size: 0.9rem;
     line-height: 1.45;
@@ -302,8 +302,8 @@ textarea:focus-visible {
     margin-top: 0.05rem;
 }
 
-.toast.ok > i    { color: #2a9d5c; }
-.toast.error > i { color: #e63946; }
+.toast.ok > i    { color: var(--text-success); }
+.toast.error > i { color: var(--text-danger); }
 
 .toast p {
     margin: 0;
@@ -318,13 +318,13 @@ textarea:focus-visible {
     padding: 0 0.15rem;
     font-size: 1.2rem;
     line-height: 1;
-    color: #8d99ae;
+    color: var(--text-light);
     cursor: pointer;
     flex-shrink: 0;
 }
 
 .toast-close:hover {
-    color: #2b2d42;
+    color: var(--text);
 }
 
 /* Leaving is scripted rather than left to the removal, so the element is

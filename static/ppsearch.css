@@ -1033,7 +1033,7 @@ button {
 /* Inline validation / server errors above a modal form. */
 .form-message {
     background: var(--surface-danger);
-    color: #b91c1c;
+    color: var(--text-danger);
     border: 1px solid var(--error);
     border-radius: 0.5rem;
     padding: 0.625rem 0.75rem;
@@ -1043,7 +1043,7 @@ button {
 
 .form-message.success {
     background: var(--surface-success);
-    color: #15803d;
+    color: var(--text-success);
     border-color: var(--success);
 }
 
@@ -1442,7 +1442,7 @@ button {
     border-radius: 0.75rem;
     padding: 1rem 1.15rem;
     margin-bottom: 1.5rem;
-    color: #7a5b00;
+    color: var(--text-note);
     font-size: 0.92rem;
     line-height: 1.6;
 }
@@ -1453,7 +1453,7 @@ button {
     margin-top: 0.1rem;
 }
 
-.example-banner strong { color: #5c4400; }
+.example-banner strong { color: var(--text-note); }
 
 /* Example cards read as secondary: muted and dashed, so they are clearly not
    real matches even at a glance. */
@@ -1467,7 +1467,7 @@ button {
     display: inline-flex;
     align-items: center;
     background: var(--border-note);
-    color: #5c4400;
+    color: var(--text-note);
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1963,8 +1963,8 @@ button {
     color: var(--text-light);
 }
 
-.detail-note-status.ok { color: #2a9d5c; }
-.detail-note-status.error { color: #e63946; }
+.detail-note-status.ok { color: var(--text-success); }
+.detail-note-status.error { color: var(--text-danger); }
 
 /* --- Score breakdown ------------------------------------------------------
    A <details>, so it costs one line until someone asks. The number above it

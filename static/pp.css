@@ -105,9 +105,9 @@ button {
 
 /* Atmospheric perspective: distant ridges are pale and low contrast, near ones
    darker, so the scene reads as depth rather than as flat shapes. */
-.peak-far  { fill: #e8edfc; }
-.peak-mid  { fill: #d5def9; }
-.peak-near { fill: #bccbf3; }
+.peak-far  { fill: var(--peak-far); }
+.peak-mid  { fill: var(--peak-mid); }
+.peak-near { fill: var(--peak-near); }
 
 /* ---------- Scroll-driven build ----------
    The bridge assembles as the hero is scrolled: the two peaks start
@@ -135,7 +135,7 @@ button {
    scene is actually about, so it gets the strongest contrast. */
 .bridge-cable {
     fill: none;
-    stroke: #8095d8;
+    stroke: var(--bridge-cable);
     stroke-width: 3;
     stroke-linecap: round;
     /* pathLength="1" on the element makes these 0..1 regardless of the real
@@ -145,7 +145,7 @@ button {
 }
 
 .bridge-hangers line {
-    stroke: #97a9e0;
+    stroke: var(--bridge-hanger);
     stroke-width: 1.6;
     opacity: 0;
 }
@@ -162,7 +162,7 @@ button {
 
 /* Towers rise out of the deck. */
 .bridge-tower {
-    fill: #7286d0;
+    fill: var(--bridge-tower);
     transform-box: fill-box;
     transform-origin: bottom;
     transform: scaleY(var(--b-towers));
@@ -170,7 +170,7 @@ button {
 
 /* Deck extends outward from mid-span. */
 .bridge-deck {
-    fill: #6d81cd;
+    fill: var(--bridge-deck);
     transform-box: fill-box;
     transform-origin: center;
     transform: scaleX(var(--b-deck));
@@ -449,7 +449,7 @@ button {
 
 .org-avatar.alt {
     background: rgba(76, 201, 240, 0.18);
-    color: #0d8fb5;
+    color: var(--text-accent);
 }
 
 .org-name {
@@ -496,7 +496,7 @@ button {
 
 .exchange-arrow.up {
     background: rgba(74, 222, 128, 0.18);
-    color: #16a34a;
+    color: var(--text-success);
 }
 
 .exchange-text {
@@ -1085,21 +1085,21 @@ button {
 
 .modal-header h2 {
     margin: 0;
-    color: #2b2d42;
+    color: var(--text);
     font-size: 1.5rem;
     font-weight: 600;
 }
 
 .close-modal {
     font-size: 1.8rem;
-    color: #8d99ae;
+    color: var(--text-light);
     cursor: pointer;
     transition: color 0.2s ease;
     line-height: 1;
 }
 
 .close-modal:hover {
-    color: #2b2d42;
+    color: var(--text);
 }
 
 .modal-body {
@@ -1129,14 +1129,14 @@ button {
 
 .step-content h3 {
     margin: 0 0 0.3rem 0;
-    color: #2b2d42;
+    color: var(--text);
     font-size: 1.1rem;
     font-weight: 500;
 }
 
 .step-content p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-light);
     font-size: 0.95rem;
     line-height: 1.5;
 }
@@ -1383,7 +1383,7 @@ button.btn-secondary {
 
 .form-message {
     background: var(--surface-danger);
-    color: #b91c1c;
+    color: var(--text-danger);
     border: 1px solid #f87171;
     border-radius: 0.5rem;
     padding: 0.625rem 0.75rem;
@@ -1393,7 +1393,7 @@ button.btn-secondary {
 
 .form-message.success {
     background: var(--surface-success);
-    color: #15803d;
+    color: var(--text-success);
     border-color: #4ade80;
 }
 

@@ -20,6 +20,18 @@
          request gets. -->
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Light is the default: only an explicit
+         choice, stored by the toggle in Settings, turns this on -- the system
+         preference is deliberately not consulted, because the product ships
+         light and a dark OS is not the same thing as asking for a dark app. -->
+    <script>
+      try {
+        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+    </script>
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="settings.css">
     <link rel="stylesheet" href="shared.css">
@@ -82,6 +94,33 @@
              that actually come from that request shimmer -- change password
              and delete account need nothing from it. -->
         <div class="settings-container" data-loading="true">
+            <!-- Appearance ---------------------------------------------- -->
+            <!-- Deliberately outside everything data-loading shimmers: the
+                 theme is stored in this browser, not on the account, so it is
+                 known before /api/me is asked and must not sit blank waiting
+                 for it. It is also the one control here that works signed
+                 out. -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-moon'></i> Appearance</h3>
+                    <p>How PartnerPortal looks on this device.</p>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="darkMode">Dark mode</label>
+                        <p>
+                            Saved in this browser rather than on your account, so it
+                            follows the device rather than the sign-in.
+                        </p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="darkMode">
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+            </div>
+
             <!-- Notifications ------------------------------------------- -->
             <div class="settings-card">
                 <div class="settings-card-header">

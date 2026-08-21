@@ -200,7 +200,7 @@ body {
 }
 
 .pw-checklist li.met {
-    color: #2a9d5c;
+    color: var(--text-success);
 }
 
 /* --- Setting row --------------------------------------------------------- */
@@ -301,7 +301,7 @@ body {
 }
 
 .setting-status.ok {
-    color: #2a9d5c;
+    color: var(--text-success);
 }
 
 .setting-status.error {
@@ -349,12 +349,12 @@ body {
 
 .pill.ok {
     background: rgba(42, 157, 92, 0.12);
-    color: #2a9d5c;
+    color: var(--text-success);
 }
 
 .pill.warn {
     background: rgba(240, 173, 78, 0.16);
-    color: #b8730f;
+    color: var(--text-note);
 }
 
 /* --- Verification prompt ------------------------------------------------- */
@@ -375,7 +375,7 @@ body {
 }
 
 .verify-prompt-copy i {
-    color: #b8730f;
+    color: var(--text-note);
     font-size: 1.25rem;
     flex-shrink: 0;
     margin-top: 0.1rem;
@@ -383,7 +383,7 @@ body {
 
 .verify-prompt-copy p {
     font-size: 0.9rem;
-    color: #7a5210;
+    color: var(--text-note);
 }
 
 .verify-prompt .btn-ghost {
@@ -517,7 +517,7 @@ body {
     padding: 0.85rem 1rem;
     border-radius: 0.6rem;
     background: rgba(230, 57, 70, 0.08);
-    color: #a4242f;
+    color: var(--text-danger);
     font-size: 0.88rem;
     margin-bottom: 1.5rem;
 }
@@ -540,9 +540,9 @@ body {
     display: inline-block;
     background: linear-gradient(
         90deg,
-        #eceef5 25%,
-        #f6f7fb 37%,
-        #eceef5 63%
+        var(--skeleton-base) 25%,
+        var(--skeleton-sheen) 37%,
+        var(--skeleton-base) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
@@ -560,9 +560,9 @@ body {
 [data-loading="true"] .switch-track {
     background: linear-gradient(
         90deg,
-        #eceef5 25%,
-        #f6f7fb 37%,
-        #eceef5 63%
+        var(--skeleton-base) 25%,
+        var(--skeleton-sheen) 37%,
+        var(--skeleton-base) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
@@ -674,7 +674,7 @@ body {
 
 .pending-email > i {
     font-size: 1.3rem;
-    color: #b45309;
+    color: var(--text-note);
     flex-shrink: 0;
 }
 

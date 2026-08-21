@@ -181,9 +181,9 @@
     box-shadow: none;
     background: linear-gradient(
         90deg,
-        #eceef5 25%,
-        #f6f7fb 37%,
-        #eceef5 63%
+        var(--skeleton-base) 25%,
+        var(--skeleton-sheen) 37%,
+        var(--skeleton-base) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
@@ -354,7 +354,7 @@
 
 .account-dropdown .account-signout:hover {
     background: rgba(230, 57, 70, 0.08);
-    color: #e63946;
+    color: var(--text-danger);
 }
 
 /* --- Drawer ------------------------------------------------------------- */

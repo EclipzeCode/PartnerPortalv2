@@ -834,9 +834,9 @@ body {
 #onboardingForm[data-prefilling] textarea {
   background-image: linear-gradient(
     90deg,
-    #eceef5 25%,
-    #f6f7fb 37%,
-    #eceef5 63%
+    var(--skeleton-base) 25%,
+    var(--skeleton-sheen) 37%,
+    var(--skeleton-base) 63%
   );
   background-color: transparent;
   background-size: 400% 100%;

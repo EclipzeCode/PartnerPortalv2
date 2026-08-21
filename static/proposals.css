@@ -305,7 +305,7 @@
     padding: 0.1rem 0.45rem;
     border-radius: 0.35rem;
     background: rgba(0, 0, 0, 0.06);
-    color: #8d99ae;
+    color: var(--text-light);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -343,12 +343,12 @@
 
 .status-pill.status-completed {
     background: rgba(74, 222, 128, 0.18);
-    color: #15803d;
+    color: var(--text-success);
 }
 
 .status-pill.status-ended {
     background: rgba(0, 0, 0, 0.07);
-    color: #52525b;
+    color: var(--text-light);
 }
 
 /* --- The delivery question ------------------------------------------------

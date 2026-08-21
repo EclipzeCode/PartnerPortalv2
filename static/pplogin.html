@@ -15,6 +15,18 @@
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Light is the default: only an explicit
+         choice, stored by the toggle in Settings, turns this on -- the system
+         preference is deliberately not consulted, because the product ships
+         light and a dark OS is not the same thing as asking for a dark app. -->
+    <script>
+      try {
+        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+    </script>
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="pplogin.css">
     <link rel="stylesheet" href="shared.css">

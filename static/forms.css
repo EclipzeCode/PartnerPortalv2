@@ -5,16 +5,19 @@
  * of these rules. Anything to do with an input, select, textarea, button or
  * modal belongs here, not in a page stylesheet.
  *
- * The --ctl-* block below is the one :root outside tokens.css, and stays
- * because it is scoped to form controls rather than a copy of the palette.
- * The fallbacks on var() calls here are now belt-and-braces: tokens.css is
- * loaded first by every page, so every palette token always resolves.
+ * The --ctl-* block below is the one :root outside tokens.css. It stays
+ * because a control's border radius is not a palette colour -- but the two
+ * colours in it were, and holding their own copies meant they never
+ * themed: .btn-danger kept the light theme's red on a near-black page,
+ * which is the same failure --bg-color had on the login card. They are
+ * aliases now, so there is still one definition of each colour and it is
+ * the one in tokens.css.
  */
 
 :root {
-    --ctl-border: #e0e0e0;
+    --ctl-border: var(--border);
     --ctl-radius: 0.5rem;
-    --ctl-danger: #dc2626;
+    --ctl-danger: var(--danger);
 }
 
 /* --- Text inputs, selects, textareas ------------------------------------ */

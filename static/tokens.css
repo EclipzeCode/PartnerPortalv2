@@ -55,8 +55,14 @@
        Consolidating down to the majority would have spread the failure to
        the one page without it, so the minority value wins here. Every page
        but settings gets slightly darker, more neutral secondary text --
-       captions, meta lines, hints, footers -- and all thirteen now pass. */
-    --text-light: #6c757d;
+       captions, meta lines, hints, footers.
+
+       #697079 rather than settings.css's original #6c757d, which passes on
+       white and then misses at 4.38:1 on the faintly tinted panels -- the
+       onboarding hints and the error pages both sit on one. A token that
+       only clears AA on the lightest surface it lands on is a token that
+       will fail again the next time something is put on a tint. */
+    --text-light: #697079;
     --border: #e6e8f0;          /* 7 files; was #e0e0e0 on 2, #e9ecef on 1 */
     --bg: #f5f7ff;              /* 6 files; was #f8f9fa in settings.css */
     /* The same colour under the name onboarding.css and ppdashboard.css use.
@@ -111,13 +117,37 @@
     --surface-note: #fffdf6;
     --surface-note-strong: #fff8e1;
     --border-note: #f5d67b;
+    /* Text sitting on one of those tints, which is a different job from the
+       semantic colour itself: --success has to read on a white card, this
+       has to read on a pale green one, and the two cannot be the same value
+       without one of them failing. These were hardcoded at ~20 call sites --
+       #15803d, #b91c1c, #7a5b00 and friends -- all of them dark enough to
+       vanish entirely once the card behind them turned. */
+    --text-success: #15803d;
+    --text-danger: #b91c1c;
     --text-note: #7a5b00;
+    --text-accent: #0b7695;   /* was #0d8fb5, which is 3.42:1 on its own tint */
 
     /* Scrollbar furniture. Not decoration -- a light thumb on a dark track
        is invisible, and these are the only handle on the long lists. */
     --track: #e0e0e0;
     --thumb: #cbd3e8;
     --thumb-hover: #aab5d6;
+
+    /* The loading placeholder, and the hero scene. Both were hardcoded --
+       the skeleton as a gradient in shared.css, the peaks and the bridge as
+       fills in pp.css -- which is why they stayed light when everything
+       around them turned. */
+    --skeleton-base: #eceef5;
+    --skeleton-sheen: #f6f7fb;
+
+    --peak-far: #e8edfc;
+    --peak-mid: #d5def9;
+    --peak-near: #bccbf3;
+    --bridge-cable: #8095d8;
+    --bridge-hanger: #97a9e0;
+    --bridge-tower: #7286d0;
+    --bridge-deck: #6d81cd;
 
     /* --- Legacy aliases --------------------------------------------------- */
     /* pplogin.css refers to the brand colour and its card background under
@@ -128,72 +158,105 @@
 }
 
 /* --- Dark ------------------------------------------------------------------
- * Only the tokens are restated. Nothing below re-styles a component, which is
- * the rule that makes this safe to add at all: if a colour has to be named
- * here to work in the dark, it was hardcoded somewhere it should not have
- * been, and the fix belongs in that file rather than in a second palette.
+ * Opt-in, not automatic. The attribute is set by an inline script in every
+ * page's <head> (see settings.js for the toggle that writes it), so a visitor
+ * who has never chosen gets the light theme -- which is the default the
+ * product ships with, rather than whatever their operating system happens to
+ * be set to.
  *
- * Guarded as :not([data-theme="light"]) so a page that ever offers an
- * explicit light choice keeps it over the system preference. There is no
- * toggle today; this costs nothing and means adding one is a button rather
- * than a rewrite.
+ * The ground is near-black rather than navy, and the greys under it are
+ * neutral: a blue-tinted dark theme reads as "light theme with the lights
+ * off", and the difference is most of why the first version of this felt
+ * wrong. Surfaces separate by lightness alone -- page, card, sunk panel --
+ * with a hairline border rather than a shadow, since shadows do not carry on
+ * a dark ground.
  *
- * Not an inversion. A few things deliberately do not flip:
+ * The accent is violet. The brand blue is the one colour that cannot survive
+ * the move: #4361ee is unreadable here, and lightening it lands on a pale
+ * periwinkle that sits badly against neutral greys. Violet keeps the same
+ * "cool, one accent, used sparingly" character while actually belonging to
+ * the surface behind it.
  *
- * --primary lightens rather than darkens. #4361ee is a strong blue on white
- * and a muddy one on near-black, and it is a link colour before it is a
- * brand colour.
+ * Secondary text is grey, not dimmed white. Everything that is not the
+ * primary thing on the page steps down in saturation as well as lightness,
+ * which is what keeps a dark screen from feeling like it is shouting.
  *
- * The semantic three go the other way from the light palette, and for the
- * same reason they were chosen there: contrast against the ground. #16a34a
- * is the readable green on white and the unreadable one on #14161c, where
- * the lighter #4ade80 -- rejected for light mode at 1.74:1 -- is the one
- * that works.
- *
- * --dark is absent on purpose. It names a surface that is meant to be dark,
- * so it is one of the few things that must not change.
+ * Not an inversion. The semantic three go the opposite way from the light
+ * palette for the same reason they were chosen there: contrast against the
+ * ground.
  */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --bg: #14161c;
-        --bg-light: #14161c;
-        --surface: #1b1e26;
-        --surface-sunk: #23262f;
+:root[data-theme="dark"] {
+    --bg: #0a0a0b;
+    --bg-light: #0a0a0b;
+    --surface: #111113;
+    --surface-sunk: #18181b;
+    --surface-veil: rgba(255, 255, 255, 0.04);
 
-        --text: #e7e9ef;
-        --text-light: #a2abbd;      /* 7.3:1 on --surface */
-        --heading: #f2f4f8;
-        --border: #2f3440;
+    /* The footer, and the panels drawn to match it. It stays a dark surface
+       in both themes -- that is the whole point of the token -- but #1a1a2e
+       is navy, and against a neutral near-black page it reads as a blue
+       block sitting on top of the design rather than part of it. Same role,
+       restated in this palette's greys. */
+    --dark: #0f0f11;
 
-        --primary: #8fa0ff;
-        --primary-dark: #6c7fe8;
-        --primary-light: rgba(140, 160, 255, 0.14);
-        --on-primary: #14161c;      /* 8.5:1 on the lighter --primary */
-        --secondary: #8b83f0;
-        --accent: #63d3f5;
+    --text: #fafafa;            /* 18.1:1 on --surface */
+    --heading: #ffffff;
+    --text-light: #9a9aa2;      /* 6.8:1 -- grey, not dimmed white */
+    --border: #27272a;
 
-        --success: #4ade80;
-        --warning: #fbbf24;
-        --error: #f87171;
-        --danger: #f87171;
-        --danger-dark: #ef4444;
+    --primary: #a78bfa;         /* 6.9:1 on --surface */
+    --primary-dark: #8b5cf6;
+    --primary-light: rgba(167, 139, 250, 0.14);
+    --secondary: #c4b5fd;
+    --accent: #7dd3fc;
+    /* The fill is light here, so what sits on it is the page colour rather
+       than white -- white on #a78bfa is 2.4:1. */
+    --on-primary: #0a0a0b;
 
-        --surface-danger: #2c1c1e;
-        --surface-success: #16281f;
-        --surface-note: #26221a;
-        --surface-note-strong: #2f2a1c;
-        --border-note: #6b5a28;
-        --text-note: #e0c98a;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --danger: #f87171;
+    --danger-dark: #ef4444;
 
-        --track: #23262f;
-        --thumb: #3a4050;
-        --thumb-hover: #4b5265;
+    --surface-danger: #2a1618;
+    --surface-success: #10251a;
+    --surface-note: #201d16;
+    --surface-note-strong: #2a2418;
+    --border-note: #5c4f2a;
+    --text-success: #6ee7a0;
+    --text-danger: #fca5a5;
+    --text-note: #d9c48f;
+    --text-accent: #7dd3fc;
 
-        /* Shadows do not read on a dark ground; depth comes from the surface
-           being lighter than the page behind it. Kept as a faint black so
-           existing box-shadow sizes stay valid rather than needing removal. */
-        --surface-veil: rgba(255, 255, 255, 0.06);
-        --shadow-tint: rgba(0, 0, 0, 0.4);
-        --shadow-tint-strong: rgba(0, 0, 0, 0.55);
-    }
+    --track: #1f1f23;
+    --thumb: #35353c;
+    --thumb-hover: #46464f;
+
+    /* Depth comes from the surface being lighter than the page, not from a
+       shadow. Kept as a faint black so existing box-shadow sizes stay valid. */
+    --shadow-tint: rgba(0, 0, 0, 0.5);
+    --shadow-tint-strong: rgba(0, 0, 0, 0.7);
+
+    /* The two aliases pplogin.css reads. Missing them is why that page kept
+       a white card and white inputs after everything else had turned. */
+    --main-color: #a78bfa;
+    --bg-color: #111113;
+
+    /* The loading placeholder. A light shimmer on a dark card is a flash of
+       white where content is about to be, which is worse than no placeholder
+       at all. */
+    --skeleton-base: #1c1c20;
+    --skeleton-sheen: #26262c;
+
+    /* The hero scene. Atmospheric perspective still runs far -> near, but
+       downward into the page instead of up out of it, and tinted toward the
+       accent so the artwork belongs to the same palette as the rest. */
+    --peak-far: #16161c;
+    --peak-mid: #1e1e28;
+    --peak-near: #292936;
+    --bridge-cable: #7c6bb8;
+    --bridge-hanger: #5f5390;
+    --bridge-tower: #8b78c9;
+    --bridge-deck: #9d8ad6;
 }
