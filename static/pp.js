@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Modals: the instructions guide and the "Request a demo" contact form.
+// Modals: the instructions guide and the contact form.
 //
 // Close handlers are scoped per-modal with modal.querySelector rather than a
 // bare document.querySelector, so adding a second modal to the page cannot
@@ -300,13 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
         instructionsBtn.addEventListener('click', () => openModal(instructionsModal));
     }
 
-    // --- Request a demo -----------------------------------------------------
+    // --- Contact us ---------------------------------------------------------
     const contactModal = document.getElementById('contact-modal');
     const contactForm = document.getElementById('contactForm');
-    const requestDemoBtn = document.getElementById('requestDemoBtn');
+    const contactBtn = document.getElementById('contactBtn');
 
-    if (requestDemoBtn && contactModal) {
-        requestDemoBtn.addEventListener('click', () => {
+    if (contactBtn && contactModal) {
+        contactBtn.addEventListener('click', () => {
             setFormMessage(contactForm, '');
             openModal(contactModal);
         });

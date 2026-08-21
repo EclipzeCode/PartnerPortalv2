@@ -64,6 +64,11 @@
        will fail again the next time something is put on a tint. */
     --text-light: #697079;
     --border: #e6e8f0;          /* 7 files; was #e0e0e0 on 2, #e9ecef on 1 */
+    /* A stronger edge, for a surface whose whole job is to read as a
+       separate thing. --border is right for a divider inside a card; against
+       the page it is 1.14:1, which is why the feature cards on the home page
+       were a white rectangle on a near-white ground with nothing to find. */
+    --border-strong: #c6ccdf;
     --bg: #f5f7ff;              /* 6 files; was #f8f9fa in settings.css */
     /* The same colour under the name onboarding.css and ppdashboard.css use.
        An alias rather than a rename, so nine call sites stay as they are. */
@@ -203,6 +208,7 @@
     --heading: #ffffff;
     --text-light: #9a9aa2;      /* 6.8:1 -- grey, not dimmed white */
     --border: #27272a;
+    --border-strong: #45454e;
 
     --primary: #a78bfa;         /* 6.9:1 on --surface */
     --primary-dark: #8b5cf6;

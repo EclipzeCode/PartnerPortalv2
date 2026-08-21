@@ -362,7 +362,7 @@
             <p class="cta-text">Setting up a profile takes a few minutes. You will see your matches, and the reasons behind each one, straight afterwards.</p>
             <div class="cta-buttons">
                 <a href="onboarding.html" class="btn-primary">Get Started</a>
-                <button type="button" id="requestDemoBtn" class="btn-secondary">Request Demo</button>
+                <button type="button" id="contactBtn" class="btn-secondary">Contact us</button>
             </div>
         </div>
     </div>
@@ -418,15 +418,15 @@
         </div>
     </div>
 
-    <!-- Request a demo / get in touch. Posts to /api/contact. -->
+    <!-- Get in touch. Posts to /api/contact. -->
     <div id="contact-modal" class="modal">
         <div class="modal-container" role="dialog" aria-modal="true">
             <div class="modal-header">
-                <h2>Request a demo</h2>
+                <h2>Get in touch</h2>
                 <button type="button" class="close-modal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-intro">Tell us about your organization and what you are hoping to find in a partner. We read every message.</p>
+                <p class="modal-intro">Tell us about your organization and what you are hoping to find in a partner &mdash; or ask us anything about how PartnerPortal works. We read every message.</p>
                 <form id="contactForm">
                     <div class="form-group">
                         <label for="contactName">Your name</label>
@@ -441,7 +441,7 @@
                         <input type="tel" id="contactPhone" maxlength="64">
                     </div>
                     <div class="form-group">
-                        <label for="contactMessage">What are you looking for?</label>
+                        <label for="contactMessage">How can we help?</label>
                         <textarea id="contactMessage" rows="4" maxlength="4000" required></textarea>
                     </div>
                     <!-- Honeypot, same as the signup form: named to look worth

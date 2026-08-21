@@ -840,18 +840,25 @@ button {
     gap: 2rem;
 }
 
+/* A white card on a near-white page, separated by a 5% shadow, is a card you
+   have to look for -- and in the dark theme a black shadow under a dark card
+   is nothing at all, so these had no edge in either theme. The border is what
+   actually draws them; the shadow only lifts them off the page, and is tinted
+   so it survives the theme it is drawn on. */
 .feature-card {
     background: var(--surface);
     padding: 2.5rem 2rem;
     border-radius: 0.75rem;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    transition: all 0.3s ease;
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 1px 2px var(--shadow-tint);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
     text-align: center;
 }
 
 .feature-card:hover {
     transform: translateY(-10px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 12px 32px var(--shadow-tint-strong);
 }
 
 .feature-icon {
@@ -932,6 +939,51 @@ button {
 .cta-section {
     background: var(--primary);
     text-align: center;
+    color: var(--on-primary);
+}
+
+/* .scroll-content is a flex row, because every other scroll-section is two
+   columns -- text beside a visual. This one is a heading, a line of copy and
+   two buttons, which are meant to sit under each other and were instead laid
+   out side by side across the full width, with the buttons stranded in a
+   column of their own. And min-height: 100vh gave three short elements an
+   entire screen to be lost in. */
+.cta-section .scroll-content {
+    flex-direction: column;
+    gap: 0;
+    max-width: 46rem;
+}
+
+.cta-section {
+    min-height: auto;
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+}
+
+/* Both buttons sit on a --primary fill, so the default primary button is
+   this colour on this colour. Inverted here: the solid one takes the page
+   colour and gives back the accent, the quiet one is an outline drawn in
+   whatever the section's text colour is. */
+.cta-section .btn-primary {
+    background: var(--on-primary);
+    border-color: var(--on-primary);
+    color: var(--primary);
+}
+
+.cta-section .btn-primary:hover {
+    background: var(--on-primary);
+    color: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+.cta-section .btn-secondary {
+    background: transparent;
+    border: 2px solid currentColor;
+    color: var(--on-primary);
+}
+
+.cta-section .btn-secondary:hover {
+    background: var(--surface-veil);
     color: var(--on-primary);
 }
 
@@ -1090,12 +1142,37 @@ button {
     font-weight: 600;
 }
 
+/* index.html does not load forms.css, so this is the only .close-modal rule
+   that reaches the dialogs on this page -- and it styled the glyph without
+   ever resetting the button around it, which left the browser's own grey
+   fill and border sitting behind the x. */
 .close-modal {
-    font-size: 1.8rem;
-    color: var(--text-light);
-    cursor: pointer;
-    transition: color 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    padding: 0;
+    font-size: 1.5rem;
+    font-family: inherit;
     line-height: 1;
+    color: var(--text-light);
+    background: none;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.close-modal:hover {
+    color: var(--text);
+    background: var(--surface-sunk);
+}
+
+.close-modal:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .close-modal:hover {
@@ -1377,8 +1454,10 @@ button.btn-secondary {
     box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
 }
 
+/* Fixed: the box is sized for the message it expects and scrolls past that.
+   Dragging it taller only pushes the submit button off the dialog. */
 .form-group textarea {
-    resize: vertical;
+    resize: none;
 }
 
 .form-message {
