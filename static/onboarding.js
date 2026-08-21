@@ -28,10 +28,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     linksPublic: document.getElementById('linksPublic')
   };
 
-  // Link inputs, keyed by the column name the server uses. Lets a server-side
-  // LinkError -- which reports `field` as the column name -- be pointed at the
-  // right input without a second mapping to keep in step.
-  const LINK_INPUTS = {
+  // Every input the server can name in an error, keyed by the column name it
+  // uses. /api/onboarding returns `field` alongside the message for thirteen
+  // of them -- the five String columns it checks the width of, the four Text
+  // ones it caps, and the four links -- but only the links were ever looked
+  // up here, so the other nine arrived as a message at the top of a long form
+  // with no indication of which input it meant. A rejected phone number is
+  // not much use as a page-level banner when the field is four screens down.
+  //
+  // `name` rather than `organization_name`: the server reports the column,
+  // and the column is `name` even though the request body calls it
+  // organization_name.
+  const FIELD_INPUTS = {
+    name: fields.organizationName,
+    organization_type: fields.organizationType,
+    location: fields.location,
+    contact_email: fields.contactEmail,
+    contact_phone: fields.contactPhone,
+    description: fields.description,
+    needs_note: fields.needsNote,
+    offers_note: fields.offersNote,
+    partnership_goals: fields.partnershipGoals,
     website_url: fields.websiteUrl,
     instagram_url: fields.instagramUrl,
     x_url: fields.xUrl,
@@ -744,11 +761,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => { window.location.href = 'ppsearch.html'; }, 900);
     } catch (error) {
-      // A rejected link comes back naming the column that failed; point at
+      // A rejected value comes back naming the column that failed; point at
       // that input rather than leaving a message at the top of a long form
-      // with no indication of which of the four it means.
+      // with no indication of which field it means.
       const field = error.data && error.data.field;
-      const input = field && LINK_INPUTS[field];
+      const input = field && FIELD_INPUTS[field];
       if (input) {
         setFieldError(input, error.message);
         input.scrollIntoView({ behavior: 'smooth', block: 'center' });
