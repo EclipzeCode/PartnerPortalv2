@@ -1,5 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
-/* Modern CSS Reset */
+/* Sign in and create account.
+ *
+ * Sixth page onto the redesign. Palette, typefaces, buttons, form controls,
+ * nav and footer come from ink.css.
+ *
+ * --- What this replaces -----------------------------------------------------
+ *
+ * The sliding two-panel auth card: a rounded white box with a blue gradient
+ * overlay that slid across on a transform when you switched between signing
+ * in and registering, revealing "Hello, Friend!" underneath. It is a widely
+ * copied template, and of everything in this app it was the piece most likely
+ * to be recognised on sight as something taken off a shelf. It was also the
+ * first screen a new organization saw.
+ *
+ * The mechanic is gone, not restyled. What is left is a split panel: a dark
+ * band on one side saying what this is, the form on the other. Switching
+ * between the two forms swaps which one is in the cell rather than sliding a
+ * cover over it -- there is no motion to get wrong, nothing absolutely
+ * positioned, and the whole thing survives a narrow screen by stacking.
+ *
+ * The JS contract is unchanged: pplogin.js toggles .active on #container and
+ * everything below keys off that, exactly as it did before.
+ */
 
 * {
     margin: 0;
@@ -7,627 +28,445 @@
     box-sizing: border-box;
 }
 
-body {
-    font-family: 'Poppins', sans-serif;
-    background-color: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    overflow-x: hidden;
+/* ------------------------------------------------------------------------- *
+ * Page
+ * ------------------------------------------------------------------------- */
 
-    /* The form was previously a plain block in normal flow, so it sat at the
-       top-left under the fixed header instead of being centred. */
+.login-main {
+    /* Top clears the fixed header; the page is meant to sit as one screen. */
+    min-height: calc(100vh - 9rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(6.5rem, 10vh, 8rem) clamp(1.25rem, 5vw, 4rem) 3rem;
+}
+
+/* The split. Both .form-container children are placed in the same cell and
+   .active picks which one is shown, so the panel does not resize as you move
+   between the two forms. */
+.container {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    width: 100%;
+    max-width: 58rem;
+    min-height: 30rem;
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+}
+
+/* ------------------------------------------------------------------------- *
+ * The dark side
+ *
+ * Was the sliding gradient overlay. Now a fixed band, in the same ink the
+ * footer uses, carrying whichever of the two prompts applies.
+ * ------------------------------------------------------------------------- */
+
+.toggle-container {
+    grid-column: 1;
+    grid-row: 1;
+    background: var(--h-footer);
+    color: var(--h-on-footer);
+    /* On the light theme the two halves separate by themselves. On the dark
+       one the panel is #08080A against a #131316 form, which is a real
+       difference and a small one -- the hairline is what makes it a seam
+       rather than a smudge. */
+    border-right: 1px solid var(--h-edge);
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
-}
-
-/* Centres the login card in whatever space is left between the fixed header
-   and the footer, rather than centring the footer along with it. */
-.login-main {
-    flex: 1;
-    display: flex;
-    align-items: center;
     justify-content: center;
-    /* 8rem leaves comfortable clearance under the 94px fixed header -- the old
-       7rem left only 18px, so the card looked like it was touching the navbar. */
-    padding: 8rem 1.5rem 2.5rem;
+    padding: 2.5rem 2rem;
 }
 
-button {
-    font-family: 'Poppins', sans-serif;
+.toggle {
+    display: contents;
 }
 
-/* Navigation Bar */
-.logo:hover {
-  color: var(--primary-dark);
-  transition: 0.3s ease;
+.toggle-panel {
+    display: none;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
 }
 
-.container{
-    background-color: var(--surface);
-    border-radius: 1.5rem;
-    box-shadow: 0 20px 50px rgba(26, 26, 46, 0.15);
-    position: relative;
-    overflow: hidden;
-    /* Height used to be `50vw` -- driven by viewport WIDTH, so the panel grew
-       absurdly tall on wide screens and collapsed on narrow ones. */
-    width: 100%;
-    max-width: 56.25rem;
-    /* Shrinks on short viewports so the card never has to scroll up behind the
-       fixed header just to reach the footer. The 240px accounts for the header
-       (94) + compact footer (141) + a little breathing room, leaving a bit
-       more of a short viewport to the card than before -- the sign-up side
-       now carries a password checklist that the old 35rem budgeted for
-       three bare inputs did not. */
-    height: min(40rem, calc(100vh - 15rem));
-    min-height: 26.25rem;
-    /* Creates a stacking context so the panels inside can never paint over the
-       fixed header, whatever z-index they use. */
-    isolation: isolate;
-    z-index: 1;
+/* Signing in is the default view, so the panel beside it invites registering.
+   .active flips both. */
+.toggle-right { display: flex; }
+.toggle-left  { display: none; }
+
+.container.active .toggle-right { display: none; }
+.container.active .toggle-left  { display: flex; }
+
+.toggle-panel h1 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 3vw, 2.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--h-on-footer);
 }
 
-.container p{
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    letter-spacing: 0.3px;
-    margin: 1.25rem 0;
+.toggle-panel p {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: color-mix(in srgb, var(--h-on-footer) 68%, transparent);
+    max-width: 32ch;
 }
 
-.btn-box {
-    padding: 0; /* Remove padding to avoid misalignment */
-    text-transform: uppercase;
-    cursor: pointer;
-    position: relative;
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    max-width: 13.75rem;
-    height: 2.75rem;
-    margin-top: 1.25rem;
-    background: var(--main-color);
-    border: 2px solid var(--main-color);
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--bg-color);
-    text-decoration: none;
-    font-weight: 600;
-    letter-spacing: 1px;
-    z-index: 1;
-    overflow: hidden;
-    transition: 0.5s;
-}
-
-.btn-box:hover {
-    color: var(--main-color);
-}
-
-.btn-box::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 100%;
-    background: var(--bg-color);
-    z-index: -1;
-    transition: 0.5s;
-}
-
-.btn-box:hover::before {
-    width: 100%;
-}
-
-.container span{
-    font-size: 0.75rem;
-}
-
-.container a{
-    color: var(--text);
-    font-size: 0.8125rem;
-    text-decoration: none;
-    margin: 0.9375rem 0 0.625rem;
-}
-
+/* The switch button inside the dark panel. Named .hidden by the template it
+   came from -- it is not hidden and never was, and pplogin.js binds its
+   click, so the class stays. */
 .container button.hidden {
-    padding: 0; /* Remove padding to avoid misalignment */
-    text-transform: uppercase;
+    margin-top: 0.6rem;
+    padding: 0.75rem 1.3rem;
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--h-on-footer) 45%, transparent);
+    border-radius: 0;
+    font-family: var(--h-sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--h-on-footer);
     cursor: pointer;
-    position: relative;
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    width: 7.5rem;
-    height: 2.5rem; /* Set a fixed height */
-    background: var(--main-color);
-    border: 2px solid var(--main-color);
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--bg-color);
-    text-decoration: none;
-    font-weight: 600;
-    letter-spacing: 1px;
-    z-index: 1;
-    overflow: hidden;
-    transition: 0.5s;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .container button.hidden:hover {
-    color: var(--main-color);
+    background: var(--h-on-footer);
+    border-color: var(--h-on-footer);
+    color: var(--h-footer);
 }
 
-.container button.hidden::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 100%;
-    background: var(--bg-color);
-    z-index: -1;
-    transition: 0.5s;
-}
+/* ------------------------------------------------------------------------- *
+ * The forms
+ * ------------------------------------------------------------------------- */
 
-.container button.hidden:hover::before {
-    width: 100%;
-}
-
-.container form{
-    background-color: var(--surface);
+.form-container {
+    grid-column: 2;
+    grid-row: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    padding: 0 2.5rem;
-    height: 100%;
+    padding: 2.5rem clamp(1.5rem, 3vw, 2.75rem);
+    /* Long enough to need it on a short window; the panel itself does not
+       grow, so the form scrolls inside its own half. */
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--h-rule) transparent;
 }
 
-/* Sign-up grew from three fields to three fields plus a strength meter and a
-   ten-rule-wide checklist -- reliably taller than the card's fixed desktop
-   height. justify-content: flex-start plus its own vertical padding keeps it
-   readable top-to-bottom on a card that no longer fits it; overflow-y: auto
-   is the fallback for whatever is still too tall (a validation error adds a
-   line on top of everything else) rather than letting .container's
-   overflow: hidden silently clip the submit button. */
-.sign-up form {
-    justify-content: flex-start;
-    overflow-y: auto;
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
+.sign-in  { display: flex; }
+.sign-up  { display: none; }
+
+.container.active .sign-in { display: none; }
+.container.active .sign-up { display: flex; }
+
+.container form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .container form h1 {
-    font-size: 1.75rem;
-    color: var(--heading);
-    margin-bottom: 0.5rem;
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.8rem, 2.8vw, 2.2rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
 }
 
-.container form span {
-    font-size: 0.85rem;
-    color: var(--text-light);
-    margin-bottom: 1.25rem;
+/* The line under the heading. It used to read "or use your email account",
+   left over from a template that offered social sign-in above it -- there is
+   no other way to sign in here, so it was offering an alternative that does
+   not exist. */
+.container form > span {
+    display: block;
+    margin-top: 0.4rem;
+    margin-bottom: 1.75rem;
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    color: var(--h-dim);
 }
 
-.container input{
-    background-color: var(--surface-sunk);
-    border: 1.5px solid transparent;
-    padding: 0.75rem 1rem;
-    font-size: 0.9rem;
-    border-radius: 0.5rem;
+/* --- Fields --------------------------------------------------------------- */
+
+.field {
+    margin-bottom: 1rem;
+}
+
+.container input {
     width: 100%;
-    outline: none;
+    padding: 0.75rem 0.85rem;
+    background: var(--h-paper);
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
     font-family: inherit;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.container input:focus {
-    border-color: var(--primary);
-    background-color: var(--surface);
+    font-size: 0.92rem;
+    color: var(--h-ink);
+    transition: border-color 0.18s ease;
 }
 
 .container input::placeholder {
-    color: var(--text-light);
+    color: var(--h-dim);
 }
 
-/* --- Field wrapper + inline errors ---------------------------------------
-   Replaces the old approach of clearing the field and putting the error
-   message in its placeholder: that lost whatever the person had typed the
-   moment something was wrong with it, and had no visible styling of its own
-   beyond a border colour injected via a <style> tag at runtime. */
-.field {
-    width: 100%;
-    margin: 0.375rem 0;
+.container input:focus {
+    outline: none;
+    border-color: var(--h-ink);
 }
 
-.field input {
-    margin: 0;
+.container input.input-error {
+    border-color: var(--h-danger);
 }
 
-/* Right-aligned and quiet on purpose: this is an escape hatch for the rare
-   case, not a second call to action next to Sign In. */
-.container .forgot-link {
-    display: block;
-    width: 100%;
-    text-align: right;
-    margin: 0.35rem 0 0.65rem;
-    font-size: 0.78rem;
-    color: var(--text-light, #8d99ae);
-}
-
-.container .forgot-link:hover {
-    color: var(--main-color, #4361ee);
-    text-decoration: underline;
-}
-
-/* .container p { margin: 1.25rem 0 } outranks a bare .field-error/.form-banner
-   (class+type beats class alone), so both are qualified with .container to
-   win the properties that rule also sets -- margin and, for .container p's
-   sibling font rules, size/line-height. */
 .container .field-error {
-    display: block;
-    min-height: 0;
-    margin: 0.3rem 0 0;
-    font-size: 0.76rem;
-    line-height: 1.35;
-    letter-spacing: normal;
-    color: var(--error, #dc2626);
-    text-align: left;
+    margin-top: 0.35rem;
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    line-height: 1.45;
+    letter-spacing: 0.03em;
+    color: var(--h-danger);
 }
 
+/* No empty gap under a field that has nothing wrong with it. */
 .container .field-error:empty {
     display: none;
 }
 
-.container input.input-error {
-    border-color: var(--error, #dc2626);
-    background-color: var(--surface-danger);
-}
+/* --- Banner --------------------------------------------------------------- */
 
-.container input.input-error:focus {
-    border-color: var(--error, #dc2626);
-}
-
-/* Page-level message: rate limits, "account created", anything that is not
-   about one specific field. Same success/error colour language as the
-   .alert.success / .alert.error pattern onboarding.html uses. */
 .container .form-banner {
-    width: 100%;
-    padding: 0.65rem 0.85rem;
-    margin: 0.375rem 0;
-    border-radius: 0.5rem;
-    font-size: 0.8rem;
-    line-height: 1.4;
-    letter-spacing: normal;
-    text-align: left;
+    padding: 0.7rem 0 0.7rem 0.9rem;
+    border-left: 3px solid var(--h-rule);
+    margin-bottom: 1.25rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--h-ink-soft);
 }
 
 .container .form-banner.error {
-    background: rgba(220, 38, 38, 0.08);
-    color: var(--text-danger);
-    border: 1px solid rgba(220, 38, 38, 0.2);
+    border-left-color: var(--h-danger);
+    color: var(--h-danger);
 }
 
 .container .form-banner.success {
-    background: rgba(22, 163, 74, 0.08);
-    color: var(--text-success);
-    border: 1px solid rgba(22, 163, 74, 0.2);
+    border-left-color: var(--h-seal);
+    color: var(--h-seal);
 }
 
-/* The honeypot's .hp-field lives in shared.css -- the contact form uses it
-   too, and index.html does not load this file. */
+/* --- Submit --------------------------------------------------------------- */
 
-/* --- Password strength meter ---------------------------------------------
-   Advisory: how strong the password is beyond the minimum. The checklist
-   below it is what actually gates submission. */
-.pw-meter {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    margin: 0.5rem 0 0.35rem;
+.btn-box {
+    margin-top: 0.5rem;
+    padding: 0.85rem 1.5rem;
+    background: var(--h-ink);
+    color: var(--h-paper);
+    border: 1px solid var(--h-edge);
+    border-radius: 0;
+    font-family: var(--h-sans);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-.pw-meter-bar {
-    flex: 1;
-    height: 0.3rem;
-    border-radius: 62.4375rem;
-    background: var(--track);
-    overflow: hidden;
+.btn-box:hover:not(:disabled) {
+    background: var(--h-give);
+    border-color: var(--h-give);
+    color: var(--h-on-give);
 }
 
-.pw-meter-fill {
-    display: block;
-    height: 100%;
-    width: 0;
-    border-radius: inherit;
-    background: var(--error);
-    transition: width 0.25s ease, background 0.25s ease;
+.btn-box:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
-.pw-meter-label {
-    flex-shrink: 0;
-    font-size: 0.74rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    min-width: 3.2rem;
-    text-align: right;
+.container .forgot-link {
+    align-self: flex-end;
+    margin-bottom: 0.75rem;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.06em;
+    color: var(--h-dim);
+    text-decoration: none;
+    transition: color 0.18s ease;
 }
 
-/* --- Password checklist ---------------------------------------------------
-   Two columns so five short rules read as a compact block instead of a tall
-   list -- this is the thing most likely to make the sign-up card taller than
-   its fixed height, so it is worth keeping dense. */
-.pw-checklist {
-    list-style: none;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.25rem 0.6rem;
-    margin: 0.25rem 0 0.5rem;
-    text-align: left;
+.container .forgot-link:hover {
+    color: var(--h-ink);
+    text-decoration: underline;
 }
 
-.pw-checklist li {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.74rem;
-    color: var(--text-light);
-    line-height: 1.3;
-    transition: color 0.2s ease;
-}
+/* --- Switching between the two forms -------------------------------------- */
+/* The in-form route between sign in and sign up. The dark panel offers the
+   same move; this one is here for anyone who never looks at the panel. */
 
-.pw-checklist li i {
-    font-size: 0.85rem;
-    flex-shrink: 0;
-    color: var(--text-light);
-    transition: color 0.2s ease;
-}
-
-.pw-checklist li.met {
-    color: var(--text-success);
-}
-
-.pw-checklist li.met i {
-    color: var(--text-success);
-}
-
-.form-container{
-    position: absolute;
-    top: 0;
-    height: 100%;
-    transition: all 0.6s ease-in-out;
-}
-
-.sign-in{
-    left: 0;
-    width: 50%;
-    z-index: 2;
-    font-size: 0.875rem;
-    line-height: 1.875rem;
-    letter-spacing: 0.3px;
-    margin: 1.25rem 0;
-    text-align: center;
-}
-
-.container.active .sign-in{
-    transform: translateX(100%);
-}
-
-.sign-up{
-    left: 0;
-    width: 50%;
-    opacity: 0;
-    z-index: 1;
-    font-size: 0.875rem;
-    line-height: 1.875rem;
-    letter-spacing: 0.3px;
-    margin: 1.25rem 0;
-    text-align: center;
-}
-
-.container.active .sign-up{
-    transform: translateX(100%);
-    opacity: 1;
-    z-index: 5;
-    animation: move 0.6s;
-}
-
-@keyframes move{
-    0%, 49.99%{
-        opacity: 0;
-        z-index: 1;
-    }
-    50%, 100%{
-        opacity: 1;
-        z-index: 5;
-    }
-}
-
-.toggle-container{
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 50%;
-    height: 100%;
-    overflow: hidden;
-    transition: all 0.6s ease-in-out;
-    border-radius: 9.375rem 0 0 6.25rem;
-    /* Was 1000 -- the same as the fixed .header. Equal stacking with a later
-       DOM position meant this panel painted over the navbar when the page was
-       scrolled. It only needs to sit above .form-container (z-index 1-5). */
-    z-index: 10;
-}
-
-.container.active .toggle-container{
-    transform: translateX(-100%);
-    border-radius: 0 9.375rem 6.25rem 0;
-}
-
-.toggle{
-    /* Was a teal (#005c80) that clashed with the blue used everywhere else. */
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    color: #fff;
-    position: relative;
-    left: -100%;
-    height: 100%;
-    width: 200%;
-    transform: translateX(0);
-    transition: all 0.6s ease-in-out;
-}
-
-.container.active .toggle{
-    transform: translateX(50%);
-}
-
-.toggle-panel{
-    position: absolute;
-    width: 50%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    padding: 0 1.875rem;
-    text-align: center;
-    top: 0;
-    transform: translateX(0);
-    transition: all 0.6s ease-in-out;
-}
-
-.toggle-left{
-    transform: translateX(-200%);
-}
-
-.container.active .toggle-left{
-    transform: translateX(0);
-}
-
-.toggle-right{
-    right: 0;
-    transform: translateX(0);
-}
-
-.container.active .toggle-right{
-    transform: translateX(200%);
-}
-
-/* Switch links inside each form. On desktop the sliding panel handles moving
-   between sign in and sign up, so these stay hidden; on mobile that panel is
-   removed and these become the only way across. */
 .switch-hint {
-    display: none;
-    font-size: 0.85rem;
-    color: var(--text-light);
     margin-top: 1.25rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--h-rule);
+    font-size: 0.85rem;
+    color: var(--h-dim);
 }
 
 .switch-link {
     background: none;
     border: none;
     padding: 0;
-    font: inherit;
-    font-weight: 600;
-    color: var(--primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--h-give);
     cursor: pointer;
     text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
-/* Mobile navigation. Mirrors the pattern used in pp.css / ppsearch.css so the
-   header behaves the same way on every page. */
+.switch-link:hover {
+    color: var(--h-ink);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Password strength
+ *
+ * The same four-segment meter the settings page uses, for the same reason:
+ * the score is an integer from 1 to 4, so a continuous bar draws a precision
+ * the number does not have. pplogin.js sets data-score on the wrapper; the
+ * colours live here rather than being assigned inline, so they follow the
+ * theme.
+ * ------------------------------------------------------------------------- */
+
+.pw-meter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.7rem;
+}
+
+.pw-meter-bar {
+    position: relative;
+    flex: 1 1 auto;
+    height: 6px;
+    background: var(--h-cell);
+    overflow: hidden;
+}
+
+.pw-meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    transition: width 0.2s ease;
+}
+
+/* The three divisions, painted in the panel colour on top of the fill. */
+.pw-meter-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(90deg,
+        transparent calc(25% - 1px), var(--h-surface) calc(25% - 1px), var(--h-surface) calc(25% + 1px),
+        transparent calc(25% + 1px), transparent calc(50% - 1px),
+        var(--h-surface) calc(50% - 1px), var(--h-surface) calc(50% + 1px),
+        transparent calc(50% + 1px), transparent calc(75% - 1px),
+        var(--h-surface) calc(75% - 1px), var(--h-surface) calc(75% + 1px),
+        transparent calc(75% + 1px));
+}
+
+.pw-meter-label {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    min-width: 4.5rem;
+}
+
+.pw-meter[data-score="1"] .pw-meter-fill { background: var(--h-danger); }
+.pw-meter[data-score="2"] .pw-meter-fill { background: var(--h-take); }
+.pw-meter[data-score="3"] .pw-meter-fill { background: var(--h-give); }
+.pw-meter[data-score="4"] .pw-meter-fill { background: var(--h-seal); }
+
+.pw-meter[data-score="1"] .pw-meter-label { color: var(--h-danger); }
+.pw-meter[data-score="2"] .pw-meter-label { color: var(--h-take); }
+.pw-meter[data-score="3"] .pw-meter-label { color: var(--h-give); }
+.pw-meter[data-score="4"] .pw-meter-label { color: var(--h-seal); }
+
+/* --- Requirement checklist ------------------------------------------------ */
+
+.pw-checklist {
+    list-style: none;
+    margin-top: 0.85rem;
+    display: grid;
+    gap: 0.3rem;
+}
+
+.pw-checklist li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
+    color: var(--h-dim);
+    transition: color 0.18s ease;
+}
+
+.pw-checklist li i {
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.pw-checklist li.met {
+    color: var(--h-seal);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ * ------------------------------------------------------------------------- */
+
 @media (max-width: 48em) {
-    /* The 50/50 split panel cannot work at phone widths. Below this breakpoint
-       the two forms stack into a single full-width card and the sliding toggle
-       panel is removed entirely. */
+    /* One column. The dark panel goes above the form rather than away: it is
+       the only thing on this screen that says what the site is, which is
+       worth more to someone arriving here for the first time than the fifty
+       vertical pixels it costs. */
     .container {
-        height: auto;
-        max-width: 26.25rem;
+        grid-template-columns: minmax(0, 1fr);
         min-height: 0;
     }
 
-    .form-container {
-        position: static;
-        width: 100%;
-        height: auto;
-        transform: none !important;
-        opacity: 1;
-        animation: none !important;
-    }
-
-    .container form {
-        padding: 2.5rem 1.75rem;
-        height: auto;
-    }
-
-    .sign-up,
-    .container.active .sign-in {
-        display: none;
-    }
-
-    .container.active .sign-up {
-        display: block;
-    }
-
     .toggle-container {
-        display: none;
+        grid-column: 1;
+        grid-row: 1;
+        padding: 1.75rem 1.5rem;
+        /* Stacked, so the seam moves to the bottom edge. */
+        border-right: none;
+        border-bottom: 1px solid var(--h-edge);
     }
 
-    .switch-hint {
-        display: block;
+    .form-container {
+        grid-column: 1;
+        grid-row: 2;
+        overflow-y: visible;
+        padding: 2rem 1.5rem 2.25rem;
     }
 
-    .btn-box {
-        max-width: 100%;
+    .toggle-panel h1 {
+        font-size: 1.65rem;
+    }
+
+    .toggle-panel p {
+        max-width: none;
     }
 }
 
-@media (max-width: 48em) {
-}
-
-/* --- Submit button loading state ---------------------------------------- */
-/* Set by pplogin.js while a sign-in or sign-up request is in flight. The
-   label changes too; this adds the motion, because a static label swap can
-   be missed on a page you were already staring at. */
-.btn-box.is-loading {
-    /* The label sits next to the spinner rather than against it. */
-    gap: 0.55rem;
-    cursor: progress;
-}
-
-/* .btn-box::before is the hover sweep -- an invitation to click. There is
-   nothing to invite while the request is running, and letting it fire under
-   the cursor makes a busy button look interactive. */
-.btn-box.is-loading::before {
-    width: 0;
-}
-
-.btn-box.is-loading:hover {
-    color: var(--bg-color);
-}
-
-/* ::after, because ::before is taken by the sweep above. currentColor keeps
-   it correct against the button's own text colour. */
-.btn-box.is-loading::after {
-    content: '';
-    flex-shrink: 0;
-    width: 0.9rem;
-    height: 0.9rem;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: btn-spin 0.65s linear infinite;
-}
-
-@keyframes btn-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* The changed label already carries the message; the ring stays as a static
-   marker so the button still looks different from its idle state. */
 @media (prefers-reduced-motion: reduce) {
-    .btn-box.is-loading::after {
-        animation: none;
-        border-top-color: currentColor;
-        opacity: 0.5;
+    .btn-box,
+    .container input,
+    .container button.hidden,
+    .pw-meter-fill,
+    .pw-checklist li,
+    .switch-link,
+    .container .forgot-link {
+        transition: none;
     }
 }

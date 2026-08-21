@@ -21,7 +21,11 @@
     background: var(--dark);
     color: #c7cbe0;
     padding: 3.5rem 8% 2rem;
-    font-family: 'Poppins', sans-serif;
+    /* Inherits the page's face. It used to name Poppins outright, which was
+       correct while every page loaded Poppins and became a bug the moment
+       none of them did: the declaration still won, the font was no longer
+       being fetched, and the footer quietly rendered in the browser's default
+       sans on top of a page set in something else. */
     font-size: 0.95rem;
     line-height: 1.7;
 }
@@ -285,7 +289,8 @@ textarea:focus-visible {
     border-radius: 0.6rem;
     background: var(--surface);
     color: var(--text);
-    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    /* Same as the footer above: inherit rather than name a face that is not
+       loaded. A toast is appended to <body>, so this picks up the page's. */
     font-size: 0.9rem;
     line-height: 1.45;
     box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.16);

@@ -1,9 +1,39 @@
 /* Account settings.
  *
- * Deliberately plain: three stacked cards, one control each, rather than the
- * two-column layout the dashboard uses. Settings are read once and changed
- * rarely, so the page optimises for "I can see what this does before I touch
- * it" over density.
+ * The second page onto the redesign, and the first one that is an
+ * application screen rather than a marketing page. The palette, the three
+ * typefaces, the buttons, the inputs, the nav and the footer all come from
+ * ink.css; this file styles what only this page has.
+ *
+ * --- The register -----------------------------------------------------------
+ *
+ * None of the home page's texture comes with it. No dot lattice, no matrix,
+ * no 4.6rem serif. What carries over is the quiet half: paper and ink,
+ * hairlines instead of shadows, square corners, mono for metadata, one accent
+ * spent on meaning. Somebody changing their password should feel like they
+ * are operating a well-labelled instrument, not reading a brochure.
+ *
+ * --- Ruled sheet, not cards -------------------------------------------------
+ *
+ * The old layout was five rounded, shadowed cards stacked down a narrow
+ * centred column, each with its heading inside it. Two problems. The obvious
+ * one is that a floating rounded card is the single most generic object in
+ * the design and this page was made of nothing else. The subtler one is that
+ * scanning it meant reading five headings down the same column the values are
+ * in, so "where is the thing I came here to change" was a linear read.
+ *
+ * It is now a ruled sheet: each group is a hairline-topped band with its
+ * label and description in a fixed left column and its controls in the right.
+ * The labels line up in their own vertical strip, so the page can be scanned
+ * down that strip alone -- which is how a specification sheet, a form, or a
+ * settings screen is actually used. It is also why the container widened
+ * from 46rem: two columns need the room, and a 46rem measure was making the
+ * descriptions read as narrow as poetry.
+ *
+ * The card markup did not have to change for this. .settings-card is the grid
+ * and .settings-card-header takes the left column; everything else in the
+ * card flows down the right. That is worth knowing before adding a child to
+ * one of these -- it will land in the right-hand column automatically.
  */
 
 * {
@@ -12,674 +42,696 @@
     box-sizing: border-box;
 }
 
-body {
-    font-family: 'Poppins', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-}
+/* ------------------------------------------------------------------------- *
+ * Page shell
+ * ------------------------------------------------------------------------- */
 
 .settings-section {
-    /* Clears the fixed header. */
-    padding: 8rem 8% 4rem;
+    /* Top clears the fixed header. */
+    padding: clamp(7rem, 11vh, 9rem) clamp(1.25rem, 5vw, 6rem) 4rem;
     min-height: calc(100vh - 12rem);
 }
 
-.section-header {
-    text-align: center;
-    margin-bottom: 3rem;
+/* Was a centred h2 with a short accent underline beneath it -- the same
+   centred-title-plus-rule that opens most template pages. Left-aligned and
+   ruled off instead, so the heading sits on the same left margin as every
+   label under it and the page reads as one document. */
+.settings-head {
+    max-width: 62rem;
+    margin: 0 auto 1rem;
 }
 
-.section-header h2 {
-    font-size: clamp(1.9rem, 4vw, 2.6rem);
-    font-weight: 700;
+.settings-head .eyebrow {
+    margin-bottom: 1.1rem;
 }
 
-.section-header h2 span {
-    color: var(--primary);
+.settings-head h1 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(2.1rem, 4vw, 3rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
 }
 
-.underline {
-    width: 6rem;
-    height: 3px;
-    background: var(--primary);
-    border-radius: 2px;
-    margin: 0.75rem auto 0;
+.settings-head p {
+    margin-top: 0.6rem;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--h-ink-soft);
+    max-width: 52ch;
 }
 
 .settings-container {
-    max-width: 46rem;
+    max-width: 62rem;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
 }
 
-/* --- Cards --------------------------------------------------------------- */
+/* ------------------------------------------------------------------------- *
+ * A settings group
+ * ------------------------------------------------------------------------- */
+
 .settings-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 1rem;
-    padding: 1.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    display: grid;
+    grid-template-columns: 15rem 1fr;
+    column-gap: clamp(2rem, 4vw, 3.5rem);
+    align-items: start;
+    padding: 2.25rem 0;
+    border-top: 1px solid var(--h-edge);
+}
+
+/* The header holds the left column; everything else in the card is placed in
+   the right one, in source order. */
+.settings-card-header {
+    grid-column: 1;
+}
+
+.settings-card > *:not(.settings-card-header) {
+    grid-column: 2;
+}
+
+/* A grid item stretches to its column by default, which is right for a form
+   or a list and wrong for a button -- "Delete my account" was rendering as a
+   700px-wide bar, which is not the width you want on the one control that
+   cannot be undone. */
+.settings-card > .btn-primary,
+.settings-card > .btn-secondary,
+.settings-card > .btn-ghost,
+.settings-card > .btn-danger {
+    justify-self: start;
 }
 
 .settings-card-header h3 {
+    font-family: var(--h-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--h-ink);
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    font-size: 1.15rem;
-    font-weight: 600;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
 }
 
+/* The boxicon in each heading. Kept, but dropped to the metadata colour and
+   sized to the mono label rather than to a heading -- at the old size it was
+   competing with the words next to it. */
 .settings-card-header h3 i {
-    color: var(--primary);
-    font-size: 1.35rem;
+    font-size: 0.95rem;
+    color: var(--h-dim);
 }
 
 .settings-card-header p {
-    color: var(--text-light);
-    font-size: 0.92rem;
-    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--h-dim);
 }
 
-/* The delete card is the only destructive thing on the page, so it is the
-   only thing on the page wearing the danger colour. */
+/* --- Destructive group ---------------------------------------------------- */
+/* Marked by its label and its rule, not by a pink card. The pale tinted panel
+   the old version used made the most dangerous control on the page the
+   softest-looking thing on it. */
 .settings-card.danger {
-    border-color: rgba(230, 57, 70, 0.35);
+    border-top-color: var(--h-danger);
 }
 
 .settings-card.danger .settings-card-header h3,
 .settings-card.danger .settings-card-header h3 i {
-    color: var(--danger);
+    color: var(--h-danger);
 }
 
-.settings-card.danger .btn-danger {
-    margin-top: 1.25rem;
-}
+/* ------------------------------------------------------------------------- *
+ * A single setting
+ * ------------------------------------------------------------------------- */
 
-/* --- Change password form ------------------------------------------------ */
-/* forms.css supplies .form-group's input styling and .field-error; this page
-   never needed a filled primary button before, so .btn-primary is defined
-   here rather than assumed to exist. */
-.password-form {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-}
-
-.password-form .form-group {
-    margin-bottom: 1.1rem;
-}
-
-.password-form .form-group label {
-    display: block;
-    font-size: 0.88rem;
-    font-weight: 500;
-    margin-bottom: 0.4rem;
-}
-
-.password-form .setting-status {
-    margin-top: 0;
-    margin-bottom: 1rem;
-}
-
-.btn-primary {
-    background: var(--primary);
-    color: var(--on-primary);
-    border: none;
-    padding: 0.7rem 1.3rem;
-    border-radius: 0.5rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-}
-
-.btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* --- Password strength ---------------------------------------------------- */
-/* Same shape as pplogin.css's .pw-meter/.pw-checklist, restated here rather
-   than shared across stylesheets -- consistent with how reset-password.js's
-   own copy of this UI justifies not importing pplogin.css either. */
-.pw-meter {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin: 0.5rem 0 0.6rem;
-}
-
-.pw-meter-bar {
-    flex: 1;
-    height: 0.3rem;
-    background: var(--border);
-    border-radius: 999px;
-    overflow: hidden;
-}
-
-.pw-meter-fill {
-    display: block;
-    height: 100%;
-    width: 0;
-    border-radius: 999px;
-    transition: width 0.2s ease, background 0.2s ease;
-}
-
-.pw-meter-label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.pw-checklist {
-    list-style: none;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.3rem 0.75rem;
-    margin: 0 0 1rem;
-    font-size: 0.8rem;
-    color: var(--text-light);
-}
-
-.pw-checklist li {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.pw-checklist li i {
-    font-size: 0.95rem;
-}
-
-.pw-checklist li.met {
-    color: var(--text-success);
-}
-
-/* --- Setting row --------------------------------------------------------- */
 .setting-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 1.5rem;
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+    gap: 2rem;
+    padding: 0.2rem 0 1.1rem;
 }
 
 .setting-copy label {
-    font-weight: 600;
-    font-size: 0.98rem;
-    cursor: pointer;
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--h-ink);
+    margin-bottom: 0.3rem;
 }
 
 .setting-copy p {
-    color: var(--text-light);
-    font-size: 0.88rem;
-    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+    max-width: 54ch;
 }
 
-/* --- Switch -------------------------------------------------------------- */
-/* Drawn from a real checkbox: the input stays in the accessibility tree and
-   keeps native keyboard behaviour, and .switch-track is painted from its
-   :checked state. Hiding it with opacity rather than display:none is what
-   keeps it focusable. */
+/* --- The toggle ----------------------------------------------------------- */
+/* The checkbox is the real control and stays in the accessibility tree; this
+   is drawn from it. Square, like everything else: a pill switch was the last
+   rounded object left on the page. */
+
 .switch {
     position: relative;
     flex-shrink: 0;
-    width: 3.1rem;
-    height: 1.75rem;
-    margin-top: 0.15rem;
+    display: inline-flex;
     cursor: pointer;
+    margin-top: 0.15rem;
 }
 
 .switch input {
     position: absolute;
-    inset: 0;
+    opacity: 0;
     width: 100%;
     height: 100%;
-    opacity: 0;
     margin: 0;
     cursor: pointer;
 }
 
 .switch-track {
-    position: absolute;
-    inset: 0;
-    background: var(--thumb);
-    border-radius: 999px;
-    transition: background 0.2s ease;
-    pointer-events: none;
+    width: 2.9rem;
+    height: 1.5rem;
+    background: var(--h-cell);
+    border: 1px solid var(--h-rule);
+    transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .switch-track::after {
     content: '';
     position: absolute;
-    top: 0.19rem;
-    left: 0.19rem;
-    width: 1.37rem;
-    height: 1.37rem;
-    background: var(--surface);
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-    transition: transform 0.2s ease;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    background: var(--h-dim);
+    transition: transform 0.18s ease, background 0.18s ease;
 }
 
 .switch input:checked + .switch-track {
-    background: var(--primary);
+    background: var(--h-give);
+    border-color: var(--h-give);
 }
 
 .switch input:checked + .switch-track::after {
-    transform: translateX(1.35rem);
+    transform: translateX(1.4rem);
+    background: var(--h-on-give);
 }
 
 .switch input:focus-visible + .switch-track {
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.3);
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
 }
 
 .switch input:disabled + .switch-track {
-    opacity: 0.55;
+    opacity: 0.5;
 }
 
 .switch input:disabled {
-    cursor: progress;
+    cursor: not-allowed;
 }
 
-/* Save feedback sits under the row it belongs to rather than floating at the
-   top of the page, so it is next to the control that produced it. */
+/* --- Inline status line --------------------------------------------------- */
+
 .setting-status {
-    margin-top: 1rem;
-    font-size: 0.87rem;
-    font-weight: 500;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+    padding-top: 0.5rem;
 }
 
-.setting-status.ok {
-    color: var(--text-success);
-}
+.setting-status.ok    { color: var(--h-seal); }
+.setting-status.error { color: var(--h-danger); }
 
-.setting-status.error {
-    color: var(--danger);
-}
+/* ------------------------------------------------------------------------- *
+ * The account facts
+ *
+ * A definition list set as a ruled table: mono term on the left, value on the
+ * right. This is the clearest case on the page for the mono treatment --
+ * these are three labelled readings, and they should look like readings.
+ * ------------------------------------------------------------------------- */
 
-/* --- Facts list ---------------------------------------------------------- */
 .settings-facts {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
+    border-top: 1px solid var(--h-rule);
+    margin-bottom: 1.5rem;
 }
 
 .settings-facts > div {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 11rem 1fr;
     gap: 1rem;
+    align-items: baseline;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--h-rule);
 }
 
 .settings-facts dt {
-    color: var(--text-light);
-    font-size: 0.9rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
 }
 
 .settings-facts dd {
-    font-weight: 500;
-    font-size: 0.93rem;
-    text-align: right;
-    overflow-wrap: anywhere;
+    font-size: 0.9rem;
+    color: var(--h-ink);
+    word-break: break-word;
 }
+
+/* --- Status chip ---------------------------------------------------------- */
 
 .pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.2rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 600;
+    gap: 0.35rem;
+    padding: 0.22rem 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
 }
 
 .pill.ok {
-    background: rgba(42, 157, 92, 0.12);
-    color: var(--text-success);
+    background: var(--h-seal);
+    color: var(--h-on-seal);
 }
 
 .pill.warn {
-    background: rgba(240, 173, 78, 0.16);
-    color: var(--text-note);
+    background: var(--h-take);
+    color: var(--h-on-take);
 }
 
-/* --- Verification prompt ------------------------------------------------- */
-/* Amber rather than red: nothing is broken and nothing was lost -- there is
-   one step outstanding, and it blocks exactly one action. */
+/* ------------------------------------------------------------------------- *
+ * Notices
+ *
+ * Both of these interrupt to say something is in flight or unfinished. Marked
+ * with a heavy left rule rather than a tinted panel: the rule reads at a
+ * glance, survives both themes without needing its own background colour, and
+ * does not compete with the destructive group for "the coloured box".
+ * ------------------------------------------------------------------------- */
+
+.pending-email,
 .verify-prompt {
-    margin-top: 1.5rem;
-    padding: 1.1rem 1.25rem;
-    border: 1px solid rgba(240, 173, 78, 0.45);
-    background: rgba(240, 173, 78, 0.08);
-    border-radius: 0.75rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    padding: 0.9rem 0 0.9rem 1rem;
+    border-left: 3px solid var(--h-take);
+    margin-bottom: 1.5rem;
+}
+
+.pending-email > i,
+.verify-prompt-copy i {
+    font-size: 1rem;
+    color: var(--h-take);
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.pending-email p,
+.verify-prompt-copy p {
+    flex: 1 1 18rem;
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+}
+
+.pending-email strong,
+.verify-prompt-copy strong {
+    font-family: var(--h-mono);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--h-ink);
+    word-break: break-word;
+}
+
+.verify-prompt {
+    flex-direction: column;
 }
 
 .verify-prompt-copy {
     display: flex;
     align-items: flex-start;
-    gap: 0.6rem;
-}
-
-.verify-prompt-copy i {
-    color: var(--text-note);
-    font-size: 1.25rem;
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-}
-
-.verify-prompt-copy p {
-    font-size: 0.9rem;
-    color: var(--text-note);
+    gap: 0.85rem;
 }
 
 .verify-prompt .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin-top: 0.9rem;
-    background: var(--surface);
+    align-self: flex-start;
 }
+
+/* ------------------------------------------------------------------------- *
+ * Change email
+ * ------------------------------------------------------------------------- */
+
+.email-change {
+    border-top: 1px solid var(--h-rule);
+    border-bottom: 1px solid var(--h-rule);
+    margin-bottom: 1.5rem;
+}
+
+.email-change summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 0;
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-ink);
+    cursor: pointer;
+    list-style: none;
+}
+
+/* The default disclosure triangle is a different shape on every platform, so
+   it is replaced with a square marker that rotates -- consistent, and the
+   same square used as the eyebrow marker elsewhere. */
+.email-change summary::-webkit-details-marker {
+    display: none;
+}
+
+.email-change summary::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    background: var(--h-take);
+    transition: transform 0.18s ease;
+}
+
+.email-change[open] summary::before {
+    transform: rotate(45deg);
+}
+
+.email-change form {
+    padding: 0.25rem 0 1.35rem;
+    max-width: 26rem;
+}
+
+.email-change-note {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+    margin-bottom: 1.1rem;
+}
+
+.email-change .form-group {
+    margin-bottom: 1.1rem;
+}
+
+.email-change .setting-status {
+    padding-bottom: 0.75rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Profile links
+ * ------------------------------------------------------------------------- */
 
 .settings-links {
     display: flex;
     flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Change password
+ * ------------------------------------------------------------------------- */
+
+.password-form {
+    max-width: 26rem;
+}
+
+.password-form .form-group {
+    margin-bottom: 1.2rem;
+}
+
+/* --- Strength meter ------------------------------------------------------- */
+/* Four segments rather than one sliding bar. The score this reports is an
+   integer from 1 to 4, so a continuous bar was drawing a precision the number
+   does not have; four blocks say "three of four" exactly.
+   settings.js sets data-score on the wrapper and the width on the fill. */
+
+.pw-meter {
+    display: flex;
+    align-items: center;
     gap: 0.75rem;
-    margin-top: 1.5rem;
+    margin-top: 0.75rem;
 }
 
-.settings-links .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    text-decoration: none;
-}
-
-/* --- Modals -------------------------------------------------------------- */
-/* Same visual language as the dashboard's event modal, restated here because
-   that one lives in ppdashboard.css and this page does not load it. */
-.modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    z-index: 2000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.25s ease, visibility 0.25s ease;
-}
-
-.modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.modal-container {
-    background: var(--surface);
-    border-radius: 0.85rem;
-    width: 100%;
-    max-width: 30rem;
-    max-height: 90vh;
-    display: flex;
-    flex-direction: column;
+.pw-meter-bar {
+    position: relative;
+    flex: 1 1 auto;
+    height: 6px;
+    background: var(--h-cell);
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-    transform: translateY(1.25rem);
-    transition: transform 0.25s ease;
 }
 
-.modal.active .modal-container {
-    transform: translateY(0);
+.pw-meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    transition: width 0.2s ease;
 }
 
-.modal-header {
+/* The three divisions, painted in the page colour on top of the fill. Drawn
+   here rather than as three elements so that settings.js can go on sizing a
+   single fill by percentage, and painted over rather than under it: doing
+   this with the bar's own background meant the fill showed through wherever
+   --h-cell was translucent, which is both themes. */
+.pw-meter-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(90deg,
+        transparent calc(25% - 1px), var(--h-paper) calc(25% - 1px), var(--h-paper) calc(25% + 1px),
+        transparent calc(25% + 1px), transparent calc(50% - 1px),
+        var(--h-paper) calc(50% - 1px), var(--h-paper) calc(50% + 1px),
+        transparent calc(50% + 1px), transparent calc(75% - 1px),
+        var(--h-paper) calc(75% - 1px), var(--h-paper) calc(75% + 1px),
+        transparent calc(75% + 1px));
+}
+
+.pw-meter-label {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    min-width: 4.5rem;
+}
+
+/* The four strength levels. These used to be four hardcoded hex values
+   assigned inline by settings.js, which meant they could not follow the
+   theme: #dc2626 on the near-black page is 4.0:1, and the whole point of the
+   label is that it is read at a glance. Driven from data-score now, so the
+   colours live here with the rest of the palette. */
+.pw-meter[data-score="1"] .pw-meter-fill { background: var(--h-danger); }
+.pw-meter[data-score="2"] .pw-meter-fill { background: var(--h-take); }
+.pw-meter[data-score="3"] .pw-meter-fill { background: var(--h-give); }
+.pw-meter[data-score="4"] .pw-meter-fill { background: var(--h-seal); }
+
+.pw-meter[data-score="1"] .pw-meter-label { color: var(--h-danger); }
+.pw-meter[data-score="2"] .pw-meter-label { color: var(--h-take); }
+.pw-meter[data-score="3"] .pw-meter-label { color: var(--h-give); }
+.pw-meter[data-score="4"] .pw-meter-label { color: var(--h-seal); }
+
+/* --- Requirement checklist ------------------------------------------------ */
+
+.pw-checklist {
+    list-style: none;
+    margin-top: 0.9rem;
+    display: grid;
+    gap: 0.3rem;
+}
+
+.pw-checklist li {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1.35rem 1.5rem;
-    border-bottom: 1px solid #f0f0f0;
+    gap: 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
+    color: var(--h-dim);
+    transition: color 0.18s ease;
+}
+
+.pw-checklist li i {
+    font-size: 0.85rem;
     flex-shrink: 0;
 }
 
-.modal-header h2 {
-    font-size: 1.2rem;
-    font-weight: 600;
+.pw-checklist li.met {
+    color: var(--h-seal);
 }
 
-.close-modal {
-    background: none;
-    border: none;
-    font-size: 1.7rem;
-    line-height: 1;
-    color: var(--text-light);
-    cursor: pointer;
-    padding: 0 0.25rem;
-    transition: color 0.2s ease;
-}
-
-.close-modal:hover {
-    color: var(--text);
-}
-
-.modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-}
+/* ------------------------------------------------------------------------- *
+ * Delete-account modals
+ * The chrome is ink.css's; this is what is inside them.
+ * ------------------------------------------------------------------------- */
 
 .modal-lede {
-    font-size: 0.95rem;
-    margin-bottom: 0.9rem;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--h-ink-soft);
+    margin-bottom: 1rem;
+}
+
+.modal-lede strong {
+    font-family: var(--h-mono);
+    font-size: 0.87rem;
+    font-weight: 500;
+    color: var(--h-ink);
+    word-break: break-word;
 }
 
 .delete-list {
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1.1rem;
+    border-top: 1px solid var(--h-rule);
+    margin-bottom: 1.25rem;
 }
 
 .delete-list li {
     display: flex;
     align-items: flex-start;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--text-light);
+    gap: 0.6rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--h-rule);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--h-ink-soft);
 }
 
-.delete-list i {
-    color: var(--danger);
-    font-size: 1.15rem;
+.delete-list li i {
+    color: var(--h-danger);
+    font-size: 1rem;
     flex-shrink: 0;
 }
 
 .modal-warning {
     display: flex;
     align-items: flex-start;
-    gap: 0.55rem;
-    padding: 0.85rem 1rem;
-    border-radius: 0.6rem;
-    background: rgba(230, 57, 70, 0.08);
-    color: var(--text-danger);
+    gap: 0.7rem;
+    padding: 0.85rem 0 0.85rem 1rem;
+    border-left: 3px solid var(--h-danger);
     font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
     margin-bottom: 1.5rem;
 }
 
 .modal-warning i {
-    font-size: 1.15rem;
+    color: var(--h-danger);
+    font-size: 1rem;
     flex-shrink: 0;
-    margin-top: 0.1rem;
 }
 
-/* --- Loading skeletons ----------------------------------------------------- */
-/* settings.js sets data-loading="true" on .settings-container while /api/me
-   is in flight and clears it once the response lands (or fails). The facts
-   still read "—" underneath -- this only paints over them, the same
-   approach onboarding.js uses for its fields, so there is nothing to swap
-   back in once the real values arrive. */
+/* ------------------------------------------------------------------------- *
+ * Loading
+ *
+ * settings.js sets data-loading="true" on .settings-container while /api/me
+ * is in flight and clears it once the response lands (or fails). The facts
+ * still read "—" underneath -- this only paints over them, the same approach
+ * onboarding.js uses for its fields, so there is nothing to swap back in once
+ * the real values arrive.
+ *
+ * tokens.css's --skeleton-* pair is a cool grey mixed for the blue palette
+ * and reads as a patch of a different page on the cream. Restated here in the
+ * paper's own tones; both are already theme-aware, so this is only about hue.
+ * ------------------------------------------------------------------------- */
+
 [data-loading="true"] #accountEmailValue,
 [data-loading="true"] #verifiedValue,
 [data-loading="true"] #profileValue {
     display: inline-block;
     background: linear-gradient(
         90deg,
-        var(--skeleton-base) 25%,
-        var(--skeleton-sheen) 37%,
-        var(--skeleton-base) 63%
+        var(--h-cell) 25%,
+        var(--h-rule) 37%,
+        var(--h-cell) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
-    border-radius: 0.375rem;
+    border-radius: 0;
     color: transparent;
     user-select: none;
 }
 
-[data-loading="true"] #accountEmailValue { min-width: 9rem; }
-[data-loading="true"] #verifiedValue { min-width: 6rem; }
-[data-loading="true"] #profileValue { min-width: 5rem; }
+[data-loading="true"] #accountEmailValue { min-width: 11rem; }
+[data-loading="true"] #verifiedValue     { min-width: 6rem; }
+[data-loading="true"] #profileValue      { min-width: 5rem; }
 
 /* The toggle does not know its saved state yet, so it is shimmered rather
    than shown sitting off -- off is a real answer, not a placeholder for one. */
 [data-loading="true"] .switch-track {
     background: linear-gradient(
         90deg,
-        var(--skeleton-base) 25%,
-        var(--skeleton-sheen) 37%,
-        var(--skeleton-base) 63%
+        var(--h-cell) 25%,
+        var(--h-rule) 37%,
+        var(--h-cell) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
 }
 
 [data-loading="true"] .switch-track::after {
-    box-shadow: none;
+    opacity: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    [data-loading="true"] #accountEmailValue,
-    [data-loading="true"] #verifiedValue,
-    [data-loading="true"] #profileValue,
-    [data-loading="true"] .switch-track {
-        animation: none;
-    }
-}
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ *
+ * The two-column sheet needs about 52rem before the label strip stops being
+ * a strip and starts being a squeeze. Below that it stacks, and the group
+ * label sits above its controls -- which is the same reading order, just
+ * vertical.
+ * ------------------------------------------------------------------------- */
 
-/* --- Small screens ------------------------------------------------------- */
-@media (max-width: 40em) {
-    .settings-section {
-        padding: 7rem 1.25rem 3rem;
-    }
-
+@media (max-width: 52rem) {
     .settings-card {
-        padding: 1.35rem;
+        grid-template-columns: 1fr;
+        row-gap: 1.4rem;
     }
 
-    /* The switch drops below its description instead of squeezing it. */
-    .setting-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.9rem;
+    .settings-card-header,
+    .settings-card > *:not(.settings-card-header) {
+        grid-column: 1;
     }
 
     .settings-facts > div {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+
+    .setting-row {
+        gap: 1.25rem;
+    }
+}
+
+@media (max-width: 34rem) {
+    .settings-links,
+    .form-actions {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 0.1rem;
+        align-items: stretch;
     }
 
-    .settings-facts dd {
-        text-align: left;
+    .password-form,
+    .email-change form {
+        max-width: none;
     }
 }
 
-/* --- Changing the sign-in email -------------------------------------------
-   Collapsed by default. Most visits to this page are about notifications or
-   a password; moving the account to a different address is rare and worth a
-   deliberate click rather than a form sitting open under the one thing
-   nobody should change by accident. */
-.email-change {
-    margin-top: 1rem;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0.6rem;
-}
-
-.email-change > summary {
-    padding: 0.7rem 0.9rem;
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--primary);
-    list-style: none;
-}
-
-.email-change > summary::-webkit-details-marker { display: none; }
-
-.email-change > summary::before {
-    content: '\203A';
-    display: inline-block;
-    margin-right: 0.5rem;
-    transition: transform 0.15s ease;
-}
-
-.email-change[open] > summary::before { transform: rotate(90deg); }
-
-.email-change > summary:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: -2px;
-    border-radius: 0.6rem;
-}
-
-.email-change form {
-    padding: 0 0.9rem 1rem;
-}
-
-.email-change-note {
-    margin: 0 0 1rem;
-    font-size: 0.85rem;
-    color: var(--text-light);
-}
-
-/* A change waiting on the new address. Without this the page shows the old
-   email with nothing to say a request is in flight, which reads as the
-   request having silently failed. */
-.pending-email {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-top: 1rem;
-    padding: 0.8rem 1rem;
-    border: 1px solid rgba(251, 191, 36, 0.4);
-    border-radius: 0.6rem;
-    background: rgba(251, 191, 36, 0.08);
-}
-
-.pending-email[hidden] { display: none; }
-
-.pending-email > i {
-    font-size: 1.3rem;
-    color: var(--text-note);
-    flex-shrink: 0;
-}
-
-.pending-email p {
-    margin: 0;
-    flex: 1 1 14rem;
-    font-size: 0.88rem;
+@media (prefers-reduced-motion: reduce) {
+    .switch-track,
+    .switch-track::after,
+    .pw-meter-fill,
+    .email-change summary::before {
+        transition: none;
+    }
 }

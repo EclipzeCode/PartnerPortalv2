@@ -1,0 +1,768 @@
+/* The redesign's shared layer.
+ *
+ * --- Why this file exists ---------------------------------------------------
+ *
+ * The home page redesign landed first, and every token and primitive it needed
+ * lived in pp.css scoped to body.home. That was correct while exactly one page
+ * used them. The moment a second page wants the same palette, the same three
+ * typefaces and the same square-edged buttons, there are only two options:
+ * copy them, or move them here.
+ *
+ * Copying is not an option. tokens.css exists because fourteen stylesheets
+ * each kept their own copy of the palette and eight tokens ended up
+ * disagreeing, so which value a page got was decided by stylesheet link
+ * order. Repeating that with a second palette -- one copy in pp.css, one in
+ * settings.css, drifting apart -- would be making the same mistake twice in
+ * the same codebase, with the first instance still documented at the top of
+ * tokens.css.
+ *
+ * So: the tokens and the primitives are here, once. Page stylesheets style
+ * what is unique to their page and nothing else.
+ *
+ * --- Opting in --------------------------------------------------------------
+ *
+ * Nothing here applies unless the page's <body> carries class="ink". That is
+ * what makes converting the app page by page safe: a page that has not been
+ * redesigned yet does not have the class, sees none of this, and keeps the
+ * blue-and-Poppins design exactly as it was. There is no flag day.
+ *
+ * Load order is tokens.css, then this, then the page's own stylesheet. The
+ * shared stylesheets that come after -- shared.css, forms.css, nav.css --
+ * are not modified, so everything here that has to beat one of them is
+ * qualified with body.ink and wins on specificity rather than on order. Where
+ * a rule in forms.css is itself heavily qualified, the selector here mirrors
+ * it exactly; those are marked.
+ *
+ * --- Register ---------------------------------------------------------------
+ *
+ * The home page is the loud end of this design: dot lattice, a serif at 4.6rem,
+ * the match matrix. None of that is here. What carries inward is the quiet
+ * half -- paper and ink, hairlines instead of shadows, square corners, mono
+ * for metadata, one accent used for meaning. An application page someone
+ * works in for an hour should read as instrumentation, not as a brochure.
+ */
+
+body.ink {
+    /* --- Ground and ink ---------------------------------------------- */
+    --h-paper: #F5F2EB;
+    --h-surface: #FCFBF8;
+    --h-ink: #17191F;
+    --h-ink-soft: #43464F;
+    --h-dim: #6B6960;
+
+    --h-rule: #DCD7C9;
+    --h-edge: #17191F;
+
+    /* --- The two directions ------------------------------------------ */
+    /* On the home page these mean "they give you" and "you give them". Away
+       from the matrix, --h-give is simply the accent -- links, focus, the
+       active state -- and --h-take is the highlight used sparingly for the
+       thing on the page that wants attention. */
+    --h-give: #1E3A6E;
+    /* #C7522A was the first choice and is 4.02:1 on the paper -- it is used
+       as a text colour, not only as a fill, and failed AA there. Darkened
+       until one value serves both jobs: 4.8:1 as text on the paper, 5.4:1
+       for a label sitting on top of it as a fill. */
+    --h-take: #B4491F;
+    --h-seal: #1F4D3D;
+
+    /* What sits on top of a fill. White is right on the light palette's deep
+       navy, rust and green, and wrong on the dark palette's versions of them,
+       which are tints: #fff on #7FA0E8 is 2.2:1. The same trap --on-primary
+       exists to close in tokens.css, so it is named here for the same reason
+       rather than hardcoded at every call site. */
+    --h-on-give: #ffffff;
+    --h-on-take: #ffffff;
+    --h-on-seal: #ffffff;
+
+    /* Destructive. Kept distinct from --h-take, which is a highlight and gets
+       used decoratively -- the colour that means "this cannot be undone" must
+       not also be the colour of a section label. */
+    --h-danger: #A32020;
+    --h-on-danger: #ffffff;
+    --h-surface-danger: #FBF0EE;
+
+    --h-dot: rgba(23, 25, 31, 0.13);
+    --h-cell: rgba(23, 25, 31, 0.07);
+
+    /* The footer is a dark band in BOTH themes -- that is the whole point of
+       it, the same role tokens.css gives --dark. It cannot be --h-ink: that
+       token is the text colour, and in the dark palette it is bone, so a
+       footer painted with it flipped to a cream block with near-black text
+       sitting under a near-black page. Named separately so the role and the
+       ink colour cannot be confused again. */
+    --h-footer: #17191F;
+    --h-on-footer: #F5F2EB;
+
+    /* --- Type -------------------------------------------------------- */
+    /* Three faces, three jobs, no overlap. The serif is only ever a headline;
+       the mono is only ever metadata; everything read in sentences is the
+       grotesque. Keeping those roles rigid is what stops three families
+       reading as clutter. */
+    --h-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+    --h-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --h-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+/* Dark. Near-black rather than a dimmed cream -- unlit paper is a muddy
+   brown, and warmth is the one thing this palette cannot survive being dimmed.
+   The warmth is carried instead by the ink being bone rather than white. */
+:root[data-theme="dark"] body.ink {
+    --h-paper: #0C0C0E;
+    --h-surface: #131316;
+    --h-ink: #F3F1EC;
+    --h-ink-soft: #B6B4AE;
+    --h-dim: #86847E;
+    --h-rule: #2A2A2F;
+    --h-edge: #3A3A42;
+
+    --h-give: #7FA0E8;
+    --h-take: #E8845C;
+    --h-seal: #5FAE8C;
+    /* All three fills are light here, so what sits on them is the page
+       colour rather than white. */
+    --h-on-give: #0C0C0E;
+    --h-on-take: #0C0C0E;
+    --h-on-seal: #0C0C0E;
+
+    --h-danger: #F08080;
+    --h-on-danger: #0C0C0E;
+    --h-surface-danger: #251617;
+
+    --h-dot: rgba(255, 255, 255, 0.09);
+    --h-cell: rgba(255, 255, 255, 0.06);
+
+    /* Still a dark band, just one that separates from a near-black page
+       rather than from cream. */
+    --h-footer: #08080A;
+    --h-on-footer: #E9E7E1;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Base
+ * ------------------------------------------------------------------------- */
+
+body.ink {
+    font-family: var(--h-sans);
+    background-color: var(--h-paper);
+    color: var(--h-ink-soft);
+    line-height: 1.6;
+}
+
+body.ink button,
+body.ink input,
+body.ink textarea,
+body.ink select {
+    font-family: inherit;
+}
+
+/* The default heading colour, wrapped in :where() so it contributes no
+ * specificity of its own -- the rule lands at (0,0,1), the weight of a bare
+ * element selector, and any page rule at all outranks it.
+ *
+ * Without that it was (0,1,2), which quietly beat ordinary page selectors
+ * like `.toggle-panel h1` and `.detail-focus h4`. The login page's dark panel
+ * was the visible case: its heading asked for the pale ink the panel is
+ * designed around, got near-black instead, and vanished into the background.
+ * A default that outranks the specific thing it is a default for is not a
+ * default. */
+:where(body.ink) h1,
+:where(body.ink) h2,
+:where(body.ink) h3,
+:where(body.ink) h4 {
+    color: var(--h-ink);
+}
+
+/* Square. Not a stylistic tic: the design is built out of cells and hairline
+   rules, and a rounded corner on any of it breaks the alignment the layout is
+   doing. Listed rather than applied with a universal selector so that a
+   genuinely round thing -- an avatar circle in the nav drawer, a radio -- can
+   still opt out by not being named. */
+body.ink .btn-primary,
+body.ink .btn-secondary,
+body.ink .btn-ghost,
+body.ink .btn-danger,
+body.ink .btn-action,
+body.ink .modal-container,
+body.ink .form-group input,
+body.ink .form-group select,
+body.ink .form-group textarea,
+body.ink .modal-body input,
+body.ink .modal-body select,
+body.ink .modal-body textarea {
+    border-radius: 0;
+}
+
+/* The focus ring. shared.css draws one for every page; this restates it in
+   the accent, because the default is the old brand blue and it is the single
+   most visible piece of chrome for anyone navigating by keyboard. */
+body.ink a:focus-visible,
+body.ink button:focus-visible,
+body.ink input:focus-visible,
+body.ink select:focus-visible,
+body.ink textarea:focus-visible,
+body.ink summary:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------------- *
+ * The mono label
+ *
+ * The design's connective tissue: small, letterspaced, uppercase, with a
+ * square marker. It is what marks metadata as metadata, and it is the single
+ * element most responsible for the whole thing reading as instrumentation
+ * rather than as marketing. Used for section labels, field labels, table
+ * headers, axes, counts, timestamps.
+ * ------------------------------------------------------------------------- */
+
+body.ink .eyebrow {
+    font-family: var(--h-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    line-height: 1;
+}
+
+body.ink .eyebrow::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    background: var(--h-take);
+    flex-shrink: 0;
+}
+
+/* The marker is the attention-getter, so a label that is not the point of its
+   section drops it and keeps only the letterspacing. */
+body.ink .eyebrow.plain::before {
+    display: none;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Buttons
+ *
+ * forms.css owns .btn-ghost and .btn-danger for the whole app and gives both
+ * a 0.5rem radius and the old palette. Restated here rather than edited
+ * there, so a page without .ink is untouched.
+ * ------------------------------------------------------------------------- */
+
+body.ink .btn-primary,
+body.ink .btn-secondary,
+body.ink .btn-ghost,
+body.ink .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.4rem;
+    font-family: var(--h-sans);
+    font-size: 0.88rem;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--h-edge);
+    background: transparent;
+    color: var(--h-ink);
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+body.ink .btn-primary {
+    background: var(--h-ink);
+    color: var(--h-paper);
+}
+
+/* No lift, no glow. The affordance is the fill inverting, which is the only
+   move available to a design with no shadows in it. */
+body.ink .btn-primary:hover:not(:disabled) {
+    background: var(--h-give);
+    border-color: var(--h-give);
+    color: var(--h-on-give);
+}
+
+body.ink .btn-secondary:hover:not(:disabled) {
+    background: var(--h-ink);
+    color: var(--h-paper);
+}
+
+/* Secondary in weight, not in importance: a quiet border and dim text until
+   it is reached for. */
+body.ink .btn-ghost {
+    border-color: var(--h-rule);
+    color: var(--h-dim);
+}
+
+body.ink .btn-ghost:hover:not(:disabled) {
+    border-color: var(--h-edge);
+    background: transparent;
+    color: var(--h-ink);
+}
+
+body.ink .btn-danger {
+    border-color: var(--h-danger);
+    color: var(--h-danger);
+    background: transparent;
+}
+
+body.ink .btn-danger:hover:not(:disabled) {
+    background: var(--h-danger);
+    color: var(--h-on-danger);
+}
+
+body.ink .btn-primary:disabled,
+body.ink .btn-secondary:disabled,
+body.ink .btn-ghost:disabled,
+body.ink .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Form controls
+ *
+ * The selectors here mirror forms.css's exactly, prefixed with body.ink.
+ * That is deliberate and load-bearing: forms.css qualifies its inputs as
+ * `.form-group input:not([type="checkbox"]):not([type="radio"])`, which is
+ * three classes and an element. A plainer `body.ink .form-group input` is
+ * two classes and an element and loses, so the inputs would keep their round
+ * corners and their blue focus ring. Any change to the selector there has to
+ * be mirrored here.
+ * ------------------------------------------------------------------------- */
+
+body.ink .form-group input:not([type="checkbox"]):not([type="radio"]),
+body.ink .form-group select,
+body.ink .form-group textarea,
+body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]),
+body.ink .modal-body select,
+body.ink .modal-body textarea {
+    border-radius: 0;
+    border: 1px solid var(--h-rule);
+    background: var(--h-paper);
+    color: var(--h-ink);
+    font-size: 0.92rem;
+    padding: 0.7rem 0.8rem;
+    transition: border-color 0.18s ease;
+}
+
+body.ink .form-group input:not([type="checkbox"]):not([type="radio"]):focus,
+body.ink .form-group select:focus,
+body.ink .form-group textarea:focus,
+body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]):focus,
+body.ink .modal-body select:focus,
+body.ink .modal-body textarea:focus {
+    border-color: var(--h-ink);
+    /* forms.css puts a 3px blue halo here. The border darkening is the whole
+       signal; the focus-visible outline above covers keyboard users. */
+    box-shadow: none;
+}
+
+body.ink .form-group input::placeholder,
+body.ink .form-group textarea::placeholder,
+body.ink .modal-body input::placeholder,
+body.ink .modal-body textarea::placeholder {
+    color: var(--h-dim);
+}
+
+/* Field labels are metadata, so they take the mono treatment.
+ *
+ * Direct children only, and not the two label classes that are themselves
+ * controls. A bare `.form-group label` reaches every label nested anywhere
+ * inside the group, and on the search page that is the category chips and the
+ * filter checkboxes -- both of which are <label> elements wrapping a hidden
+ * input. They were being letterspaced, uppercased and recoloured as if they
+ * were captions, which on a checked chip meant the label colour beat
+ * .category-chip.checked's on specificity and painted the text the same
+ * colour as the fill behind it. */
+body.ink .form-group > label:not(.checkbox-label):not(.category-chip) {
+    display: block;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    /* Through a custom property, not a plain value. The two :not()s above
+       push this selector to (0,4,2), which a page cannot realistically beat
+       without repeating them -- so the direction colours on the onboarding
+       trade labels and the propose dialog's two sides were being written and
+       silently discarded. A custom property inherits from the field's own
+       wrapper, so a page sets --h-label on .trade-need and the label picks it
+       up regardless of which selector is more specific. */
+    color: var(--h-label, var(--h-dim));
+    margin-bottom: 0.45rem;
+}
+
+/* Parentheticals inside a label are read as words, not as a label. */
+body.ink .form-group > label .optional {
+    text-transform: none;
+    letter-spacing: 0.02em;
+}
+
+body.ink .form-group input.input-error,
+body.ink .form-group select.input-error,
+body.ink .form-group textarea.input-error {
+    border-color: var(--h-danger);
+}
+
+body.ink .field-error {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
+    color: var(--h-danger);
+}
+
+/* ------------------------------------------------------------------------- *
+ * The category picker
+ *
+ * The same component on two pages: the search page filters and proposes with
+ * it, and onboarding is where an organization first picks its needs, its
+ * offers and what it works on. Both draw from the same ~33 categories the
+ * server sends, so both were carrying their own copy of these rules -- which
+ * is how the two pages ended up with chips at different sizes and different
+ * radii for the same list of words.
+ *
+ * The checked colour is deliberately NOT set here. A chip means something
+ * different depending on which side of the exchange it is on, and the page
+ * says which by qualifying the selector (see .trade-need / .trade-offer in
+ * onboarding.css and the propose grid in ppsearch.css). A shared default
+ * would be a third meaning competing with those two.
+ * ------------------------------------------------------------------------- */
+
+body.ink .category-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+body.ink .category-group + .category-group {
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+body.ink .category-group h4 {
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.5rem;
+}
+
+body.ink .category-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* forms.css makes this a positioned wrapper around a visually hidden
+   checkbox that fills it, so the whole chip is the hit area. */
+body.ink .category-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    font-family: var(--h-sans);
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--h-ink-soft);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+body.ink .category-chip:hover {
+    border-color: var(--h-edge);
+    color: var(--h-ink);
+}
+
+body.ink .category-chip:has(input:focus-visible) {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+body.ink .picker-count {
+    display: block;
+    margin-top: 0.45rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
+body.ink .picker-empty {
+    font-size: 0.83rem;
+    color: var(--h-dim);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Modals
+ * ------------------------------------------------------------------------- */
+
+/* The scrim. Deeper than forms.css's default: over a cream page a 55% wash
+   still reads as "the page, slightly greyer" rather than as a layer, and a
+   confirm dialog that does not clearly sit in front of everything else is the
+   wrong dialog to be subtle with. */
+body.ink .modal {
+    background: rgba(17, 18, 22, 0.7);
+}
+
+body.ink .modal-container {
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+    box-shadow: none;
+}
+
+body.ink .modal-header {
+    border-bottom: 1px solid var(--h-edge);
+    padding: 1.1rem 1.5rem;
+}
+
+body.ink .modal-header h2 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: 1.5rem;
+    line-height: 1.1;
+    color: var(--h-ink);
+}
+
+body.ink .close-modal {
+    color: var(--h-dim);
+}
+
+body.ink .close-modal:hover {
+    color: var(--h-ink);
+}
+
+body.ink .modal-footer {
+    border-top: 1px solid var(--h-edge);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Navigation
+ *
+ * nav.css is shared by every page and is left alone; these override it under
+ * body.ink only. The bar loses its drop shadow for a single hairline, and the
+ * pill CTA becomes a square one -- a rounded blue pill floating over a sheet
+ * of ruled paper was the one piece of chrome that gave the whole thing away.
+ * ------------------------------------------------------------------------- */
+
+body.ink .header {
+    background: var(--h-paper);
+    box-shadow: none;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+body.ink .logo {
+    font-family: var(--h-sans);
+    font-weight: 600;
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+}
+
+body.ink .logo:hover {
+    color: var(--h-give);
+}
+
+body.ink .navbar a {
+    font-family: var(--h-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+body.ink .navbar a:hover,
+body.ink .navbar a.active {
+    color: var(--h-ink);
+}
+
+body.ink .navbar a.active::after {
+    background: var(--h-take);
+    border-radius: 0;
+    height: 2px;
+}
+
+body.ink .navbar a.nav-auth-cta {
+    border-radius: 0;
+    background: var(--h-ink);
+    color: var(--h-paper);
+    font-family: var(--h-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.1rem;
+}
+
+body.ink .navbar a.nav-auth-cta:hover {
+    background: var(--h-give);
+    color: var(--h-on-give);
+    box-shadow: none;
+}
+
+body.ink .avatar-button {
+    border-radius: 0;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    font-family: var(--h-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    width: 2.3rem;
+    height: 2.3rem;
+}
+
+body.ink .avatar-button:hover,
+body.ink .avatar-button[aria-expanded="true"] {
+    background: var(--h-ink);
+    box-shadow: none;
+}
+
+body.ink .account-dropdown {
+    border-radius: 0;
+    border: 1px solid var(--h-edge);
+    box-shadow: none;
+    background: var(--h-surface);
+}
+
+body.ink .navbar .account-dropdown a,
+body.ink .account-dropdown button {
+    font-family: var(--h-sans);
+    font-size: 0.85rem;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--h-ink-soft);
+}
+
+body.ink .navbar .account-dropdown a:hover,
+body.ink .account-dropdown button:hover {
+    background: var(--h-paper);
+    color: var(--h-ink);
+}
+
+body.ink .account-identity .account-name {
+    color: var(--h-ink);
+}
+
+body.ink .account-identity .account-email {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    color: var(--h-dim);
+}
+
+body.ink .nav-badge {
+    border-radius: 0;
+    background: var(--h-take);
+    color: var(--h-on-take);
+    font-family: var(--h-mono);
+}
+
+body.ink #menu-icon {
+    color: var(--h-ink);
+}
+
+/* The mobile drawer. nav.css opens it at 68.75em and fills it with
+   var(--surface), which is pure white -- a white sheet unrolling over a cream
+   page, with a drop shadow under it. Matched to the paper instead, and the
+   shadow traded for the hairline this design uses everywhere else. The
+   breakpoint mirrors nav.css's; if that one moves, this has to move with it. */
+@media (max-width: 68.75em) {
+    body.ink .navbar {
+        background: var(--h-surface);
+    }
+
+    body.ink .navbar.active {
+        box-shadow: none;
+        border-bottom: 1px solid var(--h-edge);
+    }
+
+    /* In the drawer the avatar is a row, not a square marker, and nav.css
+       gives the circle beside it a blue tint from the old palette. */
+    body.ink .avatar-button {
+        background: none;
+        border-bottom-color: var(--h-rule);
+    }
+
+    body.ink .avatar-button .avatar-initials {
+        border-radius: 0;
+        background: var(--h-give);
+        color: var(--h-on-give);
+    }
+
+    body.ink .avatar-button .avatar-label {
+        color: var(--h-ink);
+    }
+}
+
+/* ------------------------------------------------------------------------- *
+ * Footer
+ * shared.css styles .site-footer for every page; these are more specific and
+ * apply only where .ink is set.
+ * ------------------------------------------------------------------------- */
+
+body.ink .site-footer {
+    background: var(--h-footer);
+    color: var(--h-on-footer);
+    border-top: none;
+    padding: clamp(2.5rem, 6vh, 4rem) clamp(1.25rem, 5vw, 6rem) 1.5rem;
+}
+
+body.ink .site-footer .footer-grid {
+    max-width: 78rem;
+    margin: 0 auto;
+}
+
+body.ink .footer-brand-name {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: 1.5rem;
+    color: var(--h-on-footer);
+}
+
+body.ink .footer-tagline {
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--h-on-footer) 62%, transparent);
+    max-width: 34ch;
+}
+
+body.ink .footer-col h4 {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--h-on-footer) 52%, transparent);
+}
+
+body.ink .site-footer a {
+    color: color-mix(in srgb, var(--h-on-footer) 84%, transparent);
+    font-size: 0.88rem;
+}
+
+body.ink .site-footer a:hover {
+    color: var(--h-on-footer);
+}
+
+body.ink .footer-bottom {
+    max-width: 78rem;
+    margin: 0 auto;
+    border-top: 1px solid color-mix(in srgb, var(--h-on-footer) 18%, transparent);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--h-on-footer) 52%, transparent);
+}
+
+/* Both footer colours are dark, so on the dark theme the band and the page
+   are close enough to merge. A hairline gives it an edge. */
+:root[data-theme="dark"] body.ink .site-footer {
+    border-top: 1px solid var(--h-rule);
+}

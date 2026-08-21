@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Warm the connections to the two third-party origins every page uses,
          before the local stylesheets below start downloading. Both the
-         boxicons stylesheet and the Poppins stylesheet are render-blocking
+         boxicons stylesheet and the font stylesheet are render-blocking
          and are discovered late, at the bottom of this head -- so without
          these the browser pays a DNS lookup plus a TLS handshake to each
          before it can even ask for them. gstatic serves the font files
@@ -28,22 +28,25 @@
       } catch (e) { /* storage disabled; light theme is the right fallback */ }
     </script>
     <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, controls, nav,
+         footer. Between tokens.css and the page stylesheet. -->
+    <link rel="stylesheet" href="ink.css">
     <link rel="stylesheet" href="pplogin.css">
     <link rel="stylesheet" href="shared.css">
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="nav.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <!-- Poppins is the site's typeface and every other page loads it. This one
-         did not, so sign-in and sign-up rendered in the browser's default sans
-         -- a visible change of face between the landing page someone arrives
-         from and the onboarding they go to next.
+    <!-- Instrument Serif for the headings, Space Grotesk for anything read as
+         a sentence, JetBrains Mono for metadata -- the same three the rest of
+         the redesigned pages load, so the face does not change between the
+         landing page someone arrives from and the onboarding they go to next.
 
          Font Awesome used to be loaded above this. Nothing in the project uses
          an fa- class; the icons here and everywhere else are Boxicons, which
          loads on the line above. It was a render-blocking request to a third
          CDN, on the critical path of the first page a new organization sees,
          for a stylesheet nothing referenced. -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Partner Portal - Login</title>
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
@@ -54,7 +57,8 @@
     <script defer src="pplogin.js"></script>
 </head>
 
-<body>
+<!-- .ink opts this page into the shared redesign in ink.css. -->
+<body class="ink">
     <!-- Navigation Bar -->
     <header class="header">
         <a href="index.html" class="logo">PartnerPortal</a>
@@ -98,7 +102,7 @@
         <div class="form-container sign-up">
             <form novalidate>
                 <h1>Create Account</h1>
-                <span>or use your email for registration</span>
+                <span>Free for nonprofits and small organizations</span>
 
                 <p class="form-banner" id="registerBanner" hidden></p>
 
@@ -166,7 +170,7 @@
         <div class="form-container sign-in">
             <form novalidate>
                 <h1>Sign In</h1>
-                <span>or use your email account</span>
+                <span>Welcome back</span>
 
                 <p class="form-banner" id="loginBanner" hidden></p>
 
@@ -193,14 +197,18 @@
         </div>
         <div class="toggle-container">
             <div class="toggle">
+                <!-- Shown while the register form is up, offering the way
+                     back to signing in. -->
                 <div class="toggle-panel toggle-left">
-                    <h1>Welcome Back!</h1>
-                    <p>Enter your personal details to use all of the site's features</p>
+                    <h1>Already registered?</h1>
+                    <p>Sign in to pick up your matches and any partnerships waiting on your answer.</p>
                     <button class="hidden" id="register">Sign In</button>
                 </div>
+                <!-- The default: the sign-in form is up, so this offers
+                     registering. -->
                 <div class="toggle-panel toggle-right">
-                    <h1>Hello, Friend!</h1>
-                    <p>Register with your personal details to use all of the site's features</p>
+                    <h1>New here?</h1>
+                    <p>Create an account, then tell us what your organization needs and what it can offer. We match on both.</p>
                     <button class="hidden" id="login">Sign Up</button>
                 </div>
             </div>

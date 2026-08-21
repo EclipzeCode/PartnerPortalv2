@@ -1,137 +1,11 @@
 // ---------------------------------------------------------------------------
-// Hero scene: scroll-driven bridge build + cursor parallax
+// The home page.
 //
-// Two effects, two independent drivers:
-//   1. Scroll assembles the bridge. --build (0..1) is written to the scene and
-//      pp.css remaps it onto each part.
-//   2. Each layer translates by an amount proportional to its depth, so near
-//      ridges move further than distant ones as the cursor moves.
-//
-// The scroll build runs on touch as well -- scrolling is the one interaction
-// every visitor has -- while the parallax needs a real pointer. Reduced motion
-// skips both and leaves the scene finished.
+// The scroll-driven bridge build and the cursor parallax that used to open
+// this file are gone with the illustration they animated. The hero's visual
+// is now the match matrix below, which is drawn from the same data that
+// drives the rest of the demo rather than being decoration laid behind it.
 // ---------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-    const scene = document.getElementById('heroScene');
-    const hero = document.querySelector('.hero');
-    if (!scene || !hero) return;
-
-    const layers = [...scene.querySelectorAll('.scene-layer')].map(el => ({
-        el,
-        depth: parseFloat(el.dataset.depth) || 0
-    }));
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const finePointer = window.matchMedia('(pointer: fine)').matches;
-
-    // --- Scroll build ----------------------------------------------------
-    const BUILD_FRACTION = 0.6;  // of a viewport height to go from bare to built
-
-    let buildQueued = false;
-    let buildStart = 0;   // scrollY at which the build begins
-    let buildSpan = 1;    // how much further scrolling completes it
-
-    // The window the build runs over has to be derived from where the scene
-    // actually sits, not from raw scroll depth. On a short viewport the hero
-    // content pushes the scene below the fold, so a build keyed to scrollY
-    // alone would finish before the bridge was ever on screen. Anchoring to
-    // the scene's own document position keeps the animation in view in both
-    // cases: it starts at 0 when the scene is already visible at rest (tall
-    // viewports) and defers until the scene is entering when it is not.
-    function measureBuildWindow() {
-        const vh = window.innerHeight;
-        const sceneDocTop = scene.getBoundingClientRect().top + window.scrollY;
-        buildStart = Math.max(0, sceneDocTop - vh * 0.95);
-        buildSpan = Math.max(1, vh * BUILD_FRACTION);
-    }
-
-    function applyBuild() {
-        buildQueued = false;
-        const build = Math.min(1, Math.max(0,
-            (window.scrollY - buildStart) / buildSpan));
-        scene.style.setProperty('--build', build.toFixed(4));
-    }
-
-    function onScroll() {
-        if (buildQueued) return;
-        buildQueued = true;
-        requestAnimationFrame(applyBuild);
-    }
-
-    if (!reduceMotion) {
-        window.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', () => {
-            measureBuildWindow();
-            onScroll();
-        });
-        measureBuildWindow();
-        applyBuild();  // honour a restored scroll position on reload
-
-        // The webfont lands after DOMContentLoaded and changes the hero's
-        // height, which moves the scene and so the window measured above.
-        window.addEventListener('load', () => {
-            measureBuildWindow();
-            onScroll();
-        });
-    }
-
-    // Reduced motion keeps the CSS default of --build: 1 (fully assembled).
-    // Touch keeps the scroll build above but stops here: there is no cursor to
-    // parallax against.
-    if (reduceMotion || !finePointer) return;
-
-    const MAX_SHIFT_X = 46;   // px of travel for a depth of 1.0
-    const MAX_SHIFT_Y = 22;
-
-    let targetX = 0, targetY = 0;   // normalised cursor offset, -1..1
-    let currentX = 0, currentY = 0; // smoothed values actually rendered
-    let running = false;
-    let inside = false;
-
-    function render() {
-        // Ease toward the target so the scene glides rather than snapping.
-        currentX += (targetX - currentX) * 0.08;
-        currentY += (targetY - currentY) * 0.08;
-
-        layers.forEach(({ el, depth }) => {
-            const dx = -currentX * depth * MAX_SHIFT_X;
-            const dy = -currentY * depth * MAX_SHIFT_Y;
-            el.style.transform = `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0)`;
-        });
-
-        const settled = Math.abs(targetX - currentX) < 0.001 && Math.abs(targetY - currentY) < 0.001;
-        if (settled && !inside) {
-            running = false;
-            return;
-        }
-        requestAnimationFrame(render);
-    }
-
-    function start() {
-        if (running) return;
-        running = true;
-        requestAnimationFrame(render);
-    }
-
-    hero.addEventListener('mousemove', (e) => {
-        const r = hero.getBoundingClientRect();
-        targetX = ((e.clientX - r.left) / r.width - 0.5) * 2;
-        targetY = ((e.clientY - r.top) / r.height - 0.5) * 2;
-        inside = true;
-        start();
-    });
-
-    hero.addEventListener('mouseleave', () => {
-        // Drift back to centre.
-        inside = false;
-        targetX = 0;
-        targetY = 0;
-        start();
-    });
-
-    // Paint the initial (centred) state.
-    start();
-});
 
 // ---------------------------------------------------------------------------
 // Hero match demo
@@ -161,8 +35,87 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ];
 
+    // --- The overlap matrix ------------------------------------------------
+    //
+    // Rows are categories one organization offers, columns are categories the
+    // other needs; a filled cell is one both of them named. It is an
+    // illustration rather than live data -- these three pairings are
+    // fictional -- but it is drawn under the same rules the real thing
+    // follows, which is the point of showing it at all.
+    //
+    // Two properties matter and both are easy to get wrong:
+    //
+    //   * It is deterministic. Seeded from the example's own score, so a
+    //     pairing draws the same overlap every time it comes round. A grid
+    //     that reshuffled on each pass would be telling the visitor, loudly,
+    //     that the pattern stands for nothing.
+    //
+    //   * Its density tracks the score. A 92% match has visibly more lit
+    //     cells than an 85% one. The number and the picture are claiming the
+    //     same thing, so they cannot be allowed to disagree.
+    const LATTICE_ROWS = 6;
+    const lattice = document.getElementById('matchLattice');
+
+    // The 14-column grid collapses to 7 on a narrow screen (see pp.css), so
+    // the cell count has to follow or half the matrix hangs off the panel.
+    const narrow = window.matchMedia('(max-width: 34rem)');
+
+    function latticeCols() {
+        return narrow.matches ? 7 : 14;
+    }
+
+    // mulberry32: small, fast, and adequate for choosing which squares to
+    // fill in. Nothing here is a security decision.
+    function seeded(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function drawLattice(ex) {
+        if (!lattice) return;
+
+        const cols = latticeCols();
+        const total = cols * LATTICE_ROWS;
+        const rand = seeded(ex.score);
+
+        // A fifth to a third of the grid, scaled by the score. Beyond about a
+        // third the lit cells stop reading as an overlap and start reading as
+        // the background, which inverts the whole image.
+        const lit = Math.round(total * (ex.score / 100) * 0.3);
+
+        const chosen = new Map();
+        let guard = 0;
+        while (chosen.size < lit && guard++ < total * 8) {
+            const i = Math.floor(rand() * total);
+            if (chosen.has(i)) continue;
+            // Alternating directions, so neither colour dominates and the
+            // grid reads as an exchange rather than as one side's inventory.
+            chosen.set(i, chosen.size % 2 === 0 ? 'give' : 'take');
+        }
+
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < total; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'lattice-cell' + (chosen.has(i) ? ' ' + chosen.get(i) : '');
+            // Stagger left-to-right so the matrix resolves across the panel
+            // instead of every square appearing at once. Capped, or the last
+            // column arrives after the example has already changed.
+            cell.style.animationDelay = Math.min(i * 5, 420) + 'ms';
+            frag.appendChild(cell);
+        }
+
+        lattice.replaceChildren(frag);
+    }
+
     const el = {
         score: document.getElementById('matchScore'),
+        dirA: document.getElementById('exchangeDirA'),
+        dirB: document.getElementById('exchangeDirB'),
         avatarA: document.getElementById('orgAvatarA'),
         nameA: document.getElementById('orgNameA'),
         typeA: document.getElementById('orgTypeA'),
@@ -193,6 +146,12 @@ document.addEventListener('DOMContentLoaded', () => {
         el.nameB.textContent = ex.b.name;
         el.typeB.textContent = ex.b.type;
         el.offerB.textContent = ex.b.offer;
+        // The chips name the direction with the same initials as the two
+        // markers above and below the grid, so the exchange can be read
+        // without a legend.
+        if (el.dirA) el.dirA.textContent = ex.a.initials + ' \u2192 ' + ex.b.initials;
+        if (el.dirB) el.dirB.textContent = ex.b.initials + ' \u2192 ' + ex.a.initials;
+        drawLattice(ex);
         dots.forEach((d, di) => d.classList.toggle('active', di === i));
     }
 
@@ -246,6 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.hidden) stop();
         else if (!manual) start();
     });
+
+    // Crossing the breakpoint changes the column count, and a 14-column
+    // matrix left in a 7-column grid is 84 squares in twelve rows running out
+    // of the bottom of the panel.
+    const onBreakpoint = () => drawLattice(EXAMPLES[index]);
+    if (narrow.addEventListener) narrow.addEventListener('change', onBreakpoint);
+    else narrow.addListener(onBreakpoint);   // Safari < 14
 
     paint(0);
     start();
@@ -408,8 +374,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // More precise Intersection Observer with higher threshold and rootMargin
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            if (entry.isIntersecting) {
                 entry.target.classList.add('active');
+                entry.target.classList.remove('pending');
                 
                 // If this is the platform section, animate numbers
                 if (entry.target.classList.contains('platform-section')) {
@@ -421,13 +388,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
-    }, { 
-        threshold: 0.5, // Requires 50% of element to be visible
-        rootMargin: '0px 0px -100px 0px' // 100px offset from bottom
+    }, {
+        // Was 0.5, and the callback above tested for 0.5 a second time. These
+        // sections are now tall enough on a laptop that half of one is never
+        // on screen at once, so neither test could ever pass and the section
+        // stayed at opacity 0 -- content on the page, and invisible. Lowering
+        // the threshold alone would not have helped: the observer would fire
+        // at a ratio of 0.1 and the guard would reject it. Both had to go.
+        // A tenth of the section entering means it is being read.
+        threshold: 0.1,
+        rootMargin: '0px 0px -80px 0px'
     });
     
-    // Observe all scroll sections
+    // Hide, then observe -- in that order, and only here. pp.css leaves the
+    // sections visible; .pending is what hides them, and it is added at the
+    // same moment something exists that will take it off again. If this line
+    // is never reached the page simply does not animate, which is the failure
+    // worth having.
+    //
+    // The visibility check is the second half of that. A document that is
+    // hidden when this runs -- a page opened in a background tab, a
+    // prerender, an embedded frame that is not on screen -- gets no
+    // intersection callbacks at all, because nothing can intersect a viewport
+    // that is not being composited. Hiding the sections there would mean
+    // hiding them for good: the callbacks do not arrive retroactively when
+    // the tab is finally looked at. So a hidden document keeps the content on
+    // screen and loses the animation, which is the right way round.
+    const canAnimate = document.visibilityState === 'visible';
+
     document.querySelectorAll('.scroll-section').forEach(section => {
+        if (canAnimate) section.classList.add('pending');
         observer.observe(section);
     });
 });

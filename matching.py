@@ -133,6 +133,16 @@ def score_pair(me, them):
     overlaps so the UI can name them rather than saying "you're a good match".
 
     The number comes from rank_pair; everything added here is language.
+
+    Each reason is {"kind": key, "text": sentence}. It used to be the sentence
+    alone, which threw away the one thing the caller could not work out for
+    itself: two of these describe a direction -- something coming toward you,
+    something going out from you -- and that is the distinction the whole
+    product is built on. The frontend colours those two directions everywhere
+    else it can, and here it was reduced to matching on the words "They offer"
+    at the front of a string, which is a parser waiting to break the first
+    time this wording is edited. The key is already in hand at the moment the
+    sentence is written; it costs nothing to keep it.
     """
     score, mutual, parts, they_give, i_give, shared_focus = rank_pair(me, them)
 
@@ -166,27 +176,29 @@ def score_pair(me, them):
 
     # Said in the order they are awarded, except the two-way line, which goes
     # first because it is the whole claim the ranking is built on.
-    reasons = []
-    for key, _ in parts:
-        if key == "they_give":
-            reasons.append("They offer " + _join(labels_for(they_give))
-                           + ", which you need")
-        elif key == "i_give":
-            reasons.append("You offer " + _join(labels_for(i_give))
-                           + ", which they need")
-        elif key == "location":
-            reasons.append(f"Both based in {them.location}")
-        elif key == "remote":
-            reasons.append("Both open to remote partnerships")
-        elif key == "type":
-            reasons.append("Different kind of organization "
-                           f"({them.organization_type})")
-        elif key == "focus":
-            reasons.append("You both work on "
-                           + _join(focus_labels_for(shared_focus)))
+    #
+    # The kind travels with the sentence. "they_give" and "i_give" are the two
+    # directions of the exchange and the UI paints them accordingly; the rest
+    # are context and are left neutral.
+    sentences = {
+        "they_give": lambda: "They offer " + _join(labels_for(they_give))
+                             + ", which you need",
+        "i_give": lambda: "You offer " + _join(labels_for(i_give))
+                          + ", which they need",
+        "location": lambda: f"Both based in {them.location}",
+        "remote": lambda: "Both open to remote partnerships",
+        "type": lambda: "Different kind of organization "
+                        f"({them.organization_type})",
+        "focus": lambda: "You both work on "
+                         + _join(focus_labels_for(shared_focus)),
+    }
+    reasons = [{"kind": key, "text": sentences[key]()}
+               for key, _ in parts if key in sentences]
     if mutual:
-        reasons.insert(
-            0, "Two-way match — you each have something the other needs")
+        reasons.insert(0, {
+            "kind": "mutual",
+            "text": "Two-way match — you each have something the other needs",
+        })
 
     raw = sum(points for _, points in parts)
     # The cap is part of the explanation, not something to hide: a breakdown

@@ -1,398 +1,619 @@
-/* Public organization profile.
-   Standalone stylesheet, like partnership.css: this page is shown to people
-   who have never seen the app, so it carries no navigation. */
+/* The public organization profile.
+ *
+ * Eighth page onto the redesign, and the companion to partnership.css. The
+ * two are the only pages a stranger can land on: one is the record of an
+ * agreement, this is the profile of a single organization. They are built to
+ * the same shape -- a masthead, a bordered sheet on paper, mono for anything
+ * that is a label or a reading -- because arriving at one and then the other
+ * should feel like two pages of the same document, not two websites.
+ *
+ * --- Standalone -------------------------------------------------------------
+ *
+ * Like partnership.html, this page carries no navigation and does not load
+ * shared.css, forms.css or nav.css, and organization.js deliberately avoids
+ * common.js -- that file's api() helper redirects to the login page on a 401,
+ * and this page must work with no session at all. ink.css is the one shared
+ * stylesheet it takes, for the palette and the three typefaces.
+ *
+ * --- The two directions -----------------------------------------------------
+ *
+ * Here there IS a "you": the reader is a prospective partner, signed in or
+ * not. So the pair means what it means everywhere else in the app rather than
+ * standing for two identities the way it does on the agreement page. What
+ * they offer could come to you, so it is --h-give; what they need is what you
+ * would be providing, so it is --h-take. Identical to the exchange block in
+ * the search page's detail dialog, which is the screen most visitors reach
+ * this one from.
+ *
+ * Focus areas take the third colour, as they do in onboarding: a cause is not
+ * something anyone trades.
+ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: var(--h-sans);
+    background: var(--h-paper);
+    color: var(--h-ink-soft);
     line-height: 1.6;
-    padding: 2rem 1rem;
+    padding: clamp(1.5rem, 5vh, 3.5rem) 1rem;
 }
 
 .org-page {
-    max-width: 48.75rem;
+    max-width: 48rem;
     margin: 0 auto;
 }
 
+/* Sits above the sheet, not inside it -- organization.js replaces the card's
+   entire contents once the profile loads, so anything inside would be wiped. */
+.org-masthead {
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.75rem;
+}
+
+/* Nothing to head when the id is missing or the profile is gone. */
+.org-page:has(.org-error) .org-masthead,
+.org-page:has(.loading) .org-masthead {
+    visibility: hidden;
+}
+
 .org-card {
-    background: var(--surface);
-    border-radius: 1rem;
-    padding: 2.5rem;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+    padding: clamp(1.75rem, 5vw, 3.25rem);
 }
 
-.loading,
-.org-error {
-    color: var(--text-light);
-    text-align: center;
-    padding: 2rem 0;
-}
+/* ------------------------------------------------------------------------- *
+ * Example organizations
+ * ------------------------------------------------------------------------- */
 
-/* Seeded example orgs are fictional; say so before anything else on a page
-   that can be linked to from outside the app. */
 .org-demo-banner {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(217, 119, 6, 0.1);
-    color: var(--warning);
-    border-radius: 0.625rem;
-    padding: 0.7rem 1rem;
-    font-size: 0.88rem;
-    font-weight: 500;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.85rem 0 0.85rem 1rem;
+    border-left: 3px solid var(--h-take);
     margin-bottom: 1.75rem;
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
 }
 
-/* --- Header -------------------------------------------------------------- */
+.org-demo-banner i {
+    font-size: 1rem;
+    color: var(--h-take);
+    flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Head
+ * ------------------------------------------------------------------------- */
+
 .org-head {
     display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
+    align-items: flex-start;
+    gap: 1.1rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--h-edge);
 }
 
+/* Square, like every other organization marker in the app. */
 .org-avatar {
-    width: 4rem;
-    height: 4rem;
     flex-shrink: 0;
-    border-radius: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(67, 97, 238, 0.12);
-    color: var(--primary);
-    font-size: 1.35rem;
-    font-weight: 700;
+    width: 3rem;
+    height: 3rem;
+    display: grid;
+    place-items: center;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    font-family: var(--h-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
 }
 
 .org-headings {
-    flex: 1;
-    min-width: 12rem;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-.org-headings h1 {
-    font-size: 1.9rem;
-    line-height: 1.25;
+.org-card h1 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.8rem, 3.6vw, 2.5rem);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
 }
 
 .org-meta {
-    color: var(--text-light);
-    font-size: 0.95rem;
+    margin-top: 0.25rem;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-dim);
 }
 
 .org-tag {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.4rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--primary);
-    background: rgba(67, 97, 238, 0.09);
-    padding: 0.25rem 0.65rem;
-    border-radius: 62.4375rem;
+    gap: 0.3rem;
+    margin-top: 0.7rem;
+    padding: 0.2rem 0.45rem;
+    border: 1px solid var(--h-rule);
+    font-family: var(--h-mono);
+    font-size: 0.55rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
 }
 
-/* Only rendered for a signed-in viewer, from the authenticated endpoint. */
+/* --- The score -----------------------------------------------------------
+   Only rendered for a signed-in viewer. Set as a reading, the same way the
+   search results set it, rather than as a coloured box: the whole list this
+   visitor came from was ranked by this number. */
+
 .org-match {
     flex-shrink: 0;
-    text-align: center;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 0.75rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
 }
 
 .org-match-score {
-    display: block;
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: var(--primary);
-    line-height: 1.1;
+    font-family: var(--h-sans);
+    font-size: 1.9rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--h-ink);
 }
 
 .org-match-label {
-    font-size: 0.72rem;
-    color: var(--text-light);
+    margin-top: 0.3rem;
+    font-family: var(--h-mono);
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    /* Wide enough that "match with you · two-way" breaks once rather than
+       three times -- 12ch looks generous until the letterspacing on the mono
+       is counted, and it was splitting "two-way" across lines. */
+    max-width: 17ch;
 }
+
+/* ------------------------------------------------------------------------- *
+ * Body
+ * ------------------------------------------------------------------------- */
 
 .org-bio {
-    color: var(--text);
-    margin-bottom: 2rem;
+    padding: 1.5rem 0;
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
 }
 
-/* --- The exchange -------------------------------------------------------- */
-/* Same give/receive shape as the proposals page and the public agreement, so
-   the product reads consistently wherever a pairing is described. */
+.org-card h2 {
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.7rem;
+}
+
+.org-section {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--h-rule);
+    margin-top: 1.5rem;
+}
+
+.org-section p {
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+}
+
+/* The exchange already closes with a rule, so the next section must not draw
+   its own directly under it -- two parallel hairlines a few pixels apart read
+   as a mistake rather than as a division. */
+.org-exchange + .org-section {
+    border-top: none;
+    margin-top: 0;
+}
+
+/* --- What they work on ---------------------------------------------------- */
+
+.org-focus {
+    padding-bottom: 1.5rem;
+}
+
+.org-focus-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* Causes, in the third colour -- not something anyone trades. */
+.org-focus-chips span {
+    padding: 0.28rem 0.55rem;
+    border: 1px solid var(--h-seal);
+    color: var(--h-seal);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------------- *
+ * The exchange
+ *
+ * The same two columns split by a hairline that the agreement page and the
+ * search dialog use, in the same two colours.
+ * ------------------------------------------------------------------------- */
+
 .org-exchange {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.25rem;
-    margin-bottom: 2rem;
+    border-top: 1px solid var(--h-rule);
+    border-bottom: 1px solid var(--h-rule);
 }
 
 .org-side {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
+    padding: 1.4rem 1.4rem 1.4rem 0;
+}
+
+.org-side:last-child {
+    padding-left: 1.4rem;
+    border-left: 1px solid var(--h-rule);
 }
 
 .org-side h2 {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-light);
-    margin-bottom: 0.75rem;
 }
 
-.org-side:first-child h2 i { color: var(--success); }
-.org-side:last-child h2 i { color: var(--primary); }
+/* What they offer could come to you; what they need is what you would be
+   providing. */
+.org-side:first-child h2 { color: var(--h-give); }
+.org-side:last-child h2  { color: var(--h-take); }
 
 .org-side ul {
     list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
 }
 
 .org-side li {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 62.4375rem;
-    padding: 0.3rem 0.75rem;
-    font-size: 0.86rem;
+    position: relative;
+    padding: 0.22rem 0 0.22rem 0.95rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--h-ink);
+}
+
+.org-side li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 5px;
+    height: 5px;
+    background: var(--h-give);
+}
+
+.org-side:last-child li::before {
+    background: var(--h-take);
 }
 
 .org-side li.none {
-    border-style: dashed;
-    color: var(--text-light);
+    color: var(--h-dim);
     font-style: italic;
 }
 
+/* Qualified above the two direction rules, which are (0,3,2) -- otherwise the
+   marker for "nothing listed yet" is painted in the colour of the side that
+   has nothing on it. */
+.org-exchange .org-side li.none::before {
+    background: var(--h-rule);
+}
+
+/* The organization's own words about that side, under the list. */
 .org-note {
-    margin-top: 0.8rem;
-    font-size: 0.88rem;
-    color: var(--text-light);
-    line-height: 1.55;
+    margin-top: 0.7rem;
+    font-size: 0.83rem;
+    line-height: 1.6;
+    color: var(--h-dim);
 }
 
-/* --- Sections ------------------------------------------------------------ */
-.org-section {
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-    margin-bottom: 1.5rem;
-}
-
-.org-section h2 {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
-}
+/* ------------------------------------------------------------------------- *
+ * Contact
+ * ------------------------------------------------------------------------- */
 
 .org-contact p {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text);
+    padding: 0.2rem 0;
+    font-size: 0.92rem;
+    color: var(--h-ink-soft);
+    word-break: break-word;
 }
 
 .org-contact i {
-    color: var(--primary);
+    color: var(--h-dim);
+    flex-shrink: 0;
 }
 
 .org-contact a {
-    color: var(--primary);
+    color: var(--h-give);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
 }
 
-/* Chips rather than another list of rows: four short labels read faster
-   side by side, and they wrap cleanly on a phone. */
+.org-contact a:hover {
+    border-bottom-color: var(--h-give);
+}
+
 .org-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.85rem;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
 }
 
 .org-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.8rem;
-    border: 1px solid var(--border);
-    border-radius: 62.4375rem;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 0.85rem;
-    font-weight: 500;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--h-rule);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    color: var(--h-ink-soft);
     text-decoration: none;
-    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.org-link i {
-    font-size: 1rem;
-    color: var(--text-light);
-    transition: color 0.2s ease;
+    transition: border-color 0.18s ease, color 0.18s ease;
 }
 
 .org-link:hover {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: rgba(67, 97, 238, 0.05);
+    border-color: var(--h-edge);
+    color: var(--h-ink);
 }
 
-.org-link:hover i {
-    color: var(--primary);
-}
+/* --- Signed out ----------------------------------------------------------
+   Two shapes for the same fact, depending on whether this organization also
+   published its links. Both say what is behind the wall and how to get past
+   it, without pretending the wall is not there. */
 
 .org-contact-locked {
-    font-size: 0.9rem;
-    color: var(--text-light);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--h-rule);
+    margin-top: 1.5rem;
 }
 
-/* Same note, but sitting under published links rather than replacing them. */
+/* Not a flex row. These sentences carry inline links -- "Sign in or create a
+   profile to get in touch" -- and in a flex container every run of text
+   between two elements becomes its own anonymous flex item, so the sentence
+   lays out as four side-by-side columns. The icon is taken out of the flow
+   instead, which keeps the text one inline run. */
+/* The inline variant is a <p> inside .org-contact, so `.org-contact p` above
+   -- which lays the email and phone rows out as flex -- reaches it and
+   outranks a bare class. Qualified to beat it. */
+.org-contact-locked p,
+.org-contact p.org-contact-locked-inline {
+    display: block;
+    position: relative;
+    padding: 0.85rem 0 0.85rem 2.1rem;
+    border-left: 3px solid var(--h-rule);
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+}
+
 .org-contact-locked-inline {
-    margin-top: 0.9rem;
-    font-size: 0.85rem;
-    color: var(--text-light);
+    margin-top: 1rem;
 }
 
-.org-contact-locked-inline i {
-    color: var(--text-light);
-    margin-right: 0.25rem;
+.org-contact-locked i,
+.org-contact p.org-contact-locked-inline i {
+    position: absolute;
+    left: 1rem;
+    top: 1rem;
+    color: var(--h-dim);
 }
 
-.org-contact-locked-inline a {
-    color: var(--primary);
-    font-weight: 600;
+.org-contact-locked a,
+.org-contact p.org-contact-locked-inline a {
+    color: var(--h-give);
+    text-decoration: none;
+    border-bottom: 1px solid var(--h-rule);
 }
 
-.org-contact-locked i {
-    color: var(--text-light);
-    margin-right: 0.25rem;
+.org-contact-locked a:hover,
+.org-contact p.org-contact-locked-inline a:hover {
+    border-bottom-color: var(--h-give);
 }
 
-.org-contact-locked a {
-    color: var(--primary);
-    font-weight: 600;
-}
+/* ------------------------------------------------------------------------- *
+ * Actions
+ * ------------------------------------------------------------------------- */
 
-/* --- Actions ------------------------------------------------------------- */
 .org-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+    gap: 0.6rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--h-edge);
+    margin-top: 1.75rem;
 }
 
 .btn-share,
 .btn-find {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.45rem;
-    padding: 0.7rem 1.3rem;
-    border-radius: 0.5rem;
-    font-family: inherit;
-    font-size: 0.92rem;
-    font-weight: 600;
-    cursor: pointer;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid var(--h-edge);
+    border-radius: 0;
+    font-family: var(--h-sans);
+    font-size: 0.87rem;
+    font-weight: 500;
+    line-height: 1.2;
     text-decoration: none;
-    transition: all 0.2s ease;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .btn-share {
     background: transparent;
-    color: var(--primary);
-    border: 1px solid var(--primary);
+    border-color: var(--h-rule);
+    color: var(--h-ink-soft);
 }
 
 .btn-share:hover {
-    background: rgba(67, 97, 238, 0.07);
+    border-color: var(--h-edge);
+    color: var(--h-ink);
 }
 
 .btn-find {
-    background: var(--primary);
-    color: var(--on-primary);
-    border: 1px solid var(--primary);
+    background: var(--h-ink);
+    color: var(--h-paper);
 }
 
 .btn-find:hover {
-    background: var(--primary-dark);
-    border-color: var(--primary-dark);
+    background: var(--h-give);
+    border-color: var(--h-give);
+    color: var(--h-on-give);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Before the profile loads, and when there is none
+ * ------------------------------------------------------------------------- */
+
+.loading,
+.org-error {
+    padding: 2rem 0;
+    text-align: center;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--h-dim);
+}
+
+.org-error {
+    color: var(--h-ink-soft);
 }
 
 .org-footer {
-    text-align: center;
-    color: var(--text-light);
-    font-size: 0.86rem;
     margin-top: 1.5rem;
+    text-align: center;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.05em;
+    color: var(--h-dim);
 }
 
 .org-footer a {
-    color: var(--primary);
+    color: var(--h-ink);
     text-decoration: none;
-    font-weight: 600;
+    border-bottom: 1px solid var(--h-rule);
 }
 
+.org-footer a:hover {
+    border-bottom-color: var(--h-ink);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ * ------------------------------------------------------------------------- */
+
 @media (max-width: 40em) {
-    .org-card {
-        padding: 1.5rem;
+    .org-head {
+        flex-wrap: wrap;
+    }
+
+    /* The score drops under the name rather than squeezing it. */
+    .org-match {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 0.5rem;
+        text-align: left;
+        width: 100%;
+        padding-top: 0.25rem;
+    }
+
+    .org-match-label {
+        max-width: none;
+        margin-top: 0;
     }
 
     .org-exchange {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
-    .org-headings h1 {
-        font-size: 1.5rem;
+    .org-side,
+    .org-side:last-child {
+        padding: 1.4rem 0;
     }
 
-    .btn-share,
-    .btn-find {
-        width: 100%;
-        justify-content: center;
+    .org-side:last-child {
+        border-left: none;
+        border-top: 1px solid var(--h-rule);
+    }
+
+    .org-actions .btn-share,
+    .org-actions .btn-find {
+        flex: 1 1 100%;
     }
 }
 
-/* --- Focus areas --------------------------------------------------------- */
-/* What this organization works on. Plain chips, no scoring or ranking: these
-   are self-declared and unverified, and styling them as badges would imply a
-   standing the data does not support. */
-/* Bottom margin matters as much as the top one: .org-exchange below sets no
-   margin-top of its own, so without this the chips ran straight into the
-   offer/need boxes. 2rem matches the gap .org-bio and .org-exchange already
-   keep, so this block sits in the same rhythm as everything around it. */
-.org-focus {
-    margin: 0 0 2rem;
-}
+/* ------------------------------------------------------------------------- *
+ * Print
+ *
+ * Same reasoning as the agreement page: this is a public link, someone may
+ * well print it, and a visitor reading the app in dark mode should not be
+ * handed a black page. The selectors match ink.css's own so they actually
+ * win -- see the note in partnership.css.
+ * ------------------------------------------------------------------------- */
 
-.org-focus h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-light, #6c757d);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 0.6rem;
-}
+@media print {
+    :root body.ink,
+    :root[data-theme="dark"] body.ink {
+        --h-paper: #ffffff;
+        --h-surface: #ffffff;
+        --h-ink: #000000;
+        --h-ink-soft: #1a1a1a;
+        --h-dim: #4a4a4a;
+        --h-rule: #bbbbbb;
+        --h-edge: #000000;
+        --h-cell: #eeeeee;
+        --h-give: #1E3A6E;
+        --h-take: #B4491F;
+        --h-seal: #1F4D3D;
+        --h-on-give: #ffffff;
+        --h-on-take: #ffffff;
+        --h-on-seal: #ffffff;
+    }
 
-.org-focus-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-}
+    @page { margin: 18mm; }
 
-.org-focus-chips span {
-    padding: 0.32rem 0.75rem;
-    border-radius: 62.4375rem;
-    background: rgba(67, 97, 238, 0.09);
-    color: var(--primary, #4361ee);
-    font-size: 0.85rem;
-    font-weight: 500;
+    body { background: #fff; padding: 0; }
+
+    .org-card { border: none; padding: 0; }
+
+    .org-exchange { break-inside: avoid; page-break-inside: avoid; }
+
+    /* Neither is any use on paper. */
+    .org-actions,
+    .org-footer {
+        display: none;
+    }
 }

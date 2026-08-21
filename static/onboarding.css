@@ -1,6 +1,39 @@
-/* Onboarding CSS - onboarding.css
-   Deliberately mirrors ppdashboard.css: same tokens, same section header +
-   underline, same white card treatment, same .btn-action. */
+/* Onboarding, and editing a profile.
+ *
+ * Fifth page onto the redesign. Palette, typefaces, buttons, form controls,
+ * the category picker, modal chrome, nav and footer come from ink.css;
+ * forms.css supplies the modal layout and the chip's hit area. This file
+ * styles the step cards, the progress strip and the sidebar.
+ *
+ * --- Where the two directions are born --------------------------------------
+ *
+ * This is the page that matters most for the colour language, and the old
+ * design was the one place it was actively missing. "What do you need?" and
+ * "What can you offer?" sat side by side, and a chip selected on either side
+ * was the same blue. The two halves of the exchange -- the entire premise of
+ * the product -- looked identical at the exact moment somebody is deciding
+ * what goes in each one.
+ *
+ * They are now the two direction colours used everywhere else: --h-give for
+ * what comes in to your organization, --h-take for what goes out of it. The
+ * same pair, meaning the same two things, that the home page's match matrix,
+ * the search results' exchange block and a proposal's terms all use. Someone
+ * picking "Meeting space" as a need here sees it again in that colour when a
+ * match turns up offering it.
+ *
+ * Focus areas take a third colour on purpose. A cause is not something anyone
+ * trades -- that is why the markup keeps them apart from needs and offers in
+ * the first place -- so colouring them as either direction would say something
+ * untrue about what they are.
+ *
+ * --- Cards, kept ------------------------------------------------------------
+ *
+ * The other converted pages lost their card containers. These stay, because
+ * here the boxes correspond to something real: three numbered steps that the
+ * progress strip at the top counts off, and a sidebar of two panels that are
+ * about the form rather than part of it. What went is the outer card that
+ * wrapped all of them, the shadows, and the radii.
+ */
 
 * {
   margin: 0;
@@ -8,131 +41,180 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Poppins', sans-serif;
-  background-color: var(--bg-light);
-  color: var(--text);
-  line-height: 1.6;
-  overflow-x: hidden;
-}
+.hidden { display: none !important; }
 
-/* ---------- Navigation ---------- */
-.logo:hover {
-  color: var(--primary-dark);
-  transition: 0.3s ease;
-}
+/* ------------------------------------------------------------------------- *
+ * Page shell
+ * ------------------------------------------------------------------------- */
 
-/* ---------- Section shell (matches dashboard) ---------- */
 .onboarding-section {
-  padding: 6.5rem 7% 3rem;
-  background-color: var(--bg-light);
-  min-height: 100vh;
+  /* Top clears the fixed header. */
+  padding: clamp(7rem, 11vh, 9rem) clamp(1.25rem, 4vw, 4rem) 4rem;
 }
 
 .section-header {
-  text-align: center;
-  margin-bottom: 2rem;
+  max-width: 82rem;
+  margin: 0 auto 2rem;
 }
 
+.section-header .eyebrow {
+  margin-bottom: 1.1rem;
+}
+
+/* Empty in the markup on purpose: this page is both first-time onboarding and
+   "Edit profile", and only /api/me says which. onboarding.js fills it, with a
+   span around the part that varies. */
 .section-header h2 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
-  /* Ships empty and is filled once /api/me says which mode this is. Pinning
-     the line box keeps the rest of the page from jumping when the text lands
-     -- min-height alone was 2px short of the rendered line. */
-  line-height: 1.25;
-  min-height: 1.25em;
+  font-family: var(--h-serif);
+  font-weight: 400;
+  font-size: clamp(2rem, 3.6vw, 2.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--h-ink);
+  min-height: 1.04em;
 }
 
 .section-header h2 span {
-  color: var(--primary);
-}
-
-.underline {
-  width: 5rem;
-  height: 0.25rem;
-  background: var(--primary);
-  margin: 0 auto;
-  border-radius: 2px;
+  font-style: italic;
+  color: var(--h-give);
 }
 
 .section-intro {
-  max-width: 38.75rem;
-  margin: 1.5rem auto 0;
-  color: var(--text-light);
+  margin-top: 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--h-ink-soft);
+  max-width: 58ch;
 }
 
 .onboarding-container {
-  background: var(--surface);
-  border-radius: 1rem;
-  padding: 3rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-  max-width: 75rem;
+  max-width: 82rem;
   margin: 0 auto;
 }
 
-/* ---------- Progress strip ---------- */
+/* ------------------------------------------------------------------------- *
+ * Progress strip
+ *
+ * Three cells sharing their hairlines, the same object the dashboard's counts
+ * are. onboarding.js adds .done to a step once its fields are filled.
+ * ------------------------------------------------------------------------- */
+
 .progress-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 2.5rem;
+  border: 1px solid var(--h-edge);
+  margin-bottom: 1.5rem;
 }
 
 .progress-step {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.25rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  background: var(--h-surface);
+  border-right: 1px solid var(--h-rule);
 }
 
-.progress-step.done {
-  border-color: var(--primary);
-  box-shadow: 0 5px 15px rgba(67, 97, 238, 0.12);
-}
+.progress-step:last-child { border-right: none; }
 
 .step-icon {
-  width: 2.875rem;
-  height: 2.875rem;
+  width: 1.9rem;
+  height: 1.9rem;
   flex-shrink: 0;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(67, 97, 238, 0.1);
-  color: var(--primary);
-  font-size: 1.4rem;
-  transition: background 0.3s ease, color 0.3s ease;
+  display: grid;
+  place-items: center;
+  background: var(--h-cell);
+  color: var(--h-ink-soft);
+  font-size: 1rem;
 }
 
+/* A finished step is filled rather than outlined, so the strip reads as a
+   progress bar made of three blocks. */
 .progress-step.done .step-icon {
-  background: var(--primary);
-  color: var(--on-primary);
+  background: var(--h-seal);
+  color: var(--h-on-seal);
 }
 
 .step-text h4 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
+  font-family: var(--h-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--h-ink);
 }
 
 .step-text p {
-  font-size: 0.85rem;
-  color: var(--text-light);
-  line-height: 1.3;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--h-dim);
 }
 
-/* ---------- Layout ---------- */
-/* One grid holding all six cards, rather than two independent columns.
-   `display: contents` on the wrappers lifts their children into this grid so
-   each row is a real row: with the default stretch alignment, the two cards
-   in a row share a height, which lines up their tops AND their bottoms.
-   Cards with no partner span the full width instead of leaving a gap. */
+/* ------------------------------------------------------------------------- *
+ * Notices
+ * ------------------------------------------------------------------------- */
+
+.alert {
+  padding: 0.85rem 0 0.85rem 1rem;
+  border-left: 3px solid var(--h-rule);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--h-ink-soft);
+  margin-bottom: 1.25rem;
+}
+
+.alert.success { border-left-color: var(--h-seal); }
+.alert.error   { border-left-color: var(--h-danger); color: var(--h-danger); }
+
+.draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 0 0.9rem 1rem;
+  border-left: 3px solid var(--h-take);
+  margin-bottom: 1.5rem;
+}
+
+.draft-banner[hidden] { display: none; }
+
+.draft-banner > i {
+  font-size: 1.05rem;
+  color: var(--h-take);
+  flex-shrink: 0;
+}
+
+.draft-banner p {
+  flex: 1 1 20rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--h-ink-soft);
+}
+
+.draft-banner strong {
+  font-weight: 500;
+  color: var(--h-ink);
+}
+
+.draft-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.draft-banner-actions .btn-ghost {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.78rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Layout
+ *
+ * The two columns are laid out on one grid rather than two: .form-column and
+ * .sidebar-column are display:contents, so their children are placed
+ * directly. That is what lets the sidebar panels line up with the step cards
+ * beside them, and the last two rows run the full width.
+ * ------------------------------------------------------------------------- */
+
 .onboarding-content {
   display: grid;
   grid-template-columns: 2.4fr 1fr;
@@ -150,7 +232,7 @@ body {
 .summary-card  { grid-column: 2; grid-row: 1; }
 .info-card     { grid-column: 2; grid-row: 2; }
 /* Nothing sits beside these two, so they run the full width and finish flush
-   with the right edge of the sidebar cards above. */
+   with the right edge of the sidebar panels above. */
 #card-3        { grid-column: 1 / -1; grid-row: 3; }
 .actions       { grid-column: 1 / -1; grid-row: 4; }
 
@@ -159,136 +241,88 @@ body {
 .onboarding-card {
   display: flex;
   flex-direction: column;
-}
-
-/* ---------- Cards (matches .dashboard-card) ---------- */
-.onboarding-card {
-  background: var(--surface);
-  border-radius: 0.75rem;
+  background: var(--h-surface);
+  border: 1px solid var(--h-edge);
   padding: 1.25rem 1.35rem;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-  border: 1px solid var(--border);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
   gap: 1rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--h-rule);
 }
 
 .card-header h3 {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--text);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  font-family: var(--h-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--h-ink);
 }
 
 .card-step {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--on-primary);
-  font-size: 0.9rem;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
+  background: var(--h-ink);
+  color: var(--h-paper);
+  font-family: var(--h-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
 }
 
 .card-hint {
-  font-size: 0.8rem;
-  color: var(--text-light);
-  background: var(--bg-light);
-  padding: 0.3rem 0.75rem;
-  border-radius: 62.4375rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--h-rule);
+  font-family: var(--h-mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--h-dim);
   white-space: nowrap;
 }
 
-/* ---------- Form fields ---------- */
+/* ------------------------------------------------------------------------- *
+ * Fields
+ * ------------------------------------------------------------------------- */
+
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
 }
 
 .form-group {
+  margin-bottom: 1.1rem;
+}
+
+.form-grid .form-group {
   margin-bottom: 0;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: var(--text);
-  font-size: 0.95rem;
-}
-
+/* The required marker. Not a colour anything else on the page uses, so it
+   reads as a mark rather than as a state. */
 .req {
-  color: var(--error);
+  color: var(--h-take);
 }
 
-.form-group input[type="text"],
-.form-group select,
 .form-group textarea {
-  width: 100%;
-  padding: 0.8rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  font-family: inherit;
-  font-size: 0.95rem;
-  color: var(--text);
-  background: var(--surface);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-group input[type="text"]:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
-}
-
-.form-group input::placeholder,
-.form-group textarea::placeholder {
-  color: #b3bacb;
-}
-
-/* Textareas are a fixed height and scroll internally -- dragging the resize
-   handle used to let them push the whole layout around. */
-.form-group textarea {
-  height: 9.375rem;
-  resize: none;
-  overflow-y: auto;
-  line-height: 1.6;
+  resize: vertical;
 }
 
 .form-group textarea.textarea-sm {
-  height: 6.25rem;
-}
-
-.form-group textarea::-webkit-scrollbar {
-  width: 0.5rem;
-}
-
-.form-group textarea::-webkit-scrollbar-thumb {
-  background: var(--thumb);
-  border-radius: 0.25rem;
-}
-
-.form-group textarea::-webkit-scrollbar-thumb:hover {
-  background: var(--thumb-hover);
-}
-
-.input-error {
-  border-color: var(--error) !important;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+  min-height: 4.5rem;
 }
 
 .checkbox-group {
@@ -297,389 +331,108 @@ body {
 }
 
 .checkbox-label {
-  display: flex !important;
+  display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0 !important;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--h-ink-soft);
   cursor: pointer;
-  font-weight: 400 !important;
-  color: var(--text-light);
 }
 
 .checkbox-label input {
-  width: 1.125rem;
-  height: 1.125rem;
-  accent-color: var(--primary);
-  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
+  accent-color: var(--h-give);
+  cursor: pointer;
 }
 
-/* ---------- Needs / offers pair ---------- */
+.card-note {
+  margin-top: auto;
+  padding: 0.8rem 0 0.2rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--h-dim);
+}
+
+.card-note strong {
+  font-weight: 500;
+  color: var(--h-ink);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Needs and offers
+ *
+ * The two directions, at the point where somebody decides what goes in each.
+ * ------------------------------------------------------------------------- */
+
+.trade-intro,
+.focus-intro {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--h-dim);
+  margin-bottom: 1.1rem;
+}
+
 .trade-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
-.trade-need label i,
-.trade-offer label i {
-  margin-right: 0.25rem;
-  vertical-align: -2px;
+.trade-grid .form-group {
+  margin-bottom: 0;
 }
 
-.trade-need label i {
-  color: var(--primary);
-}
+/* The label of each side takes its own direction's colour, so the heading and
+   the chips underneath it agree. ink.css sets the shape of these labels and
+   reads their colour from --h-label, which is set here on the wrapper and
+   inherited down -- see the note on that rule for why it is not a plain
+   `color` on the label. */
+.trade-need  { --h-label: var(--h-give); }
+.trade-offer { --h-label: var(--h-take); }
 
-.trade-offer label i {
-  color: var(--success);
-}
-
-.char-count {
-  display: block;
-  margin-top: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--text-light);
-  text-align: right;
-}
-
-/* ---------- Sidebar ---------- */
-.strength-meter {
-  margin-bottom: 1.25rem;
-}
-
-.strength-bar {
-  height: 0.5rem;
-  background: var(--bg-light);
-  border-radius: 0.25rem;
-  overflow: hidden;
-}
-
-.strength-bar span {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: 0.25rem;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  transition: width 0.4s ease;
-}
-
-.strength-label {
-  margin-top: 0.6rem;
-  font-size: 0.85rem;
-  color: var(--text-light);
-  font-weight: 500;
-}
-
-.checklist,
-.reason-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.checklist li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.9rem;
-  color: var(--text-light);
-  transition: color 0.2s ease;
-}
-
-.checklist li i {
-  font-size: 1.1rem;
-  color: #cdd3e2;
-  transition: color 0.2s ease;
-}
-
-.checklist li.done {
-  color: var(--text);
-}
-
-.checklist li.done i {
-  color: var(--success);
-}
-
-.reason-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  font-size: 0.9rem;
-  color: var(--text-light);
-}
-
-.reason-list li i {
-  color: var(--primary);
-  font-size: 1.05rem;
-  flex-shrink: 0;
-  margin-top: 0.15rem;
-}
-
-.tip-box {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-  padding: 1rem;
-  background: var(--bg-light);
-  border-left: 3px solid var(--primary);
-  border-radius: 0.5rem;
-  font-size: 0.88rem;
-  color: var(--text-light);
-}
-
-.tip-box i {
-  color: var(--primary);
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.tip-box strong {
-  display: block;
-  color: var(--text);
-}
-
-/* ---------- Buttons (matches .btn-action) ---------- */
-.actions {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.btn-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.5rem;
-  border-radius: 0.5rem;
-  background: var(--primary);
-  color: var(--on-primary);
-  border: 1px solid var(--primary);
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-action:hover:not(:disabled) {
-  background: var(--primary-dark);
-  border-color: var(--primary-dark);
-  transform: translateY(-2px);
-}
-
-.btn-action:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-action.secondary {
-  background: var(--surface);
-  color: var(--primary);
-}
-
-.btn-action.secondary:hover {
-  background: var(--bg-light);
-  color: var(--primary-dark);
-}
-
-/* ---------- Alerts ---------- */
-.alert {
-  padding: 0.95rem 1rem;
-  border-radius: 0.625rem;
-  margin-bottom: 1.5rem;
+.trade-need > label i,
+.trade-offer > label i {
   font-size: 0.95rem;
 }
 
-.alert.success {
-  background: rgba(22, 163, 74, 0.08);
-  color: var(--success);
-  border: 1px solid rgba(22, 163, 74, 0.2);
+/* What you need arrives; what you offer leaves. */
+.trade-need .category-chip.checked {
+  background: var(--h-give);
+  border-color: var(--h-give);
+  color: var(--h-on-give);
 }
 
-.alert.error {
-  background: rgba(220, 38, 38, 0.08);
-  color: var(--error);
-  border: 1px solid rgba(220, 38, 38, 0.2);
+.trade-offer .category-chip.checked {
+  background: var(--h-take);
+  border-color: var(--h-take);
+  color: var(--h-on-take);
 }
 
-.hidden {
-  display: none;
-}
-
-/* ---------- Responsive ---------- */
-@media (max-width: 62em) {
-  .onboarding-content {
-    grid-template-columns: 1fr;
-  }
-
-  /* Stacked: everything is full width and follows DOM order. */
-  #card-1, #card-2, #card-3, .actions,
-  .summary-card, .info-card {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-
-  .sidebar-column {
-    position: static;
-  }
-
-  .onboarding-container {
-    padding: 2rem;
-  }
-}
-
-@media (max-width: 48em) {
-  .onboarding-section {
-    padding: 7rem 5% 3rem;
-  }
-
-  .section-header h2 {
-    font-size: 2rem;
-  }
-
-  .progress-strip {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-
-  .form-grid,
-  .trade-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .actions {
-    flex-direction: column;
-  }
-
-  .actions .btn-action {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 36em) {
-  .onboarding-section {
-    padding: 7rem 4% 3rem;
-  }
-
-  .onboarding-container {
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-  }
-
-  .onboarding-card {
-    padding: 1.25rem;
-  }
-
-  .section-header h2 {
-    font-size: 1.75rem;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-}
-
-/* --- Category pickers --------------------------------------------------- */
-/* Replaces the old free-text needs/offers boxes. Selecting from a shared
-   vocabulary is what lets matching compare one org's offers against another
-   org's needs directly. */
-.trade-intro {
-  color: var(--text-light);
-  font-size: 0.92rem;
-  line-height: 1.6;
-  margin-bottom: 1.25rem;
+/* Causes are not traded -- that is why they are kept out of the two lists
+   above -- so they get the third colour rather than either direction's. */
+.focus-picker .category-chip.checked {
+  background: var(--h-seal);
+  border-color: var(--h-seal);
+  color: var(--h-on-seal);
 }
 
 .category-picker {
-  border: 1px solid var(--border);
-  border-radius: 0.625rem;
-  padding: 0.85rem 0.95rem;
-  background: var(--surface);
-  /* Bounded so two of these do not add 3800px to the page. Scrolls inside
-     its own box; the sticky group headings keep the grouping readable. */
-  max-height: 18.75rem;
+  max-height: 15rem;
   overflow-y: auto;
+  padding: 0.8rem;
+  border: 1px solid var(--h-rule);
+  scrollbar-width: thin;
+  scrollbar-color: var(--h-rule) transparent;
 }
 
 .category-picker.input-error {
-  border-color: var(--error);
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+  border-color: var(--h-danger);
 }
 
-.category-group + .category-group {
-  margin-top: 1rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--border);
-}
-
-.category-group h4 {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-light);
-  margin-bottom: 0.6rem;
-  font-weight: 700;
-}
-
-.category-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-/* The checkbox itself is visually hidden but still focusable, so the chip
-   stays keyboard-operable and screen readers announce a real checkbox.
-   The chip MUST stay position:relative -- without it the absolutely
-   positioned checkbox is placed against the page instead of the chip, and
-   clicking one scrolls the window to the bottom to bring it into view. */
-.category-chip input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.category-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 62.4375rem;
-  font-size: 0.85rem;
-  color: var(--text);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.category-chip:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.category-chip.checked {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
-}
-
-.category-chip:has(input:focus-visible) {
-  outline: 3px solid rgba(67, 97, 238, 0.4);
-  outline-offset: 2px;
-}
-
-.picker-count {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-light);
+.focus-picker {
+  max-height: none;
 }
 
 .trade-need .textarea-sm,
@@ -687,37 +440,13 @@ body {
   margin-top: 0.6rem;
 }
 
-/* Confirmation dialog copy (clear-form). */
-.confirm-text {
-  color: var(--text);
-  line-height: 1.7;
-  margin-bottom: 0.5rem;
-}
+/* ------------------------------------------------------------------------- *
+ * Links
+ * ------------------------------------------------------------------------- */
 
-/* Group headings stay visible while the picker scrolls, so the categories
-   never lose their context. */
-.category-picker .category-group h4 {
-  position: sticky;
-  top: -0.85rem;
-  background: var(--surface);
-  padding: 0.35rem 0 0.4rem;
-  margin: 0 0 0.5rem;
-  z-index: 1;
-}
-
-.category-picker .category-group + .category-group {
-  margin-top: 0.65rem;
-  padding-top: 0;
-  border-top: none;
-}
-
-/* ---------- Links ---------- */
-/* Set apart from the fields above it so the "signed-in only" note clearly
-   covers these four and not the whole step. */
 .links-block {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--h-rule);
 }
 
 .links-head {
@@ -725,130 +454,284 @@ body {
 }
 
 .links-head h4 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.3rem;
+  font-family: var(--h-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--h-ink);
 }
 
 .links-note {
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--text-light);
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--h-dim);
 }
 
-/* Set off from the four inputs so it reads as a setting about them rather
-   than a fifth field. */
+.link-icon {
+  font-size: 0.9rem;
+  color: var(--h-dim);
+  transition: color 0.18s ease;
+}
+
+.form-group:focus-within .link-icon {
+  color: var(--h-give);
+}
+
 .links-visibility {
-  margin-top: 1.25rem;
-  padding: 0.9rem 1rem;
-  background: var(--bg-light);
-  border-radius: 0.625rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--h-rule);
+  margin-top: 0.5rem;
 }
 
 .links-visibility-note {
   margin-top: 0.4rem;
-  padding-left: 1.725rem;  /* clears the checkbox + its gap */
   font-size: 0.78rem;
   line-height: 1.5;
-  color: var(--text-light);
+  color: var(--h-dim);
 }
 
-/* Sits inside the label, so the field is identifiable at a glance without a
-   separate icon column. */
-.link-icon {
-  font-size: 1rem;
-  vertical-align: -0.12em;
-  margin-right: 0.15rem;
-  color: var(--text-light);
+/* ------------------------------------------------------------------------- *
+ * Actions
+ * ------------------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
-.form-group:focus-within .link-icon {
-  color: var(--primary);
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.85rem 1.5rem;
+  font-family: var(--h-sans);
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  border: 1px solid var(--h-edge);
+  border-radius: 0;
+  background: var(--h-ink);
+  color: var(--h-paper);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-/* Fills the height a stretched row hands these cards, instead of leaving a
-   block of empty white below the last line of content. */
-.card-note {
+.btn-action:hover:not(:disabled) {
+  background: var(--h-give);
+  border-color: var(--h-give);
+  color: var(--h-on-give);
+}
+
+.btn-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-action.secondary {
+  background: transparent;
+  color: var(--h-ink);
+}
+
+.btn-action.secondary:hover:not(:disabled) {
+  background: var(--h-ink);
+  color: var(--h-paper);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Sidebar: profile strength
+ * ------------------------------------------------------------------------- */
+
+.strength-meter {
+  margin-bottom: 1.1rem;
+}
+
+.strength-bar {
+  height: 6px;
+  background: var(--h-cell);
+  overflow: hidden;
+}
+
+/* onboarding.js sets the width as a percentage. A continuous bar is honest
+   here in a way it was not for the password meter in settings: this really is
+   a percentage of six fields, not a score of one to four. */
+.strength-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--h-give);
+  transition: width 0.25s ease;
+}
+
+.strength-label {
+  margin-top: 0.5rem;
+  font-family: var(--h-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  color: var(--h-dim);
+}
+
+.checklist,
+.reason-list {
+  list-style: none;
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  font-size: 0.83rem;
+  color: var(--h-dim);
+  transition: color 0.18s ease;
+}
+
+.checklist li i {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.checklist li.done {
+  color: var(--h-ink-soft);
+}
+
+.checklist li.done i {
+  color: var(--h-seal);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Sidebar: why we ask
+ * ------------------------------------------------------------------------- */
+
+/* Not a flex row, which is what this was and what quietly broke it.
+ * These items contain inline markup -- "...what you need <em>and</em> what you
+ * offer" -- and in a flex container every run of text between two elements
+ * becomes its own anonymous flex item. The sentence was being laid out as
+ * three side-by-side columns: "Matches are ranked on what you need", "and",
+ * "what you offer", reading as nonsense across two lines. The icon is taken
+ * out of the flow instead, so the text stays one inline run.
+ */
+.reason-list li {
+  position: relative;
+  padding: 0.4rem 0 0.4rem 1.4rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--h-ink-soft);
+}
+
+.reason-list li i {
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  font-size: 0.9rem;
+  color: var(--h-give);
+}
+
+.reason-list li em {
+  font-style: italic;
+  color: var(--h-ink);
+}
+
+.tip-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
   margin-top: auto;
-  padding-top: 1rem;
-  font-size: 0.84rem;
-  line-height: 1.6;
-  color: var(--text-light);
-  border-top: 1px solid var(--border);
-}
-
-.card-note strong {
-  color: var(--text);
-  font-weight: 600;
+  padding: 0.85rem 0 0.2rem 0.9rem;
+  border-left: 3px solid var(--h-take);
 }
 
 .info-card .tip-box {
-  margin-top: auto;
+  margin-top: 1.1rem;
 }
 
-/* Preferences spans both columns, so its fields should use the width. */
-#card-3 .form-grid {
-  grid-template-columns: repeat(2, 1fr);
+.tip-box i {
+  font-size: 1rem;
+  color: var(--h-take);
+  flex-shrink: 0;
 }
 
-/* --- Loading skeletons -------------------------------------------------- */
-/* Placeholder chips shown in both category pickers while /api/categories
-   resolves. They sit inside the real .category-group / .category-options
-   structure so the spacing and wrapping are the ones the actual chips will
-   get, and the box does not resize when they are replaced. */
+.tip-box strong {
+  display: block;
+  font-family: var(--h-mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--h-ink);
+  margin-bottom: 0.25rem;
+}
+
+.tip-box div {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--h-ink-soft);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Clear-form dialog
+ * ------------------------------------------------------------------------- */
+
+.confirm-text {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--h-ink-soft);
+  margin-bottom: 1.5rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Loading
+ *
+ * onboarding.js sets data-prefilling on the form while /api/me and
+ * /api/categories are in flight, so the fields are visibly not-yet-answered
+ * rather than showing an empty form somebody might start typing into.
+ * ------------------------------------------------------------------------- */
+
 .skeleton-group-heading {
-  /* Matches .category-group h4: 0.72rem text over a 0.6rem margin. */
-  height: 0.72rem;
+  height: 0.7rem;
   width: 7rem;
   margin-bottom: 0.6rem;
 }
 
 .skeleton-chip {
   display: inline-block;
-  /* .category-chip is 0.85rem text with 0.4rem/0.75rem padding and a 1px
-     border, which comes out at this height. */
-  height: 2.05rem;
-  border-radius: 62.4375rem;
+  height: 1.7rem;
+  margin: 0 0.4rem 0.4rem 0;
+  vertical-align: middle;
 }
 
-/* Category labels are not all the same length, and a row of identical pills
-   reads as a progress bar rather than as a list of things. */
 .skeleton-chip:nth-child(3n + 1) { width: 5.5rem; }
 .skeleton-chip:nth-child(3n + 2) { width: 8rem; }
 .skeleton-chip:nth-child(3n + 3) { width: 6.5rem; }
 
-/* --- Prefill shimmer ----------------------------------------------------- */
-/* Set on the form (and the strength card) by onboarding.js while /api/me is
-   in flight. The controls stay real controls -- this only paints over them,
-   rather than swapping in placeholder markup that would have to be removed
-   and would drop anything typed in the meantime.
- *
- * Selected through #onboardingForm rather than the bare attribute: forms.css
- * styles these with `.form-group input:not([type="checkbox"]):not([type="radio"])`
- * and loads after this file, so a plain `[data-prefilling] input` rule loses
- * both the background and the colour to it and only the animation survives.
- * The id puts this out of reach of that without having to count selectors. */
+/* shared.css paints .skeleton from tokens.css's cool greys, which read as a
+   patch of a different page on the cream. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--h-cell) 25%,
+    var(--h-rule) 37%,
+    var(--h-cell) 63%
+  );
+  background-size: 400% 100%;
+  border-radius: 0;
+}
+
 #onboardingForm[data-prefilling] input:not([type="checkbox"]),
 #onboardingForm[data-prefilling] select,
 #onboardingForm[data-prefilling] textarea {
-  background-image: linear-gradient(
+  color: transparent;
+  background: linear-gradient(
     90deg,
-    var(--skeleton-base) 25%,
-    var(--skeleton-sheen) 37%,
-    var(--skeleton-base) 63%
+    var(--h-cell) 25%,
+    var(--h-rule) 37%,
+    var(--h-cell) 63%
   );
-  background-color: transparent;
   background-size: 400% 100%;
   animation: skeleton-shimmer 1.4s ease infinite;
-  /* The placeholder is the thing that reads as "we have nothing for you",
-     so it goes too -- otherwise the shimmer sits behind wording that
-     contradicts it. */
-  color: transparent;
-  border-color: transparent;
-  /* Typing into a field that is about to be overwritten by the response
-     loses whatever was typed, so the form is not offered until it settles. */
-  pointer-events: none;
+  user-select: none;
 }
 
 #onboardingForm[data-prefilling] input::placeholder,
@@ -856,84 +739,79 @@ body {
   color: transparent;
 }
 
-/* The strength meter is derived from the fields, so it is wrong for the same
-   window and is dimmed for it rather than shimmered -- it is a summary of
-   the form, not another thing being fetched. */
 .summary-card[data-prefilling] .strength-bar,
 .summary-card[data-prefilling] .strength-label,
 .summary-card[data-prefilling] .checklist {
-  opacity: 0.35;
+  opacity: 0.4;
 }
 
 @media (prefers-reduced-motion: reduce) {
   #onboardingForm[data-prefilling] input:not([type="checkbox"]),
   #onboardingForm[data-prefilling] select,
-  #onboardingForm[data-prefilling] textarea {
+  #onboardingForm[data-prefilling] textarea,
+  .skeleton {
     animation: none;
+  }
+
+  .strength-bar span,
+  .checklist li,
+  .link-icon,
+  .btn-action,
+  .category-chip {
+    transition: none;
   }
 }
 
-/* --- Focus areas --------------------------------------------------------- */
-/* A flat picker, unlike the needs/offers ones: the focus vocabulary has no
-   groups, so there are no headings to lay out around. */
-.focus-intro {
-    font-size: 0.88rem;
-    line-height: 1.6;
-    color: var(--text-light, #6c757d);
-    margin: 0.35rem 0 0.75rem;
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 62em) {
+  /* One column: the sidebar stops being a sidebar and follows the form,
+     which is the reading order anyway. The explicit row placements above have
+     to be undone or the panels stay pinned to rows that no longer exist. */
+  .onboarding-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #card-1, #card-2, #card-3,
+  .summary-card, .info-card, .actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
-.focus-picker {
-    max-height: none;
+@media (max-width: 48em) {
+  .trade-grid,
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .progress-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .progress-step {
+    border-right: none;
+    border-bottom: 1px solid var(--h-rule);
+  }
+
+  .progress-step:last-child {
+    border-bottom: none;
+  }
 }
 
-.focus-picker .category-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
+@media (max-width: 36em) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-/* --- Unsaved-draft banner -------------------------------------------------
-   Informational, not an error: nothing has gone wrong, there is simply work
-   this browser kept that the server never received. Coloured accordingly --
-   a red bar over a form someone is about to fill in reads as a failure they
-   caused. */
-.draft-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-    padding: 0.9rem 1.1rem;
-    border: 1px solid rgba(67, 97, 238, 0.25);
-    border-radius: 0.7rem;
-    background: rgba(67, 97, 238, 0.06);
-}
+  .draft-banner-actions {
+    width: 100%;
+  }
 
-.draft-banner[hidden] {
-    display: none;
-}
-
-.draft-banner > i {
-    font-size: 1.4rem;
-    color: var(--primary);
-    flex-shrink: 0;
-}
-
-.draft-banner p {
-    margin: 0;
-    flex: 1 1 16rem;
-    font-size: 0.9rem;
-    color: var(--text);
-}
-
-.draft-banner-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.draft-banner-actions .btn-ghost {
-    padding: 0.45rem 0.9rem;
-    font-size: 0.85rem;
+  .draft-banner-actions .btn-ghost {
+    flex: 1 1 auto;
+  }
 }

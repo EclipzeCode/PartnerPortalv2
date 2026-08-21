@@ -58,7 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-    const STRENGTH_COLORS = ['#dc2626', '#d97706', '#65a30d', '#16a34a'];
+    // The colours for these four levels live in notice.css, keyed off
+    // data-score. They were four hardcoded hex values assigned inline from
+    // here, which meant they could not follow the theme -- the third copy of
+    // this meter to be fixed the same way, after settings and sign-up.
 
     function passwordStrength(password, checks) {
         const satisfied = Object.values(checks).filter(Boolean).length;
@@ -154,10 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const score = passwordStrength(password, checks);
+            pwMeter.dataset.score = String(score);
             pwMeterFill.style.width = `${(score / 4) * 100}%`;
-            pwMeterFill.style.background = STRENGTH_COLORS[score - 1];
             pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
-            pwMeterLabel.style.color = STRENGTH_COLORS[score - 1];
         }
 
         pwInput.addEventListener('input', () => {

@@ -1,4 +1,48 @@
-/* Modern CSS Reset */
+/* The home page, and only the home page.
+ *
+ * index.html is the one page that loads this file (and pp.js). The palette,
+ * the three typefaces, the buttons, the nav and the footer all live in
+ * ink.css now and are shared with every other redesigned page; what is left
+ * here is what only the home page has.
+ *
+ * --- What this is -----------------------------------------------------------
+ *
+ * Two ideas, held together.
+ *
+ * The first is the lattice. A match here is not a vibe -- it is an overlap
+ * between two organizations across 33 fixed categories, scored in both
+ * directions. That is a grid, so the hero draws one: a real needs-by-offers
+ * matrix with the overlapping cells lit, two colours for the two directions.
+ * The dot texture on the page is the same grid at rest. This is why the
+ * texture is allowed to be here at all -- it is the data model, drawn, rather
+ * than an atmosphere applied on top of it. It also gives the decoration a
+ * natural stopping point: a dot that does not stand for a category does not
+ * get drawn.
+ *
+ * The second is the ledger. The product does not stop at an introduction; it
+ * ends in a written agreement that two organizations have both confirmed. So
+ * the page is set like a document -- a serif for the headline, hairline rules
+ * instead of shadows, square corners, mono for anything that is metadata.
+ * That register is doing real work with this audience: a nonprofit director
+ * forwarding a partnership summary to a board needs it to look like a record,
+ * not like a SaaS trial.
+ *
+ * --- What it replaces --------------------------------------------------------
+ *
+ * The previous version was the stock template: Poppins, a blue-to-cyan
+ * gradient wash, two blurred blobs drifting behind the hero, and soft-shadowed
+ * cards at a 0.5rem radius. Every piece of that is fine on its own and the
+ * combination is what every other product in the category also looks like.
+ * The illustrated bridge scene went with it -- good work, but "abstract
+ * metaphor rendered behind the hero" is part of the same convention, and it
+ * said nothing about how matching actually works. The matrix does.
+ *
+ * --- The loud end -----------------------------------------------------------
+ *
+ * The dot texture, the 4.6rem serif and the matrix stay on this page. They do
+ * not go inward -- see the register note at the top of ink.css. An
+ * application page is not a brochure.
+ */
 
 * {
     margin: 0;
@@ -6,1535 +50,842 @@
     box-sizing: border-box;
 }
 
-body {
-    font-family: 'Poppins', sans-serif;
-    background-color: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
+/* The lattice at rest, across the whole page. Faint enough to read as paper
+   stock rather than as a grid you are meant to look at -- it is the ground the
+   lit matrix in the hero sits on, and it only earns its keep by being quiet.
+   Home only: this is the one page that gets a texture. */
+body.home {
     overflow-x: hidden;
+    background-image: radial-gradient(circle, var(--h-dot) 1px, transparent 1.1px);
+    background-size: 24px 24px;
 }
 
-button {
-    font-family: 'Poppins', sans-serif;
+/* The two display elements that are not shared: the hero's headline and the
+   section headings. Everything else on the page uses ink.css's primitives. */
+body.home .feature-card,
+body.home .match-demo,
+body.home .agreement {
+    border-radius: 0;
 }
 
-/* Navigation Bar */
-.logo:hover {
-  color: var(--primary-dark);
-  transition: 0.3s ease;
-}
 
-/* ---------- Hero ---------- */
-.hero {
-    padding: 8rem 5% 6rem;
-    display: flex;
-    align-items: center;
-    gap: 3rem;
-    min-height: 100vh;
-    background: linear-gradient(180deg, var(--surface-sunk) 0%, var(--surface) 55%);
+/* ------------------------------------------------------------------------- *
+ * Hero
+ * ------------------------------------------------------------------------- */
+
+body.home .hero {
     position: relative;
+    padding: clamp(7rem, 12vh, 9.5rem) clamp(1.25rem, 5vw, 6rem) clamp(2.5rem, 5vh, 4rem);
+    background: none;
     overflow: hidden;
 }
 
-/* Soft colour wash behind the hero. Purely decorative. */
-.hero-bg {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
+body.home .hero-inner {
+    max-width: 78rem;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2.5rem, 5vw, 4.5rem);
+    align-items: center;
 }
 
-.hero-blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.5;
-}
-
-.blob-1 {
-    width: 26.25rem;
-    height: 26.25rem;
-    top: -7.5rem;
-    right: -5rem;
-    background: radial-gradient(circle, rgba(67, 97, 238, 0.32) 0%, rgba(67, 97, 238, 0) 70%);
-    animation: blobDrift 18s ease-in-out infinite;
-}
-
-.blob-2 {
-    width: 22.5rem;
-    height: 22.5rem;
-    bottom: -6.25rem;
-    left: -3.75rem;
-    background: radial-gradient(circle, rgba(76, 201, 240, 0.28) 0%, rgba(76, 201, 240, 0) 70%);
-    animation: blobDrift 22s ease-in-out infinite reverse;
-}
-
-@keyframes blobDrift {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50%      { transform: translate(-30px, 30px) scale(1.08); }
-}
-
-/* ---------- Hero scene: bridge over two peaks ---------- */
-/* Sits across the bottom of the hero, behind all content. Deliberately overhangs
-   the viewport on each side so parallax shifts never expose an edge. */
-.hero-scene {
-    position: absolute;
-    left: -5%;
-    right: -5%;
-    bottom: 0;
-    /* Sized from viewport width, not the hero's own height. The hero can grow
-       much taller than it is wide once the content stacks on narrower screens,
-       and a height driven by that flips which axis preserveAspectRatio="slice"
-       crops from -- exposing mid-mountain peaks that are meant to stay off to
-       the sides, as a jagged notch behind the hero content. */
-    height: clamp(8rem, 34vw, 26rem);
-    pointer-events: none;
-}
-
-.scene-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-
-/* Layers are moved by JS via translate3d; the transition only smooths the
-   settle when the cursor leaves the hero. */
-.scene-layer {
-    will-change: transform;
-}
-
-/* Atmospheric perspective: distant ridges are pale and low contrast, near ones
-   darker, so the scene reads as depth rather than as flat shapes. */
-.peak-far  { fill: var(--peak-far); }
-.peak-mid  { fill: var(--peak-mid); }
-.peak-near { fill: var(--peak-near); }
-
-/* ---------- Scroll-driven build ----------
-   The bridge assembles as the hero is scrolled: the two peaks start
-   unconnected, and the span draws itself in. It is the same claim the page
-   makes in words -- two organizations, joined by something that carries
-   traffic both ways -- so it is worth showing rather than decorating.
-
-   pp.js drives --build from 0 to 1. It defaults to 1 so that if the script
-   never runs (error, blocked JS, reduced motion) the scene still renders
-   finished rather than as a set of disconnected peaks. */
-.hero-scene {
-    --build: 1;
-}
-
-/* Sub-ranges of the overall build, so the parts arrive in an order that makes
-   structural sense instead of everything fading up at once. Each is the
-   overall progress remapped onto that part's window and clamped to 0..1. */
-.scene-bridge {
-    --b-deck:    clamp(0, (var(--build) - 0.02) / 0.30, 1);
-    --b-towers:  clamp(0, (var(--build) - 0.18) / 0.30, 1);
-    --b-cable:   clamp(0, (var(--build) - 0.38) / 0.42, 1);
-}
-
-/* The bridge is the most defined element on purpose -- it is the thing the
-   scene is actually about, so it gets the strongest contrast. */
-.bridge-cable {
-    fill: none;
-    stroke: var(--bridge-cable);
-    stroke-width: 3;
-    stroke-linecap: round;
-    /* pathLength="1" on the element makes these 0..1 regardless of the real
-       geometry, so the cable draws itself from both anchors inward. */
-    stroke-dasharray: 1;
-    stroke-dashoffset: calc(1 - var(--b-cable));
-}
-
-.bridge-hangers line {
-    stroke: var(--bridge-hanger);
-    stroke-width: 1.6;
-    opacity: 0;
-}
-
-/* Staggered so the hangers drop in across the span rather than in one block.
-   Written out per line because there are only six and the alternative is a
-   custom property per element that says the same thing less directly. */
-.bridge-hangers line:nth-child(1) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
-.bridge-hangers line:nth-child(2) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
-.bridge-hangers line:nth-child(3) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
-.bridge-hangers line:nth-child(4) { opacity: clamp(0, (var(--build) - 0.68) / 0.16, 1); }
-.bridge-hangers line:nth-child(5) { opacity: clamp(0, (var(--build) - 0.64) / 0.16, 1); }
-.bridge-hangers line:nth-child(6) { opacity: clamp(0, (var(--build) - 0.60) / 0.16, 1); }
-
-/* Towers rise out of the deck. */
-.bridge-tower {
-    fill: var(--bridge-tower);
-    transform-box: fill-box;
-    transform-origin: bottom;
-    transform: scaleY(var(--b-towers));
-}
-
-/* Deck extends outward from mid-span. */
-.bridge-deck {
-    fill: var(--bridge-deck);
-    transform-box: fill-box;
-    transform-origin: center;
-    transform: scaleX(var(--b-deck));
-}
-
-/* Fades the top of the scene into the page so the ridgelines never cut hard
-   across the headline. */
-.hero-scene::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 45%;
-    background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
+body.home .hero-content {
+    position: relative;
     z-index: 1;
 }
 
-/* No cursor to react to, and the fine detail is lost at this size. */
-@media (max-width: 47.9375em) {
-    .hero-scene {
-        opacity: 0.75;
-    }
+body.home .hero-badge {
+    margin-bottom: 1.75rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .blob-1,
-    .blob-2 {
-        animation: none;
-    }
-}
-
-.hero-content {
-    flex: 1;
-    padding-right: 2rem;
-    max-width: 38.75rem;
-    position: relative;
-    z-index: 2;
-}
-
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.45rem 0.95rem;
+body.home .hero-title {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(2.6rem, 5.4vw, 4.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
     margin-bottom: 1.5rem;
-    border: 1px solid #dfe5f8;
-    border-radius: 62.4375rem;
-    background: var(--surface-veil);
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--text-light);
 }
 
-.badge-dot {
-    width: 0.4375rem;
-    height: 0.4375rem;
-    border-radius: 50%;
-    background: var(--success);
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
-    animation: badgePulse 2.4s ease-out infinite;
+/* The emphasised half of the headline. Italic serif rather than a colour
+   swap: the phrase "already have" is the argument the whole product rests on,
+   and italics stress it the way a sentence would. */
+body.home .hero-title em {
+    font-style: italic;
+    color: var(--h-give);
 }
 
-@keyframes badgePulse {
-    0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
-    70%  { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+body.home .hero-subtitle {
+    font-size: 1.02rem;
+    line-height: 1.68;
+    color: var(--h-ink-soft);
+    max-width: 44ch;
+    margin-bottom: 2.25rem;
 }
 
-.hero-title {
-    font-size: 3.5rem;
-    font-weight: 700;
-    margin-bottom: 1.5rem;
-    line-height: 1.15;
-    letter-spacing: -1px;
-    color: var(--heading);
+body.home .hero-subtitle em {
+    font-style: italic;
+    color: var(--h-ink);
 }
 
-.hero-subtitle em {
-    font-style: normal;
-    font-weight: 600;
-    color: var(--text);
-}
-
-.hero-title span {
-    color: var(--primary);
-    position: relative;
-    display: inline-block;
-}
-
-.hero-subtitle {
-    font-size: 1.25rem;
-    color: var(--text-light);
-    margin-bottom: 2.5rem;
-    max-width: 31.25rem;
-    line-height: 1.6;
-}
-
-.hero-buttons {
+body.home .hero-buttons {
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     margin-bottom: 3rem;
 }
 
-.btn-primary {
-    background: var(--primary);
-    color: var(--on-primary);
-    padding: 0.9rem 2rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-    border: 2px solid var(--primary);
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
-}
-
-.btn-secondary {
-    background: var(--surface);
-    color: var(--primary);
-    padding: 0.9rem 2rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    border: 2px solid var(--primary);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.btn-secondary:hover {
-    background: var(--bg);
-    color: var(--primary-dark);
-}
-
-/* One row, always. Wrapping put the third stat on its own line where the
-   mountains sit, so it read as cut off. The columns share the width instead
-   of claiming their own, and the labels wrap inside their column. */
-.hero-stats {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 1.75rem;
-    margin-top: 2rem;
-}
-
-/* Hero stats use their own class names. They previously shared `.stat-item` /
-   `.stat-label` with the platform section further down this file, which meant
-   they inherited that section's white-card styling and were also picked up by
-   the counter animation in pp.js (producing NaN). */
-.hero-stat {
-    position: relative;
-    /* Share the row evenly; min-width:0 lets a long label wrap rather than
-       forcing the column wider than its third. */
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.hero-stat:not(:last-child):after {
-    content: '';
-    position: absolute;
-    right: -0.875rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 2.5rem;
-    background: var(--track);
-}
-
-.hero-stat-number {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--heading);
-    line-height: 1.2;
-}
-
-.hero-stat-label {
-    font-size: 0.82rem;
-    line-height: 1.4;
-    color: var(--text-light);
-    font-weight: 500;
-}
-
-/* ---------- Hero visual: live match demo ---------- */
-/* Pinned to the top of the hero rather than centred in it. Centred, the card
-   hung down into the mountain scene and sat on top of the ridgelines; the
-   bottom of the hero belongs to the scene. */
-.hero-visual {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    align-self: flex-start;
-    gap: 1.25rem;
-    position: relative;
-    z-index: 2;
-}
-
-.match-demo {
-    width: 100%;
-    max-width: 26.25rem;
-    background: var(--surface);
-    border: 1px solid #e7eaf6;
-    border-radius: 1.125rem;
-    padding: 1.5rem;
-    box-shadow: 0 20px 50px rgba(26, 26, 46, 0.10);
-}
-
-.match-demo-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: 1.1rem;
-    margin-bottom: 1.1rem;
-    border-bottom: 1px solid #f0f2f9;
-}
-
-.match-flag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    color: var(--primary);
-    background: rgba(67, 97, 238, 0.09);
-    padding: 0.35rem 0.75rem;
-    border-radius: 62.4375rem;
-}
-
-.match-flag i {
-    font-size: 1rem;
-}
-
-.match-score {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--heading);
-}
-
-.match-score::after {
-    content: '%';
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-light);
-    margin-left: 1px;
-}
-
-.match-org {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    padding: 0.85rem;
-    border-radius: 0.75rem;
-    background: var(--surface-sunk);
-    border: 1px solid #eef0f9;
-}
-
-.org-avatar {
-    width: 2.75rem;
-    height: 2.75rem;
-    flex-shrink: 0;
-    border-radius: 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.95rem;
-    background: rgba(67, 97, 238, 0.12);
-    color: var(--primary);
-}
-
-.org-avatar.alt {
-    background: rgba(76, 201, 240, 0.18);
-    color: var(--text-accent);
-}
-
-.org-name {
-    font-weight: 600;
-    color: var(--heading);
-    line-height: 1.3;
-}
-
-.org-type {
-    font-size: 0.82rem;
-    color: var(--text-light);
-}
-
-/* The two-way exchange between the pair -- the point of the whole product. */
-.match-exchange {
-    position: relative;
-    padding: 0.9rem 0 0.9rem 1.4rem;
-    margin: 0.25rem 0 0.25rem 1.4rem;
-    border-left: 2px dashed #dfe4f3;
-}
-
-.exchange-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.3rem 0;
-}
-
-.exchange-arrow {
-    width: 1.625rem;
-    height: 1.625rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-}
-
-.exchange-arrow.down {
-    background: rgba(67, 97, 238, 0.12);
-    color: var(--primary);
-}
-
-.exchange-arrow.up {
-    background: rgba(74, 222, 128, 0.18);
-    color: var(--text-success);
-}
-
-.exchange-text {
-    font-size: 0.9rem;
-    color: var(--text-light);
-}
-
-.exchange-text strong {
-    color: var(--heading);
-    font-weight: 600;
-}
-
-.exchange-line {
-    height: 0.35rem;
-}
-
-/* Values fade as the demo cycles between example pairings. */
-.match-demo .swap {
-    transition: opacity 0.35s ease, transform 0.35s ease;
-}
-
-.match-demo.swapping .swap {
-    opacity: 0;
-    transform: translateY(-4px);
-}
-
-/* Arrows either side of the dots, so the examples can be stepped through
-   deliberately instead of only waited out. */
-.match-nav {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-}
-
-.match-arrow {
-    width: 1.9rem;
-    height: 1.9rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 1px solid #dfe5f8;
-    border-radius: 50%;
-    background: var(--surface-veil);
-    color: var(--text-light);
-    font-size: 1.15rem;
-    cursor: pointer;
-    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.match-arrow:hover {
-    color: var(--primary);
-    border-color: var(--primary);
-    background: var(--surface);
-}
-
-.match-arrow:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-.match-dots {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.match-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: var(--thumb);
-    cursor: pointer;
-    transition: background 0.25s ease, width 0.25s ease;
-}
-
-.match-dot:hover {
-    background: var(--thumb-hover);
-}
-
-.match-dot.active {
-    width: 1.375rem;
-    border-radius: 0.25rem;
-    background: var(--primary);
-}
-
-/* Responsive Design (hero) */
-@media (max-width: 75em) {
-    .hero-title {
-        font-size: 3rem;
-    }
-}
-
-@media (max-width: 62em) {
-    .hero {
-        flex-direction: column;
-        text-align: center;
-        padding: 5rem 5% 6rem;
-    }
-
-    .hero-content {
-        padding-right: 0;
-        margin-bottom: 3rem;
-        max-width: 100%;
-    }
-
-    .hero-badge {
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .hero-buttons {
-        justify-content: center;
-    }
-
-    .hero-stats {
-        justify-content: center;
-    }
-
-    .hero-visual {
-        width: 100%;
-    }
-}
-
-@media (max-width: 48em) {
-    .hero-title {
-        font-size: 2.5rem;
-    }
-
-    .hero-subtitle {
-        font-size: 1.1rem;
-    }
-
-    .hero-buttons {
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .btn-primary,
-    .btn-secondary {
-        width: 100%;
-        text-align: center;
-    }
-
-    /* Still one row -- the columns tighten instead of wrapping. */
-    .hero-stats {
-        gap: 1.25rem;
-    }
-
-    .hero-stat:not(:last-child):after {
-        right: -0.625rem;
-    }
-}
-
-@media (max-width: 36em) {
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .hero-stats {
-        gap: 0.9rem;
-    }
-
-    .hero-stat-number {
-        font-size: 1.35rem;
-    }
-
-    .hero-stat-label {
-        font-size: 0.72rem;
-    }
-
-    /* Nothing to sit against once the columns are this narrow. */
-    .hero-stat:not(:last-child):after {
-        display: none;
-    }
-
-    .hero-subtitle {
-        font-size: 1rem;
-    }
-
-    .match-demo {
-        padding: 1.25rem;
-    }
-}
-
-.gradient-circle {
-    position: absolute;
-    width: 31.25rem;
-    height: 31.25rem;
-    background: radial-gradient(circle, var(--primary) 0%, rgba(67, 97, 238, 0) 70%);
-    opacity: 0.1;
-    border-radius: 50%;
-    z-index: 0;
-}
-
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-    100% { transform: translateY(0px); }
-}
-
-/* About Section Styles */
-.about {
-    padding: 5rem 0;
-    background: var(--surface);
-}
-
-.scroll-section {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    padding: 4rem 10%;
-    position: relative;
-    overflow: hidden;
-}
-
-.scroll-content {
-    width: 100%;
-    max-width: 87.5rem;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 5rem;
-}
-
-.text-content {
-    flex: 1;
-    opacity: 0;
-    transform: translateY(50px);
-    transition: all 0.8s ease;
-}
-
-.visual-content {
-    flex: 1;
-    opacity: 0;
-    transform: translateY(50px);
-    transition: all 0.8s ease 0.2s;
-}
-
-.section-title {
-    font-size: 3.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-    margin-bottom: 2rem;
-    color: var(--heading);
-}
-
-.section-title span {
-    color: var(--primary);
-    position: relative;
-}
-
-.section-subtitle {
-    font-size: 1.1rem;
-    color: var(--primary);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 1.5rem;
-    display: inline-block;
-}
-
-.section-description {
-    font-size: 1.25rem;
-    color: var(--text-light);
-    line-height: 1.8;
-    margin-bottom: 3rem;
-    max-width: 37.5rem;
-}
-
-/* Platform Section */
-.platform-section {
-    background: linear-gradient(to bottom, var(--surface-sunk), var(--surface));
-}
-
-.stats-grid {
+/* The three facts, ruled off like a table footer. */
+body.home .hero-stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 2rem;
-    margin-bottom: 3rem;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--h-edge);
 }
 
-.stat-item {
-    background: var(--surface);
-    padding: 2rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-    transition: all 0.3s ease
+body.home .hero-stat {
+    padding: 1.15rem 1.1rem 0 0;
 }
 
-.stat-item:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.1);
-}
-
-.stat-number {
-    font-size: 3rem;
-    font-weight: 700;
-    color: var(--primary);
-    margin-bottom: 0.5rem;
-}
-
-.stat-label {
-    font-size: 1rem;
-    color: var(--text-light);
+body.home .hero-stat-number {
+    font-family: var(--h-sans);
     font-weight: 500;
-}
-
-.platform-image {
-    position: relative;
-    border-radius: 0.75rem;
-    max-width: 70%;
-    overflow: hidden;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.1);
-}
-
-.platform-screenshot {
-    width: 100%;
-    display: block;
-    border-radius: 0.75rem;
-}
-
-.screenshot-highlight {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at center, transparent 60%, rgba(67, 97, 238, 0.1) 100%);
-    pointer-events: none;
-}
-
-/* Features Section */
-.features-section {
-    background: var(--surface);
-}
-
-/* minmax(0, 1fr) rather than 1fr: a bare 1fr is minmax(auto, 1fr), so a
-   column will not shrink below its content's longest unbreakable word, and
-   the three came out 188px, 199px and 226px wide -- three cards that are
-   meant to be identical, visibly not. */
-.feature-cards {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2rem;
-}
-
-/* This section is the one that does not want two columns. .scroll-content is
-   a flex row, so the three cards were sharing the width with the heading
-   beside them -- about 190px each, which turned every card into a 530px
-   column of two-word lines. The heading leads and the cards take the full
-   measure underneath it, which is the only width three of them read at.
-   `order` because the cards come first in the markup. */
-.features-section .scroll-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 3rem;
-}
-
-.features-section .text-content {
-    order: -1;
-    max-width: 46rem;
-}
-
-.features-section .visual-content {
-    width: 100%;
-}
-
-/* A white card on a near-white page, separated by a 5% shadow, is a card you
-   have to look for -- and in the dark theme a black shadow under a dark card
-   is nothing at all, so these had no edge in either theme. The border is what
-   actually draws them; the shadow only lifts them off the page, and is tinted
-   so it survives the theme it is drawn on. */
-.feature-card {
-    background: var(--surface);
-    padding: 2.5rem 2rem;
-    border-radius: 0.75rem;
-    border: 1px solid var(--border-strong);
-    box-shadow: 0 1px 2px var(--shadow-tint);
-    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-    text-align: center;
-}
-
-.feature-card:hover {
-    transform: translateY(-10px);
-    border-color: var(--primary);
-    box-shadow: 0 12px 32px var(--shadow-tint-strong);
-}
-
-.feature-icon {
-    font-size: 2.5rem;
-    color: var(--primary);
-    margin-bottom: 1.5rem;
-}
-
-.feature-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    color: var(--heading);
-}
-
-.feature-card p {
-    font-size: 1rem;
-    color: var(--text-light);
-    line-height: 1.6;
-}
-
-/* Benefits Section */
-.benefits-section {
-    background: linear-gradient(to bottom, var(--surface), var(--surface-sunk));
-}
-
-.benefit-list {
-    margin-top: 3rem;
-}
-
-.benefit-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid #f0f0f0;
-}
-
-.benefit-number {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--primary);
-    margin-right: 2rem;
-    min-width: 6.25rem;
-}
-
-.benefit-text {
-    font-size: 1.25rem;
-    color: var(--text);
-    line-height: 1.6;
-}
-
-.author-avatar {
-    width: 3.75rem;
-    height: 3.75rem;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-right: 1.5rem;
-    border: 3px solid var(--primary-light);
-    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-}
-
-.author-info {
-    flex: 1;
-}
-
-.author-name {
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-    color: var(--heading);
-}
-
-.author-title {
-    font-size: 0.9rem;
-    color: var(--text-light);
-}
-
-/* CTA Section */
-.cta-section {
-    background: var(--primary);
-    text-align: center;
-    color: var(--on-primary);
-}
-
-/* .scroll-content is a flex row, because every other scroll-section is two
-   columns -- text beside a visual. This one is a heading, a line of copy and
-   two buttons, which are meant to sit under each other and were instead laid
-   out side by side across the full width, with the buttons stranded in a
-   column of their own. And min-height: 100vh gave three short elements an
-   entire screen to be lost in. */
-.cta-section .scroll-content {
-    flex-direction: column;
-    gap: 0;
-    max-width: 46rem;
-}
-
-.cta-section {
-    min-height: auto;
-    padding-top: 6rem;
-    padding-bottom: 6rem;
-}
-
-/* Both buttons sit on a --primary fill, so the default primary button is
-   this colour on this colour. Inverted here: the solid one takes the page
-   colour and gives back the accent, the quiet one is an outline drawn in
-   whatever the section's text colour is. */
-.cta-section .btn-primary {
-    background: var(--on-primary);
-    border-color: var(--on-primary);
-    color: var(--primary);
-}
-
-.cta-section .btn-primary:hover {
-    background: var(--on-primary);
-    color: var(--primary-dark);
-    transform: translateY(-2px);
-}
-
-.cta-section .btn-secondary {
-    background: transparent;
-    border: 2px solid currentColor;
-    color: var(--on-primary);
-}
-
-.cta-section .btn-secondary:hover {
-    background: var(--surface-veil);
-    color: var(--on-primary);
-}
-
-.cta-title {
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 1.5rem;
-}
-
-.cta-text {
-    font-size: 1.5rem;
-    margin-bottom: 3rem;
-    opacity: 0.9;
-}
-
-.cta-buttons {
-    display: flex;
-    gap: 1.5rem;
-    justify-content: center;
-}
-
-/* Animations */
-.scroll-section.active .text-content,
-.scroll-section.active .visual-content {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Responsive Design */
-@media (max-width: 75em) {
-    .section-title {
-        font-size: 3rem;
-    }
-    
-    .scroll-content {
-        gap: 3rem;
-    }
-}
-
-@media (max-width: 62em) {
-    .scroll-content {
-        flex-direction: column;
-    }
-    
-    .text-content, 
-    .visual-content {
-        width: 100%;
-        max-width: 50rem;
-        margin: 0 auto;
-    }
-    
-    .feature-cards {
-        grid-template-columns: 1fr;
-        max-width: 31.25rem;
-        margin: 0 auto;
-    }
-    
-}
-
-@media (max-width: 48em) {
-    .section-title {
-        font-size: 2.5rem;
-    }
-    
-    .section-description {
-        font-size: 1.1rem;
-    }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .benefit-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .benefit-number {
-        margin-bottom: 1rem;
-        margin-right: 0;
-    }
-    
-    .cta-title {
-        font-size: 2.5rem;
-    }
-    
-    .cta-text {
-        font-size: 1.25rem;
-    }
-    
-    .cta-buttons {
-        flex-direction: column;
-        gap: 1rem;
-    }
-}
-
-@media (max-width: 36em) {
-    .section-title {
-        font-size: 2rem;
-    }
-    
-    .scroll-section {
-        padding: 4rem 5%;
-    }
-    
-}
-
-/* Modern Modal CSS */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
-
-.modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.modal-container {
-    background: var(--surface);
-    border-radius: 0.75rem;
-    width: 90%;
-    max-width: 37.5rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-    transform: translateY(20px);
-    transition: transform 0.3s ease;
-}
-
-.modal.active .modal-container {
-    transform: translateY(0);
-}
-
-.modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: 1.5rem;
-    font-weight: 600;
-}
-
-/* index.html does not load forms.css, so this is the only .close-modal rule
-   that reaches the dialogs on this page -- and it styled the glyph without
-   ever resetting the button around it, which left the browser's own grey
-   fill and border sitting behind the x. */
-.close-modal {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    padding: 0;
-    font-size: 1.5rem;
-    font-family: inherit;
+    font-size: 1.65rem;
     line-height: 1;
-    color: var(--text-light);
-    background: none;
-    border: none;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: color 0.2s ease, background-color 0.2s ease;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+    margin-bottom: 0.45rem;
 }
 
-.close-modal:hover {
-    color: var(--text);
-    background: var(--surface-sunk);
-}
-
-.close-modal:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-.close-modal:hover {
-    color: var(--text);
-}
-
-.modal-body {
-    padding: 1.5rem;
-}
-
-.instruction-step {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    align-items: flex-start;
-}
-
-.step-number {
-    background-color: var(--primary);
-    color: var(--on-primary);
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    flex-shrink: 0;
-    font-size: 0.9rem;
-}
-
-.step-content h3 {
-    margin: 0 0 0.3rem 0;
-    color: var(--text);
-    font-size: 1.1rem;
-    font-weight: 500;
-}
-
-.step-content p {
-    margin: 0;
-    color: var(--text-light);
-    font-size: 0.95rem;
+body.home .hero-stat-label {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
     line-height: 1.5;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+    max-width: 20ch;
 }
 
-.modal-footer {
-    padding: 1.5rem;
-    border-top: 1px solid #f0f0f0;
+/* ------------------------------------------------------------------------- *
+ * The match panel
+ *
+ * The centrepiece. Two organizations, the matrix of their overlap, and the
+ * two things they are actually exchanging. pp.js cycles three examples
+ * through it and redraws the matrix for each.
+ * ------------------------------------------------------------------------- */
+
+body.home .hero-visual {
+    position: relative;
+    z-index: 1;
+}
+
+body.home .match-demo {
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+    padding: 1.6rem 1.6rem 1.35rem;
+    transition: opacity 0.35s ease;
+}
+
+/* pp.js adds .swapping for the beat between two examples, so every field
+   changes together rather than one at a time. */
+body.home .match-demo.swapping {
+    opacity: 0.35;
+}
+
+body.home .match-demo-head {
     display: flex;
-    justify-content: flex-end;
-}
-
-.btn-confirm {
-    background-color: var(--primary);
-    color: var(--on-primary);
-    border: none;
-    padding: 0.7rem 1.5rem;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-confirm:hover {
-    background-color: var(--primary-dark);
-    transform: translateY(-2px);
-}
-
-/* Animation for steps */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.instruction-step {
-    opacity: 0;
-    animation: fadeInUp 0.4s ease forwards;
-}
-
-.instruction-step:nth-child(1) { animation-delay: 0.1s; }
-.instruction-step:nth-child(2) { animation-delay: 0.2s; }
-.instruction-step:nth-child(3) { animation-delay: 0.3s; }
-.instruction-step:nth-child(4) { animation-delay: 0.4s; }
-.instruction-step:nth-child(5) { animation-delay: 0.5s; }
-
-/* Responsive Design */
-
-@media (max-width: 62em) {
-    .hero {
-        flex-direction: column;
-        text-align: center;
-        padding-top: 8rem;
-        min-height: 0;
-    }
-
-    .hero-content {
-        padding-right: 0;
-        margin-bottom: 3rem;
-        max-width: 100%;
-    }
-
-    .hero-subtitle {
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .hero-buttons {
-        justify-content: center;
-    }
-
-    .hero-stats {
-        justify-content: center;
-    }
-
-    .about-container {
-        flex-direction: column;
-    }
-
-    /* Every scroll section was a flex row with a 5rem gap all the way down to
-       phone widths, squeezing the text and visual columns against each other. */
-    .scroll-content {
-        flex-direction: column;
-        gap: 3rem;
-    }
-
-    .scroll-section {
-        min-height: 0;
-        padding: 4rem 6%;
-    }
-
-    /* Source order puts the illustration first in some sections; on a single
-       column the copy should always lead. */
-    .features-section .scroll-content .visual-content {
-        order: 2;
-    }
-
-}
-
-@media (max-width: 48em) {
-    
-    
-    
-    .hero-title {
-        font-size: 2.5rem;
-    }
-
-    .section-header h2 {
-        font-size: 2rem;
-    }
-
-    .section-title {
-        font-size: 2.25rem;
-    }
-
-    .scroll-section {
-        padding: 3rem 6%;
-    }
-
-    .feature-cards {
-        grid-template-columns: 1fr;
-    }
-
-}
-
-@media (max-width: 36em) {
-    .hero {
-        padding: 7rem 6% 4rem;
-    }
-
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .hero-subtitle {
-        font-size: 1.05rem;
-    }
-
-    .hero-buttons {
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .btn-primary,
-    .btn-secondary {
-        width: 100%;
-        text-align: center;
-        justify-content: center;
-    }
-
-    /* The columns are too narrow here for the divider to sit against. */
-    .hero-stats {
-        gap: 0.9rem;
-    }
-
-    .hero-stat:not(:last-child):after {
-        display: none;
-    }
-
-    .stats-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-
-    .stat-item {
-        padding: 1.5rem;
-    }
-
-    .stat-number {
-        font-size: 2.25rem;
-    }
-
-    .section-title {
-        font-size: 1.85rem;
-    }
-
-    .scroll-section {
-        padding: 3rem 5%;
-    }
-
-    .cta-buttons {
-        flex-direction: column;
-    }
-
-}
-/* --- Contact / demo-request form inside the modal ----------------------- */
-/* .btn-primary and .btn-secondary were written for anchors; these fill in the
-   properties a <button> does not inherit on its own. */
-button.btn-primary,
-button.btn-secondary {
-    font-family: inherit;
-    font-size: 1rem;
-    cursor: pointer;
-}
-
-.modal-intro {
-    color: var(--text-light);
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
-}
-
-.form-group {
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--h-edge);
+    padding-bottom: 0.75rem;
     margin-bottom: 1.25rem;
 }
 
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: var(--text);
+body.home .match-flag {
+    font-family: var(--h-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--h-dim);
 }
 
-.form-group .optional {
-    font-weight: 400;
-    color: var(--text-light);
+body.home .match-flag i {
+    display: none;   /* the label says it; the icon was decoration */
 }
 
-.form-group input,
-.form-group textarea {
-    width: 100%;
-    padding: 0.75rem 0.875rem;
-    border: 1px solid #e0e0e0;
-    border-radius: 0.5rem;
-    font-family: inherit;
-    font-size: 1rem;
-    color: var(--text);
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
-}
-
-/* Fixed: the box is sized for the message it expects and scrolls past that.
-   Dragging it taller only pushes the submit button off the dialog. */
-.form-group textarea {
-    resize: none;
-}
-
-.form-message {
-    background: var(--surface-danger);
-    color: var(--text-danger);
-    border: 1px solid #f87171;
-    border-radius: 0.5rem;
-    padding: 0.625rem 0.75rem;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-}
-
-.form-message.success {
-    background: var(--surface-success);
-    color: var(--text-success);
-    border-color: #4ade80;
-}
-
-.form-message.hidden {
-    display: none;
-}
-
-/* --- Origin note -------------------------------------------------------- */
-/* Replaced the testimonial carousel. Styled as a statement from the builder
-   rather than a customer quote, so it cannot be mistaken for social proof. */
-.origin-note {
-    background: var(--surface);
-    border-radius: 1rem;
-    padding: 2rem;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
-    border-left: 4px solid var(--primary);
-}
-
-.origin-note > i {
+body.home .match-score {
+    font-family: var(--h-sans);
+    font-weight: 500;
     font-size: 1.9rem;
-    color: var(--primary);
-    opacity: 0.35;
-    display: block;
-    margin-bottom: 0.75rem;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--h-ink);
 }
 
-.origin-note p {
-    font-size: 1.05rem;
-    line-height: 1.75;
-    color: var(--text);
+body.home .match-score-unit {
+    font-family: var(--h-mono);
+    font-size: 0.8rem;
+    color: var(--h-dim);
+    margin-left: 0.15rem;
+}
+
+/* --- The two parties ----------------------------------------------------- */
+
+body.home .match-org {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+body.home .org-avatar {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+/* The second organization is marked in the other direction's colour, so the
+   two exchange rows below can be read without a legend. */
+body.home .org-avatar.alt {
+    background: var(--h-take);
+    color: var(--h-on-take);
+}
+
+body.home .org-name {
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--h-ink);
+}
+
+body.home .org-type {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+/* --- The matrix ---------------------------------------------------------- */
+/* Rows are the categories one side offers, columns the categories the other
+   side needs; a filled cell is an overlap. The fill colour says which
+   direction that particular overlap runs in, which is the entire thesis of
+   the product stated in one glance and no words. */
+
+body.home .match-lattice {
+    display: grid;
+    grid-template-columns: repeat(14, 1fr);
+    gap: 3px;
+    margin: 1.15rem 0 0.4rem;
+}
+
+body.home .lattice-cell {
+    aspect-ratio: 1;
+    background: var(--h-cell);
+    /* Cells fade in on a stagger when the example changes; the delay is set
+       per-cell by pp.js so the matrix resolves rather than snapping. */
+    animation: latticeIn 0.4s ease both;
+}
+
+body.home .lattice-cell.give { background: var(--h-give); }
+body.home .lattice-cell.take { background: var(--h-take); }
+
+@keyframes latticeIn {
+    from { opacity: 0; transform: scale(0.6); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+body.home .lattice-axis {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+    padding-top: 0.2rem;
+    margin-bottom: 1.25rem;
+}
+
+/* --- What is actually being traded --------------------------------------- */
+
+body.home .match-exchange {
+    border-top: 1px solid var(--h-rule);
+    margin-top: 1.15rem;
+    padding-top: 1rem;
+    display: grid;
+    gap: 0.55rem;
+}
+
+body.home .exchange-row {
+    display: grid;
+    grid-template-columns: 4.6rem 1fr;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+body.home .exchange-dir {
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-align: center;
+    padding: 0.25rem 0;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    white-space: nowrap;
+}
+
+body.home .exchange-row.reverse .exchange-dir {
+    background: var(--h-take);
+    color: var(--h-on-take);
+}
+
+body.home .exchange-text {
+    font-size: 0.85rem;
+    color: var(--h-ink-soft);
+}
+
+body.home .exchange-text strong {
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+/* --- Carousel controls --------------------------------------------------- */
+
+body.home .match-nav {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+}
+
+body.home .match-arrow {
+    width: 1.9rem;
+    height: 1.9rem;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    color: var(--h-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+body.home .match-arrow:hover {
+    border-color: var(--h-edge);
+    color: var(--h-ink);
+}
+
+body.home .match-dots {
+    display: flex;
+    gap: 0.35rem;
+}
+
+body.home .match-dot {
+    width: 1.4rem;
+    height: 3px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: var(--h-rule);
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+body.home .match-dot.active {
+    background: var(--h-ink);
+}
+
+/* ------------------------------------------------------------------------- *
+ * Body sections
+ *
+ * Each is revealed by the IntersectionObserver in pp.js, which adds .active.
+ * The un-revealed state is a small offset and no opacity -- if the observer
+ * never fires (an old browser, a section taller than the threshold can ever
+ * satisfy), the content is still on the page and still readable.
+ * ------------------------------------------------------------------------- */
+
+body.home .about {
+    padding: 0 clamp(1.25rem, 5vw, 6rem);
+}
+
+body.home .scroll-section {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(3rem, 8vh, 6rem) 0;
+    border-top: 1px solid var(--h-rule);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+/* The un-revealed state, and the important part is which way round it is.
+   A section is visible in CSS and is hidden only by .pending, which pp.js
+   adds at runtime and only once it has an IntersectionObserver in hand to
+   take it off again. Hiding by default is how a reveal animation turns into
+   a blank page: any failure between the stylesheet loading and the observer
+   firing -- a JS error earlier in the file, an observer that never fires --
+   leaves the whole page's content on the page and invisible, and the reveal
+   is decorative while the content is the entire point. */
+body.home .scroll-section.pending {
+    opacity: 0;
+    transform: translateY(1.25rem);
+}
+
+body.home .scroll-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2.5rem, 6vw, 5rem);
+    align-items: center;
+}
+
+body.home .section-subtitle {
+    margin-bottom: 1.4rem;
+}
+
+body.home .section-title {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 3.6vw, 3rem);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    color: var(--h-ink);
     margin-bottom: 1.1rem;
 }
 
-.origin-attribution {
-    font-size: 0.8rem;
-    font-weight: 700;
+body.home .section-title span {
+    font-style: italic;
+    color: var(--h-give);
+}
+
+body.home .section-description {
+    font-size: 0.98rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+    max-width: 46ch;
+}
+
+body.home .text-content .btn-primary {
+    margin-top: 1.75rem;
+}
+
+/* --- How it works: the numbered steps ------------------------------------ */
+/* Set as a ruled list rather than as four cards. Cards would have implied
+   four separate features; this is one sequence, and a numbered ledger is how
+   a sequence is written down. */
+
+body.home .steps {
+    border-top: 1px solid var(--h-edge);
+}
+
+body.home .step {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+body.home .step-index {
+    font-family: var(--h-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--h-dim);
+}
+
+body.home .step-text {
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: var(--h-ink-soft);
+}
+
+body.home .step-text strong {
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+/* --- What makes it different: the three cells ---------------------------- */
+/* One shared grid, hairlines collapsed into a single line between cells, so
+   the three read as a table rather than three floating cards. */
+
+body.home .feature-cards {
+    display: grid;
+    gap: 1px;
+    background: var(--h-rule);
+    border: 1px solid var(--h-edge);
+}
+
+body.home .feature-card {
+    background: var(--h-surface);
+    padding: 1.5rem 1.4rem;
+}
+
+body.home .feature-icon {
+    font-size: 1.15rem;
+    color: var(--h-give);
+    margin-bottom: 0.85rem;
+    line-height: 1;
+}
+
+body.home .feature-card:nth-child(2) .feature-icon { color: var(--h-take); }
+body.home .feature-card:nth-child(3) .feature-icon { color: var(--h-seal); }
+
+body.home .feature-card h3 {
+    font-family: var(--h-sans);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.5rem;
+}
+
+body.home .feature-card p {
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+}
+
+body.home .feature-card p em {
+    font-style: italic;
+    color: var(--h-ink);
+}
+
+/* --- Why this exists: the benefit list ----------------------------------- */
+
+body.home .benefit-list {
+    margin-top: 1.75rem;
+    border-top: 1px solid var(--h-edge);
+}
+
+body.home .benefit-item {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+body.home .benefit-number {
+    font-family: var(--h-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-light);
+    color: var(--h-take);
+}
+
+body.home .benefit-text {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--h-ink-soft);
+}
+
+/* --- The agreement -------------------------------------------------------- */
+/* The second half of the product, drawn as the thing it produces. Both sides
+   listed, what each provides, and a footer that reads like a filing stamp.
+   This is where the ledger idea is most literal, and it is the right place
+   for it: this panel is standing in for an actual document. */
+
+body.home .agreement {
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+}
+
+body.home .agreement-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1.35rem;
+    border-bottom: 1px solid var(--h-edge);
+}
+
+body.home .agreement-head .k {
+    font-family: var(--h-mono);
+    font-size: 0.63rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--h-ink);
+}
+
+body.home .agreement-head .v {
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--h-seal);
+    color: var(--h-on-seal);
+    padding: 0.25rem 0.55rem;
+    white-space: nowrap;
+}
+
+body.home .agreement-body {
+    padding: 1.35rem;
+}
+
+body.home .agreement-side + .agreement-side {
+    border-top: 1px dashed var(--h-rule);
+    margin-top: 1.1rem;
+    padding-top: 1.1rem;
+}
+
+body.home .agreement-side .who {
+    font-family: var(--h-serif);
+    font-size: 1.35rem;
+    line-height: 1.15;
+    color: var(--h-ink);
+    margin-bottom: 0.15rem;
+}
+
+body.home .agreement-side .meta {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.8rem;
+}
+
+body.home .agreement-side .provides {
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.45rem;
+}
+
+body.home .agreement-side ul {
+    list-style: none;
+}
+
+body.home .agreement-side li {
+    position: relative;
+    padding: 0.28rem 0 0.28rem 1.2rem;
+    font-size: 0.88rem;
+    color: var(--h-ink-soft);
+}
+
+body.home .agreement-side li::before {
+    content: '\2014';
+    position: absolute;
+    left: 0;
+    color: var(--h-give);
+}
+
+body.home .agreement-side + .agreement-side li::before {
+    color: var(--h-take);
+}
+
+body.home .agreement-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.8rem 1.35rem;
+    border-top: 1px solid var(--h-edge);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--h-dim);
+}
+
+/* --- Closing call to action ---------------------------------------------- */
+
+body.home .cta-section {
+    border-bottom: 1px solid var(--h-rule);
+    text-align: center;
+}
+
+/* The CTA reuses .scroll-content, which is a two-column grid with a large
+   gap -- collapsed to one column that gap becomes row spacing, and the
+   heading, the sentence and the buttons ended up a full 5rem apart from each
+   other. They are one block of copy; their own margins are the spacing. */
+body.home .cta-section .scroll-content {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0;
+}
+
+body.home .cta-title {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 4.2vw, 3.2rem);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    color: var(--h-ink);
+    margin-bottom: 0.9rem;
+}
+
+body.home .cta-text {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+    max-width: 52ch;
+    margin-bottom: 2rem;
+}
+
+body.home .cta-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Modal contents
+ *
+ * The chrome -- backdrop, container, header, close button, footer -- is
+ * ink.css's, and the display/layout rules are forms.css's, which index.html
+ * now loads for the contact form. Only what is inside these two particular
+ * modals is here.
+ * ------------------------------------------------------------------------- */
+
+body.home .modal-intro {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--h-ink-soft);
+    margin-bottom: 1.5rem;
+}
+
+body.home .instruction-step {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    gap: 1rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+body.home .instruction-step:last-child {
+    border-bottom: none;
+}
+
+body.home .step-number {
+    font-family: var(--h-mono);
+    font-size: 0.7rem;
+    color: var(--h-dim);
+}
+
+body.home .step-content h3 {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+}
+
+body.home .step-content p {
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+}
+
+/* The guide modal's own confirm button. Not a .btn-primary in the markup, so
+   ink.css does not reach it. */
+body.home .btn-confirm {
+    background: var(--h-ink);
+    color: var(--h-paper);
+    border: 1px solid var(--h-edge);
+    border-radius: 0;
+    padding: 0.8rem 1.4rem;
+    font-family: var(--h-sans);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+body.home .btn-confirm:hover {
+    background: var(--h-give);
+    border-color: var(--h-give);
+    color: var(--h-on-give);
+}
+
+body.home #contactForm .btn-primary {
+    width: 100%;
+}
+
+
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ *
+ * One column below 62rem. The match panel moves above the copy on the way
+ * down and then below it on a phone: it is the most persuasive thing on the
+ * page on a laptop, and the slowest to read on a handset.
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 62rem) {
+    body.home .hero-inner,
+    body.home .scroll-content {
+        grid-template-columns: 1fr;
+    }
+
+    /* The features section puts its visual first in source order so the
+       desktop layout can alternate; on one column that has to unwind or the
+       cards arrive before the heading that introduces them. */
+    body.home .features-section .visual-content { order: 2; }
+    body.home .features-section .text-content { order: 1; }
+
+    body.home .hero-subtitle,
+    body.home .section-description,
+    body.home .cta-text {
+        max-width: none;
+    }
+}
+
+@media (max-width: 34rem) {
+    body.home .hero-stats {
+        grid-template-columns: 1fr;
+    }
+
+    body.home .hero-stat {
+        padding: 0.85rem 0;
+        border-bottom: 1px solid var(--h-rule);
+    }
+
+    body.home .hero-stat-label {
+        max-width: none;
+    }
+
+    /* Fourteen columns of matrix on a 320px screen is a 20px cell with a
+       3px gutter -- the gutter stops reading and the whole thing turns into
+       a smear. Half the columns, same shape. */
+    body.home .match-lattice {
+        grid-template-columns: repeat(7, 1fr);
+    }
+
+    body.home .hero-buttons .btn-primary,
+    body.home .hero-buttons .btn-secondary {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+}
+
+/* Reduced motion: the reveal and the matrix stagger are the two things that
+   move here, and both are decorative. Everything lands in its final state. */
+@media (prefers-reduced-motion: reduce) {
+    body.home .scroll-section,
+    body.home .scroll-section.pending {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    body.home .lattice-cell {
+        animation: none;
+    }
+
+    body.home .modal-container {
+        animation: none;
+    }
 }

@@ -129,6 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         `).join('');
     }
 
+    // Which reasons get a direction colour on a result card. Keys come from
+    // matching.py's score_pair; anything not listed here renders neutral.
+    const REASON_CLASS = {
+        they_give: 'give',    // toward you
+        i_give: 'take',       // out from you
+        mutual: 'mutual',     // both at once
+    };
+
     // --- Data -----------------------------------------------------------
     async function loadMatches() {
         // Screen readers get the status line; sighted users get the shapes.
@@ -477,8 +485,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 && !(m.match_detail.they_give || []).length
                 && !(m.match_detail.i_give || []).length;
 
+            // Each reason arrives as {kind, text}. Two of the kinds name a
+            // direction -- something coming toward you, something going out
+            // from you -- and those are the two the card paints, in the same
+            // pair of colours the exchange block, the proposal terms and the
+            // home page's matrix use. Everything else is context and stays
+            // neutral.
+            //
+            // Mapped through a fixed table rather than interpolating the
+            // server's key into a class name, so a kind this build does not
+            // know about renders unstyled instead of putting an arbitrary
+            // string in the markup.
             const reasons = (m.reasons || [])
-                .map((r) => `<li>${esc(r)}</li>`).join('')
+                .map((r) => {
+                    const cls = REASON_CLASS[r.kind] || '';
+                    return `<li${cls ? ` class="${cls}"` : ''}>${esc(r.text)}</li>`;
+                }).join('')
                 || '<li class="none">Nothing either of you has listed lines '
                    + 'up yet.</li>';
 

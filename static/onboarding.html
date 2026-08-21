@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Warm the connections to the two third-party origins every page uses,
          before the local stylesheets below start downloading. Both the
-         boxicons stylesheet and the Poppins stylesheet are render-blocking
+         boxicons stylesheet and the font stylesheet are render-blocking
          and are discovered late, at the bottom of this head -- so without
          these the browser pays a DNS lookup plus a TLS handshake to each
          before it can even ask for them. gstatic serves the font files
@@ -32,15 +32,26 @@
         }
       } catch (e) { /* storage disabled; light theme is the right fallback */ }
     </script>
-  <link rel="stylesheet" href="onboarding.css" />
+  <!-- Order matters and was wrong here: onboarding.css used to load BEFORE
+       tokens.css, so this was the one page whose stylesheet could not be
+       overridden by the palette that is supposed to sit under everything.
+       Palette first, then the redesign's shared layer, then the page. -->
   <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="ink.css">
+  <link rel="stylesheet" href="onboarding.css" />
   <link rel="stylesheet" href="shared.css">
   <link rel="stylesheet" href="forms.css">
   <link rel="stylesheet" href="nav.css">
   <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Instrument Serif for the page heading, Space Grotesk for anything read
+       as a sentence, JetBrains Mono for metadata. Poppins is no longer used
+       on this page. -->
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
+<!-- .ink opts this page into the shared redesign in ink.css. A page without
+     it sees none of that stylesheet and keeps the original blue-and-Poppins
+     design, which is what lets the app be converted a page at a time. -->
+<body class="ink">
     <!-- First stop for a keyboard or screen-reader visitor. The nav
          is the same dozen links on every page; without this they are
          tabbed through again on each one before reaching anything
@@ -90,8 +101,8 @@
            "Edit profile", and only /api/me says which. onboarding.js fills it
            once that answers, rather than showing "Get Started" to someone who
            arrived here to edit an existing profile. -->
+      <p class="eyebrow">Your profile</p>
       <h2 id="onboardingTitle"></h2>
-      <div class="underline"></div>
       <p class="section-intro">
         Tell us what your organization needs and what it can offer. We use both
         sides to rank partners you can actually trade value with.

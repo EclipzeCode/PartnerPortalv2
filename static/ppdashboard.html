@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Warm the connections to the two third-party origins every page uses,
          before the local stylesheets below start downloading. Both the
-         boxicons stylesheet and the Poppins stylesheet are render-blocking
+         boxicons stylesheet and the font stylesheet are render-blocking
          and are discovered late, at the bottom of this head -- so without
          these the browser pays a DNS lookup plus a TLS handshake to each
          before it can even ask for them. gstatic serves the font files
@@ -33,15 +33,25 @@
       } catch (e) { /* storage disabled; light theme is the right fallback */ }
     </script>
     <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, controls, nav,
+         footer. Between tokens.css and the page stylesheets, so those can
+         override it. -->
+    <link rel="stylesheet" href="ink.css">
     <link rel="stylesheet" href="ppdashboard.css">
     <link rel="stylesheet" href="shared.css">
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="proposals.css">
     <link rel="stylesheet" href="nav.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Instrument Serif for the page heading, Space Grotesk for anything
+         read as a sentence, JetBrains Mono for metadata. Poppins is no longer
+         used on this page. -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
+<!-- .ink opts this page into the shared redesign in ink.css. A page without
+     it sees none of that stylesheet and keeps the original blue-and-Poppins
+     design, which is what lets the app be converted a page at a time. -->
+<body class="ink">
     <!-- First stop for a keyboard or screen-reader visitor. The nav
          is the same dozen links on every page; without this they are
          tabbed through again on each one before reaching anything
@@ -87,9 +97,13 @@
 
     <!-- Dashboard Section -->
     <section class="dashboard-section" id="main" tabindex="-1">
+        <!-- ppdashboard.js replaces this h2's contents with "Welcome back,
+             <span>Organization</span>" once the dashboard data lands, so both
+             the h2 and a span inside it have to stay. The static text is what
+             shows until then. -->
         <div class="section-header">
+            <p class="eyebrow">Your organization</p>
             <h2>Client <span>Dashboard</span></h2>
-            <div class="underline"></div>
         </div>
 
         <div class="dashboard-container">

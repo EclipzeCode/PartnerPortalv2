@@ -1,4 +1,40 @@
-/* Dashboard CSS - ppdashboard.css */
+/* The dashboard.
+ *
+ * Third page onto the redesign. Palette, typefaces, buttons, inputs, modal
+ * chrome, nav and footer come from ink.css; the modal's own layout comes from
+ * forms.css. This file styles what only the dashboard has, and proposals.css
+ * styles the partnership cards inside it.
+ *
+ * --- Two levels of card, and now none -------------------------------------
+ *
+ * The old page was a white rounded card (.dashboard-container) sitting on a
+ * grey page, holding six white rounded stat tiles, a white rounded
+ * partnerships card, and two more white rounded cards below. Card inside card
+ * inside card. Every one of those boxes cost a border radius, a shadow and
+ * twelve to twenty pixels of padding, and none of them meant anything -- the
+ * nesting did not correspond to any grouping a user has in their head. The
+ * page had six visual levels and about two real ones.
+ *
+ * It is a ruled sheet now, the same idiom as the settings page: content sits
+ * on the paper, and the divisions are hairlines. What is left after taking the
+ * boxes away is the actual structure -- a header, a strip of counts, the
+ * partnerships, and two columns underneath. That was always the structure; it
+ * was just hard to see through the containers.
+ *
+ * The stats keep a border, because they are the one thing on this page that
+ * is a grid of equivalent cells and reads best as a table. They share their
+ * hairlines rather than each having their own, so they are one object with
+ * six cells rather than six objects.
+ *
+ * --- Give and receive -------------------------------------------------------
+ *
+ * The two direction colours from ink.css do real work here. On the home page
+ * --h-give and --h-take colour the two halves of a match. On a proposal card
+ * they colour "You give" and "You receive", which is the same distinction
+ * arriving at the point where it actually costs something. Someone who read
+ * the marketing page and then signed up meets the same two colours meaning the
+ * same two things, which is most of what a design system is for.
+ */
 
 * {
     margin: 0;
@@ -6,310 +42,346 @@
     box-sizing: border-box;
 }
 
-/* [hidden] is fixed for every page in shared.css, loaded below. */
+/* ------------------------------------------------------------------------- *
+ * Page shell
+ * ------------------------------------------------------------------------- */
 
-body {
-    font-family: 'Poppins', sans-serif;
-    background-color: var(--bg-light);
-    color: var(--text);
-    line-height: 1.6;
-    overflow-x: hidden;
-}
-
-/* Navigation Bar (Same as search page) */
-.logo:hover {
-    color: var(--primary-dark);
-    transition: 0.3s ease;
-}
-
-/* Dashboard Section */
 .dashboard-section {
-    padding: 8rem 10% 5rem;
-    background-color: var(--bg-light);
-    min-height: 100vh;
+    /* Top clears the fixed header. */
+    padding: clamp(7rem, 11vh, 9rem) clamp(1.25rem, 4vw, 4rem) 4rem;
+    min-height: calc(100vh - 12rem);
 }
 
+/* ppdashboard.js replaces this h2's contents with "Welcome back, <span>Org
+   </span>" once /api/dashboard lands, so the element and its span both have
+   to survive. What changed is that it is no longer centred with an accent
+   rule under it: it sits on the same left margin as everything below, and the
+   organization's name takes the italic serif the rest of the design gives to
+   the emphasised half of a heading. */
 .section-header {
-    text-align: center;
-    margin-bottom: 3rem;
+    max-width: 82rem;
+    margin: 0 auto 2rem;
+}
+
+.section-header .eyebrow {
+    margin-bottom: 1.1rem;
 }
 
 .section-header h2 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 3.6vw, 2.9rem);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
 }
 
 .section-header h2 span {
-    color: var(--primary);
-}
-
-.underline {
-    width: 5rem;
-    height: 0.25rem;
-    background: var(--primary);
-    margin: 0 auto;
-    border-radius: 2px;
+    font-style: italic;
+    color: var(--h-give);
 }
 
 .dashboard-container {
-    background: var(--surface);
-    border-radius: 1rem;
-    padding: 3rem;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    margin-top: 2rem;
+    max-width: 82rem;
+    margin: 0 auto;
 }
 
-/* Profile toolbar */
-/* Unverified accounts only. Amber, not red: nothing is broken and nothing was
-   lost -- one step is outstanding and it blocks one action. Sits above the
-   toolbar because it is a condition on the whole page, not another action. */
+/* ------------------------------------------------------------------------- *
+ * Verify banner
+ *
+ * A left rule rather than a tinted panel, matching the notices on the
+ * settings page. It is the same class of message and should not look like a
+ * different species of thing on a different screen.
+ * ------------------------------------------------------------------------- */
+
 .verify-banner {
     display: flex;
     align-items: center;
+    gap: 0.85rem;
     flex-wrap: wrap;
-    gap: 0.75rem 1rem;
+    padding: 0.9rem 0 0.9rem 1rem;
+    border-left: 3px solid var(--h-take);
     margin-bottom: 1.75rem;
-    padding: 1rem 1.25rem;
-    border: 1px solid rgba(240, 173, 78, 0.45);
-    background: rgba(240, 173, 78, 0.08);
-    border-radius: 0.75rem;
 }
 
 .verify-banner > i {
-    color: var(--text-note);
-    font-size: 1.4rem;
+    font-size: 1.05rem;
+    color: var(--h-take);
     flex-shrink: 0;
 }
 
 .verify-banner p {
-    /* Takes the row, pushing the button to the far edge; drops to its own
-       line once there is no room for both. */
-    flex: 1 1 18rem;
-    margin: 0;
-    font-size: 0.92rem;
+    flex: 1 1 20rem;
+    font-size: 0.88rem;
     line-height: 1.55;
-    color: var(--text-note);
+    color: var(--h-ink-soft);
 }
 
 .verify-banner strong {
-    color: var(--text-note);
+    font-weight: 500;
+    color: var(--h-ink);
 }
 
-/* White fill so the ghost button reads as a control rather than sinking into
-   the amber it sits on. */
-.verify-banner .btn-action.ghost {
-    flex-shrink: 0;
-    background: var(--surface);
-    border-color: rgba(240, 173, 78, 0.6);
-    color: var(--text-note);
-}
-
-.verify-banner .btn-action.ghost:hover {
-    background: var(--surface);
-    border-color: #b8730f;
-    color: var(--text-note);
-    box-shadow: 0 0.25rem 0.75rem rgba(184, 115, 15, 0.18);
-}
+/* ------------------------------------------------------------------------- *
+ * Toolbar
+ * ------------------------------------------------------------------------- */
 
 .dashboard-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1.25rem;
     flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 2rem;
     padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border);
 }
 
 .toolbar-hint {
-    font-size: 0.95rem;
-    color: var(--text-light);
-    margin: 0;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
 }
 
 .toolbar-actions {
     display: flex;
-    align-items: center;
+    gap: 0.6rem;
     flex-wrap: wrap;
-    gap: 1rem;
 }
 
-/* An <a> styled as .btn-action: the shared rule sets no text-decoration
-   because it was only ever used on <button>. */
-a.btn-action {
-    text-decoration: none;
-    display: inline-flex;
-}
-
-/* Draws the eye when the profile is the thing actually blocking matches. */
+/* An organization that has not finished onboarding gets pushed toward the one
+   action that fixes it. The old version pulsed the button; a hairline design
+   has a quieter way to say the same thing, so it takes the fill instead. */
 .dashboard-toolbar.needs-profile #editProfileBtn {
-    animation: toolbarNudge 2.4s ease-in-out 3;
+    background: var(--h-take);
+    border-color: var(--h-take);
+    color: var(--h-on-take);
 }
 
-@keyframes toolbarNudge {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
-    50%      { box-shadow: 0 0 0 0.5rem rgba(67, 97, 238, 0.12); }
+/* --- The dashboard's own button size -------------------------------------- */
+/* .btn-action is this page's compact button. It is not one of the four names
+   ink.css styles, so it is defined here in the same shapes. */
+
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.65rem 1.05rem;
+    font-family: var(--h-sans);
+    font-size: 0.83rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--h-edge);
+    border-radius: 0;
+    background: var(--h-ink);
+    color: var(--h-paper);
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .dashboard-toolbar.needs-profile .btn-action {
-        animation: none;
-    }
+.btn-action:hover {
+    background: var(--h-give);
+    border-color: var(--h-give);
+    color: var(--h-on-give);
 }
 
-/* Stats Grid */
-/* Fixed column counts, never auto-fit: a minmax() floor used to reflow to
-   3-across at in-between widths and strand a card on its own row, so the
-   cards share the row width instead of dictating it.
+.btn-action.ghost {
+    background: transparent;
+    border-color: var(--h-rule);
+    color: var(--h-dim);
+}
 
-   Three across above 75em, where there is room for it; two below (see the
-   75em block), where three would squeeze the icon and label together long
-   before the compacting rules at 48em take over. Six cards divide evenly
-   either way -- 3+3 or 2+2+2 -- so neither width strands one on a row of its
-   own, which is what the fifth card had to be reasoned around. */
+.btn-action.ghost:hover {
+    background: transparent;
+    border-color: var(--h-edge);
+    color: var(--h-ink);
+}
+
+.btn-action.small {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.76rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * The counts
+ *
+ * One object with six cells: a single border around the group and shared
+ * hairlines between, so it reads as a table of readings rather than six
+ * floating tiles. Each cell is a button that opens the list behind its number.
+ * ------------------------------------------------------------------------- */
+
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 3rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--h-rule);
+    border: 1px solid var(--h-edge);
+    margin-bottom: 2.5rem;
 }
 
-/* Buttons: each card opens the dialog listing what it counts. The type,
-   font and alignment resets are what a <button> does not inherit. */
 .stat-card {
-    background: var(--surface);
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    border: 1px solid var(--border);
-    transition: all 0.3s ease;
-    text-decoration: none;
-    color: inherit;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.8rem;
+    align-items: start;
     width: 100%;
+    padding: 1.15rem 1.1rem;
+    background: var(--h-surface);
+    border: none;
+    border-radius: 0;
     text-align: left;
-    font: inherit;
+    font-family: inherit;
     cursor: pointer;
+    transition: background 0.18s ease;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    border-color: rgba(67, 97, 238, 0.35);
+    background: var(--h-paper);
 }
 
 .stat-card:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-/* Affordance that the card goes somewhere; slides on hover. */
-.stat-go {
-    margin-left: auto;
-    flex-shrink: 0;
-    font-size: 1.3rem;
-    color: var(--text-light);
-    opacity: 0;
-    transform: translateX(-0.35rem);
-    transition: opacity 0.25s ease, transform 0.25s ease, color 0.25s ease;
-}
-
-.stat-card:hover .stat-go,
-.stat-card:focus-visible .stat-go {
-    opacity: 1;
-    transform: translateX(0);
-    color: var(--primary);
-}
-
-/* Touch devices have no hover, so the chevron would never appear. */
-@media (hover: none) {
-    .stat-go {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .stat-card,
-    .stat-go {
-        transition: none;
-    }
-
-    .stat-card:hover {
-        transform: none;
-    }
+    outline: 2px solid var(--h-give);
+    outline-offset: -2px;
 }
 
 .stat-icon {
-    width: 3.75rem;
-    height: 3.75rem;
-    border-radius: 50%;
-    background: rgba(67, 97, 238, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary);
-    font-size: 1.8rem;
-}
-
-/* min-width:0 lets the text shrink inside the fixed 2-up grid instead of
-   forcing the card wider than its column. */
-.stat-content {
-    flex: 1;
-    min-width: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--h-dim);
 }
 
 .stat-content h3 {
-    font-size: 1rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
     font-weight: 500;
-    color: var(--text-light);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--h-dim);
     margin-bottom: 0.5rem;
 }
 
 .stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text);
     display: block;
+    font-family: var(--h-sans);
+    font-size: 1.8rem;
+    font-weight: 500;
     line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--h-ink);
+    margin-bottom: 0.4rem;
 }
 
 .stat-change {
-    font-size: 0.85rem;
     display: block;
-    margin-top: 0.3rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.03em;
+    color: var(--h-dim);
 }
 
-.stat-change.positive {
-    color: var(--success);
+.stat-change.positive { color: var(--h-seal); }
+.stat-change.negative { color: var(--h-danger); }
+.stat-change.neutral  { color: var(--h-dim); }
+
+/* The chevron says the cell opens something. Dim at rest so six of them do
+   not read as six arrows; full strength on the one being pointed at. */
+.stat-go {
+    font-size: 1.05rem;
+    line-height: 1.3;
+    color: var(--h-rule);
+    transition: color 0.18s ease;
 }
 
-.stat-change.negative {
-    color: var(--error);
+.stat-card:hover .stat-go,
+.stat-card:focus-visible .stat-go {
+    color: var(--h-ink);
 }
 
-.stat-change.neutral {
-    color: var(--warning);
+/* Nothing hovers on a touch screen, so the affordance has to be visible at
+   rest there. */
+@media (hover: none) {
+    .stat-go {
+        color: var(--h-dim);
+    }
 }
 
-/* Dashboard Content */
-/* Two cards now that Partner Connections is gone, so the side column gets a
-   floor wide enough for "Upcoming Events" and its Add Event button to sit on
-   one line instead of wrapping. */
+/* ------------------------------------------------------------------------- *
+ * Panels
+ *
+ * What used to be .dashboard-card. Still a bordered box, because these two do
+ * hold a scrolling list and a box is what tells you where the scroll ends --
+ * but a hairline box on the paper, not a shadowed white card on grey.
+ * ------------------------------------------------------------------------- */
+
+.dashboard-card {
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+    margin-bottom: 2rem;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.95rem 1.25rem;
+    border-bottom: 1px solid var(--h-edge);
+}
+
+.card-header h3 {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--h-ink);
+}
+
+.card-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-footer {
+    padding: 0.7rem 1.25rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+
+.view-all:hover {
+    color: var(--h-ink);
+}
+
+/* --- The two-column area -------------------------------------------------- */
+
 .dashboard-content {
     display: grid;
     grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 1fr);
     gap: 2rem;
 }
 
-/* Both cards are the same fixed height so their bottoms line up regardless of
+/* Both panels are the same fixed height so their bottoms line up regardless of
    how much each one holds. Tall enough for three activity rows even when the
    text wraps to two lines; past that the list itself scrolls rather than the
-   card growing and breaking the alignment. */
+   panel growing and breaking the alignment. */
 .dashboard-content > .dashboard-card {
     height: 28rem;
     display: flex;
@@ -327,21 +399,13 @@ a.btn-action {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    margin-bottom: 0;
     /* Room for the scrollbar so it never sits on top of the text. */
     padding-right: 0.35rem;
-}
-
-/* Anchored from the stats card, so clear the fixed site header. */
-#upcomingEventsCard {
-    scroll-margin-top: 7rem;
-}
-
-/* Slim scrollbars: the default chrome is heavy inside a small card. */
-.dashboard-content .activity-list,
-.dashboard-content .events-list {
+    /* Slim scrollbars: the default chrome is heavy inside a small panel.
+       The colours are tokens rather than the hardcoded #cbd3e8 that was here,
+       which stayed light-blue on the dark theme. */
     scrollbar-width: thin;
-    scrollbar-color: #cbd3e8 transparent;
+    scrollbar-color: var(--h-rule) transparent;
 }
 
 .dashboard-content .activity-list::-webkit-scrollbar,
@@ -356,571 +420,303 @@ a.btn-action {
 
 .dashboard-content .activity-list::-webkit-scrollbar-thumb,
 .dashboard-content .events-list::-webkit-scrollbar-thumb {
-    background: var(--thumb);
-    border-radius: 62.4375rem;
+    background: var(--h-rule);
+    border-radius: 0;
 }
 
 .dashboard-content .activity-list::-webkit-scrollbar-thumb:hover,
 .dashboard-content .events-list::-webkit-scrollbar-thumb:hover {
-    background: var(--thumb-hover);
+    background: var(--h-dim);
 }
 
-.dashboard-card {
-    background: var(--surface);
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    border: 1px solid var(--border);
-    margin-bottom: 2rem;
+/* Anchored from the stats card, so clear the fixed site header. */
+#upcomingEventsCard {
+    scroll-margin-top: 7rem;
 }
 
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-}
+/* ------------------------------------------------------------------------- *
+ * Recent activity
+ * ------------------------------------------------------------------------- */
 
-.card-header h3 {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: var(--text);
-}
-
-.card-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Secondary action next to a filled one, so the pair does not read as two
-   equally weighted primary buttons. */
-.btn-action.ghost {
-    background: transparent;
-    color: var(--text-light);
-    border: 1px solid var(--border);
-}
-
-.btn-action.ghost:hover {
-    background: rgba(67, 97, 238, 0.06);
-    color: var(--primary);
-    border-color: var(--primary);
-    box-shadow: none;
-}
-
-.btn-action {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.8rem 1.5rem;
-    border-radius: 0.5rem;
-    background: var(--primary);
-    color: var(--on-primary);
-    border: none;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-family: "poppins";
-}
-
-.btn-action:hover {
-    background: var(--primary-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
-}
-
-.btn-action.small {
-    padding: 0.55rem 1rem;
-    font-size: 0.88rem;
-    white-space: nowrap;
-}
-
-.btn-action.small i {
-    font-size: 1rem;
-    margin-right: 0.3rem;
-}
-
-/* Activity List */
 .activity-list {
-    margin-bottom: 1rem;
+    padding: 0 1.25rem;
 }
 
 .activity-item {
     display: flex;
-    gap: 1rem;
-    padding: 1rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--h-rule);
 }
 
 .activity-item:last-child {
     border-bottom: none;
 }
 
+/* A square mark, not a tinted circle. The colour is the whole signal, so it
+   is applied to a small solid block where it reads, rather than to a pale
+   round wash behind a glyph where it does not. */
+/* The neutral mark takes the body-text colour rather than the metadata one.
+   --h-dim is mixed to sit on the page, and --h-cell lifts the ground out from
+   under it -- 4.3:1 on the dark theme, which clears the 3:1 an icon needs but
+   is the weakest thing on the page for no reason. */
 .activity-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    background: rgba(67, 97, 238, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary);
-    font-size: 1.2rem;
+    width: 1.6rem;
+    height: 1.6rem;
     flex-shrink: 0;
-}
-
-.activity-content {
-    flex: 1;
+    display: grid;
+    place-items: center;
+    font-size: 0.85rem;
+    background: var(--h-cell);
+    color: var(--h-ink-soft);
 }
 
 .activity-content p {
-    font-size: 0.95rem;
-    margin-bottom: 0.3rem;
+    font-size: 0.87rem;
     line-height: 1.5;
+    color: var(--h-ink-soft);
 }
 
 .activity-content strong {
-    font-weight: 600;
-    color: var(--text);
+    font-weight: 500;
+    color: var(--h-ink);
 }
 
 .activity-time {
-    font-size: 0.8rem;
-    color: var(--text-light);
+    display: block;
+    margin-top: 0.25rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
 }
 
-/* Colour-codes the feed by what kind of thing happened, so a decline does not
-   read the same as an agreement at a glance. */
-.activity-item.kind-accepted .activity-icon { background: rgba(22, 163, 74, 0.12); color: var(--text-success); }
-.activity-item.kind-declined .activity-icon,
-.activity-item.kind-withdrawn .activity-icon { background: rgba(141, 153, 174, 0.16); color: var(--text-light); }
-.activity-item.kind-incoming .activity-icon { background: rgba(217, 119, 6, 0.14); color: var(--text-note); }
-.activity-item.kind-event .activity-icon { background: rgba(76, 201, 240, 0.18); color: var(--text-accent); }
+/* The four kinds of thing that turn up in the feed. Each was a pale tint of a
+   semantic colour behind a matching glyph; now the mark itself carries the
+   colour, so a scan down the column reads as a column of coloured marks. */
+.activity-item.kind-accepted .activity-icon {
+    background: var(--h-seal);
+    color: var(--h-on-seal);
+}
 
-/* Filter control. Built as a pill rather than a bare <select> so it reads as
-   a sibling of the .btn-action in the other card's header. */
+.activity-item.kind-incoming .activity-icon {
+    background: var(--h-take);
+    color: var(--h-on-take);
+}
+
+.activity-item.kind-event .activity-icon {
+    background: var(--h-give);
+    color: var(--h-on-give);
+}
+
+/* Declined and withdrawn are the two outcomes that are not news. They keep
+   the neutral mark, which is what makes the coloured ones mean something. */
+.activity-item.kind-declined .activity-icon,
+.activity-item.kind-withdrawn .activity-icon {
+    background: var(--h-cell);
+    color: var(--h-ink-soft);
+}
+
+/* --- Filter --------------------------------------------------------------- */
+
 .activity-filter {
     position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.5rem 1.75rem 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    color: var(--text-light);
-    background: var(--surface);
+    padding: 0.35rem 1.6rem 0.35rem 0.6rem;
+    border: 1px solid var(--h-rule);
     cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+    transition: border-color 0.18s ease;
 }
 
-.activity-filter:hover {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: rgba(67, 97, 238, 0.04);
-}
-
+.activity-filter:hover,
 .activity-filter:focus-within {
-    border-color: var(--primary);
-    color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+    border-color: var(--h-edge);
 }
 
 .activity-filter > i {
-    font-size: 1rem;
-    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: var(--h-dim);
 }
 
-/* Chevron drawn here, since the native one cannot be positioned. */
+/* The native arrow is a different shape on every platform, so the select
+   hides its own and this draws one. */
 .activity-filter::after {
     content: '';
     position: absolute;
-    right: 0.7rem;
-    top: 50%;
+    right: 0.6rem;
     width: 0.4rem;
     height: 0.4rem;
-    margin-top: -0.3rem;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: rotate(45deg);
+    border-right: 1.5px solid var(--h-dim);
+    border-bottom: 1.5px solid var(--h-dim);
+    transform: translateY(-0.1rem) rotate(45deg);
     pointer-events: none;
 }
 
 .activity-filter select {
     appearance: none;
-    -webkit-appearance: none;
-    border: none;
     background: none;
-    font-family: inherit;
-    font-size: 0.88rem;
-    font-weight: 500;
-    color: inherit;
-    cursor: pointer;
-    padding: 0;
-}
-
-.activity-filter select:focus {
+    border: none;
     outline: none;
-}
-
-/* Options render in the OS menu, which does not inherit the pill's colour. */
-.activity-filter select option {
-    color: var(--text);
-    font-weight: 500;
-}
-
-/* .view-all is an <a> elsewhere; as a button it needs the chrome stripped. */
-button.view-all {
-    background: none;
-    border: none;
-    font-family: inherit;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-ink);
     cursor: pointer;
+}
+
+/* The dropdown itself is painted by the OS, which does not inherit any of the
+   above -- without this the options render as dark text on a dark list. */
+.activity-filter select option {
+    background: var(--h-surface);
+    color: var(--h-ink);
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 .visually-hidden {
     position: absolute;
     width: 1px;
     height: 1px;
-    margin: -1px;
     padding: 0;
+    margin: -1px;
     overflow: hidden;
-    clip: rect(0 0 0 0);
+    clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
 }
 
-/* Connections Grid */
-/* Events List */
+/* ------------------------------------------------------------------------- *
+ * Upcoming events
+ * ------------------------------------------------------------------------- */
+
 .events-list {
-    margin-bottom: 1rem;
+    padding: 0 1.25rem;
 }
 
 .event-item {
     display: flex;
-    gap: 1rem;
-    padding: 1rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
     align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--h-rule);
 }
 
 .event-item:last-child {
     border-bottom: none;
 }
 
-/* A meeting that has already happened. Still listed -- it is the only record
-   of it anyone has -- but visibly not one of the ones coming up, so the
-   heading above the list and the count on the stat card stay true to what
-   the reader sees. Dimmed rather than hidden, and not so far that the text
-   stops being readable. */
+/* A meeting that has already happened stays in the list until it is cleared,
+   but stops competing with the ones that have not. */
 .event-item.is-past {
     opacity: 0.55;
 }
 
-.event-item.is-past .event-date {
-    background: rgba(0, 0, 0, 0.06);
-    color: var(--text-light);
+.event-date {
+    flex-shrink: 0;
+    width: 2.75rem;
+    padding: 0.35rem 0;
+    text-align: center;
+    background: var(--h-give);
+    color: var(--h-on-give);
 }
 
-.event-date {
-    background: rgba(67, 97, 238, 0.1);
-    color: var(--primary);
-    border-radius: 0.5rem;
-    padding: 0.5rem;
-    text-align: center;
-    min-width: 3.125rem;
+.event-item.is-past .event-date {
+    background: var(--h-cell);
+    color: var(--h-dim);
 }
 
 .event-day {
-    font-size: 1.3rem;
-    font-weight: 700;
     display: block;
-    line-height: 1;
+    font-family: var(--h-sans);
+    font-size: 1.05rem;
+    font-weight: 500;
+    line-height: 1.1;
 }
 
 .event-month {
-    font-size: 0.8rem;
-    text-transform: uppercase;
     display: block;
+    font-family: var(--h-mono);
+    font-size: 0.55rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .event-details {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .event-details h4 {
-    font-size: 1rem;
-    margin-bottom: 0.2rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--h-ink);
 }
 
 .event-details p {
-    font-size: 0.9rem;
-    color: var(--text-light);
-    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--h-ink-soft);
 }
 
 .event-time {
-    font-size: 0.8rem;
-    color: var(--text-light);
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
 }
 
 .btn-event {
+    flex-shrink: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    display: grid;
+    place-items: center;
     background: transparent;
-    color: var(--primary);
-    border: 1px solid var(--primary);
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    color: var(--h-dim);
+    font-size: 0.8rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: border-color 0.18s ease, color 0.18s ease;
 }
 
 .btn-event:hover {
-    background: var(--primary);
-    color: var(--on-primary);
+    border-color: var(--h-edge);
+    color: var(--h-ink);
 }
 
-/* Resources List */
-.resources-list {
-    margin-bottom: 1rem;
+/* ------------------------------------------------------------------------- *
+ * Empty states
+ * ------------------------------------------------------------------------- */
+
+.empty-state {
+    padding: 1.75rem 1.25rem;
+    text-align: center;
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--h-dim);
 }
 
-.resource-item {
-    display: flex;
-    gap: 1rem;
-    padding: 1rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
-    align-items: center;
+.empty-state .btn-primary {
+    margin-top: 1rem;
 }
 
-.resource-item:last-child {
-    border-bottom: none;
-}
+/* ------------------------------------------------------------------------- *
+ * The stat dialog
+ *
+ * One dialog behind all six counts, with a second level for a single meeting
+ * or match. Chrome is ink.css's; this is the list and the detail inside it.
+ * ------------------------------------------------------------------------- */
 
-.resource-icon {
-    font-size: 1.8rem;
-    color: var(--primary);
-}
-
-.resource-info {
-    flex: 1;
-}
-
-.resource-info h4 {
-    font-size: 1rem;
-    margin-bottom: 0.2rem;
-}
-
-.resource-info p {
-    font-size: 0.9rem;
-    color: var(--text-light);
-    margin-bottom: 0.3rem;
-}
-
-.resource-date {
-    font-size: 0.8rem;
-    color: var(--text-light);
-}
-
-.btn-resource {
-    background: transparent;
-    color: var(--primary);
-    border: none;
-    font-size: 1.2rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-resource:hover {
-    color: var(--primary-dark);
-}
-
-/* Card Footer */
-.card-footer {
-    text-align: right;
-}
-
-.view-all {
-    color: var(--primary);
-    font-size: 0.9rem;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    transition: all 0.3s ease;
-}
-
-.view-all:hover {
-    color: var(--primary-dark);
-    gap: 0.5rem;
-}
-
-/* Event Modal */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
-
-.modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-/* Column layout so the header stays put and only the body scrolls. When the
-   whole container scrolled, a tall form (the description textarea alone was
-   7.5rem) pushed the last fields -- Location, and the save button -- past the
-   bottom edge with nothing to indicate they were there. */
-.modal-container {
-    background: var(--surface);
-    border-radius: 0.75rem;
-    width: 90%;
-    max-width: 31.25rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-    transform: translateY(20px);
-    transition: transform 0.3s ease;
-    max-height: 90vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.modal.active .modal-container {
-    transform: translateY(0);
-}
-
-.modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--surface);
-    flex-shrink: 0;
-}
-
-.modal-header h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: 1.5rem;
-    font-weight: 600;
-}
-
-.close-modal {
-    font-size: 1.8rem;
-    color: var(--text-light);
-    cursor: pointer;
-    transition: color 0.2s ease;
-    line-height: 1;
-    background: none;
-    border: none;
-    padding: 0;
-}
-
-.close-modal:hover {
-    color: var(--primary);
-}
-
-.modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-/* Form Styles */
-#eventForm {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.form-group {
-    margin-bottom: 1rem;
-}
-
-/* The form already spaces its children with `gap`; the per-group margin on
-   top of that was stacking two gaps between every field. */
-#eventForm .form-group,
-#eventForm .form-row {
-    margin-bottom: 0;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: var(--text);
-    font-size: 0.95rem;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 0.8rem 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid #e0e0e0;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    font-family: 'Poppins', sans-serif;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
-    outline: none;
-}
-
-.form-group textarea {
-    min-height: 4.5rem;
-    resize: vertical;
-}
-
-/* --- Select control ------------------------------------------------------ */
-/* forms.css already resets the native chrome and draws the arrow for every
-   `.modal-body select`, so this only adds what it leaves out. */
-.modal-body select {
-    cursor: pointer;
-}
-
-.modal-body select:hover {
-    border-color: #c7cee4;
-}
-
-/* Until a real choice is made the control should read like the empty inputs
-   above it, not like a filled-in value. */
-.modal-body select:has(option[value=""]:checked) {
-    color: var(--text-light);
-}
-
-.modal-body select option {
-    color: var(--text);
-}
-
-/* --- Stat detail dialog -------------------------------------------------- */
-/* Everything here is tuned to get a whole list on screen at once: two columns
-   of compact rows rather than one column of tall cards. The body still scrolls
-   as a fallback -- with enough matches nothing fits a viewport, and silently
-   clipping rows would be worse than a scrollbar. */
 .modal-heading {
     display: flex;
     align-items: center;
@@ -929,450 +725,267 @@ button.view-all {
 }
 
 .stat-back {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.9rem;
-    height: 1.9rem;
     flex-shrink: 0;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background: var(--surface);
-    color: var(--text-light);
-    font-size: 1.2rem;
+    width: 1.8rem;
+    height: 1.8rem;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    color: var(--h-dim);
+    font-size: 1rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: border-color 0.18s ease, color 0.18s ease;
 }
 
 .stat-back:hover {
-    color: var(--primary);
-    border-color: var(--primary);
+    border-color: var(--h-edge);
+    color: var(--h-ink);
 }
 
-/* Two-up so twice as much fits before anything scrolls. */
 .stat-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-    gap: 0.6rem;
+    border-top: 1px solid var(--h-rule);
 }
 
 .stat-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
     width: 100%;
-    padding: 0.7rem 0.85rem;
-    border: 1px solid var(--border);
-    border-radius: 0.625rem;
-    background: var(--surface);
-    font: inherit;
+    padding: 0.85rem 0.25rem;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--h-rule);
     text-align: left;
-    color: inherit;
+    font-family: inherit;
     cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease;
+    transition: background 0.18s ease;
 }
 
 .stat-row:hover {
-    border-color: var(--primary);
-    background: rgba(67, 97, 238, 0.04);
+    background: var(--h-paper);
 }
 
+/* The initials block, or a date for a meeting. */
 .stat-row-mark {
     flex-shrink: 0;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(67, 97, 238, 0.1);
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 0.8rem;
-    line-height: 1.1;
+    width: 2.4rem;
+    padding: 0.3rem 0;
+    display: grid;
+    place-items: center;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    line-height: 1.25;
 }
 
 .stat-row-mark small {
-    font-size: 0.55rem;
-    font-weight: 600;
+    font-size: 0.52rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    opacity: 0.75;
 }
 
 .stat-row-main {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
-/* display:block because these are spans -- a <button> cannot contain block
-   elements, so the rows are built from spans throughout. */
 .stat-row-title {
     display: block;
-    font-weight: 600;
-    font-size: 0.92rem;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--h-ink);
 }
 
 .stat-row-meta {
     display: block;
-    font-size: 0.78rem;
-    color: var(--text-light);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin-top: 0.15rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
 }
 
 .stat-row-go {
     flex-shrink: 0;
-    color: var(--text-light);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    color: var(--h-rule);
 }
 
+.stat-row:hover .stat-row-go {
+    color: var(--h-ink);
+}
+
+/* A two-way match, flagged in the list. The same word the home page's match
+   panel uses, in the same colour. */
 .stat-row .mutual-flag {
-    display: inline-block;
-    margin-left: 0.35rem;
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-success);
-    background: rgba(22, 163, 74, 0.12);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.5rem;
     padding: 0.1rem 0.35rem;
-    border-radius: 62.4375rem;
+    background: var(--h-take);
+    color: var(--h-on-take);
+    font-family: var(--h-mono);
+    font-size: 0.55rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     vertical-align: middle;
 }
 
-/* --- Tag columns --------------------------------------------------------- */
+/* --- Needs and offers, in the tags view ---------------------------------- */
+
 .stat-tags {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
 .stat-tags h3 {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.74rem;
+    gap: 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-light);
-    margin-bottom: 0.6rem;
+    color: var(--h-dim);
+    margin-bottom: 0.7rem;
 }
 
-.stat-tags .needs h3 i { color: var(--primary); }
-.stat-tags .offers h3 i { color: var(--text-success); }
+/* Needs are what you receive, offers are what you give -- the same two
+   directions, the same two colours, as everywhere else. */
+.stat-tags .needs h3 i  { color: var(--h-give); }
+.stat-tags .offers h3 i { color: var(--h-take); }
 
 .tag-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: 0.4rem;
 }
 
 .tag-chips span {
-    font-size: 0.78rem;
-    line-height: 1.3;
-    padding: 0.25rem 0.6rem;
-    border-radius: 62.4375rem;
-    background: var(--surface-sunk);
-    border: 1px solid var(--border);
-    color: var(--text);
+    padding: 0.28rem 0.55rem;
+    border: 1px solid var(--h-give);
+    color: var(--h-give);
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
 }
 
 .stat-tags .offers .tag-chips span {
-    background: var(--surface-success);
+    border-color: var(--h-take);
+    color: var(--h-take);
 }
 
-/* --- Detail view --------------------------------------------------------- */
+/* --- A single match or meeting -------------------------------------------- */
+
 .stat-detail-head {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
     padding-bottom: 1rem;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--h-edge);
 }
 
 .stat-detail-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 0.75rem 1.25rem;
-    margin-bottom: 1rem;
+    gap: 0;
+    border-top: 1px solid var(--h-rule);
+    margin-bottom: 1.25rem;
 }
 
 .stat-field dt {
-    font-size: 0.72rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-light);
-    margin-bottom: 0.15rem;
+    color: var(--h-dim);
 }
 
 .stat-field dd {
-    margin: 0;
-    font-size: 0.92rem;
-    color: var(--text);
-    overflow-wrap: anywhere;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--h-ink);
 }
 
 .stat-detail-note {
-    font-size: 0.9rem;
+    padding: 0.85rem 0 0.85rem 1rem;
+    border-left: 3px solid var(--h-take);
+    font-size: 0.87rem;
     line-height: 1.6;
-    color: var(--text);
-    background: var(--surface-sunk);
-    border-radius: 0.5rem;
-    padding: 0.8rem 1rem;
-    margin-bottom: 1rem;
+    color: var(--h-ink-soft);
+    margin-bottom: 1.25rem;
 }
 
 .stat-detail-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.6rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
 }
 
-.stat-detail-actions a,
-.stat-detail-actions button {
-    padding: 0.55rem 1.1rem;
-    font-size: 0.9rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    font-family: inherit;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    cursor: pointer;
-    width: auto;
-    margin-top: 0;
-}
-
-@media (max-width: 40em) {
-    .stat-tags {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* --- Inline field errors ------------------------------------------------- */
-/* The .field-error note and .input-error control state are styled in
-   forms.css, which every page shares. Only the extras this modal adds live
-   here, scoped to the form so the other pages' errors are left alone. */
-#eventForm .field-error {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    line-height: 1.45;
-}
-
-#eventForm .field-error::before {
-    content: '\26A0';
-    font-size: 0.9rem;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-/* forms.css colours the border; the tint makes the field itself read as the
-   thing at fault, not just its outline. `background-color` specifically, so
-   the arrow that forms.css draws with `background-image` survives. */
-#eventForm .input-error {
-    background-color: var(--surface-danger);
-}
+/* ------------------------------------------------------------------------- *
+ * Event form
+ * ------------------------------------------------------------------------- */
 
 .form-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 1rem;
 }
 
-.form-row .form-group {
-    flex: 1;
-}
+/* ------------------------------------------------------------------------- *
+ * Loading skeletons
+ *
+ * The stat cards carry a literal 0 in the markup so the page is not empty
+ * before the script runs, but that 0 is a real-looking number that changes a
+ * moment later. While data-loading is set, the text is replaced by a shimmer
+ * block of roughly its own size -- ppdashboard.js sets the attribute before
+ * awaiting /api/dashboard and clears it once the numbers are in.
+ *
+ * tokens.css's --skeleton-* pair is a cool grey mixed for the blue palette and
+ * reads as a patch of a different page on the cream, so these use the paper's
+ * own tones. Both are already theme-aware; this is only about hue.
+ * ------------------------------------------------------------------------- */
 
-.btn-primary {
-    background: var(--primary);
-    color: var(--on-primary);
-    padding: 0.8rem 1.5rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-family: 'Poppins', sans-serif;
-    margin-top: 0.5rem;
-    width: 100%;
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
-}
-
-/* Responsive Design */
-@media (max-width: 75em) {
-    .dashboard-content {
-        grid-template-columns: 1fr;
-    }
-
-    /* Two across from here down: three columns at this width leaves each card
-       too narrow for its icon and label to sit side by side. Six divides into
-       it evenly, so nothing is left stranded. */
-    .stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 62em) {
-    
-    .dashboard-section {
-        padding: 8rem 5% 5rem;
-    }
-}
-
-@media (max-width: 48em) {
-    .section-header h2 {
-        font-size: 2rem;
-    }
-
-    .dashboard-container {
-        padding: 2rem;
-    }
-
-    /* Stays two across -- the cards compact instead of dropping to one
-       column. */
-    .stats-grid {
-        gap: 1rem;
-    }
-
-    .stat-card {
-        gap: 1rem;
-        padding: 1.25rem;
-    }
-
-    .stat-icon {
-        width: 3rem;
-        height: 3rem;
-        font-size: 1.4rem;
-    }
-}
-
-@media (max-width: 36em) {
-    .dashboard-section {
-        padding: 8rem 3% 5rem;
-    }
-
-    /* Icon above the text: side by side leaves too little room for the
-       label once two cards share a phone-width row. */
-    .stat-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-        padding: 1rem;
-    }
-
-    /* `margin-left: auto` means nothing once the card is a column, and there
-       is no width to spare for it either. */
-    .stat-go {
-        display: none;
-    }
-
-    .stat-value {
-        font-size: 1.6rem;
-    }
-
-    .stat-content h3 {
-        font-size: 0.9rem;
-    }
-
-    .modal-container {
-        width: 95%;
-        max-width: 95%;
-    }
-
-    .form-row {
-        flex-direction: column;
-        gap: 1rem;
-    }
-}
-.empty-state {
-    grid-column: 1 / -1;
-    text-align: center;
-    color: var(--text-light);
-    padding: 2.5rem 1rem;
-    line-height: 1.6;
-}
-
-.empty-state .btn-primary {
-    display: inline-block;
-    text-decoration: none;
-    background: var(--primary);
-    color: var(--on-primary);
-    padding: 0.7rem 1.4rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-}
-
-/* --- Loading skeletons -------------------------------------------------- */
-/* The stat cards carry a literal 0 in the markup so the page is not empty
-   before the script runs, but that 0 is a real-looking number that changes a
-   moment later. While data-loading is set, the text is replaced by a shimmer
-   block of roughly its own size -- ppdashboard.js sets the attribute before
-   awaiting /api/dashboard and clears it once the numbers are in. */
 [data-loading="true"] .stat-value,
 [data-loading="true"] .stat-change {
-    /* Inherits .skeleton's paint without needing the class in the markup,
-       which would mean rewriting these nodes twice per load. */
     background: linear-gradient(
         90deg,
-        var(--skeleton-base) 25%,
-        var(--skeleton-sheen) 37%,
-        var(--skeleton-base) 63%
+        var(--h-cell) 25%,
+        var(--h-rule) 37%,
+        var(--h-cell) 63%
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
-    border-radius: 0.375rem;
+    border-radius: 0;
     color: transparent;
     user-select: none;
     width: fit-content;
 }
 
-[data-loading="true"] .stat-value {
-    min-width: 2.5rem;
-}
+[data-loading="true"] .stat-value  { min-width: 2.5rem; }
+[data-loading="true"] .stat-change { min-width: 6rem; }
 
-[data-loading="true"] .stat-change {
-    min-width: 6rem;
-}
-
-/* The chevron promises the card opens something; while the numbers are still
+/* The chevron promises the cell opens something; while the numbers are still
    loading there is nothing behind it yet. */
 [data-loading="true"] .stat-go {
     opacity: 0.25;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    [data-loading="true"] .stat-value,
-    [data-loading="true"] .stat-change {
-        animation: none;
-    }
-}
-
-/* Activity feed placeholders. The real rows are an icon plus two lines of
+/* Activity feed placeholders. The real rows are a mark plus two lines of
    text, so these are too. */
 .activity-item.skeleton-activity {
     align-items: center;
 }
 
 .skeleton-dot {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 50%;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 0;
     flex-shrink: 0;
 }
 
@@ -1388,4 +1001,79 @@ button.view-all {
 .skeleton-activity-text .skeleton-line.short {
     width: 35%;
     margin-bottom: 0;
+}
+
+/* shared.css paints .skeleton from tokens.css's cool greys; restated on the
+   paper's tones for the same reason as the block above. */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--h-cell) 25%,
+        var(--h-rule) 37%,
+        var(--h-cell) 63%
+    );
+    background-size: 400% 100%;
+    border-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-loading="true"] .stat-value,
+    [data-loading="true"] .stat-change,
+    .skeleton {
+        animation: none;
+    }
+}
+
+/* ------------------------------------------------------------------------- *
+ * Responsive
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 75em) {
+    .dashboard-content {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-content > .dashboard-card {
+        height: auto;
+        max-height: 32rem;
+    }
+}
+
+@media (max-width: 62em) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 48em) {
+    .dashboard-toolbar {
+        align-items: flex-start;
+    }
+
+    .toolbar-actions {
+        width: 100%;
+    }
+
+    .toolbar-actions .btn-action {
+        flex: 1 1 auto;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 36em) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .card-header {
+        flex-wrap: wrap;
+    }
+
+    .stat-detail-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }

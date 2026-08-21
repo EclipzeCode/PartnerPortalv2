@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Warm the connections to the two third-party origins every page uses,
          before the local stylesheets below start downloading. Both the
-         boxicons stylesheet and the Poppins stylesheet are render-blocking
+         boxicons stylesheet and the font stylesheet are render-blocking
          and are discovered late, at the bottom of this head -- so without
          these the browser pays a DNS lookup plus a TLS handshake to each
          before it can even ask for them. gstatic serves the font files
@@ -33,13 +33,32 @@
       } catch (e) { /* storage disabled; light theme is the right fallback */ }
     </script>
     <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, nav, footer.
+         Between tokens.css and the page stylesheet, so pp.css can override
+         it and so both can be overridden by nothing else. -->
+    <link rel="stylesheet" href="ink.css">
     <link rel="stylesheet" href="pp.css">
     <link rel="stylesheet" href="shared.css">
+    <!-- The canonical control and modal stylesheet, which the contact form
+         and the two modals on this page now use rather than keeping a second
+         copy of those rules in pp.css. -->
+    <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="nav.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three faces, three jobs (see the header of pp.css): Instrument Serif
+         for headlines only, Space Grotesk for anything read as a sentence,
+         JetBrains Mono for metadata. Poppins is not loaded here any more --
+         this is the only page that used it without declaring it in its own
+         stylesheet, and the other pages fetch it themselves. -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
+<!-- Two classes, two scopes. .ink opts this page into the shared redesign in
+     ink.css -- palette, typefaces, buttons, nav, footer -- and is what every
+     redesigned page carries. .home scopes what only this page has: the dot
+     texture, the match matrix, the hero. A page without .ink sees none of it
+     and keeps the original design untouched, which is what lets the app be
+     converted a page at a time. -->
+<body class="ink home">
     <!-- First stop for a keyboard or screen-reader visitor. The nav
          is the same dozen links on every page; without this they are
          tabbed through again on each one before reaching anything
@@ -54,7 +73,6 @@
             <a href="index.html" class="active">Home</a>
             <a href="ppsearch.html">Search</a>
             <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
-            <!-- <a href="pphelp.html">Help</a> -->
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
@@ -83,290 +101,260 @@
         </nav>
     </header>
 
-    <!-- Hero Section -->
-<section class="hero" id="main" tabindex="-1">
-    <div class="hero-bg" aria-hidden="true">
-        <span class="hero-blob blob-1"></span>
-        <span class="hero-blob blob-2"></span>
+    <!-- Hero -->
+    <section class="hero" id="main" tabindex="-1">
+        <div class="hero-inner">
+            <div class="hero-content">
+                <div class="hero-badge eyebrow">Built for two-way partnerships</div>
 
-        <!--
-            Two peaks separated by a chasm, joined by a suspension bridge.
-            The span assembles as the page is scrolled (see --build in pp.css)
-            and the layers shift at different rates with the cursor
-            (parallax). Decorative only.
-        -->
-        <div class="hero-scene" id="heroScene">
-            <svg class="scene-svg" viewBox="0 0 1440 520" preserveAspectRatio="xMidYMax slice" role="presentation" focusable="false">
-                <!-- Far range -->
-                <g class="scene-layer" data-depth="0.12">
-                    <path class="peak-far" d="M-60,520 L-60,362 L140,286 L330,336 L520,262 L700,330 L900,268 L1090,332 L1280,278 L1500,346 L1500,520 Z"/>
-                </g>
+                <h1 class="hero-title">
+                    Find a partner who needs what you <em>already have</em>
+                </h1>
 
-                <!-- Mid range: the two peaks the bridge connects -->
-                <g class="scene-layer" data-depth="0.3">
-                    <path class="peak-mid" d="M-60,520 L-60,404 L120,330 L300,240 L430,300 L560,352 L560,520 Z"/>
-                    <path class="peak-mid" d="M880,520 L880,352 L1010,296 L1150,222 L1320,314 L1500,388 L1500,520 Z"/>
-                </g>
+                <p class="hero-subtitle">
+                    Most partnerships fall apart because one side is doing a favour. PartnerPortal
+                    matches organizations on both what they need <em>and</em> what they can offer &mdash;
+                    so both sides walk in with something to gain.
+                </p>
 
-                <!-- The bridge -->
-                <g class="scene-layer scene-bridge" data-depth="0.46">
-                    <!-- Main suspension cable: anchor, over left tower, sag, over
-                         right tower, anchor. pathLength="1" normalises the path so
-                         the scroll-driven draw-on in pp.css can work in 0..1 units
-                         without measuring the real length at runtime. -->
-                    <path class="bridge-cable" pathLength="1" d="M560,350 L634,258 Q720,338 806,258 L880,350"/>
-
-                    <!-- hangers from cable down to deck -->
-                    <g class="bridge-hangers">
-                        <line x1="596" y1="304" x2="596" y2="350"/>
-                        <line x1="664" y1="286" x2="664" y2="350"/>
-                        <line x1="700" y1="300" x2="700" y2="350"/>
-                        <line x1="740" y1="300" x2="740" y2="350"/>
-                        <line x1="776" y1="286" x2="776" y2="350"/>
-                        <line x1="844" y1="304" x2="844" y2="350"/>
-                    </g>
-
-                    <!-- towers -->
-                    <rect class="bridge-tower" x="630" y="252" width="8" height="102" rx="2"/>
-                    <rect class="bridge-tower" x="802" y="252" width="8" height="102" rx="2"/>
-
-                    <!-- deck -->
-                    <rect class="bridge-deck" x="556" y="348" width="328" height="7" rx="3"/>
-                </g>
-
-                <!-- Near ridge. Kept low and shallow: it is the darkest fill in
-                     the scene, so if it rises any higher it sits behind the hero
-                     stats and drags their contrast down. -->
-                <g class="scene-layer" data-depth="0.75">
-                    <path class="peak-near" d="M-60,520 L-60,500 L200,477 L420,495 L640,480 L880,497 L1120,481 L1500,499 L1500,520 Z"/>
-                </g>
-            </svg>
-        </div>
-    </div>
-
-    <div class="hero-content">
-        <div class="hero-badge">
-            <span class="badge-dot"></span>
-            Built for two-way partnerships
-        </div>
-
-        <h1 class="hero-title">
-            Find a partner who needs<br>
-            what you <span>already have</span>
-        </h1>
-
-        <p class="hero-subtitle">
-            Most partnerships fall apart because one side is doing a favour. PartnerPortal
-            matches organizations on both what they need <em>and</em> what they can offer &mdash;
-            so both sides walk in with something to gain.
-        </p>
-
-        <div class="hero-buttons">
-            <a href="onboarding.html" class="btn-primary">Get matched free</a>
-            <a href="ppsearch.html" class="btn-secondary">Browse partners <i class='bx bx-right-arrow-alt'></i></a>
-        </div>
-
-        <!-- Facts about how the product works, not traction claims. Replace
-             these with real numbers only when there are real numbers. -->
-        <div class="hero-stats">
-            <div class="hero-stat">
-                <div class="hero-stat-number">33</div>
-                <div class="hero-stat-label">Need &amp; offer categories</div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-number">2-way</div>
-                <div class="hero-stat-label">Every match scored both directions</div>
-            </div>
-            <div class="hero-stat">
-                <div class="hero-stat-number">Free</div>
-                <div class="hero-stat-label">For nonprofits and small orgs</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="hero-visual">
-        <!-- Live match demo: cycles through example pairings -->
-        <div class="match-demo" id="matchDemo">
-            <div class="match-demo-head">
-                <span class="match-flag"><i class='bx bx-transfer-alt'></i> Mutual match</span>
-                <span class="match-score" id="matchScore">92</span>
-            </div>
-
-            <div class="match-org match-org-a">
-                <div class="org-avatar" id="orgAvatarA">CB</div>
-                <div class="org-info">
-                    <div class="org-name" id="orgNameA">Coders Over Borders</div>
-                    <div class="org-type" id="orgTypeA">Non-profit</div>
+                <div class="hero-buttons">
+                    <a href="onboarding.html" class="btn-primary">Get matched free</a>
+                    <a href="ppsearch.html" class="btn-secondary">Browse partners <i class='bx bx-right-arrow-alt'></i></a>
                 </div>
-            </div>
 
-            <div class="match-exchange">
-                <div class="exchange-row">
-                    <span class="exchange-arrow down"><i class='bx bx-down-arrow-alt'></i></span>
-                    <span class="exchange-text">
-                        offers <strong id="offerA">Web Development</strong>
-                    </span>
-                </div>
-                <div class="exchange-line"></div>
-                <div class="exchange-row">
-                    <span class="exchange-arrow up"><i class='bx bx-up-arrow-alt'></i></span>
-                    <span class="exchange-text">
-                        offers <strong id="offerB">Student Internships</strong>
-                    </span>
-                </div>
-            </div>
-
-            <div class="match-org match-org-b">
-                <div class="org-avatar alt" id="orgAvatarB">RT</div>
-                <div class="org-info">
-                    <div class="org-name" id="orgNameB">Riverside Tech</div>
-                    <div class="org-type" id="orgTypeB">Small Business</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Manual controls. The demo also advances on its own, but that
-             cycling stops for good once either arrow is used, so it never
-             moves on while someone is reading a pairing they chose. -->
-        <div class="match-nav">
-            <button type="button" class="match-arrow" id="matchPrev" aria-label="Previous example match">
-                <i class='bx bx-chevron-left'></i>
-            </button>
-
-            <div class="match-dots" id="matchDots" role="tablist" aria-label="Example matches">
-                <button class="match-dot active" data-index="0" aria-label="Example match 1"></button>
-                <button class="match-dot" data-index="1" aria-label="Example match 2"></button>
-                <button class="match-dot" data-index="2" aria-label="Example match 3"></button>
-            </div>
-
-            <button type="button" class="match-arrow" id="matchNext" aria-label="Next example match">
-                <i class='bx bx-chevron-right'></i>
-            </button>
-        </div>
-    </div>
-</section>
-
-    <!-- About Section -->
-<section class="about" id="about">    
-    <!-- Platform Section -->
-    <div class="scroll-section platform-section">
-        <div class="scroll-content">
-            <div class="text-content">
-                <h3 class="section-subtitle">How it works</h3>
-                <h2 class="section-title">From a <span>match</span> to a written <span>agreement</span></h2>
-                <p class="section-description">Most tools stop at introductions. PartnerPortal takes you from finding an organization whose needs line up with yours through to a summary both sides have actually agreed to.</p>
-            </div>
-            <div class="visual-content">
-                <!-- Repurposed from a stats grid. These are the four steps of
-                     the product, not metrics -- no data-target, so pp.js
-                     leaves the numbers alone. -->
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-number">1</div>
-                        <div class="stat-label">Say what you need and what you offer</div>
+                <!-- Facts about how the product works, not traction claims. Replace
+                     these with real numbers only when there are real numbers. -->
+                <div class="hero-stats">
+                    <div class="hero-stat">
+                        <div class="hero-stat-number">33</div>
+                        <div class="hero-stat-label">Need &amp; offer categories</div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-number">2</div>
-                        <div class="stat-label">See organizations ranked by two-way fit</div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-number">2-way</div>
+                        <div class="hero-stat-label">Every match scored both directions</div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-number">3</div>
-                        <div class="stat-label">Propose terms, pre-filled from the match</div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-number">Free</div>
+                        <div class="hero-stat-label">For nonprofits and small orgs</div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-number">4</div>
-                        <div class="stat-label">Both confirm, and share the summary</div>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <!-- Live match demo: cycles through example pairings. The
+                     matrix between the two organizations is the overlap that
+                     produced the score -- rows are what one side offers,
+                     columns what the other needs, and a filled cell is a
+                     category both of them named. pp.js draws it. -->
+                <div class="match-demo" id="matchDemo">
+                    <div class="match-demo-head">
+                        <span class="match-flag"><i class='bx bx-transfer-alt'></i> Mutual match</span>
+                        <span><span class="match-score" id="matchScore">92</span><span class="match-score-unit">%</span></span>
+                    </div>
+
+                    <div class="match-org match-org-a">
+                        <div class="org-avatar" id="orgAvatarA">CB</div>
+                        <div class="org-info">
+                            <div class="org-name" id="orgNameA">Coders Over Borders</div>
+                            <div class="org-type" id="orgTypeA">Non-profit</div>
+                        </div>
+                    </div>
+
+                    <!-- Filled by pp.js. Decorative: the exchange rows below
+                         say in words what the grid says in colour. -->
+                    <div class="match-lattice" id="matchLattice" aria-hidden="true"></div>
+                    <div class="lattice-axis" aria-hidden="true">
+                        <span>they need &#9656;</span>
+                        <span>you offer &#9662;</span>
+                    </div>
+
+                    <div class="match-org match-org-b">
+                        <div class="org-avatar alt" id="orgAvatarB">RT</div>
+                        <div class="org-info">
+                            <div class="org-name" id="orgNameB">Riverside Tech</div>
+                            <div class="org-type" id="orgTypeB">Small Business</div>
+                        </div>
+                    </div>
+
+                    <div class="match-exchange">
+                        <div class="exchange-row">
+                            <span class="exchange-dir" id="exchangeDirA">CB &rarr; RT</span>
+                            <span class="exchange-text">
+                                offers <strong id="offerA">Web Development</strong>
+                            </span>
+                        </div>
+                        <div class="exchange-row reverse">
+                            <span class="exchange-dir" id="exchangeDirB">RT &rarr; CB</span>
+                            <span class="exchange-text">
+                                offers <strong id="offerB">Student Internships</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual controls. The demo also advances on its own, but that
+                     cycling stops for good once either arrow is used, so it never
+                     moves on while someone is reading a pairing they chose. -->
+                <div class="match-nav">
+                    <button type="button" class="match-arrow" id="matchPrev" aria-label="Previous example match">
+                        <i class='bx bx-chevron-left'></i>
+                    </button>
+
+                    <div class="match-dots" id="matchDots" role="tablist" aria-label="Example matches">
+                        <button class="match-dot active" data-index="0" aria-label="Example match 1"></button>
+                        <button class="match-dot" data-index="1" aria-label="Example match 2"></button>
+                        <button class="match-dot" data-index="2" aria-label="Example match 3"></button>
+                    </div>
+
+                    <button type="button" class="match-arrow" id="matchNext" aria-label="Next example match">
+                        <i class='bx bx-chevron-right'></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About -->
+    <section class="about" id="about">
+
+        <!-- How it works. Four steps of one sequence, set as a numbered
+             ledger rather than as four cards: cards would imply four separate
+             features, and this is an order of operations. -->
+        <div class="scroll-section platform-section">
+            <div class="scroll-content">
+                <div class="text-content">
+                    <h3 class="section-subtitle eyebrow">How it works</h3>
+                    <h2 class="section-title">From a <span>match</span> to a written <span>agreement</span></h2>
+                    <p class="section-description">Most tools stop at introductions. PartnerPortal takes you from finding an organization whose needs line up with yours through to a summary both sides have actually agreed to.</p>
+                </div>
+                <div class="visual-content">
+                    <div class="steps">
+                        <div class="step">
+                            <span class="step-index">01</span>
+                            <span class="step-text"><strong>Say</strong> what your organization needs, and what it can offer, from a shared vocabulary of 33 categories.</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-index">02</span>
+                            <span class="step-text"><strong>See</strong> every other organization ranked by how well the two profiles fit in both directions.</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-index">03</span>
+                            <span class="step-text"><strong>Propose</strong> terms, pre-filled from the overlap that produced the match.</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-index">04</span>
+                            <span class="step-text"><strong>Confirm</strong>, and share a summary page with a board or a funder &mdash; no account needed to read it.</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Features Section -->
-    <div class="scroll-section features-section">
-        <div class="scroll-content">
-            <div class="visual-content">
-                <div class="feature-cards">
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class='bx bx-transfer'></i></div>
-                        <h3>Two-way matching</h3>
-                        <p>Every organization is scored on what it offers you <em>and</em> what you offer it. Mutual matches rank above one-sided ones.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class='bx bx-category-alt'></i></div>
-                        <h3>Structured needs and offers</h3>
-                        <p>Both sides pick from the same 33 categories, so a match is a real overlap rather than two descriptions that happen to share a word.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class='bx bx-file'></i></div>
-                        <h3>Agreements, not just intros</h3>
-                        <p>Propose what each side will provide. Once both confirm, you get a summary page you can send to a board or a funder.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="text-content">
-                <h3 class="section-subtitle">What makes it different</h3>
-                <h2 class="section-title">Built around what each side <span>brings</span>, not just what they <span>want</span></h2>
-                <p class="section-description">A partnership where only one side gains is a favour, and favours run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
-                <a href="onboarding.html" class="btn-primary">Set up your profile</a>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Benefits Section -->
-    <div class="scroll-section benefits-section">
-        <div class="scroll-content">
-            <div class="text-content">
-                <h3 class="section-subtitle">Why this exists</h3>
-                <h2 class="section-title">Small organizations already have what each other <span>needs</span></h2>
-                <p class="section-description">A nonprofit with a hall standing empty and no one to run its outreach. A studio down the road with time to donate and no cause to donate it to. They rarely find each other, and when they do it is usually by accident.</p>
 
-                <div class="benefit-list">
-                    <div class="benefit-item">
-                        <div class="benefit-number">Both</div>
-                        <div class="benefit-text">Sides have to bring something — one-sided proposals are rejected</div>
-                    </div>
-                    <div class="benefit-item">
-                        <div class="benefit-number">Set</div>
-                        <div class="benefit-text">Categories instead of free text, so matches are real overlaps</div>
-                    </div>
-                    <div class="benefit-item">
-                        <div class="benefit-number">Open</div>
-                        <div class="benefit-text">Agreed partnerships get a summary anyone can read, no account needed</div>
+        <!-- What makes it different -->
+        <div class="scroll-section features-section">
+            <div class="scroll-content">
+                <div class="visual-content">
+                    <div class="feature-cards">
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class='bx bx-transfer'></i></div>
+                            <h3>Two-way matching</h3>
+                            <p>Every organization is scored on what it offers you <em>and</em> what you offer it. Mutual matches rank above one-sided ones.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class='bx bx-category-alt'></i></div>
+                            <h3>Structured needs and offers</h3>
+                            <p>Both sides pick from the same 33 categories, so a match is a real overlap rather than two descriptions that happen to share a word.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class='bx bx-file'></i></div>
+                            <h3>Agreements, not just intros</h3>
+                            <p>Propose what each side will provide. Once both confirm, you get a summary page you can send to a board or a funder.</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="visual-content">
-                <!-- A testimonial carousel lived here with an invented quote
-                     attributed to a named person. Removed: there are no real
-                     users yet to quote. Put real ones back when there are. -->
-                <div class="origin-note">
-                    <i class='bx bxs-quote-alt-left'></i>
-                    <p>
-                        PartnerPortal started because a nonprofit I know lost a
-                        partner organization and had no way to find another one
-                        like it. Everything here is built around that problem:
-                        making the trade explicit, so both sides can see what
-                        they are getting before they commit.
-                    </p>
-                    <span class="origin-attribution">Why I built this</span>
+                <div class="text-content">
+                    <h3 class="section-subtitle eyebrow">What makes it different</h3>
+                    <h2 class="section-title">Built around what each side <span>brings</span>, not just what they <span>want</span></h2>
+                    <p class="section-description">A partnership where only one side gains is a favour, and favours run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
+                    <a href="onboarding.html" class="btn-primary">Set up your profile</a>
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- CTA Section -->
-    <div class="scroll-section cta-section">
-        <div class="scroll-content">
-            <h2 class="cta-title">See who you could be trading with</h2>
-            <p class="cta-text">Setting up a profile takes a few minutes. You will see your matches, and the reasons behind each one, straight afterwards.</p>
-            <div class="cta-buttons">
-                <a href="onboarding.html" class="btn-primary">Get Started</a>
-                <button type="button" id="contactBtn" class="btn-secondary">Contact us</button>
+
+        <!-- Why this exists. The visual is the thing the product actually
+             produces: a partnership both sides have confirmed. -->
+        <div class="scroll-section benefits-section">
+            <div class="scroll-content">
+                <div class="text-content">
+                    <h3 class="section-subtitle eyebrow">Why this exists</h3>
+                    <h2 class="section-title">Small organizations already have what each other <span>needs</span></h2>
+                    <p class="section-description">A nonprofit with a hall standing empty and no one to run its outreach. A studio down the road with time to donate and no cause to donate it to. They rarely find each other, and when they do it is usually by accident.</p>
+
+                    <div class="benefit-list">
+                        <div class="benefit-item">
+                            <div class="benefit-number">Both</div>
+                            <div class="benefit-text">Sides have to bring something &mdash; one-sided proposals are rejected</div>
+                        </div>
+                        <div class="benefit-item">
+                            <div class="benefit-number">Set</div>
+                            <div class="benefit-text">Categories instead of free text, so matches are real overlaps</div>
+                        </div>
+                        <div class="benefit-item">
+                            <div class="benefit-number">Open</div>
+                            <div class="benefit-text">Agreed partnerships get a summary anyone can read, no account needed</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="visual-content">
+                    <!-- An illustration of the output, built from the same
+                         example the hero cycles through first. The names here
+                         are fictional, as they are in the demo above. -->
+                    <div class="agreement">
+                        <div class="agreement-head">
+                            <span class="k">Partnership agreement</span>
+                            <span class="v">Both confirmed</span>
+                        </div>
+                        <div class="agreement-body">
+                            <div class="agreement-side">
+                                <div class="who">Coders Over Borders</div>
+                                <div class="meta">Non-profit &middot; Riverside, CA</div>
+                                <div class="provides">Provides</div>
+                                <ul>
+                                    <li>Web development, 40 hours</li>
+                                    <li>Volunteer recruiting</li>
+                                </ul>
+                            </div>
+                            <div class="agreement-side">
+                                <div class="who">Riverside Tech</div>
+                                <div class="meta">Small business &middot; Riverside, CA</div>
+                                <div class="provides">Provides</div>
+                                <ul>
+                                    <li>Student internships, 3 seats</li>
+                                    <li>Meeting space, Tuesdays</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="agreement-foot">
+                            <span>Match 92% &middot; mutual</span>
+                            <span>Example summary</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</section>
+
+        <!-- CTA Section -->
+        <div class="scroll-section cta-section">
+            <div class="scroll-content">
+                <h2 class="cta-title">See who you could be trading with</h2>
+                <p class="cta-text">Setting up a profile takes a few minutes. You will see your matches, and the reasons behind each one, straight afterwards.</p>
+                <div class="cta-buttons">
+                    <a href="onboarding.html" class="btn-primary">Get Started</a>
+                    <button type="button" id="contactBtn" class="btn-secondary">Contact us</button>
+                </div>
+            </div>
+        </div>
+    </section>
 
         <!-- Modal HTML -->
     <div id="instructions-modal" class="modal">
@@ -377,35 +365,35 @@
             </div>
             <div class="modal-body">
                 <div class="instruction-step">
-                    <div class="step-number">1</div>
+                    <div class="step-number">01</div>
                     <div class="step-content">
                         <h3>Account Setup</h3>
                         <p>Begin by creating your account or logging in to access all platform features.</p>
                     </div>
                 </div>
                 <div class="instruction-step">
-                    <div class="step-number">2</div>
+                    <div class="step-number">02</div>
                     <div class="step-content">
                         <h3>Navigation</h3>
                         <p>Use the menu bar at the top to explore different sections of the platform.</p>
                     </div>
                 </div>
                 <div class="instruction-step">
-                    <div class="step-number">3</div>
+                    <div class="step-number">03</div>
                     <div class="step-content">
                         <h3>Partner Search</h3>
                         <p>Click "Search" to find business partners using our advanced filtering system.</p>
                     </div>
                 </div>
                 <div class="instruction-step">
-                    <div class="step-number">4</div>
+                    <div class="step-number">04</div>
                     <div class="step-content">
                         <h3>Connection Management</h3>
                         <p>View partner profiles, save favorites, and initiate contact through the platform.</p>
                     </div>
                 </div>
                 <div class="instruction-step">
-                    <div class="step-number">5</div>
+                    <div class="step-number">05</div>
                     <div class="step-content">
                         <h3>Getting Help</h3>
                         <p>Visit our Help section for FAQs or to contact our support team with any questions.</p>
