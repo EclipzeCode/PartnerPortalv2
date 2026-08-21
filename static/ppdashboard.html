@@ -269,23 +269,32 @@
                     </div>
                 </div>
 
-                <!-- Upcoming Events. The rows and "View all" both open the same
-                     dialog the Upcoming stat card does, so there is one place
-                     meetings are read regardless of where you click from. -->
+                <!-- Upcoming Events. Past meetings stay here, dimmed, because
+                     this is the only record of them; the Upcoming stat card
+                     and its dialog count and list only what is still to come.
+                     Nothing on this card opens that dialog -- "View all"
+                     expands the list in place. -->
                 <div class="dashboard-card" id="upcomingEventsCard">
                     <div class="card-header">
                         <h3>Upcoming Events</h3>
                         <div class="card-header-actions">
-                            <button class="btn-action small ghost" id="eventsViewAll">
-                                View all
-                            </button>
                             <button class="btn-action small" id="addEventBtn">
                                 <i class='bx bx-plus'></i> Add Event
                             </button>
                         </div>
                     </div>
                     <div class="events-list">
-                        <!-- Filled from localStorage by ppdashboard.js -->
+                        <!-- Filled from the dashboard payload by ppdashboard.js -->
+                    </div>
+                    <!-- Expands the list in place, the same way the activity
+                         card's does. It used to open the stat dialog, which
+                         made two different things happen under one label --
+                         the dialog is now only what the Upcoming stat card
+                         opens. -->
+                    <div class="card-footer">
+                        <button type="button" class="view-all" id="eventsViewAll" hidden>
+                            View all meetings <i class='bx bx-chevron-right'></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -394,14 +403,59 @@
                             <label for="eventDate">Date</label>
                             <input type="date" id="eventDate" required>
                         </div>
+                        <!-- Three controls rather than <input type="time">.
+                             The native one puts AM/PM in a segment you have to
+                             find and then type or arrow through, and on a
+                             24-hour locale it does not offer the choice at
+                             all. These say the hour, the minute and which half
+                             of the day in the shape people say them.
+                             ppdashboard.js fills the two selects and keeps
+                             them in step with the "HH:MM" the API wants. -->
                         <div class="form-group">
-                            <label for="eventTime">Time</label>
-                            <input type="time" id="eventTime" required>
+                            <label for="eventHour" id="eventTimeLabel">Time</label>
+                            <div class="time-field" id="eventTimeField">
+                                <select id="eventHour" aria-describedby="eventTimeLabel">
+                                    <option value="">--</option>
+                                </select>
+                                <span class="time-colon" aria-hidden="true">:</span>
+                                <select id="eventMinute" aria-label="Minute"></select>
+                                <!-- Radios, not buttons: this is one choice
+                                     between two values, which is what a radio
+                                     group already means to a screen reader and
+                                     to the arrow keys. The styling makes them
+                                     look like a segmented control. -->
+                                <span class="meridiem" role="radiogroup" aria-label="AM or PM">
+                                    <label class="meridiem-option">
+                                        <input type="radio" name="eventMeridiem" value="AM" checked>
+                                        <span>AM</span>
+                                    </label>
+                                    <label class="meridiem-option">
+                                        <input type="radio" name="eventMeridiem" value="PM">
+                                        <span>PM</span>
+                                    </label>
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group checkbox-row">
+                        <label class="checkbox-label" for="eventAllDay">
+                            <input type="checkbox" id="eventAllDay">
+                            <span>
+                                <strong>All day</strong>
+                                <em>Filed under the date with no start time or
+                                length</em>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="form-group" id="eventDurationGroup">
                         <label for="eventDuration">Duration (hours)</label>
-                        <input type="number" id="eventDuration" min="0.5" step="0.5" value="1" required>
+                        <input type="number" id="eventDuration" min="0.5" max="24"
+                               step="0.5" placeholder="Optional">
+                        <p class="field-hint">
+                            Leave this blank if you have not agreed how long it
+                            runs — the meeting will show a start time and no
+                            end.
+                        </p>
                     </div>
                     <div class="form-group">
                         <label for="eventPartner">With Partner</label>
@@ -425,6 +479,38 @@
                     <p class="field-error" id="eventFormError" role="alert" hidden></p>
                     <button type="submit" class="btn-primary" id="eventSubmitBtn">Save Event</button>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Removing a meeting is not undoable and the trash button sits an inch
+         from the pencil, so it asks first. Named rather than generic: "this
+         meeting" is what a confirmation that could be about any row says, and
+         it is exactly when someone is not sure they clicked the right row
+         that they need to be told which one they clicked. -->
+    <div id="confirmEventDeleteModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="confirmEventDeleteTitle">
+            <div class="modal-header">
+                <h2 id="confirmEventDeleteTitle">Remove this meeting?</h2>
+                <button type="button" class="close-modal" data-cancel-event-delete
+                        aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-lede">
+                    <strong id="confirmEventDeleteName"></strong>
+                    <span id="confirmEventDeleteWhen"></span>
+                </p>
+                <p class="modal-warning">
+                    <i class='bx bx-error'></i>
+                    This removes the meeting for good. Your partner is not told.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn-ghost" data-cancel-event-delete>Cancel</button>
+                    <button type="button" class="btn-danger" id="confirmEventDeleteBtn">
+                        Remove meeting
+                    </button>
+                </div>
             </div>
         </div>
     </div>

@@ -141,7 +141,7 @@ ORGANIZATION_TYPES = [
 def clean_categories(values):
     """Filter arbitrary client input down to known slugs.
 
-    Anything unrecognised is dropped rather than raising: a stale category in
+    Anything unrecognized is dropped rather than raising: a stale category in
     an old browser tab should not fail the whole submission. Order is preserved
     and duplicates removed so stored arrays stay stable and comparable.
     """

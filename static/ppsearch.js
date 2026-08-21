@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         `).join('');
     }
 
-    // Which reasons get a direction colour on a result card. Keys come from
+    // Which reasons get a direction color on a result card. Keys come from
     // matching.py's score_pair; anything not listed here renders neutral.
     const REASON_CLASS = {
         they_give: 'give',    // toward you
@@ -478,7 +478,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Browse lists organizations that have nothing to exchange with
             // you, which matches never did. A bare "0" in the score badge
-            // reads as a judgement on them rather than on the pairing, and
+            // reads as a judgment on them rather than on the pairing, and
             // "Why match" over an empty list reads as a page that failed to
             // load. Both say what is actually true instead.
             const noOverlap = !m.match_score
@@ -488,7 +488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Each reason arrives as {kind, text}. Two of the kinds name a
             // direction -- something coming toward you, something going out
             // from you -- and those are the two the card paints, in the same
-            // pair of colours the exchange block, the proposal terms and the
+            // pair of colors the exchange block, the proposal terms and the
             // home page's matrix use. Everything else is context and stays
             // neutral.
             //

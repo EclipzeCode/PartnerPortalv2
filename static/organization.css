@@ -25,7 +25,7 @@
  * the search page's detail dialog, which is the screen most visitors reach
  * this one from.
  *
- * Focus areas take the third colour, as they do in onboarding: a cause is not
+ * Focus areas take the third color, as they do in onboarding: a cause is not
  * something anyone trades.
  */
 
@@ -157,7 +157,7 @@ body {
 
 /* --- The score -----------------------------------------------------------
    Only rendered for a signed-in viewer. Set as a reading, the same way the
-   search results set it, rather than as a coloured box: the whole list this
+   search results set it, rather than as a colored box: the whole list this
    visitor came from was ranked by this number. */
 
 .org-match {
@@ -243,7 +243,7 @@ body {
     gap: 0.4rem;
 }
 
-/* Causes, in the third colour -- not something anyone trades. */
+/* Causes, in the third color -- not something anyone trades. */
 .org-focus-chips span {
     padding: 0.28rem 0.55rem;
     border: 1px solid var(--h-seal);
@@ -257,7 +257,7 @@ body {
  * The exchange
  *
  * The same two columns split by a hairline that the agreement page and the
- * search dialog use, in the same two colours.
+ * search dialog use, in the same two colors.
  * ------------------------------------------------------------------------- */
 
 .org-exchange {
@@ -319,7 +319,7 @@ body {
 }
 
 /* Qualified above the two direction rules, which are (0,3,2) -- otherwise the
-   marker for "nothing listed yet" is painted in the colour of the side that
+   marker for "nothing listed yet" is painted in the color of the side that
    has nothing on it. */
 .org-exchange .org-side li.none::before {
     background: var(--h-rule);

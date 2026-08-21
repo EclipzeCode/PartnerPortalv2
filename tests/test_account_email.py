@@ -96,7 +96,7 @@ def test_moving_to_your_own_address_is_refused(client, login, make_org):
     assert _request(client, email=org.email).status_code == 400
 
 
-def test_a_change_can_be_cancelled(client, login, make_org, session):
+def test_a_change_can_be_canceled(client, login, make_org, session):
     org = make_org()
     login(org)
     _request(client)

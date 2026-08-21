@@ -11,12 +11,12 @@
  * no 4.6rem serif. What carries over is the quiet half: paper and ink,
  * hairlines instead of shadows, square corners, mono for metadata, one accent
  * spent on meaning. Somebody changing their password should feel like they
- * are operating a well-labelled instrument, not reading a brochure.
+ * are operating a well-labeled instrument, not reading a brochure.
  *
  * --- Ruled sheet, not cards -------------------------------------------------
  *
  * The old layout was five rounded, shadowed cards stacked down a narrow
- * centred column, each with its heading inside it. Two problems. The obvious
+ * centered column, each with its heading inside it. Two problems. The obvious
  * one is that a floating rounded card is the single most generic object in
  * the design and this page was made of nothing else. The subtler one is that
  * scanning it meant reading five headings down the same column the values are
@@ -52,8 +52,8 @@
     min-height: calc(100vh - 12rem);
 }
 
-/* Was a centred h2 with a short accent underline beneath it -- the same
-   centred-title-plus-rule that opens most template pages. Left-aligned and
+/* Was a centered h2 with a short accent underline beneath it -- the same
+   centered-title-plus-rule that opens most template pages. Left-aligned and
    ruled off instead, so the heading sits on the same left margin as every
    label under it and the page reads as one document. */
 .settings-head {
@@ -134,7 +134,7 @@
     margin-bottom: 0.7rem;
 }
 
-/* The boxicon in each heading. Kept, but dropped to the metadata colour and
+/* The boxicon in each heading. Kept, but dropped to the metadata color and
    sized to the mono label rather than to a heading -- at the old size it was
    competing with the words next to it. */
 .settings-card-header h3 i {
@@ -270,7 +270,7 @@
  *
  * A definition list set as a ruled table: mono term on the left, value on the
  * right. This is the clearest case on the page for the mono treatment --
- * these are three labelled readings, and they should look like readings.
+ * these are three labeled readings, and they should look like readings.
  * ------------------------------------------------------------------------- */
 
 .settings-facts {
@@ -331,8 +331,8 @@
  *
  * Both of these interrupt to say something is in flight or unfinished. Marked
  * with a heavy left rule rather than a tinted panel: the rule reads at a
- * glance, survives both themes without needing its own background colour, and
- * does not compete with the destructive group for "the coloured box".
+ * glance, survives both themes without needing its own background color, and
+ * does not compete with the destructive group for "the colored box".
  * ------------------------------------------------------------------------- */
 
 .pending-email,
@@ -499,7 +499,7 @@
     transition: width 0.2s ease;
 }
 
-/* The three divisions, painted in the page colour on top of the fill. Drawn
+/* The three divisions, painted in the page color on top of the fill. Drawn
    here rather than as three elements so that settings.js can go on sizing a
    single fill by percentage, and painted over rather than under it: doing
    this with the bar's own background meant the fill showed through wherever
@@ -531,7 +531,7 @@
    assigned inline by settings.js, which meant they could not follow the
    theme: #dc2626 on the near-black page is 4.0:1, and the whole point of the
    label is that it is read at a glance. Driven from data-score now, so the
-   colours live here with the rest of the palette. */
+   colors live here with the rest of the palette. */
 .pw-meter[data-score="1"] .pw-meter-fill { background: var(--h-danger); }
 .pw-meter[data-score="2"] .pw-meter-fill { background: var(--h-take); }
 .pw-meter[data-score="3"] .pw-meter-fill { background: var(--h-give); }
@@ -573,23 +573,10 @@
 
 /* ------------------------------------------------------------------------- *
  * Delete-account modals
- * The chrome is ink.css's; this is what is inside them.
+ * The chrome is ink.css's and the lede/warning blocks are forms.css's, shared
+ * with the dashboard's remove-meeting dialog; this is the one part only the
+ * account dialog has.
  * ------------------------------------------------------------------------- */
-
-.modal-lede {
-    font-size: 0.92rem;
-    line-height: 1.65;
-    color: var(--h-ink-soft);
-    margin-bottom: 1rem;
-}
-
-.modal-lede strong {
-    font-family: var(--h-mono);
-    font-size: 0.87rem;
-    font-weight: 500;
-    color: var(--h-ink);
-    word-break: break-word;
-}
 
 .delete-list {
     list-style: none;
@@ -614,24 +601,6 @@
     flex-shrink: 0;
 }
 
-.modal-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.7rem;
-    padding: 0.85rem 0 0.85rem 1rem;
-    border-left: 3px solid var(--h-danger);
-    font-size: 0.88rem;
-    line-height: 1.6;
-    color: var(--h-ink-soft);
-    margin-bottom: 1.5rem;
-}
-
-.modal-warning i {
-    color: var(--h-danger);
-    font-size: 1rem;
-    flex-shrink: 0;
-}
-
 /* ------------------------------------------------------------------------- *
  * Loading
  *
@@ -641,7 +610,7 @@
  * onboarding.js uses for its fields, so there is nothing to swap back in once
  * the real values arrive.
  *
- * tokens.css's --skeleton-* pair is a cool grey mixed for the blue palette
+ * tokens.css's --skeleton-* pair is a cool gray mixed for the blue palette
  * and reads as a patch of a different page on the cream. Restated here in the
  * paper's own tones; both are already theme-aware, so this is only about hue.
  * ------------------------------------------------------------------------- */

@@ -166,7 +166,7 @@ def test_sorting(client, login, directory):
     # Beta Legal was created last of the three.
     assert _names(newest)[0] == "pytest-dir Beta Legal"
 
-    # An unrecognised sort falls back rather than failing.
+    # An unrecognized sort falls back rather than failing.
     assert client.get(
         f"/api/organizations?{SCOPE}&sort=nonsense").get_json()["sort"] == "name"
 

@@ -12,7 +12,7 @@
  * The first is the lattice. A match here is not a vibe -- it is an overlap
  * between two organizations across 33 fixed categories, scored in both
  * directions. That is a grid, so the hero draws one: a real needs-by-offers
- * matrix with the overlapping cells lit, two colours for the two directions.
+ * matrix with the overlapping cells lit, two colors for the two directions.
  * The dot texture on the page is the same grid at rest. This is why the
  * texture is allowed to be here at all -- it is the data model, drawn, rather
  * than an atmosphere applied on top of it. It also gives the decoration a
@@ -73,14 +73,43 @@ body.home .agreement {
  * Hero
  * ------------------------------------------------------------------------- */
 
+/* The whole first screen, so the headline and the match panel are the only
+   two things being looked at. min-height rather than height: on a short
+   window the content still decides, and grows past the fold instead of being
+   squeezed into it.
+
+   svh, not vh: on a phone vh is measured against the *largest* viewport, the
+   one you only get once the browser chrome has retracted, so 100vh puts the
+   bottom of the hero under the address bar on arrival. The vh line is the
+   fallback for anything that has not heard of svh. */
 body.home .hero {
     position: relative;
-    padding: clamp(7rem, 12vh, 9.5rem) clamp(1.25rem, 5vw, 6rem) clamp(2.5rem, 5vh, 4rem);
+    display: flex;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: clamp(6rem, 11vh, 9rem) clamp(1.25rem, 5vw, 6rem) clamp(2.5rem, 5vh, 4rem);
     background: none;
     overflow: hidden;
 }
 
+/* The dot field. Behind both columns, and inert -- everything above it sets
+   its own stacking context below. Sized in JS to the hero's box; the CSS here
+   only places it. */
+body.home .hero-field {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    /* Never eats a click meant for the page. */
+    pointer-events: none;
+}
+
 body.home .hero-inner {
+    position: relative;
+    z-index: 1;
+    width: 100%;
     max-width: 78rem;
     margin: 0 auto;
     display: grid;
@@ -108,7 +137,7 @@ body.home .hero-title {
     margin-bottom: 1.5rem;
 }
 
-/* The emphasised half of the headline. Italic serif rather than a colour
+/* The emphasized half of the headline. Italic serif rather than a color
    swap: the phrase "already have" is the argument the whole product rests on,
    and italics stress it the way a sentence would. */
 body.home .hero-title em {
@@ -116,24 +145,52 @@ body.home .hero-title em {
     color: var(--h-give);
 }
 
-body.home .hero-subtitle {
-    font-size: 1.02rem;
-    line-height: 1.68;
-    color: var(--h-ink-soft);
-    max-width: 44ch;
-    margin-bottom: 2.25rem;
-}
-
-body.home .hero-subtitle em {
-    font-style: italic;
-    color: var(--h-ink);
-}
-
 body.home .hero-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
     margin-bottom: 3rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * The lede
+ *
+ * One sentence on its own screen-width band, ruled top and bottom. Set larger
+ * than body copy and well short of the page's width, because a line that runs
+ * the full 78rem is a line nobody finishes.
+ * ------------------------------------------------------------------------- */
+
+body.home .hero-lede {
+    padding: clamp(3.5rem, 8vh, 6rem) clamp(1.25rem, 5vw, 6rem);
+    border-top: 1px solid var(--h-rule);
+    border-bottom: 1px solid var(--h-rule);
+}
+
+/* The page's own container, so the sentence starts on the same left edge as
+   the headline above it and the section heading below. Centering the measure
+   instead put it on a line of its own that nothing else on the page shares. */
+body.home .lede-inner {
+    max-width: 78rem;
+    margin: 0 auto;
+}
+
+body.home .lede-text {
+    /* Short of the container: a line that runs the full 78rem is a line
+       nobody finishes. */
+    max-width: 40ch;
+    font-family: var(--h-serif);
+    font-size: clamp(1.5rem, 2.8vw, 2.15rem);
+    font-weight: 400;
+    line-height: 1.36;
+    letter-spacing: -0.01em;
+    color: var(--h-ink);
+}
+
+/* "and" is the whole claim -- both directions, not one -- so it is stressed
+   the way the headline stresses "already have". */
+body.home .lede-text em {
+    font-style: italic;
+    color: var(--h-give);
 }
 
 /* The three facts, ruled off like a table footer. */
@@ -169,7 +226,7 @@ body.home .hero-stat-label {
 /* ------------------------------------------------------------------------- *
  * The match panel
  *
- * The centrepiece. Two organizations, the matrix of their overlap, and the
+ * The centerpiece. Two organizations, the matrix of their overlap, and the
  * two things they are actually exchanging. pp.js cycles three examples
  * through it and redraws the matrix for each.
  * ------------------------------------------------------------------------- */
@@ -252,7 +309,7 @@ body.home .org-avatar {
     letter-spacing: 0.04em;
 }
 
-/* The second organization is marked in the other direction's colour, so the
+/* The second organization is marked in the other direction's color, so the
    two exchange rows below can be read without a legend. */
 body.home .org-avatar.alt {
     background: var(--h-take);
@@ -276,7 +333,7 @@ body.home .org-type {
 
 /* --- The matrix ---------------------------------------------------------- */
 /* Rows are the categories one side offers, columns the categories the other
-   side needs; a filled cell is an overlap. The fill colour says which
+   side needs; a filled cell is an overlap. The fill color says which
    direction that particular overlap runs in, which is the entire thesis of
    the product stated in one glance and no words. */
 
@@ -363,7 +420,7 @@ body.home .exchange-text strong {
 body.home .match-nav {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 0.6rem;
     margin-top: 0.9rem;
 }
@@ -817,6 +874,91 @@ body.home #contactForm .btn-primary {
 
 
 /* ------------------------------------------------------------------------- *
+ * The arrival
+ *
+ * The hero is the one thing on the page that is already on screen when it
+ * loads, so it cannot be revealed on scroll the way every section below it
+ * is. It plays once instead, bottom-weighted: each block starts a little low
+ * and settles, in the order they are meant to be read.
+ *
+ * `both` matters -- the fill-forwards half holds the final state, and the
+ * backwards half applies the *from* keyframe during the delay. Without it
+ * every block would paint at full opacity for a frame and then blink out as
+ * its turn came round.
+ * ------------------------------------------------------------------------- */
+
+@keyframes hero-rise {
+    from {
+        opacity: 0;
+        transform: translateY(1.1rem);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+body.home .hero-badge,
+body.home .hero-buttons,
+body.home .hero-stats,
+body.home .hero-visual {
+    animation: hero-rise 0.85s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+body.home .hero-badge { animation-delay: 0.05s; }
+/* The panel comes in with the headline rather than after the copy below it:
+   the two are the point of the screen, and staggering them by half a second
+   reads as the page still loading. */
+body.home .hero-visual { animation-delay: 0.34s; }
+body.home .hero-buttons { animation-delay: 0.52s; }
+body.home .hero-stats { animation-delay: 0.62s; }
+
+/* The headline goes word by word. pp.js wraps each word and numbers it, so
+   the delay is a multiplication here rather than a rule per word; a headline
+   whose wording changes needs no CSS.
+
+   The words rise out of their own line box: the clip is on the word's
+   wrapper, so a descender cannot show above the line before its turn. */
+body.home .hero-title .rise-word {
+    display: inline-block;
+    overflow: hidden;
+    /* The wrapper is what is clipped, and inline-block clips a descender
+       flat. The padding gives the tail somewhere to be. */
+    padding-bottom: 0.12em;
+    margin-bottom: -0.12em;
+    vertical-align: bottom;
+}
+
+body.home .hero-title .rise-word > span {
+    display: inline-block;
+    animation: word-rise 0.72s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: calc(0.16s + var(--word-index) * 0.045s);
+}
+
+@keyframes word-rise {
+    from {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* The lede is under the fold, so it is revealed on the way in like the
+   sections below it rather than on load. pp.js observes it with the same
+   observer. */
+body.home .hero-lede .lede-text {
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+body.home .hero-lede.pending .lede-text {
+    opacity: 0;
+    transform: translateY(1.25rem);
+}
+
+/* ------------------------------------------------------------------------- *
  * Responsive
  *
  * One column below 62rem. The match panel moves above the copy on the way
@@ -836,7 +978,6 @@ body.home #contactForm .btn-primary {
     body.home .features-section .visual-content { order: 2; }
     body.home .features-section .text-content { order: 1; }
 
-    body.home .hero-subtitle,
     body.home .section-description,
     body.home .cta-text {
         max-width: none;
@@ -883,6 +1024,23 @@ body.home #contactForm .btn-primary {
 
     body.home .lattice-cell {
         animation: none;
+    }
+
+    /* The hero's arrival, the word stagger and the lede's reveal. All three
+       are decorative, and all three land where they were going. */
+    body.home .hero-badge,
+    body.home .hero-buttons,
+    body.home .hero-stats,
+    body.home .hero-visual,
+    body.home .hero-title .rise-word > span {
+        animation: none;
+    }
+
+    body.home .hero-lede .lede-text,
+    body.home .hero-lede.pending .lede-text {
+        opacity: 1;
+        transform: none;
+        transition: none;
     }
 
     body.home .modal-container {

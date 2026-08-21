@@ -35,7 +35,7 @@ def _propose(client, recipient, **overrides):
 # --- Creating -------------------------------------------------------------
 
 def test_a_proposal_needs_something_from_both_sides(client, login, pair):
-    """A one-sided proposal is a request for a favour, and the premise here
+    """A one-sided proposal is a request for a favor, and the premise here
     is the exchange -- so it is refused rather than stored as a partnership."""
     proposer, recipient = pair
     login(proposer)
@@ -99,7 +99,7 @@ def test_the_reverse_direction_is_refused_too(client, login, pair):
 
     That is now refused in the endpoint rather than the index, because the
     rule is about the pair and the index is about the row. The test that
-    asserted the old behaviour was this one; it is kept, pointed the other
+    asserted the old behavior was this one; it is kept, pointed the other
     way, so the change is visible rather than silently deleted.
     """
     proposer, recipient = pair

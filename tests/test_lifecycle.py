@@ -158,7 +158,7 @@ def test_either_side_can_end_it_alone(client, login, agreed):
     _proposer, recipient, pid, _token = agreed
     login(recipient)
     response = client.post(f"/api/proposals/{pid}/end",
-                           json={"reason": "Our programme finished early."})
+                           json={"reason": "Our program finished early."})
     assert response.status_code == 200
     body = response.get_json()["proposal"]
     assert body["status"] == "ended"

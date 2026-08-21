@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         {
             score: 88,
             a: { initials: 'GE', name: 'Green Earth Initiative', type: 'NGO', offer: 'Volunteer Network' },
-            b: { initials: 'LC', name: 'Lakeside Community Centre', type: 'Community Org', offer: 'Event Space' }
+            b: { initials: 'LC', name: 'Lakeside Community Center', type: 'Community Org', offer: 'Event Space' }
         },
         {
             score: 85,
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         while (chosen.size < lit && guard++ < total * 8) {
             const i = Math.floor(rand() * total);
             if (chosen.has(i)) continue;
-            // Alternating directions, so neither colour dominates and the
+            // Alternating directions, so neither color dominates and the
             // grid reads as an exchange rather than as one side's inventory.
             chosen.set(i, chosen.size % 2 === 0 ? 'give' : 'take');
         }
@@ -416,8 +416,326 @@ document.addEventListener('DOMContentLoaded', function() {
     // screen and loses the animation, which is the right way round.
     const canAnimate = document.visibilityState === 'visible';
 
-    document.querySelectorAll('.scroll-section').forEach(section => {
+    // The lede band rides the same observer. It is not a .scroll-section --
+    // it holds one sentence, not a two-column block -- but it is under the
+    // fold, so it should arrive the way everything under the fold arrives.
+    document.querySelectorAll('.scroll-section, .hero-lede').forEach(section => {
         if (canAnimate) section.classList.add('pending');
         observer.observe(section);
     });
+});
+
+// ---------------------------------------------------------------------------
+// The headline, word by word
+//
+// The h1 carries an <em> around half of it, so this cannot be an innerHTML
+// split on spaces -- that would flatten the emphasis the sentence is built
+// on. It walks the text nodes instead and rewrites only those, which leaves
+// every element in place and every word inside the element it belongs to.
+//
+// Each word becomes a clipped wrapper around a span, and the span is what
+// moves; pp.css animates it out from under the clip. The words are numbered
+// through a custom property so the stagger is one rule rather than one per
+// word.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const title = document.querySelector('.hero-title');
+    if (!title) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Collected first: wrapping a text node replaces it, and a live walk
+    // would then be standing on a node that is no longer in the tree.
+    const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) textNodes.push(n);
+
+    let index = 0;
+    textNodes.forEach((node) => {
+        // Kept: the separators are the spaces between words, and dropping
+        // them would run the sentence together once each word is a box.
+        const parts = node.nodeValue.split(/(\s+)/).filter((p) => p !== '');
+        if (parts.length === 0) return;
+
+        const frag = document.createDocumentFragment();
+        parts.forEach((part) => {
+            if (/^\s+$/.test(part)) {
+                frag.appendChild(document.createTextNode(part));
+                return;
+            }
+            const outer = document.createElement('span');
+            outer.className = 'rise-word';
+            const inner = document.createElement('span');
+            inner.style.setProperty('--word-index', String(index));
+            inner.textContent = part;
+            index += 1;
+            outer.appendChild(inner);
+            frag.appendChild(outer);
+        });
+        node.parentNode.replaceChild(frag, node);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The hero's dot field
+//
+// body.home tiles a 24px dot lattice across the whole page as a CSS texture.
+// Over the first screen the same lattice is drawn here instead, so it can
+// answer the cursor: dots near the pointer lift away from it, grow, and warm
+// towards the accent, and settle back when it leaves.
+//
+// It is painted on the same grid, measured from the same origin, so the drawn
+// half and the tiled half meet without a seam at the fold. The hero is the
+// first thing in the body and the header above it is position:fixed, so the
+// canvas's top-left corner really is the document's -- which is what the CSS
+// background-position resolves against too.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('heroField');
+    const hero = canvas && canvas.closest('.hero');
+    if (!canvas || !hero) return;
+
+    // Nothing is drawn at all in that case: the canvas stays empty and
+    // transparent, and the page's own texture shows through it unchanged.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
+
+    // Matches body.home's background-size, and the circle a radial-gradient
+    // tile puts at its center.
+    const STEP = 24;
+    const HALF = STEP / 2;
+    const BASE_RADIUS = 1;
+    // How far the cursor is felt, and how hard. Both in CSS pixels.
+    const REACH = 165;
+    const PUSH = 9;
+
+    let width = 0;
+    let height = 0;
+    let cols = 0;
+    let rows = 0;
+    let dpr = 1;
+
+    // Where the pointer is, and where the field currently believes it is.
+    // The gap between the two is the whole easing: the field chases, so a
+    // fast flick draws a trail that catches up rather than teleporting.
+    let pointerX = -9999;
+    let pointerY = -9999;
+    let fieldX = -9999;
+    let fieldY = -9999;
+    let strength = 0;      // 0 when the pointer is away, 1 when it is over
+    let targetStrength = 0;
+
+    let paper = '#F5F2EB';
+    let dotColor = 'rgba(0,0,0,0.06)';
+    let accent = '#1E3A6E';
+    let accentRGB = [30, 58, 110];
+
+    function readColors() {
+        const style = getComputedStyle(document.body);
+        paper = style.getPropertyValue('--h-paper').trim() || paper;
+        dotColor = style.getPropertyValue('--h-dot').trim() || dotColor;
+        accent = style.getPropertyValue('--h-give').trim() || accent;
+        accentRGB = parseColor(accent) || accentRGB;
+    }
+
+    // --h-give is a hex literal in both palettes; this is deliberately not a
+    // general CSS color parser, and falls back rather than guessing.
+    function parseColor(value) {
+        const hex = value.replace('#', '');
+        if (hex.length === 6) {
+            return [
+                parseInt(hex.slice(0, 2), 16),
+                parseInt(hex.slice(2, 4), 16),
+                parseInt(hex.slice(4, 6), 16),
+            ];
+        }
+        const m = value.match(/rgba?\(([^)]+)\)/);
+        if (m) {
+            const parts = m[1].split(',').map((p) => parseFloat(p));
+            if (parts.length >= 3) return [parts[0], parts[1], parts[2]];
+        }
+        return null;
+    }
+
+    function resize() {
+        const rect = hero.getBoundingClientRect();
+        width = Math.ceil(rect.width);
+        height = Math.ceil(rect.height);
+        // Capped: a 3x display over a full-screen hero is a lot of pixels to
+        // repaint every frame for a texture, and the difference above 2x is
+        // not visible on a 2px dot.
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cols = Math.ceil(width / STEP);
+        rows = Math.ceil(height / STEP);
+        readColors();
+        // Immediately, not on the next frame. Setting canvas.width resets the
+        // bitmap, and an alpha:false canvas resets to opaque black -- so any
+        // moment between here and the next paint is a black rectangle over
+        // the hero. That gap is the whole first screen when the loop is
+        // paused, which is exactly the case on a page opened in a background
+        // tab: no frames arrive until it is looked at.
+        draw(performance.now());
+    }
+
+    // Smoothstep. Linear falloff leaves a visible circular edge where the
+    // reach ends; this one arrives at zero flat.
+    function ease(t) {
+        return t * t * (3 - 2 * t);
+    }
+
+    function draw(now) {
+        ctx.fillStyle = paper;
+        ctx.fillRect(0, 0, width, height);
+
+        // The field eases towards the pointer rather than snapping to it.
+        fieldX += (pointerX - fieldX) * 0.14;
+        fieldY += (pointerY - fieldY) * 0.14;
+        // Quick to light, slow to let go. Symmetrical easing made the field
+        // feel like it was catching up with the cursor rather than answering
+        // it, and made the fade an abrupt switching-off.
+        strength += (targetStrength - strength) * (targetStrength > strength ? 0.16 : 0.05);
+
+        const reach = REACH;
+        const reachSq = reach * reach;
+        // Only the block of dots the cursor can actually reach is considered
+        // for the lit pass; the rest are one batched path.
+        const minCol = Math.max(0, Math.floor((fieldX - reach - HALF) / STEP));
+        const maxCol = Math.min(cols, Math.ceil((fieldX + reach - HALF) / STEP) + 1);
+        const minRow = Math.max(0, Math.floor((fieldY - reach - HALF) / STEP));
+        const maxRow = Math.min(rows, Math.ceil((fieldY + reach - HALF) / STEP) + 1);
+
+        // A slow diagonal swell, so the field is not perfectly still when
+        // nobody is touching it. Small enough to read as the paper breathing.
+        const t = now / 1000;
+
+        ctx.fillStyle = dotColor;
+        ctx.beginPath();
+        for (let row = 0; row < rows; row += 1) {
+            const y = row * STEP + HALF;
+            for (let col = 0; col < cols; col += 1) {
+                if (strength > 0.01
+                    && col >= minCol && col < maxCol
+                    && row >= minRow && row < maxRow) {
+                    const dx = col * STEP + HALF - fieldX;
+                    const dy = y - fieldY;
+                    if (dx * dx + dy * dy < reachSq) continue;   // drawn lit, below
+                }
+                const x = col * STEP + HALF;
+                const breathe = 0.9 + 0.1 * Math.sin(t * 0.6 + (col + row) * 0.22);
+                ctx.moveTo(x + BASE_RADIUS * breathe, y);
+                ctx.arc(x, y, BASE_RADIUS * breathe, 0, Math.PI * 2);
+            }
+        }
+        ctx.fill();
+
+        // The lit neighborhood, one dot at a time -- each has its own offset,
+        // size and alpha, so there is nothing to batch.
+        if (strength > 0.01) {
+            for (let row = minRow; row < maxRow; row += 1) {
+                for (let col = minCol; col < maxCol; col += 1) {
+                    const x = col * STEP + HALF;
+                    const y = row * STEP + HALF;
+                    const dx = x - fieldX;
+                    const dy = y - fieldY;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq >= reachSq) continue;
+
+                    const dist = Math.sqrt(distSq) || 0.0001;
+                    const falloff = ease(1 - dist / reach) * strength;
+
+                    // Pushed away from the cursor, so the lattice opens
+                    // around it rather than lighting up in place.
+                    const offset = falloff * PUSH;
+                    const px = x + (dx / dist) * offset;
+                    const py = y + (dy / dist) * offset;
+
+                    const radius = BASE_RADIUS + falloff * 1.7;
+                    const alpha = 0.1 + falloff * 0.75;
+                    ctx.fillStyle =
+                        `rgba(${accentRGB[0]}, ${accentRGB[1]}, ${accentRGB[2]}, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(px, py, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+    }
+
+    // --- The loop ---------------------------------------------------------
+    // Running only while the hero is on screen and the tab is being looked
+    // at. A texture is not worth a frame of work behind a scrolled-past fold
+    // or in a background tab.
+    let frame = null;
+    let visible = document.visibilityState === 'visible';
+    let onScreen = true;
+
+    function tick(now) {
+        draw(now);
+        frame = requestAnimationFrame(tick);
+    }
+
+    function play() {
+        if (frame === null && visible && onScreen) frame = requestAnimationFrame(tick);
+    }
+
+    function pause() {
+        if (frame !== null) {
+            cancelAnimationFrame(frame);
+            frame = null;
+        }
+    }
+
+    hero.addEventListener('pointermove', (e) => {
+        const rect = hero.getBoundingClientRect();
+        pointerX = e.clientX - rect.left;
+        pointerY = e.clientY - rect.top;
+        // First contact: start the field where the cursor is rather than
+        // easing it in from the corner it was parked in.
+        if (targetStrength === 0) {
+            fieldX = pointerX;
+            fieldY = pointerY;
+        }
+        targetStrength = 1;
+    });
+
+    hero.addEventListener('pointerleave', () => { targetStrength = 0; });
+
+    // A touch is a tap, not a hover: the field answers it and then lets go,
+    // rather than leaving a bright patch where a finger last was.
+    hero.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'touch') return;
+        const rect = hero.getBoundingClientRect();
+        pointerX = fieldX = e.clientX - rect.left;
+        pointerY = fieldY = e.clientY - rect.top;
+        targetStrength = 1;
+        setTimeout(() => { targetStrength = 0; }, 900);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        visible = document.visibilityState === 'visible';
+        if (visible) play(); else pause();
+    });
+
+    if ('IntersectionObserver' in window) {
+        new IntersectionObserver((entries) => {
+            onScreen = entries[0].isIntersecting;
+            if (onScreen) play(); else pause();
+        }, { threshold: 0 }).observe(hero);
+    }
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 120);
+    });
+
+    // resize() paints its own first frame, so the field is already the right
+    // texture before the loop has run once -- including when the loop is not
+    // going to run at all yet.
+    resize();
+    play();
 });

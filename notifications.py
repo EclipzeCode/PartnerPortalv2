@@ -609,7 +609,7 @@ def notify_email_verification(org, token):
     login address is still the right one -- it is what this link confirms.
 
     Deliberately ignores org.email_notifications, which the other two senders
-    here honour. That setting covers optional partnership mail; this is how
+    here honor. That setting covers optional partnership mail; this is how
     someone proves the address is theirs, and it now gates whether they can
     propose a partnership at all. An org that had turned notifications off
     could otherwise never verify, and never find out why.

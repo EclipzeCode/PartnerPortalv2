@@ -6,7 +6,7 @@ import secrets
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
 
 import bcrypt
@@ -1285,7 +1285,7 @@ def resend_verification(org, db):
 
     # Replacing the token invalidates whatever was in the previous email --
     # the column holds exactly one, so an older link stops working the moment
-    # this runs. That is the intended behaviour: the newest link is the only
+    # this runs. That is the intended behavior: the newest link is the only
     # live one, and a link someone forwarded or left in an old message cannot
     # be used later.
     org.email_verify_token = secrets.token_urlsafe(32)
@@ -1571,7 +1571,7 @@ def cancel_email_change(org, db):
     org.pending_email_token = None
     org.pending_email_sent_at = None
     db.commit()
-    return jsonify({"message": "Email change cancelled"}), 200
+    return jsonify({"message": "Email change canceled"}), 200
 
 
 @app.route("/api/account/email/confirm", methods=["POST"])
@@ -1687,7 +1687,7 @@ def delete_account(org, db):
 
     if not org.password_hash:
         # A profile pre-created for an org that never claimed it. There is no
-        # password to check, so there is no safe way to honour this here.
+        # password to check, so there is no safe way to honor this here.
         return jsonify({
             "error": "This account has no password set, so it cannot be "
                      "deleted from here. Please contact support.",
@@ -1770,7 +1770,7 @@ def save_onboarding(org, db):
     needs = clean_categories(data.get("needs"))
     offers = clean_categories(data.get("offers"))
     # Optional, unlike needs and offers: an organization that would rather not
-    # categorise what it works on still gets matched on the exchange, which is
+    # categorize what it works on still gets matched on the exchange, which is
     # what the score is actually built from.
     focus_areas = clean_focus_areas(data.get("focus_areas"))
 
@@ -2075,7 +2075,7 @@ def list_organizations(org, db):
 
 
 # --- Profile views ----------------------------------------------------------
-# Counted, never itemised. An organization is told how often its public
+# Counted, never itemized. An organization is told how often its public
 # profile was opened; it is not told by whom. Naming visitors would publish
 # the browsing of people who never agreed to be seen doing it -- most of them
 # signed-out, with no account here and no way to opt out.
@@ -2093,7 +2093,7 @@ VIEW_DEDUP_WINDOW = timedelta(hours=24)
 #
 # Falls back to the secret key so nothing has to be configured for this to
 # work; set PROFILE_VIEW_SALT to any fixed string to pin it. Changing it only
-# affects which repeat visits are recognised as repeats.
+# affects which repeat visits are recognized as repeats.
 PROFILE_VIEW_SALT = (
     os.environ.get("PROFILE_VIEW_SALT", "").strip() or app.secret_key
 )
@@ -2442,6 +2442,27 @@ def _events_for(db, org):
     ).order_by(Event.date, Event.time).all()
 
 
+def _event_duration(raw):
+    """How long a meeting runs, or None if nobody said.
+
+    Returns (duration, problem). Absent, null and empty string all mean "not
+    stated" and are accepted -- a meeting is a complete thought without a
+    length, and requiring one only ever produced an invented number.
+
+    Capped as well as floored: a meeting cannot run longer than the day it is
+    filed under, and the check constraint only rules out zero and below.
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, None
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError):
+        return None, "a length between 0 and 24 hours"
+    if duration <= 0 or duration > 24:
+        return None, "a length between 0 and 24 hours"
+    return duration, None
+
+
 @app.route("/api/events", methods=["GET"])
 @login_required
 def list_events(org, db):
@@ -2471,6 +2492,8 @@ def create_event(org, db):
     if not partner:
         problems.append("who the meeting is with")
 
+    all_day = bool(data.get("all_day"))
+
     # strptime rather than date.fromisoformat: fromisoformat also accepts
     # forms the date input never produces, and the column stores neither.
     event_date = event_time = None
@@ -2478,19 +2501,21 @@ def create_event(org, db):
         event_date = datetime.strptime(data.get("date") or "", "%Y-%m-%d").date()
     except ValueError:
         problems.append("a valid date")
-    try:
-        event_time = datetime.strptime(data.get("time") or "", "%H:%M").time()
-    except ValueError:
-        problems.append("a valid start time")
 
-    try:
-        duration = float(data.get("duration"))
-    except (TypeError, ValueError):
+    if all_day:
+        # Midnight, and no length. Both are the column's way of saying "filed
+        # under the date alone"; see the Event model.
+        event_time = time_type(0, 0)
         duration = None
-    # Capped as well as floored: a meeting cannot run longer than the day it
-    # is filed under, and the check constraint only rules out zero and below.
-    if duration is None or duration <= 0 or duration > 24:
-        problems.append("a length between 0 and 24 hours")
+    else:
+        try:
+            event_time = datetime.strptime(data.get("time") or "", "%H:%M").time()
+        except ValueError:
+            problems.append("a valid start time")
+
+        duration, bad = _event_duration(data.get("duration"))
+        if bad:
+            problems.append(bad)
 
     if problems:
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
@@ -2506,6 +2531,7 @@ def create_event(org, db):
         date=event_date,
         time=event_time,
         duration=duration,
+        all_day=all_day,
         partner_name=partner,
         description=description or None,
         location=location or None,
@@ -2573,14 +2599,23 @@ def update_event(org, db, event_id):
             problems.append("a valid start time")
 
     if "duration" in data:
-        try:
-            duration = float(data.get("duration"))
-        except (TypeError, ValueError):
-            duration = None
-        if duration is None or duration <= 0 or duration > 24:
-            problems.append("a length between 0 and 24 hours")
+        duration, bad = _event_duration(data.get("duration"))
+        if bad:
+            problems.append(bad)
         else:
             event.duration = duration
+
+    if "all_day" in data:
+        event.all_day = bool(data.get("all_day"))
+
+    # Applied after the fields above rather than inside the all_day branch:
+    # whether a meeting is all-day and what time it starts can arrive in the
+    # same body or in separate ones, and either way the row has to come out
+    # consistent. Doing it here means a client cannot leave a stale start time
+    # or an invented length on an all-day meeting by sending the two apart.
+    if event.all_day:
+        event.time = time_type(0, 0)
+        event.duration = None
 
     if "location" in data:
         location = (data.get("location") or "").strip()
@@ -2710,7 +2745,7 @@ def create_proposal(org, db):
     recipient_gives = clean_categories(data.get("recipient_gives"))
 
     # Both sides must bring something. A proposal where one side gives nothing
-    # is a request for a favour, and the whole premise here is the two-way
+    # is a request for a favor, and the whole premise here is the two-way
     # exchange -- so it is rejected rather than quietly stored as a partnership.
     if not proposer_gives or not recipient_gives:
         return jsonify({
@@ -2837,7 +2872,7 @@ def list_proposals(org, db):
 
 
 def _annotate_message_counts(db, org, rows, payloads):
-    """Add message and unread counts to a list of serialised proposals.
+    """Add message and unread counts to a list of serialized proposals.
 
     Two grouped queries for the whole list, whatever its length. This runs on
     every load of the proposals page and of the dashboard, and counting per
@@ -2847,7 +2882,7 @@ def _annotate_message_counts(db, org, rows, payloads):
     Unread is per viewer and the marker to compare against depends on which
     side of each proposal this org is on, which is why it joins partnerships
     and asks both cases in one WHERE rather than looping. It is the same
-    condition _unread_message_count uses, grouped instead of totalled.
+    condition _unread_message_count uses, grouped instead of totaled.
     """
     ids = [row.id for row in rows]
     if not ids:

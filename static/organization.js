@@ -70,7 +70,7 @@
     // all. So there is no visibility decision to make here -- the server has
     // already made it by choosing what to send.
     //
-    // Every URL was normalised by links.py to http(s) on a known host, which
+    // Every URL was normalized by links.py to http(s) on a known host, which
     // is what makes it safe to put in an href.
     const LINKS = [
         { key: 'website_url', icon: 'bx-globe', label: 'Website' },

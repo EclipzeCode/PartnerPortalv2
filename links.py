@@ -1,4 +1,4 @@
-"""Normalising and validating the optional links on an organization profile.
+"""Normalizing and validating the optional links on an organization profile.
 
 Everything here is stored as a full canonical URL so the profile page can put
 it straight into an href without reassembling anything at render time. People
@@ -214,7 +214,7 @@ LINK_FIELDS = {
 
 
 def parse_links(data):
-    """Normalise every link field present in `data`.
+    """Normalize every link field present in `data`.
 
     Returns {column_name: url_or_None}. Raises LinkError naming the field that
     failed, so the caller can point the form at it.

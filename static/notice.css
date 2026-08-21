@@ -8,7 +8,7 @@
  *
  * These pages were carrying password-reset.css, verify-email.css,
  * notfound.css and error.css -- 668 lines across four files that were four
- * drafts of the same object. Every one of them centred a card on the page,
+ * drafts of the same object. Every one of them centered a card on the page,
  * put a heading at the top, a paragraph under it and a row of actions at the
  * bottom, and each had reached its own conclusions about the padding, the
  * radius, the shadow and the maximum width. The class names differ
@@ -50,7 +50,7 @@ body {
  * The page
  *
  * The three that carry a nav need their top padding to clear the fixed
- * header; the three that do not are centred in the viewport.
+ * header; the three that do not are centered in the viewport.
  * ------------------------------------------------------------------------- */
 
 .reset-main,
@@ -286,7 +286,7 @@ body {
  * Password strength
  *
  * The same four-segment meter as settings and sign-up. Third copy of the
- * markup in the app, third page to key its colours off data-score instead of
+ * markup in the app, third page to key its colors off data-score instead of
  * assigning them inline from JS -- which is what let them follow the theme.
  * ------------------------------------------------------------------------- */
 
@@ -314,7 +314,7 @@ body {
     transition: width 0.2s ease;
 }
 
-/* The three divisions, painted in the card colour over the fill. */
+/* The three divisions, painted in the card color over the fill. */
 .pw-meter-bar::after {
     content: '';
     position: absolute;

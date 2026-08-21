@@ -81,7 +81,7 @@ class Organization(Base):
     contact_phone: Mapped[str | None] = mapped_column(String(32))
 
     # --- Links -------------------------------------------------------------
-    # All optional. Stored as full canonical URLs -- links.py normalises
+    # All optional. Stored as full canonical URLs -- links.py normalizes
     # whatever shape they were typed in, and only ever produces http(s) on a
     # known host, so rendering these in an href is safe.
     website_url: Mapped[str | None] = mapped_column(String(255))
@@ -180,7 +180,7 @@ class Organization(Base):
     )
     # Seeded example organizations. Kept out of real orgs' match results so a
     # new signup is never paired with something fictional, but still shown --
-    # clearly labelled -- as example matches while the directory is small.
+    # clearly labeled -- as example matches while the directory is small.
     is_demo: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
@@ -202,7 +202,7 @@ class Organization(Base):
     def __repr__(self):
         return f"<Organization {self.id} {self.name!r}>"
 
-    # --- Serialisation -----------------------------------------------------
+    # --- Serialization -----------------------------------------------------
     def public_dict(self):
         """Fields safe to show to any signed-in organization.
 
@@ -854,9 +854,23 @@ class Event(Base):
     # database rejects "2026-13-45", and "next meeting first" is an ORDER BY
     # rather than a string comparison that only works while the format holds.
     date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    # Midnight when all_day is set. The column stays NOT NULL rather than
+    # going nullable for the all-day case: every read of this table is
+    # "soonest first", and a real 00:00 sorts an all-day meeting to the top of
+    # its own day, which is where it belongs. A NULL would have to be given
+    # that meaning by hand in every ORDER BY instead.
     time: Mapped[time_type] = mapped_column(Time, nullable=False)
     # Hours. Fractional on purpose -- a 30-minute call is 0.5.
-    duration: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")
+    #
+    # Optional: "we are meeting at three" is a complete thought, and requiring
+    # a length meant inventing one. NULL means nobody said, which the card
+    # renders as a start time with no range after it. Always NULL when
+    # all_day is set -- see the check constraint below.
+    duration: Mapped[float | None] = mapped_column(Float)
+    # A meeting filed under a date with no time of day.
+    all_day: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
 
     partner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -867,7 +881,16 @@ class Event(Base):
     )
 
     __table_args__ = (
+        # NULL passes: a CHECK only fails on FALSE, and "no length given" is
+        # exactly what NULL is here.
         CheckConstraint("duration > 0", name="ck_events_duration_positive"),
+        # An all-day meeting has no length to state, so the two cannot both be
+        # set. Enforced here rather than left to the route: a length that only
+        # some code paths clear is a length that eventually gets rendered.
+        CheckConstraint(
+            "NOT (all_day AND duration IS NOT NULL)",
+            name="ck_events_all_day_has_no_duration",
+        ),
         # Every read is "this org's meetings, soonest first".
         Index("ix_events_organization_date", "organization_id", "date", "time"),
     )
@@ -888,7 +911,11 @@ class Event(Base):
             "title": self.title,
             "date": self.date.strftime("%Y-%m-%d"),
             "time": self.time.strftime("%H:%M"),
+            # null rather than a stand-in: the dashboard draws a start time
+            # with no range after it when nobody said how long, and it can
+            # only tell the difference if the absence survives the trip.
             "duration": self.duration,
+            "all_day": self.all_day,
             "partner": self.partner_name,
             "description": self.description or "",
             "location": self.location or "",

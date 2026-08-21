@@ -1,4 +1,4 @@
-// Shared behaviour loaded on every page.
+// Shared behavior loaded on every page.
 // Must be included BEFORE the page-specific script.
 
 // Flask serves these files itself now, so the API is same-origin and the base
@@ -308,6 +308,14 @@ window.dialogOpened = function dialogOpened(modal, preferred) {
 
     const onKeydown = (e) => {
         if (e.key !== 'Tab') return;
+        // Only the dialog on top traps. A confirmation opened from inside
+        // another dialog registers second, and while it is up the one
+        // underneath has to leave Tab alone: otherwise both traps run on
+        // every Tab and the lower one pulls focus back out of the dialog the
+        // user is actually answering. openDialogs is insertion-ordered, so
+        // the last key is whatever opened most recently.
+        const stack = [...openDialogs.keys()];
+        if (stack[stack.length - 1] !== modal) return;
         const list = focusableIn(modal);
         if (list.length === 0) {
             // Nothing to move to, but Tab must still not escape into the

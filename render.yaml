@@ -48,7 +48,7 @@ services:
         value: https://partnerportal-j6x1.onrender.com
 
       # Outbound mail. Without RESEND_API_KEY the app logs what it would have
-      # sent instead of sending it, which is the right behaviour locally and
+      # sent instead of sending it, which is the right behavior locally and
       # the wrong one here: nobody is told a proposal is waiting. sync:false
       # so the key is entered once and stored as a secret.
       - key: RESEND_API_KEY

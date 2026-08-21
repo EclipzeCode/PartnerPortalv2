@@ -9,16 +9,16 @@
  * A proposal card exists to answer one question: what do I give, and what do
  * I get. Everything else on it -- who, when, what status -- is context for
  * that. So the terms block is the largest thing on the card, and the two
- * sides take the two direction colours the whole design uses for exactly this
+ * sides take the two direction colors the whole design uses for exactly this
  * distinction: --h-take for what leaves your organization, --h-give for what
- * arrives. Those are the same two colours the home page's match matrix uses,
+ * arrives. Those are the same two colors the home page's match matrix uses,
  * meaning the same two things, which is the point of having them.
  *
  * They used to be a lavender panel and a mint panel -- pale tints chosen to
  * look soft, which is the wrong instinct for the one part of the page where a
  * misread costs somebody a commitment they did not mean to make. The tints
- * are gone; the sides are separated by a hairline and marked by a coloured
- * rule and a coloured heading, which is legible at a glance and survives both
+ * are gone; the sides are separated by a hairline and marked by a colored
+ * rule and a colored heading, which is legible at a glance and survives both
  * themes without needing two more background tokens.
  */
 
@@ -86,9 +86,9 @@
 
 /* An inactive tab's count is a fact, not a call to action -- so it loses the
    solid fill, not its legibility. --h-dim on --h-cell is 3.74:1 on the dark
-   theme and 4.4:1 on the light one: the metadata colour is mixed to sit on
+   theme and 4.4:1 on the light one: the metadata color is mixed to sit on
    the page, and --h-cell lifts the ground out from under it. Body text
-   colour instead, which clears AA on both. */
+   color instead, which clears AA on both. */
 .proposal-tab:not(.active) .tab-count {
     background: var(--h-cell);
     color: var(--h-ink-soft);
@@ -190,7 +190,7 @@
  * The terms
  *
  * The whole reason the card exists. Two columns split by a hairline, each
- * headed in its own direction's colour.
+ * headed in its own direction's color.
  * ------------------------------------------------------------------------- */
 
 .terms {

@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await window.api('/api/account/email', { method: 'DELETE' });
                 paintPendingEmail(null);
-                window.toast('Email change cancelled.');
+                window.toast('Email change canceled.');
             } catch (error) {
                 window.toast(error.message || 'Could not cancel that.', 'error');
             } finally {
@@ -453,7 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-    // The colours these four levels are drawn in live in settings.css, keyed
+    // The colors these four levels are drawn in live in settings.css, keyed
     // off data-score. They were four hardcoded hex values assigned inline
     // from here, which meant they could not follow the theme -- #dc2626 on
     // the near-black page is 4.0:1, on the one label whose whole job is to be

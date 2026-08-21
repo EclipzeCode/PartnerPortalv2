@@ -8,7 +8,7 @@
  * --- Two levels of card, and now none -------------------------------------
  *
  * The old page was a white rounded card (.dashboard-container) sitting on a
- * grey page, holding six white rounded stat tiles, a white rounded
+ * gray page, holding six white rounded stat tiles, a white rounded
  * partnerships card, and two more white rounded cards below. Card inside card
  * inside card. Every one of those boxes cost a border radius, a shadow and
  * twelve to twenty pixels of padding, and none of them meant anything -- the
@@ -28,11 +28,11 @@
  *
  * --- Give and receive -------------------------------------------------------
  *
- * The two direction colours from ink.css do real work here. On the home page
- * --h-give and --h-take colour the two halves of a match. On a proposal card
- * they colour "You give" and "You receive", which is the same distinction
+ * The two direction colors from ink.css do real work here. On the home page
+ * --h-give and --h-take color the two halves of a match. On a proposal card
+ * they color "You give" and "You receive", which is the same distinction
  * arriving at the point where it actually costs something. Someone who read
- * the marketing page and then signed up meets the same two colours meaning the
+ * the marketing page and then signed up meets the same two colors meaning the
  * same two things, which is most of what a design system is for.
  */
 
@@ -54,10 +54,10 @@
 
 /* ppdashboard.js replaces this h2's contents with "Welcome back, <span>Org
    </span>" once /api/dashboard lands, so the element and its span both have
-   to survive. What changed is that it is no longer centred with an accent
+   to survive. What changed is that it is no longer centered with an accent
    rule under it: it sits on the same left margin as everything below, and the
    organization's name takes the italic serif the rest of the design gives to
-   the emphasised half of a heading. */
+   the emphasized half of a heading. */
 .section-header {
     max-width: 82rem;
     margin: 0 auto 2rem;
@@ -311,7 +311,7 @@
  *
  * What used to be .dashboard-card. Still a bordered box, because these two do
  * hold a scrolling list and a box is what tells you where the scroll ends --
- * but a hairline box on the paper, not a shadowed white card on grey.
+ * but a hairline box on the paper, not a shadowed white card on gray.
  * ------------------------------------------------------------------------- */
 
 .dashboard-card {
@@ -402,7 +402,7 @@
     /* Room for the scrollbar so it never sits on top of the text. */
     padding-right: 0.35rem;
     /* Slim scrollbars: the default chrome is heavy inside a small panel.
-       The colours are tokens rather than the hardcoded #cbd3e8 that was here,
+       The colors are tokens rather than the hardcoded #cbd3e8 that was here,
        which stayed light-blue on the dark theme. */
     scrollbar-width: thin;
     scrollbar-color: var(--h-rule) transparent;
@@ -454,10 +454,10 @@
     border-bottom: none;
 }
 
-/* A square mark, not a tinted circle. The colour is the whole signal, so it
+/* A square mark, not a tinted circle. The color is the whole signal, so it
    is applied to a small solid block where it reads, rather than to a pale
    round wash behind a glyph where it does not. */
-/* The neutral mark takes the body-text colour rather than the metadata one.
+/* The neutral mark takes the body-text color rather than the metadata one.
    --h-dim is mixed to sit on the page, and --h-cell lifts the ground out from
    under it -- 4.3:1 on the dark theme, which clears the 3:1 an icon needs but
    is the weakest thing on the page for no reason. */
@@ -493,8 +493,8 @@
 }
 
 /* The four kinds of thing that turn up in the feed. Each was a pale tint of a
-   semantic colour behind a matching glyph; now the mark itself carries the
-   colour, so a scan down the column reads as a column of coloured marks. */
+   semantic color behind a matching glyph; now the mark itself carries the
+   color, so a scan down the column reads as a column of colored marks. */
 .activity-item.kind-accepted .activity-icon {
     background: var(--h-seal);
     color: var(--h-on-seal);
@@ -511,7 +511,7 @@
 }
 
 /* Declined and withdrawn are the two outcomes that are not news. They keep
-   the neutral mark, which is what makes the coloured ones mean something. */
+   the neutral mark, which is what makes the colored ones mean something. */
 .activity-item.kind-declined .activity-icon,
 .activity-item.kind-withdrawn .activity-icon {
     background: var(--h-cell);
@@ -628,11 +628,17 @@
     padding: 0 1.25rem;
 }
 
+/* The right inset is the row's, not the list's. The list is the scroll
+   container, so its own padding-right is cut to 0.35rem above to leave the
+   scrollbar somewhere to sit -- which put the trash button 0.9rem further
+   right than the "Add Event" button in the header, whose 1.25rem comes from
+   .card-header. Padding the row makes up the difference, so both measure from
+   the same card edge; the divider still spans the list, so it is unmoved. */
 .event-item {
     display: flex;
     align-items: center;
     gap: 0.85rem;
-    padding: 0.85rem 0;
+    padding: 0.85rem 0.9rem 0.85rem 0;
     border-bottom: 1px solid var(--h-rule);
 }
 
@@ -723,6 +729,16 @@
 .btn-event:hover {
     border-color: var(--h-edge);
     color: var(--h-ink);
+}
+
+/* The confirmation's second line: which meeting, when, and with whom. Below
+   the title rather than beside it -- .modal-lede strong is mono and the two
+   run together on one line. */
+#confirmEventDeleteWhen {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--h-dim);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -852,7 +868,7 @@
 }
 
 /* A two-way match, flagged in the list. The same word the home page's match
-   panel uses, in the same colour. */
+   panel uses, in the same color. */
 .stat-row .mutual-flag {
     display: inline-flex;
     align-items: center;
@@ -889,7 +905,7 @@
 }
 
 /* Needs are what you receive, offers are what you give -- the same two
-   directions, the same two colours, as everywhere else. */
+   directions, the same two colors, as everywhere else. */
 .stat-tags .needs h3 i  { color: var(--h-give); }
 .stat-tags .offers h3 i { color: var(--h-take); }
 
@@ -968,6 +984,108 @@
     gap: 1rem;
 }
 
+/* --- The start time ------------------------------------------------------ */
+/* Hour, minute and half of the day, sitting on one line and reading as one
+   control. The two selects size to their content rather than splitting the
+   row, so the AM/PM pair keeps its width whatever the hour is. */
+
+.time-field {
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+/* Qualified to outrank forms.css's `.form-group select { width: 100% }`,
+   which is the same specificity and loads after this file: here the field is
+   three controls wide and each takes only what it needs. */
+.form-group .time-field select {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 0;
+    padding-left: 0.6rem;
+    padding-right: 1.7rem;
+    /* forms.css draws the arrow itself out of two gradients, positioned from
+       the right edge; these are the same two, moved in to match the narrower
+       padding above. */
+    background-position:
+        calc(100% - 14px) calc(50% + 2px),
+        calc(100% - 9px) calc(50% + 2px);
+}
+
+.time-colon {
+    align-self: center;
+    font-family: var(--h-mono);
+    color: var(--h-dim);
+}
+
+/* One choice between two values. The radios themselves are hidden -- not
+   display:none, which would take them out of the tab order and out of the
+   accessibility tree -- and the two labels are drawn as a segmented pair. */
+.meridiem {
+    display: flex;
+    margin-left: 0.15rem;
+    border: 1px solid var(--ctl-border, var(--h-rule));
+}
+
+.meridiem-option {
+    position: relative;
+    display: flex;
+    cursor: pointer;
+}
+
+.meridiem-option + .meridiem-option {
+    border-left: 1px solid var(--ctl-border, var(--h-rule));
+}
+
+.meridiem-option input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.meridiem-option span {
+    display: flex;
+    align-items: center;
+    padding: 0 0.7rem;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--h-dim);
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.meridiem-option:hover span {
+    color: var(--h-ink);
+}
+
+.meridiem-option input:checked + span {
+    background: var(--h-give);
+    color: var(--h-on-give);
+}
+
+.meridiem-option input:focus-visible + span {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+/* All day switched on: the time and the length are not being asked for any
+   more. Dimmed rather than removed, so the row does not collapse under the
+   cursor and the fields are where they were when it is switched back off. */
+.time-field:has(select:disabled),
+#eventDurationGroup:has(input:disabled) {
+    opacity: 0.45;
+}
+
+.meridiem-option input:disabled,
+.meridiem-option:has(input:disabled) {
+    cursor: not-allowed;
+}
+
 /* ------------------------------------------------------------------------- *
  * Loading skeletons
  *
@@ -977,7 +1095,7 @@
  * block of roughly its own size -- ppdashboard.js sets the attribute before
  * awaiting /api/dashboard and clears it once the numbers are in.
  *
- * tokens.css's --skeleton-* pair is a cool grey mixed for the blue palette and
+ * tokens.css's --skeleton-* pair is a cool gray mixed for the blue palette and
  * reads as a patch of a different page on the cream, so these use the paper's
  * own tones. Both are already theme-aware; this is only about hue.
  * ------------------------------------------------------------------------- */

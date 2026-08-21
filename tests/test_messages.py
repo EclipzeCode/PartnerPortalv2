@@ -276,7 +276,7 @@ def test_deleting_a_pending_proposal_takes_its_thread(client, login, thread, ses
 # --- What an open thread polls for ------------------------------------------
 # The dialog re-reads this endpoint on a timer while it is open, because a
 # reply arriving mid-conversation used to stay invisible until the thread was
-# closed and opened again. These pin the three things that behaviour rests on.
+# closed and opened again. These pin the three things that behavior rests on.
 
 def test_a_reply_shows_up_on_a_second_read(client, login, thread):
     """The poll's whole purpose: the same GET, later, returns the new message."""

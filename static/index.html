@@ -103,6 +103,15 @@
 
     <!-- Hero -->
     <section class="hero" id="main" tabindex="-1">
+        <!-- The dot lattice, drawn rather than tiled, for the first screen
+             only. pp.js paints the same 24px grid body.home carries as a CSS
+             texture -- aligned to it, so the two meet without a seam at the
+             fold -- and lets the dots near the cursor lift and brighten.
+             Decorative and inert: it is a texture that answers the mouse, and
+             there is nothing in it to read or operate. Left empty and unused
+             when the visitor has asked for reduced motion, in which case the
+             page texture underneath simply shows through. -->
+        <canvas class="hero-field" id="heroField" aria-hidden="true"></canvas>
         <div class="hero-inner">
             <div class="hero-content">
                 <div class="hero-badge eyebrow">Built for two-way partnerships</div>
@@ -110,12 +119,6 @@
                 <h1 class="hero-title">
                     Find a partner who needs what you <em>already have</em>
                 </h1>
-
-                <p class="hero-subtitle">
-                    Most partnerships fall apart because one side is doing a favour. PartnerPortal
-                    matches organizations on both what they need <em>and</em> what they can offer &mdash;
-                    so both sides walk in with something to gain.
-                </p>
 
                 <div class="hero-buttons">
                     <a href="onboarding.html" class="btn-primary">Get matched free</a>
@@ -161,7 +164,7 @@
                     </div>
 
                     <!-- Filled by pp.js. Decorative: the exchange rows below
-                         say in words what the grid says in colour. -->
+                         say in words what the grid says in color. -->
                     <div class="match-lattice" id="matchLattice" aria-hidden="true"></div>
                     <div class="lattice-axis" aria-hidden="true">
                         <span>they need &#9656;</span>
@@ -212,6 +215,22 @@
                 </div>
             </div>
         </div>
+    </section>
+
+    <!-- The argument the whole product rests on. It used to sit under the
+         headline, where it was the fourth thing stacked in a column that also
+         had to hold the buttons, the three facts and a match panel beside it.
+         On its own band it gets the width to be read as a statement, and it
+         is the first thing under the fold -- which is where someone who has
+         scrolled past the headline is asking exactly this question. -->
+    <section class="hero-lede">
+      <div class="lede-inner">
+        <p class="lede-text">
+            Most partnerships fall apart because one side is doing a favor. PartnerPortal
+            matches organizations on both what they need <em>and</em> what they can offer &mdash;
+            so both sides walk in with something to gain.
+        </p>
+      </div>
     </section>
 
     <!-- About -->
@@ -275,7 +294,7 @@
                 <div class="text-content">
                     <h3 class="section-subtitle eyebrow">What makes it different</h3>
                     <h2 class="section-title">Built around what each side <span>brings</span>, not just what they <span>want</span></h2>
-                    <p class="section-description">A partnership where only one side gains is a favour, and favours run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
+                    <p class="section-description">A partnership where only one side gains is a favor, and favors run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
                     <a href="onboarding.html" class="btn-primary">Set up your profile</a>
                 </div>
             </div>

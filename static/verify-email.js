@@ -4,7 +4,7 @@
 // guarantee the reader is signed in on this device, so this does not load
 // common.js (whose api() helper redirects to the login page on 401 -- there
 // is no 401 here, the token itself is the credential, but the redirect
-// behaviour is the wrong default for a page that must work logged out).
+// behavior is the wrong default for a page that must work logged out).
 
 (async function () {
     const card = document.getElementById('verifyCard');

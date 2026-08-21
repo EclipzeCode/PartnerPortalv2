@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const activityFilter = document.getElementById('activityFilter');
     const activityViewAll = document.getElementById('activityViewAll');
     const ACTIVITY_COLLAPSED = 4;
+    const eventsViewAll = document.getElementById('eventsViewAll');
+    const EVENTS_COLLAPSED = 4;
+    let eventsExpanded = false;
     let activityExpanded = false;
 
     // --- Live data ------------------------------------------------------
@@ -518,6 +521,101 @@ document.addEventListener('DOMContentLoaded', async () => {
         return total >= 24 * 60 ? `${label} (+1 day)` : label;
     }
 
+    // --- The start-time controls -----------------------------------------
+    // Hour, minute and AM/PM, standing in for <input type="time">. The API
+    // still speaks "HH:MM" on a 24-hour clock, so everything below is about
+    // getting between the two.
+    const eventHour = document.getElementById('eventHour');
+    const eventMinute = document.getElementById('eventMinute');
+    const eventAllDay = document.getElementById('eventAllDay');
+    const eventDuration = document.getElementById('eventDuration');
+
+    // Five-minute steps: a list of sixty is unusable, and nothing in this app
+    // schedules to the minute. A saved meeting that does -- one typed into the
+    // old time input -- gets its exact value added, so editing the date of a
+    // 10:07 meeting cannot silently move it to 10:05.
+    const MINUTE_STEP = 5;
+
+    function fillTimeSelects() {
+        if (!eventHour || !eventMinute) return;
+        for (let h = 1; h <= 12; h += 1) {
+            eventHour.add(new Option(String(h), String(h)));
+        }
+        for (let m = 0; m < 60; m += MINUTE_STEP) {
+            eventMinute.add(new Option(String(m).padStart(2, '0'), String(m)));
+        }
+    }
+    fillTimeSelects();
+
+    function meridiemInputs() {
+        return [...document.querySelectorAll('input[name="eventMeridiem"]')];
+    }
+
+    function setMeridiem(value) {
+        meridiemInputs().forEach((r) => { r.checked = r.value === value; });
+    }
+
+    function currentMeridiem() {
+        const on = meridiemInputs().find((r) => r.checked);
+        return on ? on.value : 'AM';
+    }
+
+    /** Point the three controls at a "HH:MM" 24-hour time. */
+    function setTimeControls(time24) {
+        if (!eventHour || !eventMinute) return;
+        // Drop the exact-value option a previous edit may have added, or they
+        // pile up one per off-step meeting that has been opened.
+        [...eventMinute.options]
+            .filter((o) => o.dataset.exact)
+            .forEach((o) => o.remove());
+
+        if (!time24) {
+            eventHour.value = '';
+            eventMinute.value = '0';
+            setMeridiem('AM');
+            return;
+        }
+
+        const [hours, minutes] = time24.split(':').map(Number);
+        eventHour.value = String(hours % 12 || 12);
+        setMeridiem(hours >= 12 ? 'PM' : 'AM');
+
+        if (minutes % MINUTE_STEP !== 0) {
+            const exact = new Option(String(minutes).padStart(2, '0'), String(minutes));
+            exact.dataset.exact = 'true';
+            eventMinute.add(exact);
+        }
+        eventMinute.value = String(minutes);
+    }
+
+    /** The three controls as "HH:MM", or '' when no hour has been picked. */
+    function readTimeControls() {
+        if (!eventHour || !eventHour.value) return '';
+        const hour12 = Number(eventHour.value);
+        const pm = currentMeridiem() === 'PM';
+        // 12 AM is midnight and 12 PM is noon -- the one pair the modulo below
+        // would otherwise map to 12:00 and 24:00.
+        const hours = (hour12 % 12) + (pm ? 12 : 0);
+        const minutes = Number(eventMinute.value) || 0;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    /** All-day meetings have no start time and no length to ask for. */
+    function syncAllDay() {
+        const on = Boolean(eventAllDay && eventAllDay.checked);
+        [eventHour, eventMinute, eventDuration].forEach((el) => {
+            if (el) el.disabled = on;
+        });
+        meridiemInputs().forEach((r) => { r.disabled = on; });
+        // Errors on fields that are no longer being asked for would stop a
+        // submit over a value nobody can now see or change.
+        if (on) {
+            [eventHour, eventDuration].forEach((el) => setFieldError(el, ''));
+        }
+    }
+
+    if (eventAllDay) eventAllDay.addEventListener('change', syncAllDay);
+
     // Focus is handled by common.js's dialogOpened/dialogClosed, which trap
     // Tab inside the dialog and put focus back on the control that opened it.
     // Which meeting the dialog is editing, or null when it is adding one.
@@ -542,8 +640,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (event) {
             document.getElementById('eventTitle').value = event.title || '';
             document.getElementById('eventDate').value = event.date || '';
-            document.getElementById('eventTime').value = event.time || '';
-            document.getElementById('eventDuration').value = event.duration ?? 1;
+            if (eventAllDay) eventAllDay.checked = Boolean(event.all_day);
+            // An all-day meeting is stored at midnight, which is a real time
+            // the controls would happily show as 12:00 AM. It is not one
+            // anybody chose, so the pickers are left blank for it.
+            setTimeControls(event.all_day ? '' : (event.time || ''));
+            // ?? '' rather than ?? 1: null here means nobody said how long,
+            // and opening the meeting to change its date should not be what
+            // decides that for them.
+            document.getElementById('eventDuration').value = event.duration ?? '';
             document.getElementById('eventDescription').value = event.description || '';
             document.getElementById('eventLocation').value = event.location || '';
 
@@ -569,8 +674,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .find((o) => o.text === event.partner)?.value || '';
         } else {
             eventForm.reset();
+            // reset() restores the markup's defaults, which for the two
+            // selects is the first option rather than anything meaningful.
+            setTimeControls('');
         }
 
+        syncAllDay();
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, document.getElementById('eventTitle'));
@@ -593,9 +702,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal && modal.classList.contains('active')) {
-            closeModal();
-        }
+        if (e.key !== 'Escape' || !modal || !modal.classList.contains('active')) return;
+        // Anything stacked on top answers Escape first.
+        const confirming = document.getElementById('confirmEventDeleteModal');
+        if (confirming && confirming.classList.contains('active')) return;
+        closeModal();
     });
 
     // Local time; a bare "YYYY-MM-DD" is treated as UTC by Date and would
@@ -611,17 +722,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     // something coming up. Measured from the end of the meeting rather than
     // its start, so one that is running right now still counts as upcoming.
     function isPastEvent(ev) {
-        const end = eventDateTime(ev);
-        if (!end) return false;
-        const finishes = new Date(end);
+        const start = eventDateTime(ev);
+        if (!start) return false;
+
+        // An all-day meeting, or one nobody gave a length, has no stated end
+        // -- so it stays upcoming until the day it is filed under is over.
+        // The alternative for an untimed meeting is to treat it as finishing
+        // the moment it starts, which drops a three o'clock call off the card
+        // at 3:01, while the call is still happening.
+        if (ev.all_day || !Number(ev.duration)) {
+            const endOfDay = eventDate(ev);
+            endOfDay.setHours(23, 59, 59, 999);
+            return endOfDay.getTime() < Date.now();
+        }
+
+        const finishes = new Date(start);
         finishes.setMinutes(
-            finishes.getMinutes() + Math.round((Number(ev.duration) || 0) * 60),
+            finishes.getMinutes() + Math.round(Number(ev.duration) * 60),
         );
         return finishes.getTime() < Date.now();
     }
 
     function eventTimeLabel(event) {
-        const endTime = addHours(event.time, event.duration);
+        if (event.all_day) return 'All day';
+        // No length given: a start and nothing after it. Writing "3:00 PM -
+        // 4:00 PM" from a default would state an end time nobody agreed to.
+        if (!Number(event.duration)) return formatTime(event.time);
+        const endTime = addHours(event.time, Number(event.duration));
         return endTime
             ? `${formatTime(event.time)} - ${endTime}`
             : formatTime(event.time);
@@ -634,8 +761,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const item = document.createElement('div');
         item.className = 'event-item' + (isPastEvent(event) ? ' is-past' : '');
-        // Opens the same dialog the Upcoming stat card does.
-        item.dataset.eventId = event.id;
         item.innerHTML = `
             <div class="event-date">
                 <span class="event-day">${date.getDate()}</span>
@@ -671,12 +796,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const upcoming = events.filter((ev) => !isPastEvent(ev));
         const past = events.filter(isPastEvent).reverse();
 
+        const ordered = [...upcoming, ...past];
+
         if (events.length === 0) {
             eventsList.innerHTML =
                 '<p class="empty-state">No meetings scheduled yet.</p>';
         } else {
-            [...upcoming, ...past].forEach(
-                (event) => eventsList.appendChild(renderEvent(event)));
+            const shown = eventsExpanded
+                ? ordered
+                : ordered.slice(0, EVENTS_COLLAPSED);
+            shown.forEach((event) => eventsList.appendChild(renderEvent(event)));
+        }
+
+        // Same control as the activity card's: it expands the list in place
+        // rather than opening anything. Hidden when there is nothing folded
+        // away, so it never offers to show what is already on screen.
+        if (eventsViewAll) {
+            eventsViewAll.hidden = ordered.length <= EVENTS_COLLAPSED;
+            eventsViewAll.innerHTML = eventsExpanded
+                ? "Show less <i class='bx bx-chevron-up'></i>"
+                : `View all meetings (${ordered.length}) <i class='bx bx-chevron-right'></i>`;
         }
 
         // Counts what the card is headed with. This used to be every meeting
@@ -692,7 +831,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (eventsList) {
-        eventsList.addEventListener('click', async (e) => {
+        eventsList.addEventListener('click', (e) => {
             const edit = e.target.closest('.btn-event[data-edit-event-id]');
             if (edit) {
                 const found = loadEvents().find(
@@ -703,27 +842,117 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const btn = e.target.closest('.btn-event[data-event-id]');
             if (btn) {
-                // Disabled while the request is in flight: the row stays put
-                // until the server confirms, and a second click would send a
-                // delete for something already gone.
-                btn.disabled = true;
-                try {
-                    await removeEvent(btn.dataset.eventId);
-                    renderSavedEvents();
-                } catch (error) {
-                    btn.disabled = false;
-                    // The row is still on screen and still real, so this says
-                    // so rather than leaving a delete that looked ignored.
-                    window.toast(
-                        error.message || 'Could not remove that meeting.',
-                        'error',
-                    );
-                }
+                const found = loadEvents().find(
+                    (ev) => String(ev.id) === String(btn.dataset.eventId));
+                if (found) openDeleteConfirm(found);
                 return;
             }
-            // Anywhere else on the row opens that meeting in the dialog.
-            const item = e.target.closest('.event-item[data-event-id]');
-            if (item) openStat('events', { kind: 'event', id: item.dataset.eventId });
+        });
+    }
+
+    if (eventsViewAll) {
+        eventsViewAll.addEventListener('click', () => {
+            eventsExpanded = !eventsExpanded;
+            renderSavedEvents();
+        });
+    }
+
+    // --- Remove-meeting confirmation -------------------------------------
+    // The trash button sits an inch from the pencil and the delete cannot be
+    // undone, so the click opens this rather than removing the row.
+    //
+    // The id is held rather than the button that was clicked: the list
+    // repaints for reasons that have nothing to do with this dialog -- saving
+    // a meeting in another tab, the feed refreshing -- and the element would
+    // then be a detached node pointing at nothing.
+    const confirmDeleteModal = document.getElementById('confirmEventDeleteModal');
+    const confirmDeleteBtn = document.getElementById('confirmEventDeleteBtn');
+    let pendingDeleteId = null;
+
+    function openDeleteConfirm(event) {
+        if (!confirmDeleteModal) return;
+        pendingDeleteId = event.id;
+
+        // Named, not "this meeting": the whole reason to ask is that someone
+        // may have clicked the wrong row, and only the title tells them.
+        document.getElementById('confirmEventDeleteName').textContent =
+            event.title || 'Untitled meeting';
+        const day = eventDate(event).toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', year: 'numeric',
+        });
+        document.getElementById('confirmEventDeleteWhen').textContent =
+            `${day}, ${eventTimeLabel(event)} \u00b7 with ${event.partner}`;
+
+        confirmDeleteBtn.disabled = false;
+        confirmDeleteModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        // Focused on the confirm button, matching the account-delete dialog in
+        // settings.js. Escape and Cancel are both one key away either way.
+        window.dialogOpened(confirmDeleteModal, confirmDeleteBtn);
+    }
+
+    function closeDeleteConfirm() {
+        if (!confirmDeleteModal) return;
+        pendingDeleteId = null;
+        confirmDeleteModal.classList.remove('active');
+        // Not unconditionally 'auto': this dialog can be opened from inside
+        // the stat dialog, which is still up and still wants the page behind
+        // it held still.
+        const stillOpen = [modal, statModal].some(
+            (m) => m && m.classList.contains('active'));
+        document.body.style.overflow = stillOpen ? 'hidden' : 'auto';
+        window.dialogClosed(confirmDeleteModal);
+    }
+
+    if (confirmDeleteModal) {
+        // Cancel, the X and the backdrop share one way out. The backdrop is
+        // the modal element itself; a click inside the container is not a
+        // click-away.
+        confirmDeleteModal.addEventListener('click', (e) => {
+            if (e.target === confirmDeleteModal
+                || e.target.closest('[data-cancel-event-delete]')) {
+                closeDeleteConfirm();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && confirmDeleteModal.classList.contains('active')) {
+                closeDeleteConfirm();
+            }
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            const id = pendingDeleteId;
+            if (id === null) return;
+            // Disabled while the request is in flight, so a second click
+            // cannot send a delete for something already gone.
+            confirmDeleteBtn.disabled = true;
+            try {
+                await removeEvent(id);
+                // If the stat dialog is sitting on the detail for this very
+                // meeting, that view no longer has anything to show, so it
+                // steps back to the list rather than rendering a blank.
+                if (statDetail && statDetail.kind === 'event'
+                    && String(statDetail.id) === String(id)) {
+                    statDetail = null;
+                }
+                // Repainted before the dialog closes, on purpose: common.js
+                // hands focus back to whatever opened the dialog, and what
+                // opened this one was the trash button in the row that just
+                // went away. Removing it first means there is nothing to hand
+                // focus back to rather than a node about to be detached.
+                renderSavedEvents();
+                closeDeleteConfirm();
+            } catch (error) {
+                confirmDeleteBtn.disabled = false;
+                // The meeting is still there and still real, so this says so
+                // rather than leaving a delete that looked ignored. The dialog
+                // stays open on the row it is about.
+                window.toast(
+                    error.message || 'Could not remove that meeting.',
+                    'error',
+                );
+            }
         });
     }
 
@@ -781,9 +1010,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function validateEventForm() {
         const title = document.getElementById('eventTitle');
         const date = document.getElementById('eventDate');
-        const time = document.getElementById('eventTime');
         const duration = document.getElementById('eventDuration');
         const partner = document.getElementById('eventPartner');
+        const allDay = Boolean(eventAllDay && eventAllDay.checked);
 
         const problems = [];
         const fail = (field, message) => {
@@ -795,11 +1024,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!title.value.trim()) fail(title, 'Give the meeting a title.');
         if (!date.value) fail(date, 'Pick a date.');
-        if (!time.value) fail(time, 'Pick a start time.');
 
-        const hours = parseFloat(duration.value);
-        if (!duration.value || Number.isNaN(hours) || hours <= 0) {
-            fail(duration, 'Enter how long it runs, in hours.');
+        // Neither is asked for on an all-day meeting, so neither can be wrong.
+        if (!allDay) {
+            if (!readTimeControls()) fail(eventHour, 'Pick a start time.');
+
+            // Optional: blank means nobody has said how long, which the card
+            // shows as a start time with no end. Only a value that is there
+            // and makes no sense is an error.
+            if (duration.value.trim()) {
+                const hours = parseFloat(duration.value);
+                if (Number.isNaN(hours) || hours <= 0 || hours > 24) {
+                    fail(duration, 'Give a length between 0 and 24 hours, or leave it blank.');
+                }
+            }
         }
 
         if (!partner.value) {
@@ -833,11 +1071,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const select = document.getElementById('eventPartner');
+            const allDay = Boolean(eventAllDay && eventAllDay.checked);
+            const hours = eventDuration.value.trim();
             const payload = {
                 title: document.getElementById('eventTitle').value.trim(),
                 date: document.getElementById('eventDate').value,
-                time: document.getElementById('eventTime').value,
-                duration: parseFloat(document.getElementById('eventDuration').value) || 1,
+                all_day: allDay,
+                // Midnight for an all-day meeting: the column is NOT NULL and
+                // 00:00 is what sorts it to the top of its own day. The server
+                // does the same thing rather than trusting this.
+                time: allDay ? '00:00' : readTimeControls(),
+                // null, not a default. An edit that says nothing about the
+                // length leaves the field untouched; this one is a full save
+                // of what the form shows, and what it shows is blank.
+                duration: allDay || !hours ? null : parseFloat(hours),
                 partner: select.options[select.selectedIndex].text,
                 description: document.getElementById('eventDescription').value.trim(),
                 location: document.getElementById('eventLocation').value.trim()
@@ -955,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const full = d.toLocaleDateString('en-US', {
             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
         });
-        const hours = Number(ev.duration) || 1;
+        const hours = Number(ev.duration);
         return `
             <div class="stat-detail-head">
                 <span class="stat-row-mark">${d.getDate()}<small>${
@@ -969,7 +1216,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             <dl class="stat-detail-grid">
                 ${field('Date', full)}
                 ${field('Time', eventTimeLabel(ev))}
-                ${field('Duration', `${hours} hour${hours === 1 ? '' : 's'}`)}
+                ${/* Left out rather than filled with a default: field()
+                      already drops an empty value, and a meeting nobody gave
+                      a length simply has nothing to say here. */ ''}
+                ${field('Duration', hours ? `${hours} hour${hours === 1 ? '' : 's'}` : '')}
                 ${field('Location', ev.location)}
             </dl>
             ${ev.description
@@ -1042,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>`;
     }
 
-    // A summary, not a list. Every other view here itemises what it counts;
+    // A summary, not a list. Every other view here itemizes what it counts;
     // this one deliberately cannot, because the rows behind it record that
     // somebody looked, not who -- most visitors are signed out and have no
     // account here to be named from. Says so plainly rather than leaving the
@@ -1097,11 +1347,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         statBack.hidden = true;
 
         if (statView === 'events') {
-            const events = sortedEvents();
+            // Upcoming only. The card this dialog opens from is headed
+            // "Upcoming" and counts exactly these, so listing meetings that
+            // have already happened made the list disagree with the number
+            // that opened it. The card behind the dialog still keeps them.
+            const events = sortedEvents().filter((ev) => !isPastEvent(ev));
             statTitle.textContent = `${VIEW_TITLES.events} (${events.length})`;
             statBody.innerHTML = events.length
                 ? `<div class="stat-list">${events.map(eventRow).join('')}</div>`
-                : emptyState('No meetings scheduled yet. Use Add Event to create one.');
+                : emptyState('Nothing coming up. Use Add Event to schedule a '
+                    + 'meeting — anything that has already happened stays on '
+                    + 'the Upcoming Events card.');
             return;
         }
 
@@ -1216,9 +1472,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         card.addEventListener('click', () => openStat(card.dataset.stat));
     });
 
-    const eventsViewAll = document.getElementById('eventsViewAll');
-    if (eventsViewAll) eventsViewAll.addEventListener('click', () => openStat('events'));
-
     if (statModal) {
         statBack.addEventListener('click', () => { statDetail = null; renderStat(); });
         document.getElementById('statClose').addEventListener('click', closeStat);
@@ -1227,21 +1480,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // Row clicks and the in-detail remove button.
-        statBody.addEventListener('click', async (e) => {
+        statBody.addEventListener('click', (e) => {
             const remove = e.target.closest('[data-remove-event]');
             if (remove) {
-                remove.disabled = true;
-                try {
-                    await removeEvent(remove.dataset.removeEvent);
-                    statDetail = null;
-                    renderSavedEvents();  // repaints the card, the feed and this dialog
-                } catch (error) {
-                    remove.disabled = false;
-                    window.toast(
-                        error.message || 'Could not remove that meeting.',
-                        'error',
-                    );
-                }
+                // The same confirmation the card's trash button opens. It
+                // stacks on top of this dialog; common.js hands the Tab trap
+                // to whichever dialog is on top, so the one underneath stops
+                // grabbing focus while the question is up.
+                const found = loadEvents().find(
+                    (ev) => String(ev.id) === String(remove.dataset.removeEvent));
+                if (found) openDeleteConfirm(found);
                 return;
             }
             const row = e.target.closest('.stat-row');
@@ -1256,6 +1504,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape' || !statModal.classList.contains('active')) return;
+            // The remove confirmation can be stacked on top of this dialog,
+            // and Escape belongs to whatever is on top: without this it
+            // dismissed the confirmation and stepped this dialog back out of
+            // its detail view in the same keypress.
+            if (confirmDeleteModal && confirmDeleteModal.classList.contains('active')) return;
             // Escape steps back out of a detail before closing the dialog.
             if (statDetail) { statDetail = null; renderStat(); } else closeStat();
         });

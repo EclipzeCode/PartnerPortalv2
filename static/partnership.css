@@ -21,7 +21,7 @@
  * work with no session at all. ink.css is the one shared stylesheet it takes,
  * for the palette, the three typefaces and the .eyebrow primitive.
  *
- * --- Two colours, used as names ---------------------------------------------
+ * --- Two colors, used as names ---------------------------------------------
  *
  * Everywhere else in the app --h-give and --h-take mean "toward you" and
  * "away from you". There is no "you" on this page: the reader is a third
@@ -112,7 +112,7 @@ body {
 }
 
 /* Neutral rather than red. Ending a partnership is an ordinary outcome, and
-   this page cannot say whose decision it was or why -- colouring it as a
+   this page cannot say whose decision it was or why -- coloring it as a
    failure would imply an answer it does not have. */
 .agreement-badge.ended {
     background: transparent;
@@ -157,7 +157,7 @@ body {
  * The two parties
  *
  * Side by side with the exchange mark between them, split by hairlines. Each
- * party takes one of the two colours as an identity, carried from its name
+ * party takes one of the two colors as an identity, carried from its name
  * down to the marks beside the things it agreed to provide.
  * ------------------------------------------------------------------------- */
 
@@ -188,7 +188,7 @@ body {
     color: var(--h-ink);
 }
 
-/* The identity mark: a short rule above each name in that party's colour. */
+/* The identity mark: a short rule above each name in that party's color. */
 .party::before {
     content: '';
     display: block;
@@ -254,15 +254,15 @@ body {
     font-style: italic;
 }
 
-/* Qualified up to (0,3,2) so it outweighs the second party's colour rule
+/* Qualified up to (0,3,2) so it outweighs the second party's color rule
    above -- which is `.party:last-of-type .party-gives li::before` and was
-   painting the "nothing listed" marker in that party's colour, exactly where
+   painting the "nothing listed" marker in that party's color, exactly where
    the point is that there is nothing to attribute to them. */
 .parties .party-gives li.none::before {
     background: var(--h-rule);
 }
 
-/* The divider between the two, with the exchange mark centred on it. */
+/* The divider between the two, with the exchange mark centered on it. */
 .exchange-arrow {
     display: flex;
     align-items: center;

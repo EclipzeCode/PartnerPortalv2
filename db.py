@@ -22,7 +22,7 @@ if not DATABASE_URL:
     )
 
 
-def _normalise(url):
+def _normalize(url):
     """Point SQLAlchemy at psycopg 3.
 
     Hosting providers hand out `postgresql://` (and older ones `postgres://`),
@@ -40,7 +40,7 @@ def _normalise(url):
     return url
 
 
-DATABASE_URL = _normalise(DATABASE_URL)
+DATABASE_URL = _normalize(DATABASE_URL)
 
 engine = create_engine(
     DATABASE_URL,
@@ -50,5 +50,5 @@ engine = create_engine(
 )
 
 # expire_on_commit=False so objects stay readable after the session commits,
-# which is what request handlers want when serialising a response.
+# which is what request handlers want when serializing a response.
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)

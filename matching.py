@@ -7,7 +7,7 @@ so the score is built around two questions asked in both directions:
     i_give    = my offers     ∩  their needs   -- what they get out of it
 
 An org that satisfies both is a mutual match and is ranked far above one that
-only satisfies one, because a one-sided match is just a request for a favour.
+only satisfies one, because a one-sided match is just a request for a favor.
 That asymmetry is the whole point, so the bonus for mutuality is large enough
 that no amount of one-directional overlap can outrank it.
 
@@ -138,7 +138,7 @@ def score_pair(me, them):
     alone, which threw away the one thing the caller could not work out for
     itself: two of these describe a direction -- something coming toward you,
     something going out from you -- and that is the distinction the whole
-    product is built on. The frontend colours those two directions everywhere
+    product is built on. The frontend colors those two directions everywhere
     else it can, and here it was reduced to matching on the words "They offer"
     at the front of a string, which is a parser waiting to break the first
     time this wording is edited. The key is already in hand at the moment the
@@ -239,7 +239,7 @@ def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
 
     Seeded example organizations are excluded by default: a real signup should
     never be paired with something fictional. `demo_only=True` returns exactly
-    those instead, for the clearly-labelled "example matches" view shown when
+    those instead, for the clearly-labeled "example matches" view shown when
     the real directory is still small.
     """
     from models import Organization

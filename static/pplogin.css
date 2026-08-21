@@ -9,7 +9,7 @@
  * overlay that slid across on a transform when you switched between signing
  * in and registering, revealing "Hello, Friend!" underneath. It is a widely
  * copied template, and of everything in this app it was the piece most likely
- * to be recognised on sight as something taken off a shelf. It was also the
+ * to be recognized on sight as something taken off a shelf. It was also the
  * first screen a new organization saw.
  *
  * The mechanic is gone, not restyled. What is left is a split panel: a dark
@@ -331,7 +331,7 @@
  * The same four-segment meter the settings page uses, for the same reason:
  * the score is an integer from 1 to 4, so a continuous bar draws a precision
  * the number does not have. pplogin.js sets data-score on the wrapper; the
- * colours live here rather than being assigned inline, so they follow the
+ * colors live here rather than being assigned inline, so they follow the
  * theme.
  * ------------------------------------------------------------------------- */
 
@@ -357,7 +357,7 @@
     transition: width 0.2s ease;
 }
 
-/* The three divisions, painted in the panel colour on top of the fill. */
+/* The three divisions, painted in the panel color on top of the fill. */
 .pw-meter-bar::after {
     content: '';
     position: absolute;

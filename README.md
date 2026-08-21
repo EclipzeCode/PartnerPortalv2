@@ -1,7 +1,7 @@
 # PartnerPortal
 
 Most partnerships between small organizations fall apart because one side is
-doing a favour. PartnerPortal matches organizations on **both** what they need
+doing a favor. PartnerPortal matches organizations on **both** what they need
 and what they can offer, so both sides walk in with something to gain — then
 gives them a way to write the exchange down and agree to it.
 
@@ -16,7 +16,7 @@ to trade resources with each other.
    profiles fit *in both directions*. An org that offers what you need **and**
    needs what you offer is a two-way match and ranks far above one that only
    satisfies one direction, because a one-sided match is just a request for a
-   favour.
+   favor.
 3. **Proposing** — open a match and propose a partnership. The terms start
    pre-filled from the overlap that produced the match, and each side can only
    commit to things it actually listed.
@@ -86,7 +86,7 @@ however much else they have in common), the proposal lifecycle (who may
 accept, decline, withdraw, complete or end one, and what a settled proposal
 refuses), what one organization can and cannot learn about another, which
 rows it may act on, how a profile view is counted, and what the server does
-with input it does not recognise.
+with input it does not recognize.
 
 Several of them exist because the answer is a promise the product makes in
 prose. That neither side can be committed to something it never listed. That
@@ -125,7 +125,7 @@ there rather than on someone's first deploy.
 | `models.py` | `Organization`, `Partnership`, `Message`, `Event`, `SavedLead`, `ProfileView` |
 | `matching.py` | Bidirectional scoring and the reasons shown to users |
 | `categories.py` | The shared need/offer vocabulary, focus areas and timelines |
-| `links.py` | Normalising and validating the four profile links |
+| `links.py` | Normalizing and validating the four profile links |
 | `moderation.py` | Blocking inappropriate organization names |
 | `notifications.py` | Transactional email, and the dry-run fallback without a key |
 | `db.py` | Engine and session setup |

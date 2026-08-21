@@ -40,7 +40,7 @@
     /* --- Neutrals -------------------------------------------------------- */
     /* A deliberately dark surface -- the footer, and the panels that match
        it -- so it stays dark in both themes. It used to double as the
-       heading colour, which is the opposite role: one has to invert and the
+       heading color, which is the opposite role: one has to invert and the
        other must not, and sharing a token between them meant the footer
        turned pale the moment a dark palette existed, taking its white text
        with it. Headings now use --heading below. */
@@ -70,7 +70,7 @@
        were a white rectangle on a near-white ground with nothing to find. */
     --border-strong: #c6ccdf;
     --bg: #f5f7ff;              /* 6 files; was #f8f9fa in settings.css */
-    /* The same colour under the name onboarding.css and ppdashboard.css use.
+    /* The same color under the name onboarding.css and ppdashboard.css use.
        An alias rather than a rename, so nine call sites stay as they are. */
     --bg-light: #f5f7ff;
 
@@ -92,15 +92,15 @@
     --danger-dark: #c92c39;
 
     /* --- Surfaces --------------------------------------------------------- */
-    /* The colour of a card, and of a panel sunk into one. These were the
+    /* The color of a card, and of a panel sunk into one. These were the
        gap that stopped the palette being a palette: --bg named the page
        behind everything, but the card on top of it was ~60 hardcoded
        `background: #fff` scattered across sixteen files. Nothing could be
        restyled -- least of all inverted -- while the most common surface on
        the site had no name.
 
-       --shadow-tint is the colour a shadow is drawn in rather than a whole
-       shadow, because the sizes are all different and only the colour has
+       --shadow-tint is the color a shadow is drawn in rather than a whole
+       shadow, because the sizes are all different and only the color has
        to change: black at 6% reads as depth on white and as nothing at all
        on a dark ground. */
     --surface: #ffffff;
@@ -114,7 +114,7 @@
 
     /* Tinted panels that carry a meaning -- a failed field, a delivered
        side of an agreement, an example organization. Each was a one-off hex
-       chosen to sit beside the matching semantic colour, which is fine until
+       chosen to sit beside the matching semantic color, which is fine until
        the ground moves: #fef2f2 is a red so pale it only exists relative to
        white. Named here so the dark palette can restate them. */
     --surface-danger: #fef2f2;
@@ -123,7 +123,7 @@
     --surface-note-strong: #fff8e1;
     --border-note: #f5d67b;
     /* Text sitting on one of those tints, which is a different job from the
-       semantic colour itself: --success has to read on a white card, this
+       semantic color itself: --success has to read on a white card, this
        has to read on a pale green one, and the two cannot be the same value
        without one of them failing. These were hardcoded at ~20 call sites --
        #15803d, #b91c1c, #7a5b00 and friends -- all of them dark enough to
@@ -155,7 +155,7 @@
     --bridge-deck: #6d81cd;
 
     /* --- Legacy aliases --------------------------------------------------- */
-    /* pplogin.css refers to the brand colour and its card background under
+    /* pplogin.css refers to the brand color and its card background under
        these two names. Kept as aliases so that file's call sites are left
        alone; prefer --primary and a plain white above in anything new. */
     --main-color: #4361ee;
@@ -169,20 +169,20 @@
  * product ships with, rather than whatever their operating system happens to
  * be set to.
  *
- * The ground is near-black rather than navy, and the greys under it are
+ * The ground is near-black rather than navy, and the grays under it are
  * neutral: a blue-tinted dark theme reads as "light theme with the lights
  * off", and the difference is most of why the first version of this felt
  * wrong. Surfaces separate by lightness alone -- page, card, sunk panel --
  * with a hairline border rather than a shadow, since shadows do not carry on
  * a dark ground.
  *
- * The accent is violet. The brand blue is the one colour that cannot survive
+ * The accent is violet. The brand blue is the one color that cannot survive
  * the move: #4361ee is unreadable here, and lightening it lands on a pale
- * periwinkle that sits badly against neutral greys. Violet keeps the same
+ * periwinkle that sits badly against neutral grays. Violet keeps the same
  * "cool, one accent, used sparingly" character while actually belonging to
  * the surface behind it.
  *
- * Secondary text is grey, not dimmed white. Everything that is not the
+ * Secondary text is gray, not dimmed white. Everything that is not the
  * primary thing on the page steps down in saturation as well as lightness,
  * which is what keeps a dark screen from feeling like it is shouting.
  *
@@ -201,12 +201,12 @@
        in both themes -- that is the whole point of the token -- but #1a1a2e
        is navy, and against a neutral near-black page it reads as a blue
        block sitting on top of the design rather than part of it. Same role,
-       restated in this palette's greys. */
+       restated in this palette's grays. */
     --dark: #0f0f11;
 
     --text: #fafafa;            /* 18.1:1 on --surface */
     --heading: #ffffff;
-    --text-light: #9a9aa2;      /* 6.8:1 -- grey, not dimmed white */
+    --text-light: #9a9aa2;      /* 6.8:1 -- gray, not dimmed white */
     --border: #27272a;
     --border-strong: #45454e;
 
@@ -215,7 +215,7 @@
     --primary-light: rgba(167, 139, 250, 0.14);
     --secondary: #c4b5fd;
     --accent: #7dd3fc;
-    /* The fill is light here, so what sits on it is the page colour rather
+    /* The fill is light here, so what sits on it is the page color rather
        than white -- white on #a78bfa is 2.4:1. */
     --on-primary: #0a0a0b;
 
