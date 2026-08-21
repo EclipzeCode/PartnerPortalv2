@@ -18,7 +18,7 @@
 
 /* ---------- Footer ---------- */
 .site-footer {
-    background: #1a1a2e;
+    background: var(--dark);
     color: #c7cbe0;
     padding: 3.5rem 8% 2rem;
     font-family: 'Poppins', sans-serif;
@@ -283,7 +283,7 @@ textarea:focus-visible {
     gap: 0.6rem;
     padding: 0.85rem 1rem;
     border-radius: 0.6rem;
-    background: #fff;
+    background: var(--surface);
     color: #2b2d42;
     font-family: 'Poppins', system-ui, -apple-system, sans-serif;
     font-size: 0.9rem;
@@ -403,7 +403,7 @@ textarea:focus-visible {
     z-index: 1100;
     padding: 0.7rem 1.1rem;
     background: var(--primary, #4361ee);
-    color: #fff;
+    color: var(--on-primary);
     font-weight: 600;
     text-decoration: none;
     border-radius: 0 0 0.5rem 0;

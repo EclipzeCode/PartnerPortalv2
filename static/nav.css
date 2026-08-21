@@ -20,7 +20,7 @@
     width: 100%;
     /* Padding shrinks with the viewport so the nav keeps its room longest. */
     padding: clamp(0.75rem, 1.6vw, 1.5rem) clamp(1rem, 5vw, 6rem);
-    background: #fff;
+    background: var(--surface);
     box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
     display: flex;
     justify-content: space-between;
@@ -97,7 +97,7 @@
     margin-left: 0.3rem;
     border-radius: 62.4375rem;
     background: var(--primary, #4361ee);
-    color: #fff;
+    color: var(--on-primary);
     font-size: 0.68rem;
     font-weight: 700;
     line-height: 1;
@@ -211,7 +211,7 @@
     padding: 0.55rem 1.15rem;
     border-radius: 999px;
     background: var(--primary, #4361ee);
-    color: #fff;
+    color: var(--on-primary);
     font-weight: 600;
     white-space: nowrap;
     transition: background 0.2s ease, box-shadow 0.2s ease;
@@ -219,7 +219,7 @@
 
 .navbar a.nav-auth-cta:hover {
     background: var(--primary-dark, #3a56d4);
-    color: #fff;
+    color: var(--on-primary);
     box-shadow: 0 0.35rem 0.9rem rgba(67, 97, 238, 0.28);
 }
 
@@ -280,7 +280,7 @@
     right: 0;
     min-width: 15rem;
     padding: 0.4rem;
-    background: #fff;
+    background: var(--surface);
     border: 1px solid #eef0f6;
     border-radius: 0.75rem;
     box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.14);
@@ -379,7 +379,7 @@
         flex-direction: column;
         align-items: stretch;
         gap: 0;
-        background: #fff;
+        background: var(--surface);
         /* Hidden by default; common.js toggles .active. Clipping rather than
            display:none keeps the open/close transition.
            max-height caps content only -- vertical padding and the shadow

@@ -47,7 +47,7 @@
     padding: 0 0.35rem;
     border-radius: 62.4375rem;
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     font-size: 0.74rem;
     font-weight: 700;
 }
@@ -64,7 +64,7 @@
 }
 
 .proposal-card {
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 0.875rem;
     padding: 1.5rem;
@@ -128,13 +128,13 @@
 }
 
 .terms-side {
-    background: #f7f9ff;
+    background: var(--surface-sunk);
     border-radius: 0.625rem;
     padding: 0.9rem 1rem;
 }
 
 .terms-side.gets {
-    background: #f4fbf6;
+    background: var(--surface-success);
 }
 
 .terms-side h4 {
@@ -232,7 +232,7 @@
     font-size: 0.86rem;
     color: var(--text-light);
     line-height: 1.6;
-    background: #f7f9ff;
+    background: var(--surface-sunk);
     border-radius: 0.5rem;
     padding: 0.8rem 1rem;
 }
@@ -402,7 +402,7 @@
     margin: 0 0 0.75rem;
     padding: 0.6rem 0.85rem;
     border-radius: 0.7rem;
-    background: #fff;
+    background: var(--surface);
     border: 1px solid rgba(0, 0, 0, 0.07);
 }
 
@@ -462,7 +462,7 @@
     padding: 0.05rem 0.35rem;
     border-radius: 999px;
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     font-size: 0.72rem;
     font-weight: 700;
     text-align: center;

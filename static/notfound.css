@@ -85,7 +85,7 @@ body {
 
 .notfound-actions .btn-primary {
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     border: 1px solid var(--primary);
 }
 
@@ -95,7 +95,7 @@ body {
 }
 
 .notfound-actions .btn-ghost {
-    background: #fff;
+    background: var(--surface);
     color: var(--text-light);
     border: 1px solid var(--border);
 }

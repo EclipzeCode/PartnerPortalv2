@@ -8,7 +8,7 @@
 
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: #f5f7ff;
+    background-color: var(--bg);
     color: var(--text);
     line-height: 1.6;
     overflow-x: hidden;
@@ -31,7 +31,7 @@ button {
     align-items: center;
     gap: 3rem;
     min-height: 100vh;
-    background: linear-gradient(180deg, #f7f9ff 0%, #ffffff 55%);
+    background: linear-gradient(180deg, var(--surface-sunk) 0%, var(--surface) 55%);
     position: relative;
     overflow: hidden;
 }
@@ -183,7 +183,7 @@ button {
     position: absolute;
     inset: 0 0 auto 0;
     height: 45%;
-    background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
     z-index: 1;
 }
 
@@ -217,7 +217,7 @@ button {
     margin-bottom: 1.5rem;
     border: 1px solid #dfe5f8;
     border-radius: 62.4375rem;
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-veil);
     font-size: 0.82rem;
     font-weight: 500;
     color: var(--text-light);
@@ -227,7 +227,7 @@ button {
     width: 0.4375rem;
     height: 0.4375rem;
     border-radius: 50%;
-    background: #22c55e;
+    background: var(--success);
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
     animation: badgePulse 2.4s ease-out infinite;
 }
@@ -244,7 +244,7 @@ button {
     margin-bottom: 1.5rem;
     line-height: 1.15;
     letter-spacing: -1px;
-    color: var(--dark);
+    color: var(--heading);
 }
 
 .hero-subtitle em {
@@ -275,7 +275,7 @@ button {
 
 .btn-primary {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     padding: 0.9rem 2rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -292,7 +292,7 @@ button {
 }
 
 .btn-secondary {
-    background: white;
+    background: var(--surface);
     color: var(--primary);
     padding: 0.9rem 2rem;
     border-radius: 0.5rem;
@@ -306,7 +306,7 @@ button {
 }
 
 .btn-secondary:hover {
-    background: #f5f7ff;
+    background: var(--bg);
     color: var(--primary-dark);
 }
 
@@ -340,13 +340,13 @@ button {
     transform: translateY(-50%);
     width: 1px;
     height: 2.5rem;
-    background: #e0e0e0;
+    background: var(--track);
 }
 
 .hero-stat-number {
     font-size: 1.75rem;
     font-weight: 700;
-    color: var(--dark);
+    color: var(--heading);
     line-height: 1.2;
 }
 
@@ -376,7 +376,7 @@ button {
 .match-demo {
     width: 100%;
     max-width: 26.25rem;
-    background: white;
+    background: var(--surface);
     border: 1px solid #e7eaf6;
     border-radius: 1.125rem;
     padding: 1.5rem;
@@ -412,7 +412,7 @@ button {
 .match-score {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--dark);
+    color: var(--heading);
 }
 
 .match-score::after {
@@ -429,7 +429,7 @@ button {
     gap: 0.9rem;
     padding: 0.85rem;
     border-radius: 0.75rem;
-    background: #fafbff;
+    background: var(--surface-sunk);
     border: 1px solid #eef0f9;
 }
 
@@ -454,7 +454,7 @@ button {
 
 .org-name {
     font-weight: 600;
-    color: var(--dark);
+    color: var(--heading);
     line-height: 1.3;
 }
 
@@ -505,7 +505,7 @@ button {
 }
 
 .exchange-text strong {
-    color: var(--dark);
+    color: var(--heading);
     font-weight: 600;
 }
 
@@ -540,7 +540,7 @@ button {
     padding: 0;
     border: 1px solid #dfe5f8;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--surface-veil);
     color: var(--text-light);
     font-size: 1.15rem;
     cursor: pointer;
@@ -550,7 +550,7 @@ button {
 .match-arrow:hover {
     color: var(--primary);
     border-color: var(--primary);
-    background: #fff;
+    background: var(--surface);
 }
 
 .match-arrow:focus-visible {
@@ -569,13 +569,13 @@ button {
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: #d5dbec;
+    background: var(--thumb);
     cursor: pointer;
     transition: background 0.25s ease, width 0.25s ease;
 }
 
 .match-dot:hover {
-    background: #b9c2de;
+    background: var(--thumb-hover);
 }
 
 .match-dot.active {
@@ -702,7 +702,7 @@ button {
 /* About Section Styles */
 .about {
     padding: 5rem 0;
-    background: white;
+    background: var(--surface);
 }
 
 .scroll-section {
@@ -742,7 +742,7 @@ button {
     font-weight: 700;
     line-height: 1.2;
     margin-bottom: 2rem;
-    color: var(--dark);
+    color: var(--heading);
 }
 
 .section-title span {
@@ -769,7 +769,7 @@ button {
 
 /* Platform Section */
 .platform-section {
-    background: linear-gradient(to bottom, #f9faff, white);
+    background: linear-gradient(to bottom, var(--surface-sunk), var(--surface));
 }
 
 .stats-grid {
@@ -780,7 +780,7 @@ button {
 }
 
 .stat-item {
-    background: white;
+    background: var(--surface);
     padding: 2rem;
     border-radius: 0.75rem;
     box-shadow: 0 5px 20px rgba(0,0,0,0.05);
@@ -831,7 +831,7 @@ button {
 
 /* Features Section */
 .features-section {
-    background: white;
+    background: var(--surface);
 }
 
 .feature-cards {
@@ -841,7 +841,7 @@ button {
 }
 
 .feature-card {
-    background: white;
+    background: var(--surface);
     padding: 2.5rem 2rem;
     border-radius: 0.75rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
@@ -863,7 +863,7 @@ button {
 .feature-card h3 {
     font-size: 1.5rem;
     margin-bottom: 1rem;
-    color: var(--dark);
+    color: var(--heading);
 }
 
 .feature-card p {
@@ -874,7 +874,7 @@ button {
 
 /* Benefits Section */
 .benefits-section {
-    background: linear-gradient(to bottom, white, #f9faff);
+    background: linear-gradient(to bottom, var(--surface), var(--surface-sunk));
 }
 
 .benefit-list {
@@ -920,7 +920,7 @@ button {
 .author-name {
     font-weight: 600;
     margin-bottom: 0.25rem;
-    color: var(--dark);
+    color: var(--heading);
 }
 
 .author-title {
@@ -932,7 +932,7 @@ button {
 .cta-section {
     background: var(--primary);
     text-align: center;
-    color: white;
+    color: var(--on-primary);
 }
 
 .cta-title {
@@ -1062,7 +1062,7 @@ button {
 }
 
 .modal-container {
-    background: white;
+    background: var(--surface);
     border-radius: 0.75rem;
     width: 90%;
     max-width: 37.5rem;
@@ -1114,8 +1114,8 @@ button {
 }
 
 .step-number {
-    background-color: #4361ee;
-    color: white;
+    background-color: var(--primary);
+    color: var(--on-primary);
     width: 1.75rem;
     height: 1.75rem;
     border-radius: 50%;
@@ -1149,8 +1149,8 @@ button {
 }
 
 .btn-confirm {
-    background-color: #4361ee;
-    color: white;
+    background-color: var(--primary);
+    color: var(--on-primary);
     border: none;
     padding: 0.7rem 1.5rem;
     border-radius: 0.375rem;
@@ -1160,7 +1160,7 @@ button {
 }
 
 .btn-confirm:hover {
-    background-color: #3a56d4;
+    background-color: var(--primary-dark);
     transform: translateY(-2px);
 }
 
@@ -1382,7 +1382,7 @@ button.btn-secondary {
 }
 
 .form-message {
-    background: #fef2f2;
+    background: var(--surface-danger);
     color: #b91c1c;
     border: 1px solid #f87171;
     border-radius: 0.5rem;
@@ -1392,7 +1392,7 @@ button.btn-secondary {
 }
 
 .form-message.success {
-    background: #f0fdf4;
+    background: var(--surface-success);
     color: #15803d;
     border-color: #4ade80;
 }
@@ -1405,7 +1405,7 @@ button.btn-secondary {
 /* Replaced the testimonial carousel. Styled as a statement from the builder
    rather than a customer quote, so it cannot be mistaken for social proof. */
 .origin-note {
-    background: #fff;
+    background: var(--surface);
     border-radius: 1rem;
     padding: 2rem;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);

@@ -10,7 +10,7 @@
 
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: #f5f7ff;
+    background-color: var(--bg);
     color: var(--text);
     line-height: 1.6;
     overflow-x: hidden;
@@ -32,7 +32,7 @@ button {
     display: flex;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #f5f7ff 0%, #e8ecff 100%);
+    background: linear-gradient(135deg, var(--bg) 0%, var(--surface-sunk) 100%);
 }
 
 .hero-content {
@@ -77,7 +77,7 @@ button {
 
 .btn-primary {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     padding: 0.8rem 2rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -93,7 +93,7 @@ button {
 }
 
 .btn-secondary {
-    background: white;
+    background: var(--surface);
     color: var(--primary);
     padding: 0.8rem 2rem;
     border-radius: 0.5rem;
@@ -105,7 +105,7 @@ button {
 
 .btn-secondary:hover {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
 }
 
 .hero-image {
@@ -128,7 +128,7 @@ button {
 /* About Section */
 .about {
     padding: 5rem 10%;
-    background: white;
+    background: var(--surface);
 }
 
 .section-header {
@@ -187,7 +187,7 @@ button {
 }
 
 .about-card {
-    background: white;
+    background: var(--surface);
     padding: 2rem;
     border-radius: 0.75rem;
     box-shadow: 0 5px 20px rgba(0,0,0,0.05);
@@ -237,18 +237,18 @@ button {
 
 .btn-outline:hover {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
 }
 
 /* Search Section */
 .search-section {
     padding: 8rem 10% 5rem;
-    background-color: #f5f7ff;
+    background-color: var(--bg);
     min-height: 100vh;
 }
 
 .search-container {
-    background: white;
+    background: var(--surface);
     border-radius: 1rem;
     padding: 3rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
@@ -305,7 +305,7 @@ button {
     padding: 0.8rem 1.5rem;
     border-radius: 0.5rem;
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     border: none;
     font-weight: 500;
     cursor: pointer;
@@ -330,7 +330,7 @@ button {
 }
 
 .partner-card {
-    background: white;
+    background: var(--surface);
     border-radius: 0.75rem;
     overflow: hidden;
     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
@@ -387,7 +387,7 @@ button {
     align-items: center;
     justify-content: center;
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     border: none;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -399,7 +399,7 @@ button {
 }
 
 .btn-pagination:disabled {
-    background: #e0e0e0;
+    background: var(--track);
     cursor: not-allowed;
     transform: none;
 }
@@ -470,7 +470,7 @@ button {
 }
 
 .modal-container {
-    background: white;
+    background: var(--surface);
     border-radius: 0.75rem;
     width: 90%;
     max-width: 37.5rem;
@@ -493,7 +493,7 @@ button {
     align-items: center;
     position: sticky;
     top: 0;
-    background: white;
+    background: var(--surface);
     z-index: 1;
 }
 
@@ -567,7 +567,7 @@ button {
 
 .btn-primary {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     padding: 0.8rem 1.5rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -608,7 +608,7 @@ button {
 }
 
 .modal-container {
-    background: white;
+    background: var(--surface);
     border-radius: 0.75rem;
     width: 90%;
     max-width: 50rem; /* Increased from 600px */
@@ -631,7 +631,7 @@ button {
     align-items: center;
     position: sticky;
     top: 0;
-    background: white;
+    background: var(--surface);
     z-index: 1;
 }
 
@@ -663,7 +663,7 @@ button {
 
 .btn-primary {
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     padding: 0.8rem 1.5rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -810,7 +810,7 @@ button {
 
 #partnerDetailModal .modal-header {
     padding: 1.5rem 2rem;
-    background: white;
+    background: var(--surface);
     position: relative;
     z-index: 2;
     border-bottom: 1px solid rgba(0,0,0,0.05);
@@ -818,7 +818,7 @@ button {
 
 #partnerDetailModal .modal-header h2 {
     font-size: 2rem;
-    color: var(--dark);
+    color: var(--heading);
     margin: 0;
     display: flex;
     align-items: center;
@@ -856,7 +856,7 @@ button {
     top: 1rem;
     right: -1rem;
     background: var(--primary);
-    color: white;
+    color: var(--on-primary);
     width: 4.375rem;
     height: 4.375rem;
     border-radius: 50%;
@@ -893,7 +893,7 @@ button {
 }
 
 .detail-value {
-    color: var(--dark);
+    color: var(--heading);
     flex: 1;
     line-height: 1.6;
 }
@@ -923,7 +923,7 @@ button {
 /* Contact info container */
 .contact-info {
     grid-column: 1 / -1;
-    background: #f9faff;
+    background: var(--surface-sunk);
     padding: 1.5rem;
     border-radius: 0.5rem;
     margin-top: 1rem;
@@ -968,8 +968,8 @@ button {
 }
 
 .partner-score {
-    background: #4361ee;
-    color: white;
+    background: var(--primary);
+    color: var(--on-primary);
     padding: 0.625rem;
     font-weight: bold;
     border-radius: 0.5rem;
@@ -980,7 +980,7 @@ button {
 .match-reasons {
     margin-top: 0.625rem;
     font-size: 0.85rem;
-    background: #f0f4ff;
+    background: var(--surface-sunk);
     padding: 0.5rem;
     border-radius: 0.375rem;
 }
@@ -1032,7 +1032,7 @@ button {
 
 /* Inline validation / server errors above a modal form. */
 .form-message {
-    background: #fef2f2;
+    background: var(--surface-danger);
     color: #b91c1c;
     border: 1px solid var(--error);
     border-radius: 0.5rem;
@@ -1042,7 +1042,7 @@ button {
 }
 
 .form-message.success {
-    background: #f0fdf4;
+    background: var(--surface-success);
     color: #15803d;
     border-color: var(--success);
 }
@@ -1054,7 +1054,7 @@ button {
 /* The Filters button reflects how many filters are currently applied. */
 .btn-action.has-filters {
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--primary);
 }
 
@@ -1183,7 +1183,7 @@ button {
     padding: 0.9rem 1rem;
     max-height: 16.25rem;
     overflow-y: auto;
-    background: #fff;
+    background: var(--surface);
 }
 
 .category-picker.compact {
@@ -1239,7 +1239,7 @@ button {
 .category-chip.checked {
     background: var(--primary);
     border-color: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
 }
 
 .category-chip:has(input:focus-visible) {
@@ -1291,7 +1291,7 @@ button {
     height: 4.625rem;
     border-radius: 0.875rem;
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1323,12 +1323,12 @@ button {
 }
 
 .exchange-side {
-    background: #f7f9ff;
+    background: var(--surface-sunk);
     border-radius: 0.625rem;
     padding: 0.9rem 1rem;
 }
 
-.exchange-side:last-child { background: #f4fbf6; }
+.exchange-side:last-child { background: var(--surface-success); }
 
 .exchange-side h4 {
     display: flex;
@@ -1368,7 +1368,7 @@ button {
 .exchange-side li.none::before { content: '–'; }
 
 .detail-contact {
-    background: #fafbff;
+    background: var(--surface-sunk);
     border: 1px solid #e6e8f0;
     border-radius: 0.625rem;
     padding: 0.9rem 1rem;
@@ -1437,7 +1437,7 @@ button {
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
-    background: #fff8e1;
+    background: var(--surface-note-strong);
     border: 1px solid #f5d67b;
     border-radius: 0.75rem;
     padding: 1rem 1.15rem;
@@ -1460,13 +1460,13 @@ button {
 .partner-card.is-example {
     border-style: dashed;
     border-color: #d9c48a;
-    background: #fffdf6;
+    background: var(--surface-note);
 }
 
 .example-tag {
     display: inline-flex;
     align-items: center;
-    background: #f5d67b;
+    background: var(--border-note);
     color: #5c4400;
     font-size: 0.72rem;
     font-weight: 700;
@@ -1558,7 +1558,7 @@ button {
     padding: 0;
     border: 1px solid #e6e8f0;
     border-radius: 50%;
-    background: #fff;
+    background: var(--surface);
     color: var(--text-light, #8d99ae);
     font-size: 1.2rem;
     line-height: 1;
@@ -1590,20 +1590,20 @@ button {
 /* The toggle reads as pressed while the shortlist is showing, so it is clear
    the grid is no longer the full match list. */
 #savedToggle {
-    background: #fff;
+    background: var(--surface);
     color: var(--text, #2b2d42);
     border: 1px solid #e6e8f0;
 }
 
 #savedToggle:hover {
-    background: #fff;
+    background: var(--surface);
     color: var(--primary, #4361ee);
     border-color: var(--primary, #4361ee);
 }
 
 #savedToggle.active {
     background: var(--primary, #4361ee);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--primary, #4361ee);
 }
 
@@ -1628,7 +1628,7 @@ button {
 }
 
 #savedToggle.active .saved-count {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--surface-veil);
     color: #fff;
 }
 
@@ -1680,7 +1680,7 @@ button {
     gap: 0.25rem;
     padding: 0.3rem 0.7rem;
     border-radius: 62.4375rem;
-    background: #f1f3f9;
+    background: var(--surface-sunk);
     color: var(--text-light, #6c757d);
     font-size: 0.82rem;
     font-weight: 500;
@@ -1823,7 +1823,7 @@ button {
     right: 0;
     bottom: 1.35rem;
     height: 2.25rem;
-    background: linear-gradient(to bottom, rgba(240, 244, 255, 0), #f0f4ff);
+    background: linear-gradient(to bottom, transparent, var(--surface-sunk));
     pointer-events: none;
 }
 
@@ -1839,7 +1839,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    background: #f0f4ff;
+    background: var(--surface-sunk);
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--primary);
@@ -1851,7 +1851,7 @@ button {
     padding: 0.5rem 1.1rem;
     border-radius: 62.4375rem;
     border: 1px solid #e0e4f0;
-    background: #fff;
+    background: var(--surface);
     color: var(--text-light);
     font-family: inherit;
     font-size: 0.85rem;
@@ -2086,7 +2086,7 @@ button {
     padding: 0.35rem 0.6rem;
     border: 1px solid rgba(0, 0, 0, 0.12);
     border-radius: 0.4rem;
-    background: #fff;
+    background: var(--surface);
     font: inherit;
     color: var(--text);
 }
@@ -2155,7 +2155,7 @@ button {
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     font-size: 0.72rem;
     text-align: center;
 }

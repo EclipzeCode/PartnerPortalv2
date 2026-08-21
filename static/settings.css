@@ -57,7 +57,7 @@ body {
 
 /* --- Cards --------------------------------------------------------------- */
 .settings-card {
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 1rem;
     padding: 1.75rem;
@@ -126,7 +126,7 @@ body {
 
 .btn-primary {
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     border: none;
     padding: 0.7rem 1.3rem;
     border-radius: 0.5rem;
@@ -253,7 +253,7 @@ body {
 .switch-track {
     position: absolute;
     inset: 0;
-    background: #c9cdd6;
+    background: var(--thumb);
     border-radius: 999px;
     transition: background 0.2s ease;
     pointer-events: none;
@@ -266,7 +266,7 @@ body {
     left: 0.19rem;
     width: 1.37rem;
     height: 1.37rem;
-    background: #fff;
+    background: var(--surface);
     border-radius: 50%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     transition: transform 0.2s ease;
@@ -391,7 +391,7 @@ body {
     align-items: center;
     gap: 0.45rem;
     margin-top: 0.9rem;
-    background: #fff;
+    background: var(--surface);
 }
 
 .settings-links {
@@ -431,7 +431,7 @@ body {
 }
 
 .modal-container {
-    background: #fff;
+    background: var(--surface);
     border-radius: 0.85rem;
     width: 100%;
     max-width: 30rem;

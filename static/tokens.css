@@ -32,9 +32,20 @@
     --secondary: #3f37c9;
     --accent: #4cc9f0;
     --primary-light: rgba(67, 97, 238, 0.1);
+    /* What sits on top of a --primary fill. White works on #4361ee and fails
+       on the lighter blue the dark palette needs -- 2.43:1 -- so the pairing
+       is named rather than assumed at 34 call sites. */
+    --on-primary: #ffffff;
 
     /* --- Neutrals -------------------------------------------------------- */
+    /* A deliberately dark surface -- the footer, and the panels that match
+       it -- so it stays dark in both themes. It used to double as the
+       heading colour, which is the opposite role: one has to invert and the
+       other must not, and sharing a token between them meant the footer
+       turned pale the moment a dark palette existed, taking its white text
+       with it. Headings now use --heading below. */
     --dark: #1a1a2e;
+    --heading: #1a1a2e;
     --light: #f8f9fa;
     --text: #2b2d42;            /* unanimous */
     /* Twelve files said #8d99ae and settings.css alone said #6c757d, so this
@@ -69,10 +80,120 @@
     --danger: #dc2626;          /* was #e63946 in settings.css alone */
     --danger-dark: #c92c39;
 
+    /* --- Surfaces --------------------------------------------------------- */
+    /* The colour of a card, and of a panel sunk into one. These were the
+       gap that stopped the palette being a palette: --bg named the page
+       behind everything, but the card on top of it was ~60 hardcoded
+       `background: #fff` scattered across sixteen files. Nothing could be
+       restyled -- least of all inverted -- while the most common surface on
+       the site had no name.
+
+       --shadow-tint is the colour a shadow is drawn in rather than a whole
+       shadow, because the sizes are all different and only the colour has
+       to change: black at 6% reads as depth on white and as nothing at all
+       on a dark ground. */
+    --surface: #ffffff;
+    --surface-sunk: #f7f9ff;
+    /* A translucent panel floating over a gradient -- a chip on the hero,
+       a pill over the search banner. Must follow the ground it sits on, so
+       it is a token rather than a hardcoded white at 80%. */
+    --surface-veil: rgba(255, 255, 255, 0.8);
+    --shadow-tint: rgba(0, 0, 0, 0.06);
+    --shadow-tint-strong: rgba(0, 0, 0, 0.12);
+
+    /* Tinted panels that carry a meaning -- a failed field, a delivered
+       side of an agreement, an example organization. Each was a one-off hex
+       chosen to sit beside the matching semantic colour, which is fine until
+       the ground moves: #fef2f2 is a red so pale it only exists relative to
+       white. Named here so the dark palette can restate them. */
+    --surface-danger: #fef2f2;
+    --surface-success: #f0fdf4;
+    --surface-note: #fffdf6;
+    --surface-note-strong: #fff8e1;
+    --border-note: #f5d67b;
+    --text-note: #7a5b00;
+
+    /* Scrollbar furniture. Not decoration -- a light thumb on a dark track
+       is invisible, and these are the only handle on the long lists. */
+    --track: #e0e0e0;
+    --thumb: #cbd3e8;
+    --thumb-hover: #aab5d6;
+
     /* --- Legacy aliases --------------------------------------------------- */
     /* pplogin.css refers to the brand colour and its card background under
        these two names. Kept as aliases so that file's call sites are left
        alone; prefer --primary and a plain white above in anything new. */
     --main-color: #4361ee;
     --bg-color: #ffffff;
+}
+
+/* --- Dark ------------------------------------------------------------------
+ * Only the tokens are restated. Nothing below re-styles a component, which is
+ * the rule that makes this safe to add at all: if a colour has to be named
+ * here to work in the dark, it was hardcoded somewhere it should not have
+ * been, and the fix belongs in that file rather than in a second palette.
+ *
+ * Guarded as :not([data-theme="light"]) so a page that ever offers an
+ * explicit light choice keeps it over the system preference. There is no
+ * toggle today; this costs nothing and means adding one is a button rather
+ * than a rewrite.
+ *
+ * Not an inversion. A few things deliberately do not flip:
+ *
+ * --primary lightens rather than darkens. #4361ee is a strong blue on white
+ * and a muddy one on near-black, and it is a link colour before it is a
+ * brand colour.
+ *
+ * The semantic three go the other way from the light palette, and for the
+ * same reason they were chosen there: contrast against the ground. #16a34a
+ * is the readable green on white and the unreadable one on #14161c, where
+ * the lighter #4ade80 -- rejected for light mode at 1.74:1 -- is the one
+ * that works.
+ *
+ * --dark is absent on purpose. It names a surface that is meant to be dark,
+ * so it is one of the few things that must not change.
+ */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #14161c;
+        --bg-light: #14161c;
+        --surface: #1b1e26;
+        --surface-sunk: #23262f;
+
+        --text: #e7e9ef;
+        --text-light: #a2abbd;      /* 7.3:1 on --surface */
+        --heading: #f2f4f8;
+        --border: #2f3440;
+
+        --primary: #8fa0ff;
+        --primary-dark: #6c7fe8;
+        --primary-light: rgba(140, 160, 255, 0.14);
+        --on-primary: #14161c;      /* 8.5:1 on the lighter --primary */
+        --secondary: #8b83f0;
+        --accent: #63d3f5;
+
+        --success: #4ade80;
+        --warning: #fbbf24;
+        --error: #f87171;
+        --danger: #f87171;
+        --danger-dark: #ef4444;
+
+        --surface-danger: #2c1c1e;
+        --surface-success: #16281f;
+        --surface-note: #26221a;
+        --surface-note-strong: #2f2a1c;
+        --border-note: #6b5a28;
+        --text-note: #e0c98a;
+
+        --track: #23262f;
+        --thumb: #3a4050;
+        --thumb-hover: #4b5265;
+
+        /* Shadows do not read on a dark ground; depth comes from the surface
+           being lighter than the page behind it. Kept as a faint black so
+           existing box-shadow sizes stay valid rather than needing removal. */
+        --surface-veil: rgba(255, 255, 255, 0.06);
+        --shadow-tint: rgba(0, 0, 0, 0.4);
+        --shadow-tint-strong: rgba(0, 0, 0, 0.55);
+    }
 }

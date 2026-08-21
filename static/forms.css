@@ -34,7 +34,7 @@
     font-family: inherit;
     font-size: 0.95rem;
     color: var(--text, #2b2d42);
-    background: #fff;
+    background: var(--surface);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -136,7 +136,7 @@ button.btn-action {
 .btn-ghost:hover {
     color: var(--text, #2b2d42);
     border-color: var(--text-light, #8d99ae);
-    background: #f7f9ff;
+    background: var(--surface-sunk);
 }
 
 .btn-danger {
@@ -235,7 +235,7 @@ button.btn-action {
 }
 
 .modal-container {
-    background: #fff;
+    background: var(--surface);
     border-radius: 0.875rem;
     width: 100%;
     max-width: 40rem;

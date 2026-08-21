@@ -18,7 +18,7 @@ body {
 }
 
 .agreement-card {
-    background: #fff;
+    background: var(--surface);
     border-radius: 1rem;
     padding: 2.5rem;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.07);
@@ -168,7 +168,7 @@ body {
 /* Printing the agreement is a plausible thing to want when taking it to a
    board meeting. */
 @media print {
-    body { background: #fff; padding: 0; }
+    body { background: var(--surface); padding: 0; }
     .agreement-card { box-shadow: none; padding: 0; }
     .agreement-footer { display: none; }
 }

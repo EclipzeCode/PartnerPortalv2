@@ -64,7 +64,7 @@ body {
 }
 
 .onboarding-container {
-  background: white;
+  background: var(--surface);
   border-radius: 1rem;
   padding: 3rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
@@ -87,7 +87,7 @@ body {
   padding: 1.25rem;
   border-radius: 0.75rem;
   border: 1px solid var(--border);
-  background: white;
+  background: var(--surface);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -112,7 +112,7 @@ body {
 
 .progress-step.done .step-icon {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
 }
 
 .step-text h4 {
@@ -163,7 +163,7 @@ body {
 
 /* ---------- Cards (matches .dashboard-card) ---------- */
 .onboarding-card {
-  background: white;
+  background: var(--surface);
   border-radius: 0.75rem;
   padding: 1.25rem 1.35rem;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
@@ -193,7 +193,7 @@ body {
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   font-size: 0.9rem;
   font-weight: 600;
   display: inline-flex;
@@ -243,7 +243,7 @@ body {
   font-family: inherit;
   font-size: 0.95rem;
   color: var(--text);
-  background: white;
+  background: var(--surface);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -278,12 +278,12 @@ body {
 }
 
 .form-group textarea::-webkit-scrollbar-thumb {
-  background: #d5d9e6;
+  background: var(--thumb);
   border-radius: 0.25rem;
 }
 
 .form-group textarea::-webkit-scrollbar-thumb:hover {
-  background: #b9c0d4;
+  background: var(--thumb-hover);
 }
 
 .input-error {
@@ -454,7 +454,7 @@ body {
   padding: 0.8rem 1.5rem;
   border-radius: 0.5rem;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border: 1px solid var(--primary);
   font-family: inherit;
   font-size: 0.95rem;
@@ -476,7 +476,7 @@ body {
 }
 
 .btn-action.secondary {
-  background: white;
+  background: var(--surface);
   color: var(--primary);
 }
 
@@ -600,7 +600,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 0.625rem;
   padding: 0.85rem 0.95rem;
-  background: #fff;
+  background: var(--surface);
   /* Bounded so two of these do not add 3800px to the page. Scrolls inside
      its own box; the sticky group headings keep the grouping readable. */
   max-height: 18.75rem;
@@ -667,7 +667,7 @@ body {
 .category-chip.checked {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .category-chip:has(input:focus-visible) {
@@ -699,7 +699,7 @@ body {
 .category-picker .category-group h4 {
   position: sticky;
   top: -0.85rem;
-  background: #fff;
+  background: var(--surface);
   padding: 0.35rem 0 0.4rem;
   margin: 0 0 0.5rem;
   z-index: 1;
