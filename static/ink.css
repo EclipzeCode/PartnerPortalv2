@@ -207,6 +207,44 @@ body.ink summary:focus-visible {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Loading skeletons
+ *
+ * shared.css owns .skeleton for the whole app and paints it from tokens.css's
+ * --skeleton-* pair, which is a cool blue-grey mixed for the old palette and
+ * reads as a patch of a different page on the cream. It also gives it a
+ * 0.375rem radius, which is the one shape nothing else in this design has.
+ *
+ * Restated here rather than in each page stylesheet, and that is the whole
+ * point: page stylesheets load BEFORE shared.css, so four separate attempts
+ * to redefine `.skeleton` at (0,1,0) all lost to shared.css's own rule on
+ * source order and did nothing at all. Every skeleton in the app was still
+ * round and still blue. body.ink is (0,2,0) and wins wherever it sits.
+ * ------------------------------------------------------------------------- */
+
+body.ink .skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--h-cell) 25%,
+        var(--h-rule) 37%,
+        var(--h-cell) 63%
+    );
+    background-size: 400% 100%;
+    border-radius: 0;
+}
+
+/* The activity placeholder's mark. It was a circle to match the round icons
+   the feed used to have; those are squares now, so this is too. */
+body.ink .skeleton-dot {
+    border-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.ink .skeleton {
+        animation: none;
+    }
+}
+
+/* ------------------------------------------------------------------------- *
  * The mono label
  *
  * The design's connective tissue: small, letterspaced, uppercase, with a

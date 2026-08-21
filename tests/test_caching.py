@@ -126,15 +126,50 @@ def test_only_a_versioned_request_is_immutable(client):
     assert f"max-age={app_module.UNVERSIONED_CACHE_SECONDS}" in bare.headers["Cache-Control"]
 
 
-def test_api_responses_are_never_stored(client, login, make_org):
+def test_per_account_api_responses_are_never_stored(client, login, make_org):
     """A dashboard is per-account; a shared proxy must not hand it on."""
-    for path in ("/api/categories", "/api/me"):
-        assert client.get(path).headers["Cache-Control"] == "no-store"
+    assert client.get("/api/me").headers["Cache-Control"] == "no-store"
 
     login(make_org())
-    response = client.get("/api/dashboard")
+    for path in ("/api/dashboard", "/api/matches", "/api/saved", "/api/proposals"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["Cache-Control"] == "no-store", path
+
+
+def test_the_category_vocabulary_is_cacheable(client):
+    """The one /api/ response that is not about anybody.
+
+    /api/categories is built from the constants in categories.py: no database,
+    no session, and the same bytes for every caller. It used to be swept up by
+    the blanket no-store for /api/, so every search and onboarding load spent a
+    round trip re-reading a constant -- which on a remote database host is the
+    part you feel.
+
+    This is the carve-out, and the test is here to make sure the carve-out
+    stays exactly that size. The one above is the other half: everything that
+    is about somebody must still be no-store.
+    """
+    response = client.get("/api/categories")
     assert response.status_code == 200
-    assert response.headers["Cache-Control"] == "no-store"
+    assert "public" in response.headers["Cache-Control"]
+    assert (f"max-age={app_module.UNVERSIONED_CACHE_SECONDS}"
+            in response.headers["Cache-Control"])
+    assert response.headers.get("ETag")
+
+    # The ETag is what keeps the window cheap rather than absolute: once the
+    # max-age lapses the browser revalidates and gets nothing back.
+    again = client.get(
+        "/api/categories",
+        headers={"If-None-Match": response.headers["ETag"]},
+    )
+    assert again.status_code == 304
+    assert not again.get_data()
+
+    # And it is still the vocabulary the rest of the app is built on.
+    payload = response.get_json()
+    assert payload["groups"] and payload["organization_types"]
+    assert payload["timelines"] and payload["focus_areas"]
 
 
 def test_error_pages_are_served_and_stamped(client):

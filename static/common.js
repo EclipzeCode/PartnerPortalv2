@@ -6,6 +6,48 @@
 // setup and the macOS AirPlay port collision that came with it.
 window.API_BASE = '';
 
+// One round trip, before any policy is applied to it. Kept separate from
+// api() below so the same response can be handed to two callers that disagree
+// about what a 401 means -- see the /api/me note.
+//
+// The body is held as text rather than as parsed JSON: two callers sharing one
+// response must not share one mutable object, or whichever of them edits it
+// first silently edits the other's copy.
+async function rawRequest(path, opts) {
+    const res = await fetch(`${window.API_BASE}${path}`, opts);
+    let text = '';
+    try {
+        text = await res.text();
+    } catch {
+        // Body already consumed or the connection dropped mid-read.
+    }
+    return { status: res.status, ok: res.ok, text };
+}
+
+// GET /api/me, shared for the life of the page.
+//
+// Every page with an account slot in the nav asks for it once from
+// updateNavForSession(), and then the page's own script asks again --
+// ppsearch.js, settings.js and onboarding.js all do. Two identical requests,
+// and /api/me is @login_required, so each one resolves the session with a
+// database query. Against a scale-to-zero Postgres that measured 1.6-3.8s
+// warm and 9.7s cold, which is a lot to pay twice for the same bytes.
+//
+// This is deliberately a promise, not a result: the second caller usually
+// arrives while the first request is still in flight, so it joins that request
+// rather than starting another. Nothing is cached across page loads -- the
+// memo dies with the document, so a session that ends elsewhere is still
+// noticed on the next navigation.
+let meRequest = null;
+
+// For callers that need the current answer rather than the page's first one.
+// refreshNavCounts() is the case this exists for: it runs after the visitor
+// has just read a thread or answered a proposal, and the whole point is that
+// the badge stops claiming something is waiting.
+window.invalidateMe = function invalidateMe() {
+    meRequest = null;
+};
+
 // Single place where session expiry is handled. Every API call goes through
 // this, so a 401 sends the user to the login page instead of leaving a screen
 // of empty widgets with no explanation.
@@ -23,26 +65,52 @@ window.api = async function api(path, options = {}) {
         if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
     }
 
-    const res = await fetch(`${window.API_BASE}${path}`, opts);
+    // `fresh` opts out of the shared request and replaces it, so whoever asks
+    // next gets the new answer rather than the one being replaced.
+    const method = (opts.method || 'GET').toUpperCase();
+    const shared = path === '/api/me' && method === 'GET' && !opts.body && !opts.fresh;
+    if (path === '/api/me' && opts.fresh) meRequest = null;
+
+    let result;
+    if (shared) {
+        if (!meRequest) meRequest = rawRequest(path, opts);
+        try {
+            result = await meRequest;
+        } catch (err) {
+            // A failed request must not be remembered as this page's answer.
+            meRequest = null;
+            throw err;
+        }
+    } else {
+        result = await rawRequest(path, opts);
+        if (path === '/api/me' && method === 'GET' && !opts.body) {
+            meRequest = Promise.resolve(result);
+        }
+    }
 
     let data = null;
     try {
-        data = await res.json();
+        data = result.text ? JSON.parse(result.text) : null;
     } catch {
         // Non-JSON response (a proxy error page, say). Leave data null and let
         // the status drive the error message.
     }
 
-    if (res.status === 401 && !opts.allowUnauthenticated) {
+    // Applied per caller, not once on the shared response: updateNavForSession
+    // passes allowUnauthenticated and wants a null back, while a page script
+    // wants the redirect. Sharing the round trip must not mean sharing this
+    // decision, or a signed-out visitor would sit on a half-built page instead
+    // of being sent to sign in.
+    if (result.status === 401 && !opts.allowUnauthenticated) {
         const here = encodeURIComponent(location.pathname.replace(/^\//, ''));
         location.href = `pplogin.html?next=${here}`;
         // Never resolves; the navigation is already underway.
         return new Promise(() => {});
     }
 
-    if (!res.ok) {
-        const error = new Error((data && data.error) || `Request failed (${res.status})`);
-        error.status = res.status;
+    if (!result.ok) {
+        const error = new Error((data && data.error) || `Request failed (${result.status})`);
+        error.status = result.status;
         error.data = data;
         throw error;
     }
@@ -476,7 +544,9 @@ async function updateNavForSession() {
 // stops being true, rather than at the next navigation.
 window.refreshNavCounts = async function refreshNavCounts() {
     try {
-        const data = await window.api('/api/me', { allowUnauthenticated: true });
+        // fresh: this is called precisely because the counts have changed.
+        const data = await window.api(
+            '/api/me', { allowUnauthenticated: true, fresh: true });
         updateProposalBadge(
             ((data && data.pending_proposals) || 0)
             + ((data && data.unread_messages) || 0));

@@ -703,18 +703,8 @@
 .skeleton-line.title { width: 60%; height: 1.15rem; }
 .skeleton-line.short { width: 40%; }
 
-/* shared.css paints .skeleton from tokens.css's cool greys, which read as a
-   patch of a different page on the cream. */
-.skeleton {
-    background: linear-gradient(
-        90deg,
-        var(--h-cell) 25%,
-        var(--h-rule) 37%,
-        var(--h-cell) 63%
-    );
-    background-size: 400% 100%;
-    border-radius: 0;
-}
+/* The paint and the radius are ink.css's -- a copy here would load before
+   shared.css and lose to it. */
 
 /* ------------------------------------------------------------------------- *
  * Pagination

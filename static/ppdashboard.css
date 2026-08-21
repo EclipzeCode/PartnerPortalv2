@@ -520,12 +520,23 @@
 
 /* --- Filter --------------------------------------------------------------- */
 
+/* The whole control is the select.
+ *
+ * This was a <label> with its own padding and a filter icon beside a select
+ * sized to its own text, which meant the box you could see and the thing you
+ * could click were different shapes: the icon, the padding and the arrow were
+ * all dead, and only the words opened the menu. Wrapping a select in a label
+ * does not help -- that focuses the control on click but does not open its
+ * popup.
+ *
+ * So the padding moved onto the select, which now fills the box, and the icon
+ * and the arrow became overlays that ignore the pointer. Every pixel inside
+ * the border is the select. */
 .activity-filter {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 1.6rem 0.35rem 0.6rem;
+    padding: 0;
     border: 1px solid var(--h-rule);
     cursor: pointer;
     transition: border-color 0.18s ease;
@@ -536,9 +547,14 @@
     border-color: var(--h-edge);
 }
 
+/* Sits over the select's left padding rather than beside it. */
 .activity-filter > i {
+    position: absolute;
+    left: 0.6rem;
     font-size: 0.85rem;
+    line-height: 1;
     color: var(--h-dim);
+    pointer-events: none;
 }
 
 /* The native arrow is a different shape on every platform, so the select
@@ -557,6 +573,10 @@
 
 .activity-filter select {
     appearance: none;
+    /* The padding is here, not on the wrapper, so the hit area covers the
+       icon on the left and the arrow on the right. */
+    padding: 0.35rem 1.6rem 0.35rem 1.9rem;
+    width: 100%;
     background: none;
     border: none;
     outline: none;
@@ -566,6 +586,17 @@
     text-transform: uppercase;
     color: var(--h-ink);
     cursor: pointer;
+}
+
+/* The focus ring belongs on the box now that the select fills it -- on the
+   select itself it drew inside the border and read as a second frame. */
+.activity-filter select:focus-visible {
+    outline: none;
+}
+
+.activity-filter:focus-within {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
 }
 
 /* The dropdown itself is painted by the OS, which does not inherit any of the
@@ -1003,18 +1034,8 @@
     margin-bottom: 0;
 }
 
-/* shared.css paints .skeleton from tokens.css's cool greys; restated on the
-   paper's tones for the same reason as the block above. */
-.skeleton {
-    background: linear-gradient(
-        90deg,
-        var(--h-cell) 25%,
-        var(--h-rule) 37%,
-        var(--h-cell) 63%
-    );
-    background-size: 400% 100%;
-    border-radius: 0;
-}
+/* The paint and the radius are ink.css's -- a copy here would load before
+   shared.css and lose to it. */
 
 @media (prefers-reduced-motion: reduce) {
     [data-loading="true"] .stat-value,

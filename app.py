@@ -517,6 +517,11 @@ def add_cache_headers(response):
     # here would be one organization's dashboard shown to the next caller
     # through a shared proxy.
     if request.path.startswith("/api/") or response.mimetype == "application/json":
+        # ...except the handful that are the same for everyone and said so
+        # themselves. Checked before the blanket rule, because the mimetype
+        # test above catches them too.
+        if request.path in PUBLIC_API_PATHS:
+            return response
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -729,10 +734,20 @@ def internal_error(error):
 
 
 # --- Reference data ---------------------------------------------------------
+# The one /api/ response that is not about anybody.
+#
+# Everything else under /api/ is per-account and gets no-store below. This is
+# built entirely from the constants in categories.py -- no database, no
+# session, byte-identical for every caller, and it changes only when the code
+# changes. It was still being re-fetched on every search and onboarding load,
+# which on a remote database host is a round trip spent re-reading a constant.
+PUBLIC_API_PATHS = frozenset({"/api/categories"})
+
+
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
     """Drives the onboarding form so the vocabulary lives in one place."""
-    return jsonify({
+    payload = {
         "groups": [
             {"name": name, "categories": [
                 {"slug": slug, "label": label} for slug, label in entries
@@ -749,7 +764,26 @@ def get_categories():
         "focus_areas": [
             {"slug": slug, "label": label} for slug, label in FOCUS_AREAS
         ],
-    })
+    }
+
+    response = jsonify(payload)
+    # An hour, the same window anything else asked for without a version gets.
+    # The vocabulary only moves on deploy, so the exposure is that a browser
+    # can miss a newly added category for up to that long -- it would not see
+    # it as an option, which is a stale list rather than a broken one. A slug
+    # that has been removed is still rejected server-side, so a stale client
+    # cannot write something the server does not accept.
+    #
+    # The ETag is what makes the hour cheap rather than absolute: once it
+    # lapses the browser revalidates and gets a 304 with no body, instead of
+    # downloading the same list again.
+    response.headers["Cache-Control"] = (
+        f"public, max-age={UNVERSIONED_CACHE_SECONDS}"
+    )
+    response.set_etag(
+        hashlib.sha256(response.get_data()).hexdigest()[:32]
+    )
+    return response.make_conditional(request)
 
 
 # --- Contact ----------------------------------------------------------------
