@@ -1,17 +1,4 @@
 /* Modern CSS Reset */
-:root {
-    --primary: #4361ee;
-    --primary-dark: #20348f;
-    --secondary: #3f37c9;
-    --dark: #1a1a2e;
-    --light: #f8f9fa;
-    --accent: #4cc9f0;
-    --text: #2b2d42;
-    --text-light: #8d99ae;
-    --success: #4ade80;
-    --warning: #fbbf24;
-    --error: #f87171;
-}
 
 * {
     margin: 0;
@@ -188,7 +175,6 @@ button {
     transform-origin: center;
     transform: scaleX(var(--b-deck));
 }
-
 
 /* Fades the top of the scene into the page so the ridgelines never cut hard
    across the headline. */
@@ -598,7 +584,6 @@ button {
     background: var(--primary);
 }
 
-
 /* Responsive Design (hero) */
 @media (max-width: 75em) {
     .hero-title {
@@ -697,7 +682,6 @@ button {
         padding: 1.25rem;
     }
 }
-
 
 .gradient-circle {
     position: absolute;
@@ -966,11 +950,6 @@ button {
 .author-title {
     font-size: 0.9rem;
     color: var(--text-light);
-}
-
-/* Add this to your :root or variables */
-:root {
-    --primary-light: rgba(67, 97, 238, 0.1);
 }
 
 /* CTA Section */

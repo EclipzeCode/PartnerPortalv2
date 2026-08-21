@@ -1,19 +1,6 @@
 /* Modern CSS Reset */
 
 /* cd "C:\Partner Portal\partner-portal" */
-:root {
-    --primary: #4361ee;
-    --primary-dark: #20348f;
-    --secondary: #3f37c9;
-    --dark: #1a1a2e;
-    --light: #f8f9fa;
-    --accent: #4cc9f0;
-    --text: #2b2d42;
-    --text-light: #8d99ae;
-    --success: #4ade80;
-    --warning: #fbbf24;
-    --error: #f87171;
-}
 
 * {
     margin: 0;
@@ -473,7 +460,6 @@ button {
     resize: vertical;
 }
 
-
 /* Add Partner Modal Styles */
 .modal {
     position: fixed;
@@ -611,7 +597,6 @@ button {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
 }
-
 
 /* Add Partner Modal Styles */
 .modal {

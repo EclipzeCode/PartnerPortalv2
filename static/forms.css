@@ -5,17 +5,15 @@
  * of these rules. Anything to do with an input, select, textarea, button or
  * modal belongs here, not in a page stylesheet.
  *
- * Colour variables are read with fallbacks because the per-page :root blocks
- * do not all define the same set.
+ * The --ctl-* block below is the one :root outside tokens.css, and stays
+ * because it is scoped to form controls rather than a copy of the palette.
+ * The fallbacks on var() calls here are now belt-and-braces: tokens.css is
+ * loaded first by every page, so every palette token always resolves.
  */
 
 :root {
     --ctl-border: #e0e0e0;
     --ctl-radius: 0.5rem;
-    /* Destructive actions own their colour here rather than reading --error,
-       which is #dc2626 in onboarding.css but #f87171 in ppsearch.css. Reading
-       the page variable meant Clear Form and Withdraw -- the same kind of
-       button -- came out two different reds. */
     --ctl-danger: #dc2626;
 }
 

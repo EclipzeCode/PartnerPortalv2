@@ -1,17 +1,6 @@
 /* Proposals page. Layered on ppsearch.css, which supplies the header, section
    header, modal and button styles. */
 
-:root {
-    --primary: #4361ee;
-    --primary-dark: #20348f;
-    --text: #2b2d42;
-    --text-light: #8d99ae;
-    --border: #e6e8f0;
-    --success: #16a34a;
-    --danger: #dc2626;
-    --warning: #d97706;
-}
-
 /* --- Tabs --------------------------------------------------------------- */
 .proposal-tabs {
     display: flex;

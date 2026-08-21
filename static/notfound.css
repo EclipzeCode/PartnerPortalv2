@@ -7,15 +7,6 @@
  * ones.
  */
 
-:root {
-    --primary: #4361ee;
-    --primary-dark: #3a56d4;
-    --text: #2b2d42;
-    --text-light: #8d99ae;
-    --border: #e6e8f0;
-    --bg: #f5f7ff;
-}
-
 * {
     margin: 0;
     padding: 0;

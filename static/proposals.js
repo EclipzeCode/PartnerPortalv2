@@ -262,6 +262,114 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let openThreadId = null;
 
+    // --- Live thread ------------------------------------------------------
+    // The thread used to be fetched once, when the dialog opened, and never
+    // again. A reply arriving while you were reading -- the likeliest moment
+    // for one, since the message you just sent is what prompted it -- stayed
+    // invisible until you closed the dialog and opened it again, with
+    // nothing on screen suggesting the view was stale.
+    //
+    // Polling rather than anything cleverer: this is a two-person thread on
+    // a proposal, open for a minute at a time, and the endpoint it calls is
+    // a single indexed query. A socket would be a lot of machinery for that.
+    const THREAD_POLL_MS = 12000;
+    let threadTimer = null;
+    let threadMessages = [];
+    // Cheap "has anything actually changed" key, so a poll that finds
+    // nothing new does not redraw the thread under someone's cursor.
+    let threadSignature = '';
+
+    function signatureFor(messages, open) {
+        const last = messages[messages.length - 1];
+        return `${messages.length}:${last ? last.id : 0}:${open}`;
+    }
+
+    // Within a line or so of the bottom. Anyone further up is reading back
+    // through the thread, and yanking them to the newest message because it
+    // happened to arrive is the rudest thing this could do.
+    function threadAtBottom() {
+        const el = messageThread;
+        return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    }
+
+    function stopThreadPolling() {
+        clearInterval(threadTimer);
+        threadTimer = null;
+    }
+
+    function startThreadPolling() {
+        stopThreadPolling();
+        // Nothing to poll for on a settled proposal: the thread is readable
+        // and closed to new messages, so it cannot change.
+        if (openThreadId === null || messageForm.hidden) return;
+        threadTimer = setInterval(pollThread, THREAD_POLL_MS);
+    }
+
+    async function pollThread() {
+        if (openThreadId === null || document.hidden) return;
+        const id = openThreadId;
+        let data;
+        try {
+            data = await window.api(`/api/proposals/${id}/messages`);
+        } catch (error) {
+            // A blip should not empty the thread or start shouting. If the
+            // proposal has genuinely gone, stop asking.
+            if (error.status === 404 || error.status === 403) stopThreadPolling();
+            return;
+        }
+        // The dialog may have been closed, or a different one opened, while
+        // that request was in the air.
+        if (openThreadId !== id) return;
+
+        const messages = data.messages || [];
+        const signature = signatureFor(messages, data.open);
+        if (signature === threadSignature) return;
+        threadSignature = signature;
+        threadMessages = messages;
+
+        renderThread(messages, { keepScroll: !threadAtBottom() });
+
+        // Reading the thread is what marked those messages read, so the
+        // badge in the nav and the count on the card are both stale now.
+        if (window.refreshNavCounts) window.refreshNavCounts();
+
+        // Refreshed before the open/closed notice is painted, not after: if
+        // the proposal settled while this thread was on screen, that notice
+        // names the status, and `proposals` is still holding the previous
+        // one until this resolves -- so painting first said "this proposal
+        // was pending, so the conversation is closed".
+        await load();
+        paintThreadOpenState(data.open);
+    }
+
+    // A proposal can settle while its thread is open -- the other side
+    // declines, or either side ends the partnership -- and the form has to
+    // go when it does, rather than failing on submit.
+    function paintThreadOpenState(open) {
+        messageForm.hidden = !open;
+        messageClosed.hidden = open;
+        if (!open) {
+            const proposal = proposals.find((p) => p.id === openThreadId);
+            const status = proposal ? proposal.status : 'closed';
+            messageClosed.textContent =
+                `This proposal was ${status}, so the conversation is closed. `
+                + 'Everything said here stays with it.';
+            stopThreadPolling();
+        }
+    }
+
+    // Polling a hidden tab is work nobody is looking at. Coming back should
+    // show the current thread immediately rather than up to a poll later.
+    document.addEventListener('visibilitychange', () => {
+        if (openThreadId === null) return;
+        if (document.hidden) {
+            stopThreadPolling();
+        } else {
+            pollThread();
+            startThreadPolling();
+        }
+    });
+
     function messageDate(iso) {
         const at = new Date(iso);
         if (Number.isNaN(at.getTime())) return '';
@@ -274,7 +382,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
     }
 
-    function renderThread(messages) {
+    function renderThread(messages, { keepScroll = false } = {}) {
+        const previousScroll = messageThread.scrollTop;
         if (messages.length === 0) {
             messageThread.innerHTML =
                 '<p class="empty-state">No messages yet. Anything you agree '
@@ -293,8 +402,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </p>
                 <p class="message-body">${esc(m.body)}</p>
             </div>`).join('');
-        // Newest is at the bottom, which is where a thread is read from.
-        messageThread.scrollTop = messageThread.scrollHeight;
+        // Newest is at the bottom, which is where a thread is read from --
+        // unless the reader had scrolled up, in which case a message
+        // arriving must not drag them away from what they were reading.
+        messageThread.scrollTop = keepScroll
+            ? previousScroll
+            : messageThread.scrollHeight;
     }
 
     async function openThread(proposal) {
@@ -319,17 +432,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         messageThread.removeAttribute('aria-busy');
-        renderThread(data.messages || []);
+        threadMessages = data.messages || [];
+        threadSignature = signatureFor(threadMessages, data.open);
+        renderThread(threadMessages);
 
         // Settled proposals keep the thread readable and stop accepting
         // posts, so the form is replaced rather than left to fail on submit.
-        messageForm.hidden = !data.open;
-        messageClosed.hidden = data.open;
-        if (!data.open) {
-            messageClosed.textContent =
-                `This proposal was ${proposal.status}, so the conversation is `
-                + `closed. Everything said here stays with it.`;
-        }
+        paintThreadOpenState(data.open);
+
+        // Kept current from here on, so a reply that arrives while this is
+        // open shows up rather than waiting for the dialog to be reopened.
+        startThreadPolling();
 
         // Opening the thread marked it read, so the badge on the card and in
         // the nav are both stale until the list is refetched.
@@ -338,7 +451,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function closeThread() {
+        stopThreadPolling();
         openThreadId = null;
+        threadMessages = [];
+        threadSignature = '';
         messageModal.classList.remove('active');
         document.body.style.overflow = 'auto';
         window.dialogClosed(messageModal);
@@ -366,18 +482,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `/api/proposals/${openThreadId}/messages`,
                 { method: 'POST', body: { body } });
             messageBody.value = '';
-            // Appended rather than refetched: the reply is already in hand,
-            // and a round trip here would blank the thread mid-conversation.
-            const existing = messageThread.querySelector('.empty-state');
-            if (existing) messageThread.innerHTML = '';
-            messageThread.insertAdjacentHTML('beforeend', `
-                <div class="message mine">
-                    <p class="message-meta"><strong>You</strong>
-                        <span class="message-time">${
-                            esc(messageDate(result.sent.created_at))}</span></p>
-                    <p class="message-body">${esc(result.sent.body)}</p>
-                </div>`);
-            messageThread.scrollTop = messageThread.scrollHeight;
+            // Added to the thread this page already holds rather than
+            // refetched: the reply is in hand, and a round trip here would
+            // blank the thread mid-conversation. Going through the same
+            // state the poll reads keeps the two from fighting -- the
+            // signature is advanced with it, so the next poll sees nothing
+            // new and leaves the thread alone instead of redrawing it.
+            threadMessages = [...threadMessages, result.sent];
+            threadSignature = signatureFor(threadMessages, true);
+            renderThread(threadMessages);
             messageBody.dispatchEvent(new Event('input'));
             await load();
         } catch (error) {

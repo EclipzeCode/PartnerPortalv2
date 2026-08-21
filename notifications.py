@@ -9,25 +9,138 @@ local development, or if the key is missing in production -- the email is
 written to stderr instead, so the flow still works and the content can be
 inspected without signing up for anything or spending free-tier credits.
 
-Sending is fire-and-forget: an SMTP hiccup or a Resend rate limit must not
-fail the proposal itself. Every send is wrapped, and failures are logged and
-swallowed. The user's action succeeds either way.
+Sending is off the request path: an SMTP hiccup or a Resend rate limit must
+not fail the proposal itself. Every send is wrapped, and failures are logged
+and swallowed. The user's action succeeds either way.
+
+It is not fire-and-forget any more, though. This used to start one daemon
+thread per message and hope: a single transient 5xx meant the message was
+gone, and daemon threads are killed at interpreter exit, so anything still
+in flight during a deploy went with them. For a verification link or a
+password reset that is not a dropped notification, it is an account someone
+cannot get into -- and they are shown a success either way, so nobody
+learns that it happened. See the queue below.
 
 NOTE: this file is intentionally NOT named email.py -- that name shadows the
 stdlib `email` package that other libraries pull in.
 """
 
+import atexit
 import json
 import logging
 import os
+import queue
+import random
+import time
 import urllib.request
 import urllib.error
 from html import escape
-from threading import Thread
+from threading import Lock, Thread
 
 log = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+
+# --- Delivery queue ---------------------------------------------------------
+# A fixed pair of workers reading a bounded queue, rather than a thread per
+# message. Two things follow from that.
+#
+# Retries become possible at all: a worker owns a message until it is
+# delivered or definitively refused, so it can back off and try again. The
+# old shape had nowhere to put that -- the thread was the message.
+#
+# And a burst costs two threads instead of one per email. The queue is
+# bounded so a provider outage cannot grow the process without limit; a full
+# queue drops the message with a log rather than blocking, because the
+# alternative is stalling the web request that produced it.
+EMAIL_WORKERS = 2
+EMAIL_QUEUE_MAXSIZE = 500
+
+# Three attempts over roughly ten seconds. Enough to ride out a rate limit or
+# a blip, short enough that a shutdown does not wait long on it.
+MAX_SEND_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = (2, 8)
+
+# How long to keep draining at exit before giving up. Render sends SIGTERM
+# and waits before SIGKILL, so this is the window where in-flight mail can
+# still be saved -- which is the half the old daemon threads always lost.
+SHUTDOWN_GRACE_SECONDS = 10
+
+_queue = queue.Queue(maxsize=EMAIL_QUEUE_MAXSIZE)
+_workers = []
+_workers_lock = Lock()
+_SHUTDOWN = object()
+
+
+def _retryable(exc):
+    """Whether another attempt could plausibly succeed.
+
+    A 401 is a bad key and a 403 is usually an unverified sender: both mean
+    every retry fails the same way, so they are logged once and dropped
+    rather than tried three times. 429 is the opposite -- it is a rate limit
+    and is precisely what backing off is for. Anything at the socket level
+    is assumed transient.
+    """
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code == 429 or exc.code >= 500
+    return isinstance(exc, (urllib.error.URLError, OSError, TimeoutError))
+
+
+def _worker_loop():
+    while True:
+        item = _queue.get()
+        try:
+            if item is _SHUTDOWN:
+                return
+            _send(*item)          # never raises; logs its own failures
+        except Exception:
+            # A worker that dies stops delivering mail for the life of the
+            # process, and nothing upstream would notice.
+            log.exception("email worker: unexpected error")
+        finally:
+            _queue.task_done()
+
+
+def _ensure_workers():
+    """Start the pool on first use.
+
+    Lazily rather than at import, so that alembic, seed.py and the test suite
+    -- none of which send anything -- do not spawn threads by importing this
+    module.
+    """
+    with _workers_lock:
+        if _workers:
+            return
+        for i in range(EMAIL_WORKERS):
+            t = Thread(target=_worker_loop, name=f"email-{i}", daemon=True)
+            t.start()
+            _workers.append(t)
+        atexit.register(_drain)
+
+
+def _drain(timeout=SHUTDOWN_GRACE_SECONDS):
+    """Finish what is queued before the process goes away.
+
+    Runs from atexit, which is early enough: daemon threads are killed after
+    interpreter shutdown begins, so this is the last point at which a message
+    already accepted can still be sent.
+
+    Queue.join() has no timeout, so this waits on the same condition it uses
+    internally. Waiting forever would turn a stuck provider into a process
+    that will not shut down, which is worse than the mail it is protecting.
+    """
+    deadline = time.monotonic() + timeout
+    with _queue.all_tasks_done:
+        while _queue.unfinished_tasks:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.warning(
+                    "email: %s message(s) still queued at shutdown",
+                    _queue.unfinished_tasks,
+                )
+                return False
+            _queue.all_tasks_done.wait(remaining)
+    return True
 
 
 def _config():
@@ -88,14 +201,20 @@ def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None):
 
 
 def _send(to_addr, subject, html, text, reply_to=None):
-    """Actual sender. Called on a background thread so the request returns
-    without waiting for Resend.
+    """Deliver one message, retrying a failure that might not repeat.
+
+    Runs on a delivery worker, never on the request thread. Returns whether
+    the message was accepted by the provider -- nothing acts on that today,
+    but a caller that wanted to record a failed reset link would need it, and
+    a sender whose only signal is a log line cannot be built on later.
+
+    Never raises: the user's action has already succeeded by this point.
     """
     cfg = _config()
 
     if not to_addr:
         log.warning("email: skipped, recipient has no address (subject: %s)", subject)
-        return
+        return False
 
     if not cfg["api_key"]:
         # Development fallback: show what would have been sent. Kept short so
@@ -108,29 +227,65 @@ def _send(to_addr, subject, html, text, reply_to=None):
             "  --- text ---\n%s\n  ------------",
             to_addr, cfg["from_addr"], subject, text,
         )
-        return
+        return True
 
-    try:
-        result = _send_via_resend(cfg, to_addr, subject, html, text, reply_to)
-        log.info("email sent to %s (id=%s)", to_addr, result.get("id"))
-    except urllib.error.HTTPError as e:
-        # A 401 means a bad or missing key; a 403 usually means the from
-        # address is not verified. Log the response body so the fix is
-        # obvious, but do not raise.
+    for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
         try:
-            detail = e.read().decode("utf-8", errors="replace")[:400]
-        except Exception:
-            detail = "<no body>"
-        log.error("email to %s failed: HTTP %s — %s", to_addr, e.code, detail)
-    except Exception as e:
-        log.exception("email to %s failed: %s", to_addr, e)
+            result = _send_via_resend(cfg, to_addr, subject, html, text, reply_to)
+            if attempt > 1:
+                log.info("email sent to %s (id=%s) on attempt %s",
+                         to_addr, result.get("id"), attempt)
+            else:
+                log.info("email sent to %s (id=%s)", to_addr, result.get("id"))
+            return True
+        except Exception as e:
+            # A 401 means a bad or missing key; a 403 usually means the from
+            # address is not verified. Log the response body so the fix is
+            # obvious, but never raise: this runs on a worker, and the user's
+            # action has already succeeded.
+            detail = ""
+            if isinstance(e, urllib.error.HTTPError):
+                try:
+                    detail = " — " + e.read().decode("utf-8", errors="replace")[:400]
+                except Exception:
+                    detail = " — <no body>"
+                what = f"HTTP {e.code}"
+            else:
+                what = type(e).__name__ + f": {e}"
+
+            last = attempt == MAX_SEND_ATTEMPTS
+            if not _retryable(e) or last:
+                # Said at error level with the attempt count, because a
+                # message that is genuinely gone is the thing worth finding
+                # in the log later -- for a reset link it is the difference
+                # between a slow inbox and a locked-out account.
+                log.error("email to %s failed after %s attempt(s): %s%s",
+                          to_addr, attempt, what, detail)
+                return False
+
+            # Jittered so two workers that hit the same rate limit do not
+            # come back in lockstep and hit it again together.
+            delay = RETRY_BACKOFF_SECONDS[attempt - 1] * (1 + random.random() * 0.25)
+            log.warning("email to %s failed (%s), retrying in %.1fs [%s/%s]",
+                        to_addr, what, delay, attempt, MAX_SEND_ATTEMPTS)
+            time.sleep(delay)
+    return False
 
 
 def _dispatch(to_addr, subject, html, text, reply_to=None):
-    """Send in a background thread so the request handler returns promptly."""
-    Thread(
-        target=_send, args=(to_addr, subject, html, text, reply_to), daemon=True,
-    ).start()
+    """Hand a message to the delivery workers so the request returns promptly.
+
+    Never blocks the caller. If the queue is full -- which means the provider
+    has been failing long enough for 500 messages to pile up -- the message
+    is dropped and said so, rather than holding up the web request that
+    produced it.
+    """
+    _ensure_workers()
+    try:
+        _queue.put_nowait((to_addr, subject, html, text, reply_to))
+    except queue.Full:
+        log.error("email to %s dropped: send queue is full (%s)",
+                  to_addr, EMAIL_QUEUE_MAXSIZE)
 
 
 # --- Templates --------------------------------------------------------------

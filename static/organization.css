@@ -2,17 +2,6 @@
    Standalone stylesheet, like partnership.css: this page is shown to people
    who have never seen the app, so it carries no navigation. */
 
-:root {
-    --primary: #4361ee;
-    --primary-dark: #20348f;
-    --text: #2b2d42;
-    --text-light: #8d99ae;
-    --border: #e6e8f0;
-    --success: #16a34a;
-    --warning: #d97706;
-    --bg: #f5f7ff;
-}
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {

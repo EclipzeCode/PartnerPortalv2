@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import secrets
+import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -18,7 +19,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 from flask import (
-    Flask, jsonify, request, session, send_from_directory
+    Flask, jsonify, request, session
 )
 
 from sqlalchemy import and_, func, or_
@@ -386,10 +387,160 @@ def login_required(view):
     return wrapper
 
 
+# --- Caching ----------------------------------------------------------------
+# Nothing set a cache policy, so every asset was revalidated on every
+# navigation: eight conditional requests on a dashboard load, each a round
+# trip, and on a free-tier host behind a cold start that is the part a
+# visitor actually feels.
+#
+# The obvious fix -- a long max-age -- was not available, because the
+# filenames never change. Ship a year-long max-age on pp.css and a fix to
+# pp.css reaches nobody who has already visited.
+#
+# So the version travels in the URL instead. Every local <link> and <script>
+# in a served HTML page is stamped with ?v=<hash of that file's contents>,
+# and a request carrying a stamp is answered as immutable for a year. Change
+# the file and the hash changes, the HTML points somewhere new, and the new
+# bytes are fetched -- with no build step, no renamed files on disk, and
+# nothing to remember to run. The HTML itself is always revalidated, which
+# is what makes the stamp inside it trustworthy.
+ASSET_CACHE_SECONDS = 31536000      # a year, for anything carrying a ?v=
+UNVERSIONED_CACHE_SECONDS = 3600    # favicon and anything asked for bare
+
+# path -> (mtime, size, hash). Hashing is a file read, so it is done once per
+# file and re-done only when the file changes underneath -- which is what
+# makes this safe to leave on in development, where editing a stylesheet has
+# to be visible on the next reload.
+_asset_versions = {}
+_asset_lock = threading.Lock()
+
+# Local .css/.js in an href/src. Anchored on the quote and excluding "/" and
+# ":" so an absolute URL (the Google Fonts stylesheet, unpkg's boxicons) is
+# left alone -- stamping one would break it.
+_ASSET_REF_RE = re.compile(
+    r'((?:href|src)=")([A-Za-z0-9._-]+\.(?:css|js))(")'
+)
+
+
+def asset_version(filename):
+    """A short content hash for a file in static/, or None if it is missing."""
+    path = os.path.join(STATIC_DIR, filename)
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    key = (stat.st_mtime_ns, stat.st_size)
+    with _asset_lock:
+        cached = _asset_versions.get(filename)
+        if cached and cached[0] == key:
+            return cached[1]
+    try:
+        with open(path, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()[:10]
+    except OSError:
+        return None
+    with _asset_lock:
+        _asset_versions[filename] = (key, digest)
+    return digest
+
+
+def _stamp_asset_refs(html):
+    """Rewrite local asset references to carry their content hash."""
+    def stamp(match):
+        prefix, filename, suffix = match.groups()
+        version = asset_version(filename)
+        if not version:
+            return match.group(0)
+        return f"{prefix}{filename}?v={version}{suffix}"
+    return _ASSET_REF_RE.sub(stamp, html)
+
+
+def serve_page(filename, status=200, html=None):
+    """Serve an HTML page with its asset references stamped.
+
+    The ETag has to be computed over the *stamped* bytes, which is the whole
+    reason this exists rather than a send_from_directory plus a rewrite in
+    after_request. That arrangement looked equivalent and was not: Flask
+    builds the ETag from the file's own mtime and size and answers the
+    conditional request before any after_request hook runs. So editing
+    nav.css left index.html's ETag untouched, a returning visitor was told
+    304, and they kept the copy of the page carrying the *old* stamp -- and
+    therefore the old stylesheet, pinned for a year by the very cache header
+    that was supposed to make changes safe. A fresh visitor got the new one.
+
+    Hashing the served body instead means any change to any file the page
+    references changes the page's own ETag, so revalidation returns the new
+    HTML and the new stamps with it.
+    """
+    if html is None:
+        with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
+            html = f.read()
+
+    body = _stamp_asset_refs(html)
+    response = app.response_class(body, status=status, mimetype="text/html")
+    response.set_etag(hashlib.sha256(body.encode("utf-8")).hexdigest()[:32])
+    # Revalidate every time. The page is small, and it is what carries the
+    # hashes that let everything else be kept for a year.
+    response.headers["Cache-Control"] = "no-cache"
+    return response.make_conditional(request)
+
+
+# The pages under static/, so a request cannot name a path this was not meant
+# to serve. Built once at import; the frontend is a fixed set of files.
+_PAGES = frozenset(
+    name for name in os.listdir(STATIC_DIR) if name.endswith(".html")
+)
+
+
+@app.route("/<page>.html")
+def html_page(page):
+    """Serve any frontend page, stamped.
+
+    Registered explicitly rather than left to Flask's static route, which
+    would answer the conditional request itself using the file's mtime --
+    see serve_page. organization.html and partnership.html have their own
+    routes above this one and are unaffected.
+    """
+    filename = f"{page}.html"
+    if filename not in _PAGES:
+        return not_found(None)
+    return serve_page(filename)
+
+
+@app.after_request
+def add_cache_headers(response):
+    """How long a non-HTML response may be kept.
+
+    HTML sets its own above, and is left alone here.
+    """
+    # An API response is per-account and often per-second. Anything cached
+    # here would be one organization's dashboard shown to the next caller
+    # through a shared proxy.
+    if request.path.startswith("/api/") or response.mimetype == "application/json":
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    if response.mimetype == "text/html":
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+    # Only a URL that names the version it wants can safely be kept for a
+    # year: a request without one may be for a file that has since changed.
+    if request.args.get("v"):
+        response.headers["Cache-Control"] = (
+            f"public, max-age={ASSET_CACHE_SECONDS}, immutable"
+        )
+    else:
+        response.headers["Cache-Control"] = (
+            f"public, max-age={UNVERSIONED_CACHE_SECONDS}"
+        )
+    return response
+
+
 # --- Static frontend --------------------------------------------------------
 @app.route("/")
 def index():
-    return send_from_directory(STATIC_DIR, "index.html")
+    return serve_page("index.html")
 
 
 def _esc_attr(value):
@@ -480,7 +631,8 @@ def organization_page():
                 description = _org_og_description(profile)
         finally:
             db.close()
-    return _render_og_page("organization.html", title, description)
+    return serve_page("organization.html",
+                      html=_render_og_page("organization.html", title, description))
 
 
 @app.route("/partnership.html")
@@ -511,7 +663,8 @@ def partnership_page():
                     description += f" Timeline: {summary['timeline_label']}."
         finally:
             db.close()
-    return _render_og_page("partnership.html", title, description)
+    return serve_page("partnership.html",
+                      html=_render_og_page("partnership.html", title, description))
 
 
 @app.errorhandler(404)
@@ -532,7 +685,7 @@ def not_found(error):
     """
     if request.path.startswith("/api/"):
         return jsonify({"error": "Not found."}), 404
-    return send_from_directory(STATIC_DIR, "404.html"), 404
+    return serve_page("404.html", status=404)
 
 
 @app.errorhandler(405)
@@ -552,7 +705,7 @@ def method_not_allowed(error):
     """
     if request.path.startswith("/api/"):
         return jsonify({"error": "Not found."}), 405
-    return send_from_directory(STATIC_DIR, "404.html"), 405
+    return serve_page("404.html", status=405)
 
 
 @app.errorhandler(500)
@@ -572,7 +725,7 @@ def internal_error(error):
     app.logger.error("Unhandled exception", exc_info=error)
     if request.path.startswith("/api/"):
         return jsonify({"error": "Something went wrong. Please try again."}), 500
-    return send_from_directory(STATIC_DIR, "500.html"), 500
+    return serve_page("500.html", status=500)
 
 
 # --- Reference data ---------------------------------------------------------
@@ -1524,11 +1677,20 @@ def delete_account(org, db):
 def _detach_partnerships(db, org):
     """Decide what survives `org` deleting its account.
 
-    An accepted partnership is a record of something two organizations
-    agreed, and the other side may have shared its link with a board or a
-    funder. It is not this org's alone to destroy, so it stays: the foreign
-    key is ON DELETE SET NULL and the agreement carries a snapshot of who
-    each side was, which is what lets the public summary still render.
+    An agreement two organizations actually reached is a record of something
+    that happened, and the other side may have shared its link with a board
+    or a funder. It is not this org's alone to destroy, so it stays: the
+    foreign key is ON DELETE SET NULL and the agreement carries a snapshot of
+    who each side was, which is what lets the public summary still render.
+
+    That means every status in Partnership.PUBLIC -- accepted, and also
+    completed and ended. A partnership that ran its course is more of a
+    record than one still in progress, not less, and public_partnership()
+    resolves all three for exactly that reason: the link was shared on the
+    strength of what two organizations agreed, and that stays true after it
+    finishes. Keeping only `accepted` here undid that from the other end --
+    the agreements with the most behind them were the ones deleting an
+    account destroyed, and the survivor lost them from its own history too.
 
     Anything that never became an agreement goes. A pending proposal from an
     organization that no longer exists can never be accepted and would sit in
@@ -1537,10 +1699,10 @@ def _detach_partnerships(db, org):
     than for its own sake. Deleted outright rather than left with a null
     party, so neither shows up as a ghost.
 
-    An accepted partnership whose *other* side has already gone is deleted
-    too. Keeping it would leave a public agreement page for two organizations
-    that have both left, which nobody remains to be accountable for or to ask
-    to take it down -- the record survives while there is still a party to it.
+    An agreement whose *other* side has already gone is deleted too. Keeping
+    it would leave a public agreement page for two organizations that have
+    both left, which nobody remains to be accountable for or to ask to take
+    it down -- the record survives while there is still a party to it.
     """
     rows = db.query(Partnership).filter(
         or_(Partnership.proposer_id == org.id,
@@ -1548,7 +1710,7 @@ def _detach_partnerships(db, org):
     ).all()
 
     for proposal in rows:
-        if proposal.status != Partnership.ACCEPTED:
+        if proposal.status not in Partnership.PUBLIC:
             db.delete(proposal)
             continue
         other_id = (proposal.recipient_id if proposal.proposer_id == org.id
@@ -1620,6 +1782,23 @@ def save_onboarding(org, db):
         problem = length_problem(field, value)
         if problem:
             return jsonify({"error": problem, "field": field}), 400
+
+    # Optional -- an org that leaves it blank is contacted on its sign-in
+    # address (see contact_email below) -- but if one is given it has to be
+    # an address. This was the only field on this endpoint checked for width
+    # and not for shape, so anything under 255 characters was stored and then
+    # rendered straight into a mailto: link on the public profile, where the
+    # one thing the page exists to do is get this organization contacted.
+    #
+    # onboarding.js already refuses it with the same pattern EMAIL_RE uses,
+    # which is exactly why it belongs here too: the form is not the only way
+    # into this endpoint, and every other field on it is checked on both
+    # sides for that reason.
+    if contact_email and not is_valid_email(contact_email):
+        return jsonify({
+            "error": "Please enter a valid contact email address.",
+            "field": "contact_email",
+        }), 400
 
     # The free-text blocks land in Text columns, so there is no width to
     # overflow -- but nothing capped them either, and an unbounded value is
