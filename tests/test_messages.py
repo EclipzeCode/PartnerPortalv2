@@ -271,3 +271,73 @@ def test_deleting_a_pending_proposal_takes_its_thread(client, login, thread, ses
     assert session.query(Message).filter(
         Message.partnership_id == pid).count() == 0
     assert session.get(Partnership, pid) is None
+
+
+# --- What an open thread polls for ------------------------------------------
+# The dialog re-reads this endpoint on a timer while it is open, because a
+# reply arriving mid-conversation used to stay invisible until the thread was
+# closed and opened again. These pin the three things that behaviour rests on.
+
+def test_a_reply_shows_up_on_a_second_read(client, login, thread):
+    """The poll's whole purpose: the same GET, later, returns the new message."""
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    first = client.get(f"/api/proposals/{pid}/messages").get_json()
+    assert first["count"] == 0
+    assert first["open"] is True
+
+    # The other side replies while the first is sitting on the open thread.
+    client.post("/logout")
+    login(recipient)
+    assert client.post(f"/api/proposals/{pid}/messages",
+                       json={"body": "pytest reply"}).status_code == 201
+    client.post("/logout")
+
+    login(proposer)
+    second = client.get(f"/api/proposals/{pid}/messages").get_json()
+    assert second["count"] == 1
+    assert second["messages"][0]["body"] == "pytest reply"
+    # Ordered oldest-first with a stable id, which is what the client's
+    # "has anything changed" check keys on.
+    assert second["messages"][0]["id"] is not None
+
+
+def test_polling_keeps_the_thread_marked_read(client, login, thread):
+    """Re-reading an open thread is reading it, so the badge must stay down."""
+    proposer, recipient, pid = thread
+
+    login(recipient)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "pytest one"})
+    client.post("/logout")
+
+    login(proposer)
+    assert client.get("/api/me").get_json()["unread_messages"] == 1
+    client.get(f"/api/proposals/{pid}/messages")            # opening it
+    assert client.get("/api/me").get_json()["unread_messages"] == 0
+    client.get(f"/api/proposals/{pid}/messages")            # a poll
+    assert client.get("/api/me").get_json()["unread_messages"] == 0
+
+
+def test_the_open_flag_turns_over_when_the_proposal_settles(client, login, thread):
+    """A proposal can settle while its thread is on screen.
+
+    The client swaps the compose form for the closed notice on this flag, so
+    it has to change without the thread being reopened -- otherwise the form
+    stays up and fails on submit.
+    """
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    assert client.get(f"/api/proposals/{pid}/messages").get_json()["open"] is True
+    client.post("/logout")
+
+    login(recipient)
+    assert client.post(f"/api/proposals/{pid}/decline", json={}).status_code == 200
+    client.post("/logout")
+
+    login(proposer)
+    settled = client.get(f"/api/proposals/{pid}/messages").get_json()
+    assert settled["open"] is False
+    # Still readable: closing a thread is not the same as hiding it.
+    assert settled["count"] == 0
