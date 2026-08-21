@@ -89,24 +89,32 @@ def test_only_one_live_proposal_per_direction(client, login, pair):
     assert len(client.get("/api/proposals").get_json()["proposals"]) == 1
 
 
-def test_the_reverse_direction_is_a_separate_proposal(client, login, pair):
-    """The index is directional: both organizations may ask each other."""
+def test_the_reverse_direction_is_refused_too(client, login, pair):
+    """This used to be allowed, and was asserted to be.
+
+    The index is directional, so it only ever stopped the same organization
+    asking twice. Both sides holding a pending proposal to each other passed
+    it -- one conversation as two rows, two notification emails, and each
+    side waiting on the other to answer something they had also sent.
+
+    That is now refused in the endpoint rather than the index, because the
+    rule is about the pair and the index is about the row. The test that
+    asserted the old behaviour was this one; it is kept, pointed the other
+    way, so the change is visible rather than silently deleted.
+    """
     proposer, recipient = pair
     login(proposer)
     assert _propose(client, recipient).status_code == 201
     client.post("/logout")
 
     login(recipient)
-    # The terms have to be swapped along with the direction: each side may
-    # only commit to what it actually offers, and in this direction the
-    # proposer is the org offering web_development. The default payload above
-    # is written for the first direction, and passing it here used to work
-    # only because nothing checked -- it described an exchange neither
-    # organization could have produced through the form.
-    assert _propose(client, proposer,
-                    proposer_gives=["web_development"],
-                    recipient_gives=["grant_writing"]).status_code == 201
-    assert len(client.get("/api/proposals").get_json()["proposals"]) == 2
+    response = _propose(client, proposer,
+                        proposer_gives=["web_development"],
+                        recipient_gives=["grant_writing"])
+    assert response.status_code == 409
+    assert response.get_json()["existing_status"] == "pending"
+    # The one that does exist is still there, and is still theirs to answer.
+    assert len(client.get("/api/proposals").get_json()["proposals"]) == 1
 
 
 def test_the_recipient_is_told(client, login, pair, outbox):
@@ -304,3 +312,97 @@ def test_both_sides_see_the_proposal_from_their_own_direction(client, login, pai
     assert theirs["proposals"][0]["can_respond"] is True
     assert theirs["proposals"][0]["can_withdraw"] is False
     assert theirs["counts"]["incoming_pending"] == 1
+
+
+# --- One live partnership per pair ------------------------------------------
+# The partial unique index stopped a second pending proposal the same way
+# round. These are the two cases it cannot see, because neither is the same
+# row twice.
+
+def test_the_other_side_cannot_propose_back_while_one_is_pending(
+        client, login, make_org):
+    """A and B each holding a pending proposal to the other is one
+    conversation wearing two rows, and two notification emails."""
+    a = make_org(name="pytest-pair A",
+                 needs=["web_development"], offers=["grant_writing"])
+    b = make_org(name="pytest-pair B",
+                 needs=["grant_writing"], offers=["web_development"])
+
+    login(a)
+    assert client.post("/api/proposals", json={
+        "recipient_id": b.id,
+        "proposer_gives": ["grant_writing"],
+        "recipient_gives": ["web_development"],
+    }).status_code == 201
+    client.post("/logout")
+
+    login(b)
+    response = client.post("/api/proposals", json={
+        "recipient_id": a.id,
+        "proposer_gives": ["web_development"],
+        "recipient_gives": ["grant_writing"],
+    })
+    assert response.status_code == 409
+    body = response.get_json()
+    assert body["existing_status"] == "pending"
+    # B is the one being waited on, so it is pointed at the proposal it has.
+    assert "already sent you a proposal" in body["error"]
+
+
+def test_no_second_agreement_on_top_of_a_live_one(client, login, make_org):
+    """What let the dashboard's "agreed" count read 2 for one relationship."""
+    a = make_org(name="pytest-live A",
+                 needs=["web_development"], offers=["grant_writing"])
+    b = make_org(name="pytest-live B",
+                 needs=["grant_writing"], offers=["web_development"])
+
+    login(a)
+    created = client.post("/api/proposals", json={
+        "recipient_id": b.id,
+        "proposer_gives": ["grant_writing"],
+        "recipient_gives": ["web_development"],
+    })
+    pid = created.get_json()["proposal"]["id"]
+    client.post("/logout")
+
+    login(b)
+    assert client.post(f"/api/proposals/{pid}/accept", json={}).status_code == 200
+    # Neither side may stack a second one on it.
+    again = client.post("/api/proposals", json={
+        "recipient_id": a.id,
+        "proposer_gives": ["web_development"],
+        "recipient_gives": ["grant_writing"],
+    })
+    assert again.status_code == 409
+    assert again.get_json()["existing_status"] == "accepted"
+    client.post("/logout")
+
+    login(a)
+    assert client.post("/api/proposals", json={
+        "recipient_id": b.id,
+        "proposer_gives": ["grant_writing"],
+        "recipient_gives": ["web_development"],
+    }).status_code == 409
+
+
+def test_a_settled_partnership_does_not_block_a_new_one(client, login, make_org):
+    """Completing one and agreeing another is the product working."""
+    a = make_org(name="pytest-again A",
+                 needs=["web_development"], offers=["grant_writing"])
+    b = make_org(name="pytest-again B",
+                 needs=["grant_writing"], offers=["web_development"])
+    terms = {"proposer_gives": ["grant_writing"],
+             "recipient_gives": ["web_development"]}
+
+    login(a)
+    pid = client.post("/api/proposals",
+                      json={"recipient_id": b.id, **terms}).get_json()["proposal"]["id"]
+    client.post("/logout")
+    login(b)
+    client.post(f"/api/proposals/{pid}/accept", json={})
+    client.post(f"/api/proposals/{pid}/end", json={"reason": "pytest done"})
+    client.post("/logout")
+
+    login(a)
+    assert client.post("/api/proposals",
+                       json={"recipient_id": b.id, **terms}).status_code == 201
