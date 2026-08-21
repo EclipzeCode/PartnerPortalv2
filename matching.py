@@ -59,11 +59,23 @@ def _same_location(a, b):
     return bool(first_a) and first_a == first_b
 
 
-def score_pair(me, them):
-    """Score `them` as a partner for `me`.
+def rank_pair(me, them):
+    """The arithmetic, with none of the prose.
 
-    Returns (score, reasons, detail) where detail carries the actual category
-    overlaps so the UI can name them rather than saying "you're a good match".
+    Split out so that counting and ranking matches does not also cost
+    building them. The dashboard asks how many matches there are, how many
+    are two-way, and for the best five -- and used to get a full
+    public_dict, a reasons list and a points breakdown for every
+    organization overlapping the caller in order to answer that.
+
+    score_pair is a thin wrapper over this rather than a second
+    implementation. There is one place the weights are applied, so the fast
+    path and the explained path cannot drift into disagreeing about what a
+    match is worth -- which matters more here than anywhere else in this
+    file, because the whole product is ranked by it.
+
+    Returns (score, mutual, parts, they_give, i_give, shared_focus) where
+    `parts` is [(key, points)] in the order the points were awarded.
     """
     they_give = _overlap(them.offers, me.needs)
     i_give = _overlap(me.offers, them.needs)
@@ -75,12 +87,56 @@ def score_pair(me, them):
     # have something to trade. On their own they described a pair with
     # nothing to exchange as a 5, and "5% match" is a claim about a
     # partnership that has no basis at all.
-    #
-    # This never arose while find_matches was the only caller: its SQL selects
-    # on `offers && needs` in one direction or the other, so every candidate
-    # it scored had already passed this test. The directory scores everyone,
-    # which is what made an unearned score visible.
     if not they_give and not i_give:
+        return 0, False, [], [], [], []
+
+    parts = []
+    if they_give:
+        parts.append(("they_give", POINTS_PER_THEY_GIVE * len(they_give)))
+    if i_give:
+        parts.append(("i_give", POINTS_PER_I_GIVE * len(i_give)))
+
+    mutual = bool(they_give and i_give)
+    if mutual:
+        parts.append(("mutual", MUTUAL_BONUS))
+
+    if _same_location(me.location, them.location):
+        parts.append(("location", SAME_LOCATION))
+    elif me.remote_friendly and them.remote_friendly:
+        parts.append(("remote", REMOTE_COMPATIBLE))
+
+    if (me.organization_type and them.organization_type
+            and me.organization_type != them.organization_type):
+        parts.append(("type", COMPLEMENTARY_TYPE))
+
+    # Shared focus areas rank candidates; they never create one. Nothing here
+    # widens the pool -- find_matches still selects on needs/offers overlap,
+    # so two organizations that care about the same cause but have nothing to
+    # exchange are still not a match.
+    shared_focus = _overlap(me.focus_areas, them.focus_areas)
+    if shared_focus:
+        parts.append(("focus", min(SHARED_FOCUS * len(shared_focus),
+                                   MAX_FOCUS_BONUS)))
+
+    raw = sum(points for _, points in parts)
+    return min(raw, MAX_SCORE), mutual, parts, they_give, i_give, shared_focus
+
+
+def _plural(n, word):
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def score_pair(me, them):
+    """Score `them` as a partner for `me`, with the reasons behind it.
+
+    Returns (score, reasons, detail) where detail carries the actual category
+    overlaps so the UI can name them rather than saying "you're a good match".
+
+    The number comes from rank_pair; everything added here is language.
+    """
+    score, mutual, parts, they_give, i_give, shared_focus = rank_pair(me, them)
+
+    if not parts:
         return 0, [], {
             "they_give": [], "they_give_labels": [],
             "i_give": [], "i_give_labels": [],
@@ -90,70 +146,53 @@ def score_pair(me, them):
             "max_score": MAX_SCORE,
         }
 
-    score = 0
+    # What each component is called in the breakdown shown beside the score.
+    # A score is a number this file made up, and "87" on its own asks the
+    # reader to trust it -- which is a lot to ask of the thing the whole
+    # product is ranked by.
+    labels = {
+        "they_give": lambda: "They offer "
+                             + _plural(len(they_give), "thing") + " you need",
+        "i_give": lambda: "You offer "
+                          + _plural(len(i_give), "thing") + " they need",
+        "mutual": lambda: "Two-way match",
+        "location": lambda: "Same location",
+        "remote": lambda: "Both open to remote",
+        "type": lambda: "Different kind of organization",
+        "focus": lambda: "Working on the same causes",
+    }
+    breakdown = [{"label": labels[key](), "points": points}
+                 for key, points in parts]
+
+    # Said in the order they are awarded, except the two-way line, which goes
+    # first because it is the whole claim the ranking is built on.
     reasons = []
-    # The same components as `reasons`, carrying the points each one
-    # contributed. A score is a number this file made up, and "87" on its own
-    # asks the reader to trust it -- which is a lot to ask of the thing the
-    # whole product is ranked by. The arithmetic is already being done here;
-    # this stops it being thrown away before anyone can see it.
-    breakdown = []
-
-    def award(points, label):
-        nonlocal score
-        score += points
-        breakdown.append({"label": label, "points": points})
-
-    if they_give:
-        labels = labels_for(they_give)
-        award(POINTS_PER_THEY_GIVE * len(they_give),
-              "They offer " + str(len(they_give))
-              + (" thing" if len(they_give) == 1 else " things") + " you need")
-        reasons.append("They offer " + _join(labels) + ", which you need")
-
-    if i_give:
-        labels = labels_for(i_give)
-        award(POINTS_PER_I_GIVE * len(i_give),
-              "You offer " + str(len(i_give))
-              + (" thing" if len(i_give) == 1 else " things") + " they need")
-        reasons.append("You offer " + _join(labels) + ", which they need")
-
-    mutual = bool(they_give and i_give)
+    for key, _ in parts:
+        if key == "they_give":
+            reasons.append("They offer " + _join(labels_for(they_give))
+                           + ", which you need")
+        elif key == "i_give":
+            reasons.append("You offer " + _join(labels_for(i_give))
+                           + ", which they need")
+        elif key == "location":
+            reasons.append(f"Both based in {them.location}")
+        elif key == "remote":
+            reasons.append("Both open to remote partnerships")
+        elif key == "type":
+            reasons.append("Different kind of organization "
+                           f"({them.organization_type})")
+        elif key == "focus":
+            reasons.append("You both work on "
+                           + _join(focus_labels_for(shared_focus)))
     if mutual:
-        award(MUTUAL_BONUS, "Two-way match")
-        reasons.insert(0, "Two-way match — you each have something the other needs")
+        reasons.insert(
+            0, "Two-way match — you each have something the other needs")
 
-    if _same_location(me.location, them.location):
-        award(SAME_LOCATION, "Same location")
-        reasons.append(f"Both based in {them.location}")
-    elif me.remote_friendly and them.remote_friendly:
-        award(REMOTE_COMPATIBLE, "Both open to remote")
-        reasons.append("Both open to remote partnerships")
-
-    if (me.organization_type and them.organization_type
-            and me.organization_type != them.organization_type):
-        award(COMPLEMENTARY_TYPE, "Different kind of organization")
-        reasons.append(
-            f"Different kind of organization ({them.organization_type})"
-        )
-
-    # Shared focus areas rank candidates; they never create one. Nothing here
-    # widens the pool -- find_matches still selects on needs/offers overlap,
-    # so two organizations that care about the same cause but have nothing to
-    # exchange are still not a match, which is the same line the rest of this
-    # file draws.
-    shared_focus = _overlap(me.focus_areas, them.focus_areas)
-    if shared_focus:
-        award(min(SHARED_FOCUS * len(shared_focus), MAX_FOCUS_BONUS),
-              "Working on the same causes")
-        labels = focus_labels_for(shared_focus)
-        reasons.append("You both work on " + _join(labels))
-
+    raw = sum(points for _, points in parts)
     # The cap is part of the explanation, not something to hide: a breakdown
     # adding to 118 beside a score of 100 reads as an arithmetic error unless
     # the page can say the total was capped.
-    total = min(score, MAX_SCORE)
-    return total, reasons, {
+    return score, reasons, {
         "they_give": they_give,
         "they_give_labels": labels_for(they_give),
         "i_give": i_give,
@@ -162,8 +201,8 @@ def score_pair(me, them):
         "shared_focus": shared_focus,
         "shared_focus_labels": focus_labels_for(shared_focus),
         "breakdown": breakdown,
-        "raw_score": score,
-        "capped": score > MAX_SCORE,
+        "raw_score": raw,
+        "capped": raw > MAX_SCORE,
         "max_score": MAX_SCORE,
     }
 
@@ -236,3 +275,63 @@ def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
         )
     )
     return results[:limit]
+
+
+def match_overview(session, me, top=5):
+    """How many matches, how many are two-way, and the best few.
+
+    What the dashboard actually needs. It used to call find_matches, which
+    answers a different question -- "give me every match, fully rendered" --
+    and then threw almost all of it away: three numbers and five cards out
+    of a full public_dict, reasons list and points breakdown built for every
+    organization overlapping the caller.
+
+    Same SQL and same scoring; the difference is that the prose is built for
+    `top` organizations instead of all of them. Everything else is the
+    arithmetic in rank_pair, which is what the two paths share.
+
+    Returns (total, mutual_count, top_matches).
+    """
+    from models import Organization
+
+    stmt = select(Organization).where(
+        Organization.id != me.id,
+        Organization.onboarding_complete.is_(True),
+        Organization.is_demo.is_(False),
+    )
+    conditions = []
+    if me.needs:
+        conditions.append(Organization.offers.overlap(me.needs))
+    if me.offers:
+        conditions.append(Organization.needs.overlap(me.offers))
+    if not conditions:
+        return 0, 0, []
+    stmt = stmt.where(or_(*conditions))
+
+    ranked = []
+    mutual_count = 0
+    for them in session.scalars(stmt):
+        score, mutual, parts, *_ = rank_pair(me, them)
+        if score <= 0:
+            continue
+        if mutual:
+            mutual_count += 1
+        ranked.append((not mutual, -score, (them.name or "").casefold(), them))
+
+    # The same ordering find_matches applies: two-way first, then score, then
+    # name. Sorted on the tuple rather than a key function so the comparison
+    # is the one written above and nothing falls back to comparing rows.
+    ranked.sort(key=lambda r: r[:3])
+
+    best = []
+    for _, _, _, them in ranked[:top]:
+        score, reasons, detail = score_pair(me, them)
+        entry = them.public_dict()
+        entry.update({
+            "match_score": score,
+            "reasons": reasons,
+            "match_detail": detail,
+        })
+        best.append(entry)
+
+    return len(ranked), mutual_count, best

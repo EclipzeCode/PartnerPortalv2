@@ -7,7 +7,8 @@ loud.
 """
 
 from matching import (
-    MAX_FOCUS_BONUS, MUTUAL_BONUS, SHARED_FOCUS, find_matches, score_pair,
+    MAX_FOCUS_BONUS, MUTUAL_BONUS, SHARED_FOCUS, find_matches, match_overview,
+    rank_pair, score_pair,
 )
 
 
@@ -211,3 +212,79 @@ def test_one_direction_of_overlap_still_collects_the_bonuses(make_org):
     assert detail["mutual"] is False
     assert score > 0
     assert any(p["label"] == "Same location" for p in detail["breakdown"])
+
+
+# --- The fast path ----------------------------------------------------------
+# The dashboard needs two counts and five cards, and used to get every match
+# rendered in full to produce them. match_overview answers the same question
+# without building what nobody sees -- which is only safe while it and
+# find_matches agree, so that is what these check.
+
+def test_rank_pair_and_score_pair_never_disagree(make_org):
+    """One arithmetic implementation, two ways of asking for it.
+
+    rank_pair is the scoring; score_pair is rank_pair plus language. If these
+    could drift, the ranking on the dashboard and the ranking on the search
+    page would be different products.
+    """
+    me = make_org(needs=["web_development", "legal"],
+                  offers=["grant_writing", "volunteers"],
+                  focus_areas=["food_security"], location="Austin, TX")
+    others = [
+        make_org(needs=["grant_writing"], offers=["web_development"],
+                 focus_areas=["food_security"], location="austin"),
+        make_org(needs=["legal"], offers=["web_development"], location="Denver, CO"),
+        make_org(needs=["volunteers"], offers=["legal"], remote_friendly=True),
+        make_org(needs=["marketing_social"], offers=["design_branding"]),
+    ]
+    for them in others:
+        fast_score, fast_mutual, *_ = rank_pair(me, them)
+        full_score, _, detail = score_pair(me, them)
+        assert fast_score == full_score
+        assert fast_mutual == detail["mutual"]
+
+
+def test_match_overview_agrees_with_find_matches(session, make_org):
+    """Same totals, same two-way count, same order at the top."""
+    me = make_org(needs=["web_development", "legal"],
+                  offers=["grant_writing", "volunteers"])
+    make_org(needs=["grant_writing"], offers=["web_development"])   # two-way
+    make_org(needs=["volunteers"], offers=["legal"])                # two-way
+    make_org(needs=["marketing_social"], offers=["web_development"])  # one-way
+    make_org(needs=["grant_writing"], offers=["design_branding"])     # one-way
+
+    full = find_matches(session, me)
+    total, mutual_count, top = match_overview(session, me, top=5)
+
+    assert total == len(full)
+    assert mutual_count == sum(1 for m in full if m["match_detail"]["mutual"])
+    assert [m["id"] for m in top] == [m["id"] for m in full[:5]]
+    # And the cards it does build are the same cards.
+    for a, b in zip(top, full[:5]):
+        assert a["match_score"] == b["match_score"]
+        assert a["reasons"] == b["reasons"]
+        assert a["match_detail"] == b["match_detail"]
+
+
+def test_match_overview_builds_only_what_it_returns(session, make_org, monkeypatch):
+    """The point of the change: the prose is not built for every candidate."""
+    import matching
+    me = make_org(needs=["web_development"], offers=["grant_writing"])
+    for _ in range(9):
+        make_org(needs=["grant_writing"], offers=["web_development"])
+
+    calls = []
+    real = matching.score_pair
+    monkeypatch.setattr(matching, "score_pair",
+                        lambda a, b: (calls.append(1), real(a, b))[1])
+
+    total, _, top = matching.match_overview(session, me, top=3)
+    assert total >= 9            # everyone was counted
+    assert len(top) == 3
+    assert len(calls) == 3       # but only three were rendered
+
+
+def test_match_overview_is_empty_without_a_profile(session, make_org):
+    """No needs and no offers is not a match with everybody."""
+    me = make_org(needs=[], offers=[])
+    assert match_overview(session, me) == (0, 0, [])

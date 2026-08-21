@@ -32,7 +32,7 @@ from categories import (
 )
 from db import SessionLocal
 from links import LinkError, parse_links
-from matching import find_matches, score_pair
+from matching import find_matches, match_overview, score_pair
 from moderation import name_problem
 from models import (
     Event, Message, Organization, Partnership, ProfileView, SavedLead,
@@ -2349,8 +2349,11 @@ def get_dashboard(org, db):
             "events": events,
         })
 
-    matches = find_matches(db, org)
-    mutual = [m for m in matches if m["match_detail"]["mutual"]]
+    # Counts and the top five, without building the rest. This used to call
+    # find_matches, which renders every match in full -- a public_dict, a
+    # reasons list and a points breakdown each -- to produce two numbers and
+    # five cards, on the page every signed-in visit lands on.
+    total_matches, mutual_matches, top_matches = match_overview(db, org, top=5)
 
     rows = db.query(Partnership).filter(
         or_(Partnership.proposer_id == org.id,
@@ -2364,8 +2367,8 @@ def get_dashboard(org, db):
         "needs_onboarding": False,
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
         "stats": {
-            "total_matches": len(matches),
-            "mutual_matches": len(mutual),
+            "total_matches": total_matches,
+            "mutual_matches": mutual_matches,
             "needs_count": len(org.needs or []),
             "offers_count": len(org.offers or []),
             "awaiting_you": sum(
@@ -2387,7 +2390,7 @@ def get_dashboard(org, db):
             "profile_views": views_total,
             "profile_views_recent": views_recent,
         },
-        "top_matches": matches[:5],
+        "top_matches": top_matches,
         "recent_proposals": proposals[:5],
         "events": events,
     })
@@ -2627,6 +2630,47 @@ def create_proposal(org, db):
             "error": "This is an example organization, shown to illustrate how "
                      "matching works. You can only propose to real organizations."
         }), 400
+
+    # One live partnership per pair, in either direction.
+    #
+    # The partial unique index on (proposer_id, recipient_id) already stopped
+    # a second pending proposal the same way round, which is what a
+    # double-clicked submit produces. It does not see the other two cases,
+    # because neither is the same row twice: A and B could each hold a
+    # pending proposal to the other -- one conversation, two rows, two
+    # emails, each side waiting on the other to answer something they also
+    # sent -- and once a partnership was accepted, either side could propose
+    # again on top of it, which is what let the dashboard's "agreed" count
+    # read 2 for a single relationship.
+    #
+    # Settled partnerships are deliberately not in the way. Completing one
+    # and agreeing another is the product working; it is only the live ones
+    # that have to be singular.
+    live = db.query(Partnership).filter(
+        or_(
+            and_(Partnership.proposer_id == org.id,
+                 Partnership.recipient_id == recipient.id),
+            and_(Partnership.proposer_id == recipient.id,
+                 Partnership.recipient_id == org.id),
+        ),
+        Partnership.status.in_((Partnership.PENDING, Partnership.ACCEPTED)),
+    ).first()
+    if live is not None:
+        # Named rather than generic: "you already have one" is confusing when
+        # the one you have is a proposal *they* sent you and you have not
+        # answered, which is the case someone is most likely to hit.
+        if live.status == Partnership.PENDING:
+            waiting_on_you = live.recipient_id == org.id
+            error = ("This organization has already sent you a proposal. "
+                     "Answer that one rather than starting a second."
+                     if waiting_on_you else
+                     "You already have a proposal waiting with this "
+                     "organization.")
+        else:
+            error = ("You already have a live partnership with this "
+                     "organization. Complete or end it before agreeing "
+                     "another.")
+        return jsonify({"error": error, "existing_status": live.status}), 409
 
     proposer_gives = clean_categories(data.get("proposer_gives"))
     recipient_gives = clean_categories(data.get("recipient_gives"))
