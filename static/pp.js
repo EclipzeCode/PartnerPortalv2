@@ -752,11 +752,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // placed as fractions of the grid, not as pixel coordinates.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    const section = document.getElementById('span');
     const track = document.getElementById('bridgeTrack');
     const grid = document.getElementById('bridgeGrid');
-    const readout = document.getElementById('bridgeReadout');
-    if (!section || !track || !grid) return;
+    if (!track || !grid) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -846,6 +844,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let cols = 0;
     let built = -1;         // how many orders are currently shown
 
+    // The build only ever goes forwards. Scrolling back up leaves the span
+    // closed rather than taking it apart again: a structure that dismantles
+    // itself when you look away from it is a gimmick, and re-reading the
+    // heading above it should not cost you the thing it is describing.
+    //
+    // Held as a fraction rather than as a count of orders, so it survives the
+    // re-render a resize causes -- the order numbers themselves change with
+    // the column count, and a fraction does not.
+    let reached = 0;
+
     function render() {
         // Coarser on a narrow screen: forty-five columns across a phone is a
         // five-pixel cell, and the bridge stops being a bridge.
@@ -875,12 +883,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         maxOrder = cells.reduce((m, c) => Math.max(m, c.order), 1);
         built = -1;
-        if (reduced) apply(1);
+        apply(reduced ? 1 : reached);
     }
 
     /** Show every cell whose turn has come, and nothing beyond it. */
     function apply(progress) {
-        const reach = Math.round(progress * (maxOrder + 1)) - 1;
+        reached = Math.max(reached, Math.min(1, Math.max(0, progress)));
+        const reach = Math.round(reached * (maxOrder + 1)) - 1;
         // Only when the frontier has actually moved: a scroll of a few pixels
         // does not change which cells are shown, and touching several hundred
         // class lists for it would be the expensive part of this whole thing.
@@ -890,14 +899,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cells.forEach((cell) => {
             cell.el.classList.toggle('built', cell.order <= reach);
         });
-
-        const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
-        if (readout) {
-            readout.textContent = percent >= 100
-                ? 'Span closed'
-                : `Span ${percent}% closed`;
-        }
-        section.classList.toggle('joined', percent >= 100);
     }
 
     function progress() {
@@ -911,7 +912,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     render();
 
-    if (reduced) return;
+    if (reduced) return;   // render() has already built it
 
     // Coalesced onto a frame: scroll fires far more often than the screen is
     // painted, and every one of those extra calls would be measuring a layout
@@ -923,6 +924,10 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => {
             queued = false;
             apply(progress());
+            // Nothing left to advance, and the build does not run backwards,
+            // so there is no reason to keep measuring a layout on every
+            // scroll for the rest of the page.
+            if (reached >= 1) window.removeEventListener('scroll', onScroll);
         });
     }
 

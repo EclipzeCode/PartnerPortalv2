@@ -886,9 +886,9 @@ body.home #contactForm .btn-primary {
  * ------------------------------------------------------------------------- */
 
 body.home .bridge-track {
-    /* How long the build takes, in screens. The stage is one of them, so this
-       leaves a little under two screens of scrolling to close the span. */
-    height: 280vh;
+    /* How long the build takes, in screens. The stage occupies one of them, so
+       this leaves a little over a screen of scrolling to close the span. */
+    height: 220vh;
 }
 
 body.home .bridge-stage {
@@ -977,17 +977,6 @@ body.home .bridge-foot {
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--h-dim);
-}
-
-body.home .bridge-readout {
-    color: var(--h-ink-soft);
-    /* The number changes on every frame of the scroll; a proportional face
-       would reflow the line as the digits change width. */
-    font-variant-numeric: tabular-nums;
-}
-
-body.home .bridge-section.joined .bridge-readout {
-    color: var(--h-seal);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1102,10 +1091,10 @@ body.home .hero-lede.pending .lede-text {
 }
 
 @media (max-width: 34rem) {
-    /* Nearly three screens of scrolling for one graphic is a long way to ask
-       someone to drag a thumb. The build is the same, over less distance. */
+    /* Two screens of scrolling for one graphic is a long way to ask someone
+       to drag a thumb. The build is the same, over less distance. */
     body.home .bridge-track {
-        height: 200vh;
+        height: 170vh;
     }
 
     body.home .hero-stats {
