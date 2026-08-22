@@ -123,24 +123,76 @@
 }
 
 /* ------------------------------------------------------------------------- *
- * Toolbar
+ * Profile header
+ *
+ * Whose dashboard this is, stated before anything it counts. A mark, a name,
+ * the two facts a profile leads with, and the actions -- one card, the shape a
+ * profile page opens in.
  * ------------------------------------------------------------------------- */
 
 .dashboard-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1.25rem;
+    gap: 1.15rem;
     flex-wrap: wrap;
-    padding-bottom: 1.5rem;
+    padding: 1.25rem 1.35rem;
+    margin-bottom: 1.25rem;
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+}
+
+/* Initials, not a photograph. There is no avatar in this product, and the
+   square is the same one the match panels and the drawer already use. */
+.profile-mark {
+    flex-shrink: 0;
+    width: 3.4rem;
+    height: 3.4rem;
+    display: grid;
+    place-items: center;
+    background: var(--h-give);
+    color: var(--h-on-give);
+    font-family: var(--h-mono);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+}
+
+.profile-identity {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+.profile-name {
+    font-family: var(--h-sans);
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
 }
 
 .toolbar-hint {
+    margin-top: 0.3rem;
     font-family: var(--h-mono);
     font-size: 0.68rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
+
+/* One line of the description, so the card says what the organization does
+   and not only what it is called. Hidden when there is nothing to say. */
+.profile-summary {
+    margin-top: 0.45rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--h-ink-soft);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.profile-summary:empty { display: none; }
 
 .toolbar-actions {
     display: flex;
@@ -206,31 +258,42 @@
 /* ------------------------------------------------------------------------- *
  * The counts
  *
- * One object with six cells: a single border around the group and shared
- * hairlines between, so it reads as a table of readings rather than six
+ * One object with five cells: a single border around the group and shared
+ * hairlines between, so it reads as a strip of readings rather than five
  * floating tiles. Each cell is a button that opens the list behind its number.
+ *
+ * At rest a cell is an icon and a number and nothing else. The name of the
+ * thing arrives on hover or focus, into space the cell is already holding for
+ * it -- so five cells stay the same size as each other whichever one is being
+ * pointed at, and the row does not move under the cursor.
  * ------------------------------------------------------------------------- */
 
 .stats-grid {
+    /* Five, on one row, always: these are five readings of one thing and a
+       reading that wraps to a second row stops being comparable with the
+       others. */
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 1px;
     background: var(--h-rule);
     border: 1px solid var(--h-edge);
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .stat-card {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 0.8rem;
-    align-items: start;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
     width: 100%;
-    padding: 1.15rem 1.1rem;
+    /* The bottom padding is the label's seat. It is reserved whether or not
+       the label is showing, which is what keeps the five identical. */
+    padding: 0.9rem 0.5rem 1.55rem;
     background: var(--h-surface);
     border: none;
     border-radius: 0;
-    text-align: left;
     font-family: inherit;
     cursor: pointer;
     transition: background 0.18s ease;
@@ -247,63 +310,66 @@
 
 .stat-icon {
     font-size: 1rem;
-    line-height: 1.5;
+    line-height: 1;
     color: var(--h-dim);
+    transition: color 0.18s ease;
 }
 
-.stat-content h3 {
-    font-family: var(--h-mono);
-    font-size: 0.62rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--h-dim);
-    margin-bottom: 0.5rem;
+.stat-card:hover .stat-icon,
+.stat-card:focus-visible .stat-icon {
+    color: var(--h-give);
 }
 
 .stat-value {
     display: block;
     font-family: var(--h-sans);
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 500;
     line-height: 1;
     letter-spacing: -0.03em;
     color: var(--h-ink);
-    margin-bottom: 0.4rem;
 }
 
-.stat-change {
-    display: block;
+/* In the markup at all times, and only ever transparent -- never hidden.
+   display:none and visibility:hidden both take it out of the accessibility
+   tree, which would make the number the only thing a screen reader could
+   reach and leave five buttons named "24", "3", "6". */
+.stat-name {
+    position: absolute;
+    left: 0.4rem;
+    right: 0.4rem;
+    bottom: 0.6rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.03em;
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--h-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-.stat-change.positive { color: var(--h-seal); }
-.stat-change.negative { color: var(--h-danger); }
-.stat-change.neutral  { color: var(--h-dim); }
-
-/* The chevron says the cell opens something. Dim at rest so six of them do
-   not read as six arrows; full strength on the one being pointed at. */
-.stat-go {
-    font-size: 1.05rem;
-    line-height: 1.3;
-    color: var(--h-rule);
-    transition: color 0.18s ease;
+.stat-card:hover .stat-name,
+.stat-card:focus-visible .stat-name {
+    opacity: 1;
+    transform: none;
 }
 
-.stat-card:hover .stat-go,
-.stat-card:focus-visible .stat-go {
-    color: var(--h-ink);
-}
-
-/* Nothing hovers on a touch screen, so the affordance has to be visible at
-   rest there. */
+/* Nothing to hover with. The labels are simply on -- a control whose name
+   only appears under a cursor has no name at all on a touchscreen. */
 @media (hover: none) {
-    .stat-go {
-        color: var(--h-dim);
+    .stat-name {
+        opacity: 1;
+        transform: none;
     }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-name { transition: opacity 0.18s ease; transform: none; }
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1100,8 +1166,7 @@
  * own tones. Both are already theme-aware; this is only about hue.
  * ------------------------------------------------------------------------- */
 
-[data-loading="true"] .stat-value,
-[data-loading="true"] .stat-change {
+[data-loading="true"] .stat-value {
     background: linear-gradient(
         90deg,
         var(--h-cell) 25%,
@@ -1116,12 +1181,11 @@
     width: fit-content;
 }
 
-[data-loading="true"] .stat-value  { min-width: 2.5rem; }
-[data-loading="true"] .stat-change { min-width: 6rem; }
+[data-loading="true"] .stat-value { min-width: 2.5rem; }
 
-/* The chevron promises the cell opens something; while the numbers are still
+/* The icon promises the cell opens something; while the numbers are still
    loading there is nothing behind it yet. */
-[data-loading="true"] .stat-go {
+[data-loading="true"] .stat-icon {
     opacity: 0.25;
 }
 
@@ -1157,7 +1221,6 @@
 
 @media (prefers-reduced-motion: reduce) {
     [data-loading="true"] .stat-value,
-    [data-loading="true"] .stat-change,
     .skeleton {
         animation: none;
     }
@@ -1178,10 +1241,12 @@
     }
 }
 
+/* The five stay on one row all the way down. They are five readings of the
+   same object, and a reading that wraps onto a second line stops being
+   comparable with the others -- so what gives way is the type, not the
+   layout. */
 @media (max-width: 62em) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    .stat-value { font-size: 1.4rem; }
 }
 
 @media (max-width: 48em) {
@@ -1203,8 +1268,25 @@
 }
 
 @media (max-width: 36em) {
-    .stats-grid {
-        grid-template-columns: 1fr;
+    .stat-card {
+        gap: 0.3rem;
+        padding: 0.75rem 0.3rem 2.3rem;
+    }
+
+    .stat-value { font-size: 1.15rem; }
+
+    /* Nothing hovers here, so the labels are always up (see the hover: none
+       rule above) -- and "Profile views" does not fit a fifth of a phone on
+       one line. It wraps inside the seat the cell is already holding, which
+       is a hair taller at this width for exactly that reason. */
+    .stat-name {
+        left: 0.15rem;
+        right: 0.15rem;
+        bottom: 0.5rem;
+        font-size: 0.5rem;
+        letter-spacing: 0.06em;
+        line-height: 1.3;
+        white-space: normal;
     }
 
     .card-header {

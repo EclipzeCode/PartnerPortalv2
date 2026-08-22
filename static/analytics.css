@@ -1,0 +1,914 @@
+/* Analytics
+ *
+ * The dashboard's charts, on their own page. They were a band in the middle of
+ * the dashboard, between the counts and the partnerships -- which put four
+ * plots in the way of the two lists people come back to act on. Behind a
+ * button they are somewhere you go to look at the numbers, which is what they
+ * are for.
+ *
+ * Loaded only by analytics.html. The panel and mark rules are all scoped to
+ * .analytics-grid, so nothing here reaches the dashboard.
+ * ------------------------------------------------------------------------- */
+
+.analytics-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.analytics-note {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
+.analytics-note.is-error {
+    color: var(--h-danger);
+}
+
+.analytics-grid {
+    display: grid;
+    /* Roughly two thirds to the plot. It is the only panel here with a
+       horizontal axis, and thirty points need the width more than four bars
+       and three meters do. */
+    grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    align-items: stretch;
+}
+
+/* The plot decides the height of the row; this column divides that height
+   between the two panels beside it, which is what puts the coverage meters'
+   bottom edge on the plot's. */
+.analytics-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-height: 0;
+}
+
+.analytics-column .pipeline-panel { flex: 7 1 0; }
+.analytics-column .coverage-panel { flex: 3 1 0; }
+
+/* Full width, under both. */
+.analytics-grid .matches-panel {
+    grid-column: 1 / -1;
+}
+
+.analytics-grid .panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--h-surface);
+    border: 1px solid var(--h-edge);
+    padding: 1.15rem 1.25rem 1.25rem;
+
+    /* --- Chart tokens ---------------------------------------------------- */
+    /* The one series, and the four ordered states. */
+    --c-series: var(--h-give);
+    --c-step-1: #8eacdf;
+    --c-step-2: #6a86b8;
+    --c-step-3: #416096;
+    --c-step-4: #1f3b6f;
+    /* Gridlines and axes are one step off the surface and stay there. */
+    --c-grid: var(--h-rule);
+    /* The unfilled half of a meter: a lighter step of the fill's own ramp, so
+       the state reads across the whole bar rather than only where it is
+       filled. */
+    --c-track: var(--h-cell);
+}
+
+/* Dark is chosen, not flipped: the light ramp's steps sit too close to a
+   near-black surface, so these are the same hue re-stepped against it. */
+:root[data-theme="dark"] .analytics-grid .panel {
+    --c-step-1: #abc4f9;
+    --c-step-2: #86a4e3;
+    --c-step-3: #6885c3;
+    --c-step-4: #4866ab;
+}
+
+/* The panels that hold a plot let it take what is left after the type. */
+.views-panel .chart,
+.pipeline-panel .chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+/* Takes what is left of the panel after the type, and gives it to the plot --
+   up to a ceiling. Past about twenty rems a chart of daily counts stops being
+   a reading and starts being a mountain range, and the numbers here are single
+   digits. Any slack past that falls to the panel's own space-between, which
+   sets the footnote on the bottom edge rather than leaving a gap under it.
+
+   The min-height is a floor, not the measurement. In one column there is no
+   panel beside this one to make the row tall, so the box would have no height
+   to inherit and the plot would decline to draw at all. It was also the wrong
+   thing to measure before the observer existed -- the first render read this
+   floor and letterboxed a full-height box around a short plot. The observer
+   redraws at the real size as soon as the row settles. */
+.views-panel {
+    justify-content: space-between;
+}
+
+.views-panel .chart {
+    align-items: stretch;
+    min-height: 11rem;
+    max-height: 20rem;
+}
+
+.panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.1rem;
+}
+
+.panel-head h3 {
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--h-ink);
+}
+
+.panel-sub {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--h-dim);
+}
+
+/* The panel's own headline number. Proportional figures, not tabular: at this
+   size tabular-nums gives every digit the width of a zero and the number reads
+   loose. */
+.panel-figure {
+    display: flex;
+    align-items: baseline;
+    font-family: var(--h-sans);
+    font-size: 2rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+}
+
+.panel-figure small {
+    margin-left: 0.4rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+/* Which way it is going, against the window before this one. The arrow is
+   drawn in text so the direction survives without color -- up and down are the
+   fact, and the color only repeats it. */
+.panel-delta {
+    margin-top: 0.45rem;
+    font-family: var(--h-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
+.panel-delta b {
+    font-weight: 500;
+    color: var(--h-ink-soft);
+}
+
+.panel-delta.is-up b { color: var(--h-seal); }
+.panel-delta.is-down b { color: var(--h-danger); }
+
+.chart-foot {
+    margin-top: 0.7rem;
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    color: var(--h-dim);
+}
+
+.chart {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.analytics-grid .chart svg,
+.analytics-grid .meter svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+/* The measured plot fills its box in both directions, because its viewBox is
+   that box: one user unit to one CSS pixel, nothing scaled. */
+.analytics-grid .chart svg.plot {
+    height: 100%;
+}
+
+/* --- Chart parts ---------------------------------------------------------- */
+/* Scoped to the panel, not to .chart: the meters are marks of the same kind
+   drawn outside a plot, and scoping these to .chart left their rects with no
+   fill rule at all -- which is not "unstyled", it is solid black, because that
+   is what an SVG rect defaults to. */
+
+.analytics-grid .grid-line {
+    stroke: var(--c-grid);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.analytics-grid .axis-text {
+    font-family: var(--h-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    fill: var(--h-dim);
+}
+
+/* Values and labels wear text tokens. The colored mark beside them is what
+   carries identity; a light step of the ramp is illegible as text. */
+.analytics-grid .value-text {
+    font-family: var(--h-sans);
+    font-size: 10px;
+    font-weight: 500;
+    fill: var(--h-ink);
+}
+
+.analytics-grid .label-text {
+    font-family: var(--h-sans);
+    font-size: 10.5px;
+    fill: var(--h-ink-soft);
+}
+
+.analytics-grid .series-area { fill: var(--c-series); opacity: 0.1; }
+.analytics-grid .series-line {
+    fill: none;
+    stroke: var(--c-series);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+/* The end marker carries a ring in the surface color so it stays legible
+   where it crosses the line. */
+.analytics-grid .series-end {
+    fill: var(--c-series);
+    stroke: var(--h-surface);
+    stroke-width: 2;
+}
+
+/* --- The donut ------------------------------------------------------------ *
+ * A true circle in plan, extruded straight down. The wall is the same step as
+ * the face it belongs to, darkened -- so depth reads as depth and never as a
+ * fifth segment. brightness() rather than a second set of hex values, because
+ * a hand-picked wall color per step in two themes is eight more numbers to
+ * keep in step with four.
+ * ------------------------------------------------------------------------- */
+
+.analytics-grid .donut {
+    display: block;
+    width: 100%;
+    max-width: 10.5rem;
+    margin: 0 auto;
+    height: auto;
+    overflow: visible;
+}
+
+/* The lift.
+ *
+ * The wall steps outward and stays on the ground; the face steps outward and
+ * rises. The gap between the two is the extrusion, so growing it is what makes
+ * the slice look taller rather than merely moved. --dx/--dy are the segment's
+ * own outward direction, set per path by analytics.js, so every slice lifts
+ * away from the middle rather than all of them lifting the same way.
+ *
+ * transform-box: fill-box would recentre each path on its own bounding box;
+ * these are translations in the SVG's own user units, so the default is what
+ * is wanted. */
+.donut-face,
+.donut-wall {
+    transition: transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity 0.2s ease;
+}
+
+.donut-wall { filter: brightness(0.62); }
+
+.donut-face.is-lifted {
+    transform: translate(calc(var(--dx) * 6px), calc(var(--dy) * 6px - 7px));
+}
+
+.donut-wall.is-lifted {
+    transform: translate(calc(var(--dx) * 6px), calc(var(--dy) * 6px));
+}
+
+/* The rest of the ring recedes while one is up, so the lift reads as one
+   slice being picked out rather than the ring wobbling. */
+.donut.is-lifting .donut-face:not(.is-lifted),
+.donut.is-lifting .donut-wall:not(.is-lifted) {
+    opacity: 0.55;
+}
+
+/* Transparent, on top, and the only thing the pointer is tested against.
+   fill rather than none: a path with no fill is not hit-tested at all. */
+.donut-hit {
+    fill: transparent;
+}
+
+:root[data-theme="dark"] .donut-wall { filter: brightness(0.5); }
+
+.donut-face.step-1, .donut-wall.step-1 { fill: var(--c-step-1); }
+.donut-face.step-2, .donut-wall.step-2 { fill: var(--c-step-2); }
+.donut-face.step-3, .donut-wall.step-3 { fill: var(--c-step-3); }
+.donut-face.step-4, .donut-wall.step-4 { fill: var(--c-step-4); }
+
+/* The total, in the hole. Proportional figures: this is one standalone number
+   at display size, not a column that has to line up. */
+.donut-total {
+    font-family: var(--h-sans);
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    fill: var(--h-ink);
+}
+
+.donut-caption {
+    font-family: var(--h-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    fill: var(--h-dim);
+}
+
+/* Identity and the exact counts, so neither depends on telling two steps of
+   one hue apart by eye. */
+.donut-legend {
+    list-style: none;
+    margin-top: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.donut-legend li {
+    display: grid;
+    grid-template-columns: 0.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.75rem;
+    color: var(--h-ink-soft);
+}
+
+/* A state nothing is in stays on the list. Dropping it would make the legend
+   change shape as partnerships move, and "none here" is an answer. */
+.donut-legend li.is-empty { opacity: 0.45; }
+
+/* The rows raise their own slice, so the ring can be read from the legend --
+   and a segment too thin to aim at is still reachable. */
+.donut-legend li.is-on { color: var(--h-ink); }
+
+.donut-legend li.is-on .key {
+    outline: 2px solid var(--h-ink);
+    outline-offset: 1px;
+}
+
+.donut-legend .key {
+    width: 0.6rem;
+    height: 0.6rem;
+    background: var(--c-series);
+}
+
+.donut-legend .key.step-1 { background: var(--c-step-1); }
+.donut-legend .key.step-2 { background: var(--c-step-2); }
+.donut-legend .key.step-3 { background: var(--c-step-3); }
+.donut-legend .key.step-4 { background: var(--c-step-4); }
+
+.donut-legend .key-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.donut-legend .key-value {
+    font-family: var(--h-sans);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--h-ink);
+}
+
+/* The pipeline panel holds a ring and a legend, so its chart is a column
+   rather than a centered single mark. */
+.pipeline-panel .chart {
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+/* --- Coverage, in the space under the ring -------------------------------- */
+/* Tighter than the version that had a panel to itself: three rows and a rule,
+   sized to land its bottom edge on the plot's. */
+
+.coverage-panel .meters { gap: 0.55rem; }
+
+.coverage-panel .meter-label {
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+}
+
+.coverage-panel .bar-track { height: 0.45rem; }
+
+.coverage-panel .meter-note {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    font-size: 0.68rem;
+    line-height: 1.4;
+}
+
+.coverage-panel .panel-head { margin-bottom: 0.85rem; }
+
+/* --- What is behind one arc ----------------------------------------------- */
+
+.stage-count {
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 1rem;
+}
+
+.stage-row + .stage-row {
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.stage-row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.stage-who {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+.stage-when {
+    flex-shrink: 0;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
+/* The two directions of the exchange, which is what a partnership is. */
+.stage-terms {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+}
+
+.stage-terms dt {
+    font-family: var(--h-mono);
+    font-size: 0.56rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    margin-bottom: 0.2rem;
+}
+
+.stage-terms dd {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--h-ink-soft);
+}
+
+/* The ring and its legend both open the list, so both say so. */
+.donut-hit,
+.donut-legend li:not(.is-empty) {
+    cursor: pointer;
+}
+
+.donut-legend li:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+/* --- Bars ----------------------------------------------------------------- */
+/* A label, a bar and a value on one line. Grid rather than flex so the bars
+   start on the same column in every row whatever the labels are, and so the
+   value column holds its width as the digits change. */
+
+.analytics-grid .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.analytics-grid .row {
+    display: grid;
+    grid-template-columns: minmax(0, 9.75rem) minmax(0, 1fr) 1.9rem;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.analytics-grid .row-label {
+    min-width: 0;
+    font-size: 0.83rem;
+    line-height: 1.3;
+    color: var(--h-ink-soft);
+    /* A name that runs into the bars is worse than a name that stops. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Two-way is said in words, not in a second color: it is a property of the
+   match, not another series. */
+.analytics-grid .row-flag {
+    margin-left: 0.35rem;
+    font-family: var(--h-mono);
+    font-size: 0.55rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+.analytics-grid .row-value {
+    text-align: right;
+    font-family: var(--h-sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    /* A column of numbers is the one place tabular figures belong. */
+    font-variant-numeric: tabular-nums;
+    color: var(--h-ink);
+}
+
+.analytics-grid .bar-track {
+    display: block;
+    height: 0.6rem;
+    background: var(--c-track);
+}
+
+.analytics-grid .bar {
+    display: block;
+    height: 100%;
+    background: var(--c-series);
+    /* Rounded at the data end, square at the baseline. */
+    border-radius: 0 2px 2px 0;
+    transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.analytics-grid .bar.step-1 { background: var(--c-step-1); }
+.analytics-grid .bar.step-2 { background: var(--c-step-2); }
+.analytics-grid .bar.step-3 { background: var(--c-step-3); }
+.analytics-grid .bar.step-4 { background: var(--c-step-4); }
+
+/* The scale under the bars. Same track as a row, so the ticks sit under the
+   column they measure rather than under the whole panel. */
+.analytics-grid .rows-scale {
+    display: grid;
+    grid-template-columns: minmax(0, 9.75rem) minmax(0, 1fr) 1.9rem;
+    gap: 0.7rem;
+    margin-top: 0.7rem;
+}
+
+.analytics-grid .scale-ticks {
+    grid-column: 2;
+    display: flex;
+    justify-content: space-between;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--c-grid);
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    color: var(--h-dim);
+}
+
+/* The hover layer. The hit target is the full column, not the 2px line. */
+.analytics-grid .hit { fill: transparent; cursor: default; }
+.analytics-grid .crosshair {
+    stroke: var(--h-dim);
+    stroke-width: 1;
+    opacity: 0;
+    pointer-events: none;
+}
+.analytics-grid .hover-dot {
+    fill: var(--c-series);
+    stroke: var(--h-surface);
+    stroke-width: 2;
+    opacity: 0;
+    pointer-events: none;
+}
+.analytics-grid .hit:hover ~ .crosshair,
+.analytics-grid .hit:hover ~ .hover-dot { opacity: 1; }
+
+.chart-tooltip {
+    position: absolute;
+    z-index: 5;
+    padding: 0.4rem 0.6rem;
+    background: var(--h-ink);
+    color: var(--h-paper);
+    border-radius: 0;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.chart-tooltip.on { opacity: 1; }
+
+/* --- Meters --------------------------------------------------------------- */
+
+.meters {
+    display: flex;
+    flex-direction: column;
+    gap: 1.05rem;
+}
+
+.meter-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--h-ink-soft);
+}
+
+.meter-label b {
+    font-family: var(--h-sans);
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+.meter-note {
+    margin-top: 0.9rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--h-rule);
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: var(--h-dim);
+}
+
+/* --- The table behind each chart ----------------------------------------- */
+/* Not a fallback -- a second reading of the same numbers, for anyone the chart
+ * does not serve. One control, opened two ways, because the two panels have
+ * different room to give it.
+ * ------------------------------------------------------------------------- */
+
+.plot-region {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Above the plot and on its left edge: the control belongs to the thing it
+   acts on, and this is the corner the eye starts from. */
+.table-toggle {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+    padding: 0.3rem 0.5rem 0.3rem 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+
+.table-toggle:hover,
+.table-toggle[aria-expanded="true"] { color: var(--h-ink); }
+
+.table-toggle:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+.table-toggle i {
+    font-size: 0.85rem;
+    transition: transform 0.18s ease;
+}
+
+.table-toggle[aria-expanded="true"] i { transform: rotate(90deg); }
+
+.plot-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* The chart is what takes the height the panel has spare. It used to be the
+   panel's own flex child and grew on its own; wrapping it in .plot-body to
+   give the table something to be positioned against left it sizing to its
+   contents instead, and the plot collapsed to a strip less than half the
+   height it had. The wrapper passes the height through. */
+.views-panel .plot-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.views-panel .plot-body > .chart {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.chart-data {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--h-rule) transparent;
+}
+
+/* --- The views panel: a sheet that drops over the plot -------------------- */
+/* There is no width to spare beside a thirty-point plot, and opening the table
+   under it would push the page around every time. So it comes down over the
+   chart on a veil of the panel's own surface -- a gradient rather than a flat
+   block, so the shape of the line is still sensed underneath and the sheet
+   reads as laid over the chart rather than as having replaced it. */
+
+.views-panel .chart-data {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    padding: 0 0.25rem 0.5rem 0;
+    background: linear-gradient(
+        to bottom,
+        var(--h-surface) 0%,
+        var(--h-surface) 62%,
+        color-mix(in srgb, var(--h-surface) 88%, transparent) 100%
+    );
+    animation: table-drop 0.22s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Browsers without color-mix get a flat veil rather than no veil. */
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+    .views-panel .chart-data { background: var(--h-surface); }
+}
+
+@keyframes table-drop {
+    from {
+        opacity: 0;
+        transform: translateY(-0.6rem);
+        clip-path: inset(0 0 100% 0);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+        clip-path: inset(0 0 0 0);
+    }
+}
+
+/* --- The matches panel: the bars give up width --------------------------- */
+/* Room to spare here, so nothing is covered and nothing has to be veiled to
+   be read. The bars keep their 0-100 scale -- only the width they draw it
+   across changes. */
+
+.matches-panel .plot-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.matches-panel .plot-region.is-open .plot-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+}
+
+.matches-panel .chart-data {
+    max-height: 18rem;
+}
+
+/* A rule between the two, so the split reads as one panel divided rather than
+   as a table that has drifted in from somewhere. */
+.matches-panel .plot-region.is-open .chart-data {
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--h-rule);
+}
+
+/* No width to divide. Below this the bars would be squeezed to nothing to
+   make room, so the table goes underneath instead -- which is the one place
+   on this page a table can grow without covering anything. */
+@media (max-width: 52em) {
+    .matches-panel .plot-region.is-open .plot-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .matches-panel .plot-region.is-open .chart-data {
+        padding-left: 0;
+        padding-top: 1.25rem;
+        border-left: none;
+        border-top: 1px solid var(--h-rule);
+    }
+}
+
+/* width: auto, not 100%. Stretched across a panel this wide, three columns
+   put a hand's breadth of nothing between a name and its number and the eye
+   loses the row on the way across. Sized to their contents they read as one
+   block, and the rules under them stop where the data does. */
+.chart-data table {
+    width: auto;
+    min-width: min(20rem, 100%);
+    max-width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.chart-data th,
+.chart-data td {
+    padding: 0.4rem 1.75rem 0.4rem 0;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--h-rule);
+    color: var(--h-ink-soft);
+}
+
+.chart-data th {
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+/* The number column, and the last one either way: no trailing gutter to push
+   the digits off their own rule, and a little padding so they are not set
+   hard against the edge of the block. */
+.chart-data th:last-child,
+.chart-data td:last-child {
+    padding-right: 0.15rem;
+}
+
+/* A column of numbers is the one place tabular figures belong -- they keep
+   the digits stacked whatever the values are. */
+.chart-data th.num,
+.chart-data td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-data td.num { color: var(--h-ink); }
+
+/* The row under the cursor, so a long table can be read across. */
+.chart-data tbody tr:hover td {
+    background: var(--h-paper);
+    color: var(--h-ink);
+}
+
+.chart-empty {
+    padding: 1.5rem 0;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--h-dim);
+}
+
+
+@media (max-width: 75em) {
+    /* One column. The bar charts are readable at any width, but the views
+       plot needs its 30 points spread over something wider than half a
+       tablet. Same breakpoint as the panels below it, so the page does not
+       change shape twice on the way down. */
+    .analytics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 36em) {
+    /* The label column gives up its fixed width first: on a phone a
+       nine-character organization name and a readable bar cannot both have
+       the room they want, and the bar is the one carrying the number. */
+    .analytics-grid .row,
+    .analytics-grid .rows-scale {
+        grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) 1.6rem;
+        gap: 0.5rem;
+    }
+
+    .panel-head {
+        flex-wrap: wrap;
+    }
+}

@@ -107,6 +107,13 @@ FOCUS_AREAS = [
 ]
 
 FOCUS_AREA_LABELS = dict(FOCUS_AREAS)
+
+# How big the two vocabularies are. Named here rather than counted at each call
+# site: the dashboard draws "needs listed, n of 33" as a ratio, and a 33 typed
+# into a stylesheet or a script is a number that goes stale the first time a
+# category is added.
+CATEGORY_TOTAL = sum(len(entries) for _name, entries in CATEGORY_GROUPS)
+FOCUS_TOTAL = len(FOCUS_AREAS)
 VALID_FOCUS_AREAS = frozenset(FOCUS_AREA_LABELS)
 
 # How long a proposed partnership is meant to run. Slugs are stored; labels are

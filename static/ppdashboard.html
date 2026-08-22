@@ -64,7 +64,7 @@
                 aria-label="Menu" aria-expanded="false"></button>
         <nav class="navbar">
             <a href="index.html">Home</a>
-            <a href="ppsearch.html">Search</a>
+            <a href="ppsearch.html">Connect</a>
             <a href="ppdashboard.html" class="active">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
             <!-- <a href="pphelp.html">Help</a> -->
             <!-- Account slot. Both states ship in the markup and share one grid
@@ -124,12 +124,25 @@
                 <a href="settings.html" class="btn-action ghost">Verify now</a>
             </div>
 
-            <!-- Profile actions. Editing your profile is the one thing every org
-                 comes back here to do, so it sits above the fold rather than
-                 buried in an empty state. -->
-            <div class="dashboard-toolbar">
-                <p class="toolbar-hint" id="toolbarHint"></p>
+            <!-- Who you are, before anything you have. The page used to open
+                 on six counts with no statement of whose they were; this says
+                 that first, the way a profile page does, and carries the two
+                 actions every org comes back here for.
+
+                 The initials block stands in for a photograph. There is no
+                 avatar upload in this product, and a generated illustration
+                 would be decoration pretending to be a likeness. -->
+            <div class="dashboard-toolbar" id="profileHeader">
+                <div class="profile-mark" id="profileInitials" aria-hidden="true"></div>
+                <div class="profile-identity">
+                    <h2 class="profile-name" id="profileName">&nbsp;</h2>
+                    <p class="toolbar-hint" id="toolbarHint"></p>
+                    <p class="profile-summary" id="profileSummary"></p>
+                </div>
                 <div class="toolbar-actions">
+                    <a href="analytics.html" class="btn-action ghost" id="analyticsBtn">
+                        <i class='bx bx-line-chart'></i> Analytics
+                    </a>
                     <a href="#" class="btn-action ghost" id="viewProfileBtn">
                         <i class='bx bx-show'></i> View public profile
                     </a>
@@ -139,82 +152,44 @@
                 </div>
             </div>
 
-            <!-- Quick Stats. Each card opens a dialog listing everything it is
-                 counting, so a number is a way in rather than a dead end.
-                 data-stat picks the view; ppdashboard.js fills it. Static
-                 labels and icons match what the script sets once data arrives,
-                 so the pre-load state does not say something different. -->
+            <!-- The counts. Five equal cells on one row: an icon, a number,
+                 and the name of the thing, which is held back until the cell
+                 is pointed at or focused. At rest the row is five readings and
+                 nothing else; the labels are what you go looking for, and they
+                 are in the markup all along so a screen reader and the
+                 keyboard never depend on a hover.
+
+                 Each cell still opens the list behind its number -- a number
+                 you cannot get into is a dead end. data-stat picks the view. -->
             <div class="stats-grid">
                 <button type="button" class="stat-card" data-stat="matches">
-                    <div class="stat-icon">
-                        <i class='bx bx-group'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Matches</h3>
-                        <span class="stat-value" id="statMatches">0</span>
-                        <span class="stat-change">&mdash;</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
-                </button>
-
-                <button type="button" class="stat-card" data-stat="mutual">
-                    <div class="stat-icon">
-                        <i class='bx bx-transfer'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Two-way matches</h3>
-                        <span class="stat-value" id="statTwoWay">0</span>
-                        <span class="stat-change">&mdash;</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                    <i class='bx bx-group stat-icon' aria-hidden="true"></i>
+                    <span class="stat-value" id="statMatches">0</span>
+                    <span class="stat-name">Matches</span>
                 </button>
 
                 <button type="button" class="stat-card" data-stat="events">
-                    <div class="stat-icon">
-                        <i class='bx bx-calendar-check'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Upcoming</h3>
-                        <span class="stat-value" id="upcomingEvents">0</span>
-                        <span class="stat-change">meetings</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                    <i class='bx bx-calendar-check stat-icon' aria-hidden="true"></i>
+                    <span class="stat-value" id="upcomingEvents">0</span>
+                    <span class="stat-name">Upcoming</span>
                 </button>
 
                 <button type="button" class="stat-card" data-stat="saved">
-                    <div class="stat-icon">
-                        <i class='bx bx-bookmark'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Saved</h3>
-                        <span class="stat-value" id="savedLeadsCount">0</span>
-                        <span class="stat-change">&mdash;</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                    <i class='bx bx-bookmark stat-icon' aria-hidden="true"></i>
+                    <span class="stat-value" id="savedLeadsCount">0</span>
+                    <span class="stat-name">Saved</span>
                 </button>
 
                 <button type="button" class="stat-card" data-stat="views">
-                    <div class="stat-icon">
-                        <i class='bx bx-show'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Profile views</h3>
-                        <span class="stat-value" id="profileViews">0</span>
-                        <span class="stat-change">&mdash;</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                    <i class='bx bx-show stat-icon' aria-hidden="true"></i>
+                    <span class="stat-value" id="profileViews">0</span>
+                    <span class="stat-name">Profile views</span>
                 </button>
 
                 <button type="button" class="stat-card" data-stat="tags">
-                    <div class="stat-icon">
-                        <i class='bx bx-star'></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3>Profile tags</h3>
-                        <span class="stat-value" id="statProfileTags">0</span>
-                        <span class="stat-change">&mdash;</span>
-                    </div>
-                    <i class='bx bx-chevron-right stat-go' aria-hidden="true"></i>
+                    <i class='bx bx-star stat-icon' aria-hidden="true"></i>
+                    <span class="stat-value" id="statProfileTags">0</span>
+                    <span class="stat-name">Profile tags</span>
                 </button>
             </div>
 

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Warm the connections to the two third-party origins every page uses,
+         before the local stylesheets below start downloading. Both the
+         boxicons stylesheet and the font stylesheet are render-blocking
+         and are discovered late, at the bottom of this head -- so without
+         these the browser pays a DNS lookup plus a TLS handshake to each
+         before it can even ask for them. gstatic serves the font files
+         themselves and is fetched in CORS mode, which is what crossorigin
+         matches; the other two are ordinary stylesheet requests. -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Partner Portal | Analytics</title>
+    <!-- SVG first for anything modern (one file, sharp at every size); the
+         .ico is the legacy fallback and is also what a bare /favicon.ico
+         request gets. -->
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Light is the default: only an explicit
+         choice, stored by the toggle in Settings, turns this on -- the system
+         preference is deliberately not consulted, because the product ships
+         light and a dark OS is not the same thing as asking for a dark app. -->
+    <script>
+      try {
+        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+    </script>
+    <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, controls, nav,
+         footer. Between tokens.css and the page stylesheets, so those can
+         override it. -->
+    <link rel="stylesheet" href="ink.css">
+    <link rel="stylesheet" href="ppdashboard.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="analytics.css">
+    <link rel="stylesheet" href="nav.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- Instrument Serif for the page heading, Space Grotesk for anything
+         read as a sentence, JetBrains Mono for metadata. Poppins is no longer
+         used on this page. -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="ink">
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <button type="button" class="bx bx-menu" id="menu-icon"
+                aria-label="Menu" aria-expanded="false"></button>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="ppsearch.html">Connect</a>
+            <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
+            <!-- <a href="pphelp.html">Help</a> -->
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <section class="dashboard-section" id="main" tabindex="-1">
+        <div class="section-header">
+            <p class="eyebrow">Your organization</p>
+            <h2>Profile <span>analytics</span></h2>
+        </div>
+
+        <div class="dashboard-container">
+            <!-- Back to the thing this is about. A page whose only way out is
+                 the browser's own button is a page you have been dropped
+                 into. -->
+            <div class="analytics-bar">
+                <a href="ppdashboard.html" class="btn-action ghost">
+                    <i class='bx bx-chevron-left'></i> Back to dashboard
+                </a>
+                <p class="analytics-note" id="analyticsNote"></p>
+            </div>
+
+            <!-- Everything here is drawn from data already on the dashboard's
+                 payload; nothing is modelled or projected.
+
+                 analytics.js draws each panel as HTML rows or, for the one
+                 real plot, inline SVG -- and writes a table of the same
+                 numbers beside it, so a chart is never the only copy of
+                 anything. -->
+            <div class="analytics-grid">
+                <!-- The plot, and the two panels that share its height. The
+                     column beside it is a flex column rather than two grid
+                     rows: the plot is what decides how tall the row is, and
+                     splitting the column 7:3 inside one cell is what lands the
+                     coverage meters' bottom edge on the plot's. -->
+                <section class="panel views-panel" aria-labelledby="viewsPanelTitle">
+                    <header class="panel-head">
+                        <div>
+                            <h3 id="viewsPanelTitle">Profile views</h3>
+                            <p class="panel-sub">Daily, last 30 days</p>
+                        </div>
+                    </header>
+
+                    <!-- The reading, then the comparison, then the plot. A
+                         number with nothing beside it says how high, never
+                         which way. -->
+                    <p class="panel-figure">
+                        <span id="viewsPanelTotal">0</span>
+                        <small>views</small>
+                    </p>
+                    <p class="panel-delta" id="viewsPanelDelta"></p>
+
+                    <!-- The toggle sits above the thing it acts on, at its
+                         left edge. The table then drops over the plot rather
+                         than under it: the panel is as tall as it is, and
+                         opening a thirty-row table below the chart pushed the
+                         whole page around. -->
+                    <div class="plot-region" id="viewsRegion">
+                        <button type="button" class="table-toggle"
+                                data-table-toggle="viewsRegion"
+                                aria-expanded="false" aria-controls="viewsTable">
+                            <i class='bx bx-table' aria-hidden="true"></i>
+                            <span>View as table</span>
+                        </button>
+                        <div class="plot-body">
+                            <div class="chart" id="viewsChart"></div>
+                            <div class="chart-data" id="viewsTable" hidden></div>
+                        </div>
+                        <p class="chart-foot">Daily totals, counted in UTC.</p>
+                    </div>
+                </section>
+
+                <div class="analytics-column">
+                    <section class="panel pipeline-panel" aria-labelledby="pipelinePanelTitle">
+                        <header class="panel-head">
+                            <div>
+                                <h3 id="pipelinePanelTitle">Pipeline</h3>
+                                <p class="panel-sub">Where each partnership stands</p>
+                            </div>
+                        </header>
+                        <div class="chart" id="pipelineChart"></div>
+                    </section>
+
+                    <section class="panel coverage-panel" aria-labelledby="coveragePanelTitle">
+                        <header class="panel-head">
+                            <div>
+                                <h3 id="coveragePanelTitle">Profile coverage</h3>
+                            </div>
+                        </header>
+                        <div class="meters" id="coverageMeters"></div>
+                    </section>
+                </div>
+
+                <section class="panel matches-panel" aria-labelledby="matchPanelTitle">
+                    <header class="panel-head">
+                        <div>
+                            <h3 id="matchPanelTitle">Strongest matches</h3>
+                            <p class="panel-sub">Score out of 100, both directions counted</p>
+                        </div>
+                    </header>
+                    <!-- The same control, a different answer to it. There is
+                         width to spare on this panel, so the bars give some up
+                         and the table sits beside them -- nothing is covered
+                         and nothing has to be veiled to be readable. -->
+                    <div class="plot-region" id="matchRegion">
+                        <button type="button" class="table-toggle"
+                                data-table-toggle="matchRegion"
+                                aria-expanded="false" aria-controls="matchTable">
+                            <i class='bx bx-table' aria-hidden="true"></i>
+                            <span>View as table</span>
+                        </button>
+                        <div class="plot-body">
+                            <div class="chart" id="matchChart"></div>
+                            <div class="chart-data" id="matchTable" hidden></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <!-- What is behind one arc of the ring. A share of a circle says how the
+         pipeline is split and never which partnerships make it up, so the
+         segments open the list. -->
+    <div class="modal" id="stageModal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="stageModalTitle">
+            <div class="modal-header">
+                <h2 id="stageModalTitle">Partnerships</h2>
+                <button type="button" class="close-modal" data-close-stage
+                        aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="stageModalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="analytics.js"></script>
+</body>
+</html>

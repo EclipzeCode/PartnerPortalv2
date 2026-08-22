@@ -103,46 +103,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         verifyBanner.hidden = false;
     }
 
-    // Stat cards. The markup labels are updated too, because "Active Partners"
-    // and "Partner Score" described numbers that never existed.
-    setStat('statMatches', stats.total_matches, 'Matches',
-            stats.mutual_matches ? `${stats.mutual_matches} two-way` : 'no two-way yet');
-    setStat('statTwoWay', stats.mutual_matches, 'Two-way matches',
-            'both sides benefit');
-    setStat('statProfileTags', stats.needs_count + stats.offers_count, 'Profile tags',
-            `${stats.needs_count} needs · ${stats.offers_count} offers`);
-    setStat('savedLeadsCount', stats.saved || 0, 'Saved',
-            stats.saved ? 'shortlisted' : 'none yet');
-    setStat('profileViews', stats.profile_views || 0, 'Profile views',
-            stats.profile_views
-                ? `${stats.profile_views_recent || 0} in the last 30 days`
-                : 'none yet');
+    // The counts. A cell is an icon and a number; its name is in the markup
+    // and shows on hover. The line of detail each one used to carry -- "no
+    // two-way yet", "shortlisted", "none yet" -- is gone: it was a caption on
+    // a number that had not been asked about yet, and five of them made a row
+    // of readings read as a paragraph.
+    setStat('statMatches', stats.total_matches);
+    setStat('statProfileTags', stats.needs_count + stats.offers_count);
+    setStat('savedLeadsCount', stats.saved || 0);
+    setStat('profileViews', stats.profile_views || 0);
 
-    function setStat(id, value, label, changeText) {
+    // The names live in the markup now -- they do not change with the data,
+    // and the version that wrote them from here meant the pre-load state could
+    // say something different from the loaded one.
+    function setStat(id, value) {
         const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = value;
-        const content = el.closest('.stat-content');
-        if (!content) return;
-        const h3 = content.querySelector('h3');
-        if (h3 && label) h3.textContent = label;
-        const change = content.querySelector('.stat-change');
-        if (change && changeText) {
-            change.textContent = changeText;
-            change.className = 'stat-change' + (value > 0 ? ' positive' : ' neutral');
-        }
+        if (el) el.textContent = value;
     }
 
-    // Prompt to finish onboarding rather than showing a page of zeroes.
+    // --- Profile header -------------------------------------------------
+    // Whose dashboard this is, said before anything it counts.
     const toolbar = document.querySelector('.dashboard-toolbar');
     const toolbarHint = document.getElementById('toolbarHint');
     const editProfileBtn = document.getElementById('editProfileBtn');
+
+    const profileName = document.getElementById('profileName');
+    if (profileName) profileName.textContent = org.name || 'Your organization';
+
+    // Two letters from two words, or the first two of one. Upper-cased here
+    // rather than in CSS so it is what a screen reader would read if the
+    // aria-hidden were ever removed.
+    const initials = document.getElementById('profileInitials');
+    if (initials) {
+        const words = (org.name || '?').trim().split(/\s+/).filter(Boolean);
+        initials.textContent = (words.length > 1
+            ? words[0][0] + words[1][0]
+            : (words[0] || '?').slice(0, 2)).toUpperCase();
+    }
+
+    const summary = document.getElementById('profileSummary');
+    if (summary && !dashboard.needs_onboarding) {
+        summary.textContent = org.description || '';
+    }
 
     if (dashboard.needs_onboarding) {
         if (toolbar) toolbar.classList.add('needs-profile');
         if (toolbarHint) {
             toolbarHint.textContent =
-                'Your profile is not finished yet, so there is nothing to match against.';
+                'Profile not finished — nothing to match against yet';
         }
         if (editProfileBtn) {
             editProfileBtn.innerHTML = "<i class='bx bx-user-plus'></i> Complete your profile";
@@ -1117,6 +1125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeModal();
         });
     }
+
 
     // --- Stat detail dialog ----------------------------------------------
     // One dialog behind all four stat cards. `statView` picks the list;

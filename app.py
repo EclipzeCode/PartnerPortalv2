@@ -27,8 +27,9 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from categories import (
-    CATEGORY_GROUPS, FOCUS_AREAS, ORGANIZATION_TYPES, TIMELINE_OPTIONS,
-    VALID_TIMELINES, clean_categories, clean_focus_areas, labels_for,
+    CATEGORY_GROUPS, CATEGORY_TOTAL, FOCUS_AREAS, FOCUS_TOTAL,
+    ORGANIZATION_TYPES, TIMELINE_OPTIONS, VALID_TIMELINES, clean_categories,
+    clean_focus_areas, labels_for,
 )
 from db import SessionLocal
 from links import LinkError, parse_links
@@ -2163,6 +2164,71 @@ def _profile_view_counts(db, org):
     return total, recent
 
 
+VIEW_SERIES_DAYS = 30
+
+
+def _profile_view_series(db, org, days=VIEW_SERIES_DAYS):
+    """One count per day for the last `days` days, oldest first.
+
+    The dashboard had two numbers for this -- all time, and the last thirty
+    days -- which can only ever be drawn as two numbers. A count per day is the
+    same rows grouped differently, and is the difference between "you have had
+    some views" and "you have had views ever since you shared the link".
+
+    Days are UTC. viewed_at is a timestamptz and the cast resolves in the
+    session's timezone, which is UTC here. A visitor's own midnight is not
+    knowable from a salted digest, and would be the wrong boundary anyway:
+    these are the profile owner's days, not the visitor's.
+
+    Every day in the window is present, including the empty ones. A series with
+    the gaps left out would draw a line straight across a fortnight of silence
+    as though it were a plateau.
+    """
+    today = datetime.now(timezone.utc).date()
+    first = today - timedelta(days=days - 1)
+
+    rows = db.query(
+        func.date(ProfileView.viewed_at).label("day"),
+        func.count(ProfileView.id),
+    ).filter(
+        ProfileView.organization_id == org.id,
+        ProfileView.viewed_at >= datetime.combine(
+            first, time_type(0, 0), tzinfo=timezone.utc
+        ),
+    ).group_by("day").all()
+
+    counts = {str(day): n for day, n in rows}
+    return [
+        {
+            "date": (first + timedelta(days=i)).strftime("%Y-%m-%d"),
+            "count": counts.get(str(first + timedelta(days=i)), 0),
+        }
+        for i in range(days)
+    ]
+
+
+def _profile_view_prior(db, org, days=VIEW_SERIES_DAYS):
+    """Views in the window before the one the chart draws.
+
+    The chart says "n views"; on its own that is a number with nothing to
+    measure it against. This is the same length of window immediately before
+    it, so the panel can say whether the line is going up or down.
+
+    Same UTC day boundaries as the series, so the two windows meet exactly and
+    no view is counted in both or in neither.
+    """
+    today = datetime.now(timezone.utc).date()
+    first = today - timedelta(days=days - 1)
+    start = datetime.combine(first - timedelta(days=days), time_type(0, 0),
+                             tzinfo=timezone.utc)
+    end = datetime.combine(first, time_type(0, 0), tzinfo=timezone.utc)
+    return db.query(ProfileView.id).filter(
+        ProfileView.organization_id == org.id,
+        ProfileView.viewed_at >= start,
+        ProfileView.viewed_at < end,
+    ).count()
+
+
 # --- Saved leads ------------------------------------------------------------
 # A private shortlist. Matching answers "who could work with me", and that
 # answer moves as either side edits its profile and as the directory grows --
@@ -2365,6 +2431,8 @@ def get_dashboard(org, db):
     # views do.
     saved_count = len(_saved_ids(db, org))
     views_total, views_recent = _profile_view_counts(db, org)
+    views_series = _profile_view_series(db, org)
+    views_prior = _profile_view_prior(db, org)
 
     if not org.onboarding_complete:
         return jsonify({
@@ -2378,6 +2446,10 @@ def get_dashboard(org, db):
                 # to be looked at yet -- but reported rather than assumed.
                 "profile_views": views_total,
                 "profile_views_recent": views_recent,
+                "profile_views_series": views_series,
+                "profile_views_prior": views_prior,
+                "category_total": CATEGORY_TOTAL,
+                "focus_total": FOCUS_TOTAL,
             },
             "top_matches": [],
             "events": events,
@@ -2423,6 +2495,15 @@ def get_dashboard(org, db):
             "saved": saved_count,
             "profile_views": views_total,
             "profile_views_recent": views_recent,
+            "profile_views_series": views_series,
+            # The 30 days before the series, so the panel can say which way the
+            # line is going rather than only how high it is.
+            "profile_views_prior": views_prior,
+            # The size of the vocabulary, so the dashboard can draw a ratio
+            # without carrying its own copy of a number that lives in
+            # categories.py.
+            "category_total": CATEGORY_TOTAL,
+            "focus_total": FOCUS_TOTAL,
         },
         "top_matches": top_matches,
         "recent_proposals": proposals[:5],
