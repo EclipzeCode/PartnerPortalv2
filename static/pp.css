@@ -964,6 +964,21 @@ body.home .bridge-cell.built.take { background: var(--h-take); }
    closes a span is the agreement, not either party. */
 body.home .bridge-cell.built.keystone { background: var(--h-seal); }
 
+/* Once the span is closed there is nothing left for the extra scroll distance
+   to reveal, so the section gives it back and behaves like any other block on
+   the page. Without this, every later pass down the page -- and every scroll
+   back up to re-read the heading -- pinned the stage for a screen and a half
+   in front of a finished picture. pp.js only makes the swap while the section
+   is off screen, so the height never disappears from under anyone. */
+body.home .bridge-section.released .bridge-track {
+    height: auto;
+}
+
+body.home .bridge-section.released .bridge-stage {
+    position: static;
+    min-height: 0;
+}
+
 body.home .bridge-foot {
     display: flex;
     align-items: baseline;

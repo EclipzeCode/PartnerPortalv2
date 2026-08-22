@@ -752,9 +752,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // placed as fractions of the grid, not as pixel coordinates.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+    const section = document.getElementById('span');
     const track = document.getElementById('bridgeTrack');
     const grid = document.getElementById('bridgeGrid');
-    if (!track || !grid) return;
+    if (!section || !track || !grid) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -917,6 +918,50 @@ document.addEventListener('DOMContentLoaded', () => {
     // Coalesced onto a frame: scroll fires far more often than the screen is
     // painted, and every one of those extra calls would be measuring a layout
     // that has not changed yet.
+    // Give the scroll distance back once there is nothing left to reveal.
+    //
+    // The extra height exists to be scrolled through while the span closes.
+    // After that it is a screen and a half of pinning in front of a finished
+    // picture -- on the way back up to re-read the heading, and on every later
+    // pass down the page, since the build does not run again.
+    //
+    // Only while the section is off screen, because collapsing it takes real
+    // height out of the document. Below the viewport there is nothing on
+    // screen to shift. Above it, everything below would be pulled upwards --
+    // so what follows the section is measured before and after and put back
+    // where it was.
+    //
+    // Measured rather than assumed: Chrome's scroll anchoring already corrects
+    // for content shrinking above the viewport, and subtracting the collapsed
+    // height on top of that moved the page twice as far as it should have, in
+    // the wrong direction. Reading the residual works whether or not the
+    // browser has done the job -- there is simply nothing left to correct when
+    // it has.
+    let released = false;
+    function release() {
+        // Tested against the build, not against the progress fraction. The
+        // last cell lands a hair before the end of the track -- and a track
+        // whose top is at a fractional pixel never reports a progress of
+        // exactly 1 anyway -- so `reached >= 1` was a condition that could sit
+        // there unmet with the span visibly closed.
+        if (released || built < maxOrder) return;
+        const rect = section.getBoundingClientRect();
+        const above = rect.bottom <= 0;
+        const below = rect.top >= window.innerHeight;
+        if (!above && !below) return;
+
+        const after = section.nextElementSibling;
+        const before = above && after ? after.getBoundingClientRect().top : null;
+        section.classList.add('released');
+        if (before !== null) {
+            const moved = after.getBoundingClientRect().top - before;
+            if (moved) window.scrollBy(0, moved);
+        }
+
+        released = true;
+        window.removeEventListener('scroll', onScroll);
+    }
+
     let queued = false;
     function onScroll() {
         if (queued) return;
@@ -924,10 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => {
             queued = false;
             apply(progress());
-            // Nothing left to advance, and the build does not run backwards,
-            // so there is no reason to keep measuring a layout on every
-            // scroll for the rest of the page.
-            if (reached >= 1) window.removeEventListener('scroll', onScroll);
+            release();
         });
     }
 
