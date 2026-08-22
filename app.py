@@ -9,6 +9,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
+from html import escape
 
 import bcrypt
 
@@ -553,14 +554,81 @@ def asset_version(filename):
 
 
 def _stamp_asset_refs(html):
-    """Rewrite local asset references to carry their content hash."""
+    """Rewrite local asset references to carry their content hash.
+
+    Returns the stamped HTML and the (filename, version) pairs that went into
+    it. The second half is what lets a caller cache the result: the stamps
+    are the output of files the page does not itself contain, so knowing the
+    page has not changed is not enough to know the *stamped* page has not.
+    """
+    seen = {}
+
     def stamp(match):
         prefix, filename, suffix = match.groups()
         version = asset_version(filename)
+        # Recorded even when it is None. A reference to a file that does not
+        # exist yet is left as written, and the day it appears its version
+        # goes from None to a digest -- which has to invalidate the page.
+        seen[filename] = version
         if not version:
             return match.group(0)
         return f"{prefix}{filename}?v={version}{suffix}"
-    return _ASSET_REF_RE.sub(stamp, html)
+
+    return _ASSET_REF_RE.sub(stamp, html), tuple(sorted(seen.items()))
+
+
+# filename -> (html key, asset versions, stamped body, etag). Every entry is
+# one of the ~15 files in static/, so this is bounded by the frontend.
+_page_cache = {}
+_page_lock = threading.Lock()
+
+
+def _page_etag(body):
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
+
+
+def _stamped_page(filename):
+    """The stamped body and ETag for a page in static/, cached.
+
+    Both are pure functions of the file plus every asset it references, and
+    a page is served far more often than it is edited -- so the read, the
+    rewrite and the SHA-256 over the result are done once per version rather
+    than once per request.
+
+    The subtlety is the key. The page's own mtime and size are not enough:
+    the body carries the *assets'* hashes, so editing nav.css changes what
+    this function must return while leaving index.html untouched on disk.
+    Keying on the page's stat alone would pin the old stamp, which is the
+    exact bug serve_page's docstring exists to describe -- reintroduced one
+    layer up. So the asset versions are part of the key too, revalidated on
+    the way in. That costs an os.stat per referenced file, which is what
+    asset_version already memoizes against.
+
+    The page is stat'd before it is read, not after. Reading stale bytes and
+    filing them under the new key would leave them cached until the next
+    edit; filing fresh bytes under the old key is corrected by the very next
+    request.
+    """
+    try:
+        stat = os.stat(os.path.join(STATIC_DIR, filename))
+        key = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        key = None
+
+    with _page_lock:
+        cached = _page_cache.get(filename)
+    if cached is not None and key is not None and cached[0] == key:
+        if all(asset_version(name) == version for name, version in cached[1]):
+            return cached[2], cached[3]
+
+    with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
+        html = f.read()
+    body, assets = _stamp_asset_refs(html)
+    etag = _page_etag(body)
+    if key is not None:
+        with _page_lock:
+            _page_cache[filename] = (key, assets, body, etag)
+    return body, etag
 
 
 def serve_page(filename, status=200, html=None):
@@ -581,12 +649,16 @@ def serve_page(filename, status=200, html=None):
     HTML and the new stamps with it.
     """
     if html is None:
-        with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
-            html = f.read()
+        body, etag = _stamped_page(filename)
+    else:
+        # Rendered for this request -- the og: tags on a profile or an
+        # agreement summary carry that row's own values, so nothing here is
+        # shared between requests and there is nothing to cache.
+        body, _ = _stamp_asset_refs(html)
+        etag = _page_etag(body)
 
-    body = _stamp_asset_refs(html)
     response = app.response_class(body, status=status, mimetype="text/html")
-    response.set_etag(hashlib.sha256(body.encode("utf-8")).hexdigest()[:32])
+    response.set_etag(etag)
     # Revalidate every time. The page is small, and it is what carries the
     # hashes that let everything else be kept for a year.
     response.headers["Cache-Control"] = "no-cache"
@@ -594,10 +666,29 @@ def serve_page(filename, status=200, html=None):
 
 
 # The pages under static/, so a request cannot name a path this was not meant
-# to serve. Built once at import; the frontend is a fixed set of files.
+# to serve. Built once at import; in production the frontend is a fixed set of
+# files, and the frozen allowlist is the boundary itself. See _pages() for the
+# one case that re-reads it.
 _PAGES = frozenset(
     name for name in os.listdir(STATIC_DIR) if name.endswith(".html")
 )
+
+
+def _pages():
+    """The allowlist, re-listed per request while debugging.
+
+    Frozen at import means a page added while the server is running 404s
+    until it restarts -- which reads as a routing bug rather than a stale
+    listing, and cost an afternoon when pphelp.html was added. Under the
+    reloader the directory is cheap to re-read and the answer is expected to
+    change, so re-list. In production it stays frozen: this is a security
+    boundary, not a cache.
+    """
+    if app.debug:
+        return frozenset(
+            name for name in os.listdir(STATIC_DIR) if name.endswith(".html")
+        )
+    return _PAGES
 
 
 @app.route("/<page>.html")
@@ -610,9 +701,98 @@ def html_page(page):
     routes above this one and are unaffected.
     """
     filename = f"{page}.html"
-    if filename not in _PAGES:
+    if filename not in _pages():
         return not_found(None)
     return serve_page(filename)
+
+
+# The pages worth offering a crawler: public, meaningful without an account,
+# and stable. Everything else on this site is one of three things a sitemap
+# should not name -- a signed-in view that renders an empty shell to a
+# crawler, a page reached only from a mailed token, or an error page.
+#
+# organization.html is deliberately absent, and not because it is private.
+# Public profiles are exactly what a directory would want found, but nobody
+# who filled in onboarding agreed to being published into search results, and
+# offering them here would decide that on their behalf. Listing them wants a
+# per-organization opt-in driving both this and the noindex tag on the page --
+# the same shape links_public already has.
+_SITEMAP_PAGES = ("index.html", "pphelp.html", "pplogin.html")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    """What a crawler may fetch.
+
+    Belt and braces over the noindex tags: those need the page fetched and
+    parsed to be obeyed, and say nothing about the API. The /api/ rule is the
+    one that matters -- an endpoint answering 401 to a crawler is not harmful,
+    but it is crawl budget spent on nothing, repeatedly.
+
+    Disallow is not a security control. Everything listed here is either
+    already behind a session check or behind an unguessable token; this only
+    keeps well-behaved crawlers out of places they gain nothing from.
+    """
+    lines = [
+        "User-agent: *",
+        "Disallow: /api/",
+        # Signed out, these render an empty shell and a redirect to login.
+        # Indexed, that shell is what a search result would show.
+        "Disallow: /analytics.html",
+        "Disallow: /onboarding.html",
+        "Disallow: /ppdashboard.html",
+        "Disallow: /ppsearch.html",
+        "Disallow: /settings.html",
+        # Reached only from a link in an email, and single-use. They carry
+        # noindex too; this saves the fetch that would read it.
+        "Disallow: /claim.html",
+        "Disallow: /confirm-email.html",
+        "Disallow: /forgot-password.html",
+        "Disallow: /reset-password.html",
+        "Disallow: /verify-email.html",
+        "",
+        f"Sitemap: {request.url_root.rstrip('/')}/sitemap.xml",
+        "",
+    ]
+    return app.response_class("\n".join(lines), mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    """The public pages, as absolute URLs.
+
+    A route rather than a file in static/ because both files here have to
+    name this site's own origin and a static file cannot know it. Built from
+    request.url_root, so moving to a custom domain does not leave a sitemap
+    advertising the old host -- which is the failure mode that makes a
+    hardcoded origin worse than no sitemap at all.
+
+    lastmod comes from each page's mtime. It is the honest answer available
+    without tracking edits separately, and a crawler treats it as a hint.
+    """
+    root = request.url_root.rstrip("/")
+    urls = []
+    for name in _SITEMAP_PAGES:
+        loc = root + "/" + name
+        try:
+            mtime = os.path.getmtime(os.path.join(STATIC_DIR, name))
+        except OSError:
+            mtime = None
+        entry = ["  <url>", f"    <loc>{escape(loc)}</loc>"]
+        if mtime is not None:
+            stamp = datetime.fromtimestamp(mtime, timezone.utc).date().isoformat()
+            entry.append(f"    <lastmod>{stamp}</lastmod>")
+        entry.append("  </url>")
+        urls.extend(entry)
+
+    body = "\n".join([
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        *urls,
+        "</urlset>",
+        "",
+    ])
+    return app.response_class(body, mimetype="application/xml")
 
 
 @app.after_request
@@ -685,7 +865,7 @@ def _inline_script_hashes():
     asset_version() uses for the cache stamps.
     """
     digests = set()
-    for name in _PAGES:
+    for name in _pages():
         try:
             with open(os.path.join(STATIC_DIR, name), encoding="utf-8") as f:
                 html = f.read()
@@ -704,12 +884,18 @@ def content_security_policy():
 
     Lazily rather than at import because it reads every page in static/, and
     because _PAGES is not built until further down this file.
+
+    Not cached while debugging, for the same reason _pages() re-lists: the
+    hashes come from the HTML, and editing an inline script does not restart
+    the reloader the way editing a .py file does. A cached policy would then
+    block the script that was just edited, which looks like a CSP bug and is
+    a stale hash.
     """
     global _csp_value
-    if _csp_value is not None:
+    if _csp_value is not None and not app.debug:
         return _csp_value
     with _csp_lock:
-        if _csp_value is None:
+        if _csp_value is None or app.debug:
             scripts = " ".join(["'self'", *_inline_script_hashes()])
             _csp_value = "; ".join([
                 "default-src 'self'",
@@ -2975,6 +3161,37 @@ NOTIFICATION_WINDOW = timedelta(days=60)
 NOTIFICATION_LIMIT = 30
 
 
+def _unread_by(org_id):
+    """A message in a thread that `org_id` is party to and has not read.
+
+    One definition for the three places that count unread messages -- the
+    notification list, the per-thread counts on the proposals list, and the
+    badge on /api/me. They were three copies of the same predicate, which is
+    three chances for one of them to answer differently from the others about
+    the same thread.
+
+    The comparison is on Message.id, not created_at. Both the id and the
+    marker come from the same database, so there is no second clock to drift:
+    a marker written from the app server's now() and compared against a
+    timestamp Postgres stamped could be wrong in either direction, and was
+    wrong silently -- ahead, and new messages never appear; behind, and the
+    badge never clears. Within a thread the two orderings agree anyway, so
+    nothing about what "unread" means has changed.
+    """
+    return and_(
+        or_(
+            and_(Partnership.proposer_id == org_id,
+                 or_(Partnership.proposer_last_read_message_id.is_(None),
+                     Message.id > Partnership.proposer_last_read_message_id)),
+            and_(Partnership.recipient_id == org_id,
+                 or_(Partnership.recipient_last_read_message_id.is_(None),
+                     Message.id > Partnership.recipient_last_read_message_id)),
+        ),
+        # Your own messages are not waiting on you.
+        or_(Message.sender_id.is_(None), Message.sender_id != org_id),
+    )
+
+
 def _notifications_for(db, org):
     """This org's recent events, newest first.
 
@@ -3044,15 +3261,7 @@ def _notifications_for(db, org):
     ).join(
         Partnership, Message.partnership_id == Partnership.id
     ).filter(
-        or_(
-            and_(Partnership.proposer_id == org.id,
-                 or_(Partnership.proposer_last_read_at.is_(None),
-                     Message.created_at > Partnership.proposer_last_read_at)),
-            and_(Partnership.recipient_id == org.id,
-                 or_(Partnership.recipient_last_read_at.is_(None),
-                     Message.created_at > Partnership.recipient_last_read_at)),
-        ),
-        or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+        _unread_by(org.id)
     ).group_by(Message.partnership_id).all()
 
     by_id = {p.id: p for p in rows}
@@ -3775,16 +3984,7 @@ def _annotate_message_counts(db, org, rows, payloads):
         .join(Partnership, Message.partnership_id == Partnership.id)
         .filter(
             Message.partnership_id.in_(ids),
-            or_(
-                and_(Partnership.proposer_id == org.id,
-                     or_(Partnership.proposer_last_read_at.is_(None),
-                         Message.created_at > Partnership.proposer_last_read_at)),
-                and_(Partnership.recipient_id == org.id,
-                     or_(Partnership.recipient_last_read_at.is_(None),
-                         Message.created_at > Partnership.recipient_last_read_at)),
-            ),
-            # Your own messages are not waiting on you.
-            or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+            _unread_by(org.id),
         )
         .group_by(Message.partnership_id).all()
     )
@@ -4279,12 +4479,22 @@ def list_messages(org, db, proposal_id):
         Message.partnership_id == proposal.id
     ).order_by(Message.created_at, Message.id).all()
 
-    now = datetime.now(timezone.utc)
-    if proposal.proposer_id == org.id:
-        proposal.proposer_last_read_at = now
-    else:
-        proposal.recipient_last_read_at = now
-    db.commit()
+    # Only when it would actually move. The marker is a position in the
+    # thread, and every use of it (the unread counts on the dashboard and in
+    # the proposals list, and whether the other side has caught up before we
+    # mail them) asks whether some message sits after it. Moving it past the
+    # last message therefore changes no answer anyone can observe, and an
+    # open thread is polled every 12 seconds. Skipping that turns nearly
+    # every poll into a pure read while the endpoint keeps its shape: opening
+    # a thread is still what marks it read, with no second request to forget.
+    #
+    # max() rather than the last row, because rows are ordered for display
+    # -- by created_at, then id -- and this needs the largest id outright.
+    newest = max((row.id for row in rows), default=None)
+    marker = proposal.last_read_message_id_for(org.id)
+    if newest is not None and (marker is None or marker < newest):
+        proposal.mark_read_through(org.id, newest, datetime.now(timezone.utc))
+        db.commit()
 
     return jsonify({
         "messages": [m.to_dict(viewer_id=org.id) for m in rows],
@@ -4339,11 +4549,14 @@ def create_message(org, db, proposal_id):
     # Writing counts as having read what came before it. Without this, a
     # reply would leave the sender's own thread showing unread messages they
     # were plainly looking at as they typed.
-    now = datetime.now(timezone.utc)
-    if proposal.proposer_id == org.id:
-        proposal.proposer_last_read_at = now
-    else:
-        proposal.recipient_last_read_at = now
+    #
+    # Flushed first because the marker is now this message's own id, which
+    # the sequence does not hand out until the INSERT goes down. Marking
+    # through the message being sent rather than the one before it is what
+    # keeps _unread_by's "not your own messages" clause from being the only
+    # thing hiding it.
+    db.flush()
+    proposal.mark_read_through(org.id, message.id, datetime.now(timezone.utc))
     db.commit()
 
     _maybe_notify_message(db, proposal, org, message)
@@ -4367,7 +4580,7 @@ def _maybe_notify_message(db, proposal, sender, message):
     if other is None:
         return
 
-    their_last_read = proposal.last_read_at_for(other.id)
+    their_last_read = proposal.last_read_message_id_for(other.id)
     now = datetime.now(timezone.utc)
 
     previous = db.query(Message).filter(
@@ -4382,7 +4595,7 @@ def _maybe_notify_message(db, proposal, sender, message):
     # read the thread in between, which makes this the first thing they have
     # not seen.
     if previous is not None and not (
-        their_last_read is not None and their_last_read >= previous.created_at
+        their_last_read is not None and their_last_read >= previous.id
     ):
         return
 
@@ -4398,16 +4611,7 @@ def _unread_message_count(db, org):
     return db.query(Message.id).join(
         Partnership, Message.partnership_id == Partnership.id
     ).filter(
-        or_(
-            and_(Partnership.proposer_id == org.id,
-                 or_(Partnership.proposer_last_read_at.is_(None),
-                     Message.created_at > Partnership.proposer_last_read_at)),
-            and_(Partnership.recipient_id == org.id,
-                 or_(Partnership.recipient_last_read_at.is_(None),
-                     Message.created_at > Partnership.recipient_last_read_at)),
-        ),
-        # Your own messages are not waiting on you.
-        or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+        _unread_by(org.id)
     ).count()
 
 

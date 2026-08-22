@@ -19,7 +19,9 @@ to trade resources with each other.
    favor.
 3. **Proposing** — open a match and propose a partnership. The terms start
    pre-filled from the overlap that produced the match, and each side can only
-   commit to things it actually listed.
+   commit to things it actually listed. A term can carry a quantity — "30
+   volunteers", "4,000 square feet" — so that what was agreed to is specific
+   enough to judge at completion.
 4. **Confirming** — the receiving organization accepts or declines. Acceptance
    generates a public summary page, shareable with a board or a funder without
    anyone needing an account.
@@ -125,6 +127,7 @@ there rather than on someone's first deploy.
 | `models.py` | `Organization`, `Partnership`, `Message`, `Event`, `SavedLead`, `ProfileView` |
 | `matching.py` | Bidirectional scoring and the reasons shown to users |
 | `categories.py` | The shared need/offer vocabulary, focus areas and timelines |
+| `units.py` | The units a partnership term may be quantified in, and what may be summed |
 | `links.py` | Normalizing and validating the four profile links |
 | `moderation.py` | Blocking inappropriate organization names |
 | `notifications.py` | Transactional email, and the dry-run fallback without a key |
@@ -136,21 +139,38 @@ there rather than on someone's first deploy.
 | `render.yaml` | Deployment blueprint |
 
 Pages, all under `static/`: `index.html` (landing), `pplogin.html`,
-`onboarding.html`, `ppsearch.html` (matches, directory and shortlist),
-`ppdashboard.html` (dashboard, partnerships and messages), `settings.html`,
+`pphelp.html`, `onboarding.html`, `ppsearch.html` (matches, directory and
+shortlist), `ppdashboard.html` (dashboard, partnerships and messages),
+`analytics.html` (an organization's own numbers), `settings.html`,
 `organization.html` (public profile), `partnership.html` (public agreement
-summary), and the four token landing pages — `verify-email.html`,
-`forgot-password.html`, `reset-password.html`, `confirm-email.html` — plus
-`404.html` and `500.html`.
+summary), and the five token landing pages — `verify-email.html`,
+`forgot-password.html`, `reset-password.html`, `confirm-email.html`,
+`claim.html` — plus `404.html` and `500.html`.
 
 There is no `proposals.html`: `proposals.js` renders the partnerships list
 and the message threads inside `ppdashboard.html`.
+
+Analytics is reachable from the account menu on every page and from a button
+on the dashboard. It is not in the main nav: the numbers are one
+organization's own and nobody signed out has anything to see there, so a
+link in the bar would be noise on most of the site.
 
 Flask serves `static/` at the site root, so `/ppsearch.html` maps to
 `static/ppsearch.html`. The frontend lives in its own directory rather than at
 the project root for a reason: Flask hands out **everything** under its
 `static_folder` verbatim, so rooting it at the project would publish `.env`,
 `app.py` and the rest of the source to anyone who asked for them.
+
+`/robots.txt` and `/sitemap.xml` are routes rather than files in `static/`,
+because both have to name this site's own origin and a file cannot know it.
+They are built from `request.url_root`, so moving to a custom domain does not
+leave a sitemap advertising the old host. The sitemap offers three pages —
+the landing page, the help page and the sign-in page. `organization.html` is
+deliberately not among them: public profiles are what a directory would most
+want found, but nobody agreed to being published into search results by
+filling in onboarding, so listing them wants a per-organization opt-in
+driving both the sitemap and the `noindex` tag — the shape `links_public`
+already has. Until that exists, the profiles stay out.
 
 ## Data model note
 
@@ -173,8 +193,10 @@ filters and paging; a private shortlist; public organization profiles;
 partnership proposals with mutual confirmation; the lifecycle after that --
 completing takes both sides, ending takes one, and each side records whether
 the other delivered; shareable agreement summaries whose link can be rotated
-or revoked; message threads on a proposal; meetings; and transactional email
-for all of it.
+or revoked; message threads on a proposal; meetings; quantified partnership
+terms; inviting an organization that has no account yet and letting it claim
+the profile later; an analytics page for an organization's own numbers; and
+transactional email for all of it.
 
 Two things are switched off rather than missing, both waiting on a verified
 sending domain:

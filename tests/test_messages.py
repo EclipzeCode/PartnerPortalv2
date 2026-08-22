@@ -319,6 +319,89 @@ def test_polling_keeps_the_thread_marked_read(client, login, thread):
     assert client.get("/api/me").get_json()["unread_messages"] == 0
 
 
+def test_a_poll_with_nothing_new_does_not_write(client, login, thread, session):
+    """The marker moves when it has somewhere to move to, and not otherwise.
+
+    An open thread re-reads this endpoint every twelve seconds, and every one
+    of those used to be a write and a commit on the partnerships row. It can
+    be skipped without changing the API's shape, because the marker is a
+    position rather than a time: every use of it asks whether some message
+    sits after it, so moving it past the last message changes no answer.
+    """
+    proposer, recipient, pid = thread
+
+    login(recipient)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "pytest one"})
+    client.post("/logout")
+
+    login(proposer)
+    client.get(f"/api/proposals/{pid}/messages")            # opening it
+    session.expire_all()
+    opened_at = session.get(Partnership, pid).proposer_last_read_message_id
+    assert opened_at is not None, "opening a thread has to mark it read"
+
+    for _ in range(3):                                      # polls
+        client.get(f"/api/proposals/{pid}/messages")
+    session.expire_all()
+    assert session.get(Partnership, pid).proposer_last_read_message_id == opened_at
+
+    # The other half, which is the one that must not be lost: a marker
+    # standing behind the newest message still moves.
+    client.post("/logout")
+    login(recipient)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "pytest two"})
+    client.post("/logout")
+
+    login(proposer)
+    assert client.get("/api/me").get_json()["unread_messages"] == 1
+    client.get(f"/api/proposals/{pid}/messages")
+    session.expire_all()
+    assert session.get(Partnership, pid).proposer_last_read_message_id > opened_at
+    assert client.get("/api/me").get_json()["unread_messages"] == 0
+
+
+def test_the_marker_does_not_depend_on_two_clocks_agreeing(client, login, thread,
+                                                           session):
+    """Why the marker is a message id and not a timestamp.
+
+    It used to be written from the app server's clock and compared against
+    created_at, which Postgres stamps from its own. Those are two machines,
+    and a persistent offset between them broke the comparison silently in
+    whichever direction it leaned -- a marker running ahead swallowed new
+    messages, one running behind never let the badge clear.
+
+    The setup here is what that skew produces: a message whose created_at
+    sits *before* the moment the reader last opened the thread, which is
+    impossible on one clock and routine on two. Under the old comparison this
+    message was invisible forever. Ordering by id does not care what any
+    clock said.
+    """
+    from datetime import timedelta
+
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    client.get(f"/api/proposals/{pid}/messages")            # opening it empty
+    client.post("/logout")
+
+    login(recipient)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "pytest one"})
+    client.post("/logout")
+
+    # The app server's clock, an hour fast. Nothing else about the row moves.
+    proposal = session.get(Partnership, pid)
+    newest = session.query(Message).filter(
+        Message.partnership_id == pid
+    ).order_by(Message.id.desc()).first()
+    proposal.proposer_last_read_message_id = None
+    proposal.proposer_last_read_at = newest.created_at + timedelta(hours=1)
+    session.commit()
+
+    login(proposer)
+    assert client.get("/api/me").get_json()["unread_messages"] == 1, \
+        "a message stamped behind the reader's clock went missing"
+
+
 def test_the_open_flag_turns_over_when_the_proposal_settles(client, login, thread):
     """A proposal can settle while its thread is on screen.
 

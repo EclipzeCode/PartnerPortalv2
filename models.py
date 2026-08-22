@@ -586,9 +586,24 @@ class Partnership(Base):
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # --- Messages ----------------------------------------------------------
-    # When each side last opened the thread, so "how many are waiting on me"
-    # is one indexed comparison rather than a read flag per message per
+    # How far into the thread each side has read, so "how many are waiting on
+    # me" is one indexed comparison rather than a read flag per message per
     # party. Null means never opened, which is what a brand new proposal is.
+    #
+    # A message id, not a time. The marker is only ever compared against a
+    # message -- nothing displays it, and no API returns it -- so a timestamp
+    # bought nothing and cost the one thing an id cannot get wrong: it was
+    # written from the app server's clock and compared against created_at,
+    # which Postgres stamps from its own. A persistent offset between those
+    # two machines breaks the comparison in whichever direction it leans, and
+    # does it silently. Both values now come from one sequence in one
+    # database.
+    proposer_last_read_message_id: Mapped[int | None] = mapped_column(Integer)
+    recipient_last_read_message_id: Mapped[int | None] = mapped_column(Integer)
+
+    # Superseded by the two above and still written, so that rolling the code
+    # back does not present every thread as unread. Nothing reads them.
+    # Removed, with their columns, once this has settled.
     proposer_last_read_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
@@ -800,9 +815,24 @@ class Partnership(Base):
              else self.proposer_gives) or []
         )
 
-    def last_read_at_for(self, org_id):
-        return (self.proposer_last_read_at if self.proposer_id == org_id
-                else self.recipient_last_read_at)
+    def last_read_message_id_for(self, org_id):
+        """The newest message `org_id` has seen, or None if it never opened."""
+        return (self.proposer_last_read_message_id if self.proposer_id == org_id
+                else self.recipient_last_read_message_id)
+
+    def mark_read_through(self, org_id, message_id, now):
+        """Record that `org_id` has read the thread as far as `message_id`.
+
+        Takes `now` rather than reading the clock, so the transitional
+        timestamp column and the caller's own idea of the time cannot
+        disagree. It is the only thing that timestamp is still for.
+        """
+        if self.proposer_id == org_id:
+            self.proposer_last_read_message_id = message_id
+            self.proposer_last_read_at = now
+        else:
+            self.recipient_last_read_message_id = message_id
+            self.recipient_last_read_at = now
 
     def messages_open(self):
         """Whether this thread still accepts new messages.
@@ -1021,8 +1051,10 @@ class Message(Base):
 
     __table_args__ = (
         # Every read is "this thread, oldest first", and the unread count is
-        # the same prefix with a timestamp comparison on top.
-        Index("ix_messages_partnership", "partnership_id", "created_at"),
+        # the same prefix with an id comparison on top. Leading on id rather
+        # than created_at because that is what the comparison now sits on --
+        # and because within a thread the two orderings agree.
+        Index("ix_messages_partnership", "partnership_id", "id"),
     )
 
     def __repr__(self):

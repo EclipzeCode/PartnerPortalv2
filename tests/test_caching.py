@@ -111,6 +111,62 @@ def test_a_changed_stylesheet_reaches_someone_who_already_has_the_page(client):
         open(path, "wb").write(original)
 
 
+def test_the_page_itself_is_not_re_stamped_on_every_request(client):
+    """The point of the page cache: serving is a dict lookup, not a rebuild.
+
+    The body and the ETag are both pure functions of the file plus the assets
+    it references, and a page is read far more often than it is edited. If
+    this stops holding, every request pays a file read, a regex rewrite over
+    the whole page and a SHA-256 of the result -- which is what it did before.
+    """
+    calls = []
+    real = app_module._stamp_asset_refs
+
+    def counted(html):
+        calls.append(html)
+        return real(html)
+
+    app_module._stamp_asset_refs = counted
+    try:
+        client.get("/index.html")
+        after_first = len(calls)
+        client.get("/index.html")
+        client.get("/index.html")
+        assert len(calls) == after_first, "the page was rebuilt on an unchanged file"
+    finally:
+        app_module._stamp_asset_refs = real
+
+
+def test_editing_the_page_itself_is_noticed_too(client):
+    """The other half of the cache key.
+
+    The asset hashes are the subtle half and have their own tests above. This
+    is the obvious half, and worth pinning precisely because it is obvious:
+    keying only on the assets would serve the old HTML forever to anyone
+    editing a page without touching a stylesheet -- which is most edits.
+    """
+    import os
+    path = os.path.join(app_module.STATIC_DIR, "pphelp.html")
+    original = open(path, "rb").read()
+
+    first = client.get("/pphelp.html")
+    etag = first.headers["ETag"]
+    assert "pytest cache probe" not in first.get_data(as_text=True)
+
+    try:
+        open(path, "wb").write(
+            original.replace(b"</body>", b"<!-- pytest cache probe --></body>")
+        )
+        again = client.get("/pphelp.html", headers={"If-None-Match": etag})
+        assert again.status_code == 200, "returning visitor was fobbed off with a 304"
+        assert "pytest cache probe" in again.get_data(as_text=True)
+        assert again.headers["ETag"] != etag
+    finally:
+        open(path, "wb").write(original)
+
+    assert client.get("/pphelp.html").headers["ETag"] == etag
+
+
 def test_only_a_versioned_request_is_immutable(client):
     """A bare URL may be for a file that has since changed."""
     version = app_module.asset_version("nav.css")
@@ -183,5 +239,8 @@ def test_error_pages_are_served_and_stamped(client):
 def test_a_missing_asset_reference_is_left_as_written(client):
     """A typo'd filename should not become a 500 in the rewriter."""
     assert app_module.asset_version("no-such-file.css") is None
-    assert app_module._stamp_asset_refs('<link href="no-such-file.css">') == \
-        '<link href="no-such-file.css">'
+    body, assets = app_module._stamp_asset_refs('<link href="no-such-file.css">')
+    assert body == '<link href="no-such-file.css">'
+    # Recorded with a None version, so the page cache invalidates the day the
+    # file appears rather than serving an unstamped reference to it forever.
+    assert assets == (("no-such-file.css", None),)

@@ -326,6 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // above has just written the server's version into the form, so this is
     // also the right moment to ask whether an unsaved one should replace it.
     draftKey = DRAFT_PREFIX + me.id;
+    sweepExpiredDrafts();
     offerDraftRestore();
     watchForDraftChanges();
   }
@@ -544,8 +545,53 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Keyed by organization so a shared browser cannot show one account's
   // half-written profile to the next person who signs in.
   const DRAFT_PREFIX = 'partnerPortalOnboardingDraft:';
+
+  // Two weeks. A draft is a safety net for work interrupted, and past a
+  // fortnight it has stopped being that: the profile on the server has moved
+  // on, and offering to restore something written before those edits invites
+  // reverting them. The banner names the age for the same reason -- the
+  // choice is only informed if it says how stale the alternative is.
+  const DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
   let draftKey = null;
   let draftTimer = null;
+
+  function isExpired(draft) {
+    // A draft with no timestamp predates this field and cannot be dated, so
+    // it is treated as expired rather than as new.
+    return !draft || typeof draft.at !== 'number'
+      || Date.now() - draft.at > DRAFT_MAX_AGE_MS;
+  }
+
+  // Drafts are keyed per organization, so anyone who signs in with a second
+  // account and never comes back leaves a key nothing will ever read again.
+  // One pass over the prefix on load clears those, not just this account's:
+  // localStorage is a small shared budget, and the abandoned ones are the
+  // reason it fills.
+  function sweepExpiredDrafts() {
+    let stale;
+    try {
+      stale = Object.keys(localStorage).filter((key) => {
+        if (!key.startsWith(DRAFT_PREFIX)) return false;
+        try {
+          return isExpired(JSON.parse(localStorage.getItem(key)));
+        } catch {
+          // Unparseable, so unusable. Nothing can restore it either.
+          return true;
+        }
+      });
+    } catch {
+      // Storage disabled. There is nothing stored to sweep.
+      return;
+    }
+    for (const key of stale) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Leave it; the next load tries again.
+      }
+    }
+  }
 
   function saveDraft() {
     if (!draftKey) return;
@@ -579,12 +625,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function readDraft() {
     if (!draftKey) return null;
+    let draft;
     try {
       const raw = localStorage.getItem(draftKey);
-      return raw ? JSON.parse(raw) : null;
+      draft = raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
+    if (!draft) return null;
+    if (isExpired(draft)) {
+      // Drop it here rather than only hiding the banner, so an expired draft
+      // is not carried around forever by a visitor who never opens this page
+      // again from a signed-in state.
+      clearDraft();
+      return null;
+    }
+    return draft;
   }
 
   // Applied only when the visitor asks for it. Restoring automatically would
