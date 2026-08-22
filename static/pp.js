@@ -754,8 +754,9 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
     const section = document.getElementById('span');
     const track = document.getElementById('bridgeTrack');
+    const stage = track && track.querySelector('.bridge-stage');
     const grid = document.getElementById('bridgeGrid');
-    if (!section || !track || !grid) return;
+    if (!section || !track || !stage || !grid) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -918,25 +919,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Coalesced onto a frame: scroll fires far more often than the screen is
     // painted, and every one of those extra calls would be measuring a layout
     // that has not changed yet.
-    // Give the scroll distance back once there is nothing left to reveal.
+    // Give the scroll distance back the moment there is nothing left to
+    // reveal.
     //
     // The extra height exists to be scrolled through while the span closes.
     // After that it is a screen and a half of pinning in front of a finished
-    // picture -- on the way back up to re-read the heading, and on every later
-    // pass down the page, since the build does not run again.
+    // picture, and the page should simply carry on.
     //
-    // Only while the section is off screen, because collapsing it takes real
-    // height out of the document. Below the viewport there is nothing on
-    // screen to shift. Above it, everything below would be pulled upwards --
-    // so what follows the section is measured before and after and put back
-    // where it was.
+    // The span closes at the far end of the track, which is exactly where the
+    // sticky stage's pinned position and its resting position coincide -- so
+    // dropping the height there leaves the stage on the same pixels it was
+    // already on, and the reader sees the page start moving again rather than
+    // anything jump. The scroll position moves a long way underneath that,
+    // because a screen and a half has just left the document above it, and
+    // none of it is visible.
     //
-    // Measured rather than assumed: Chrome's scroll anchoring already corrects
-    // for content shrinking above the viewport, and subtracting the collapsed
-    // height on top of that moved the page twice as far as it should have, in
-    // the wrong direction. Reading the residual works whether or not the
-    // browser has done the job -- there is simply nothing left to correct when
-    // it has.
+    // Anywhere the stage is not pinned, collapsing the section would move what
+    // is on screen, so it waits until there is nothing on screen to move: the
+    // section entirely above the viewport (correcting for the height that
+    // leaves from above it) or entirely below it (nothing to correct).
+    //
+    // The correction is measured rather than assumed. Chrome's scroll
+    // anchoring already adjusts for content shrinking above the viewport, and
+    // subtracting the collapsed height on top of that moved the page twice as
+    // far as it should have, in the wrong direction. Reading what a reference
+    // element actually did works whether or not the browser has done the job:
+    // there is nothing left to correct when it has.
     let released = false;
     function release() {
         // Tested against the build, not against the progress fraction. The
@@ -945,16 +953,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // exactly 1 anyway -- so `reached >= 1` was a condition that could sit
         // there unmet with the span visibly closed.
         if (released || built < maxOrder) return;
+
         const rect = section.getBoundingClientRect();
+        // Within a pixel of the top: sticky is holding it there, which is the
+        // one on-screen position the swap is invisible from.
+        const pinned = Math.abs(stage.getBoundingClientRect().top) < 1.5;
         const above = rect.bottom <= 0;
         const below = rect.top >= window.innerHeight;
-        if (!above && !below) return;
+        if (!pinned && !above && !below) return;
 
-        const after = section.nextElementSibling;
-        const before = above && after ? after.getBoundingClientRect().top : null;
+        // Whatever must not appear to move: the stage itself while it is
+        // pinned, otherwise whatever follows the section.
+        const anchor = pinned ? stage : (above ? section.nextElementSibling : null);
+        const before = anchor ? anchor.getBoundingClientRect().top : null;
         section.classList.add('released');
-        if (before !== null) {
-            const moved = after.getBoundingClientRect().top - before;
+        if (anchor) {
+            const moved = anchor.getBoundingClientRect().top - before;
             if (moved) window.scrollBy(0, moved);
         }
 

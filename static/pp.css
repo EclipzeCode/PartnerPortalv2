@@ -974,9 +974,13 @@ body.home .bridge-section.released .bridge-track {
     height: auto;
 }
 
+/* The stage keeps its height. Only the track's extra scroll distance goes,
+   so the swap changes nothing about the box the reader is looking at -- and
+   what follows the section stays on the pixel it was already on. Dropping the
+   min-height here as well shrank the stage to its contents in the same frame,
+   which pulled the next section up by the difference. */
 body.home .bridge-section.released .bridge-stage {
     position: static;
-    min-height: 0;
 }
 
 body.home .bridge-foot {
