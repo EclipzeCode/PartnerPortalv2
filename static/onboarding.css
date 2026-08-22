@@ -7,23 +7,23 @@
  *
  * --- Where the two directions are born --------------------------------------
  *
- * This is the page that matters most for the colour language, and the old
+ * This is the page that matters most for the color language, and the old
  * design was the one place it was actively missing. "What do you need?" and
  * "What can you offer?" sat side by side, and a chip selected on either side
  * was the same blue. The two halves of the exchange -- the entire premise of
  * the product -- looked identical at the exact moment somebody is deciding
  * what goes in each one.
  *
- * They are now the two direction colours used everywhere else: --h-give for
+ * They are now the two direction colors used everywhere else: --h-give for
  * what comes in to your organization, --h-take for what goes out of it. The
  * same pair, meaning the same two things, that the home page's match matrix,
  * the search results' exchange block and a proposal's terms all use. Someone
- * picking "Meeting space" as a need here sees it again in that colour when a
+ * picking "Meeting space" as a need here sees it again in that color when a
  * match turns up offering it.
  *
- * Focus areas take a third colour on purpose. A cause is not something anyone
+ * Focus areas take a third color on purpose. A cause is not something anyone
  * trades -- that is why the markup keeps them apart from needs and offers in
- * the first place -- so colouring them as either direction would say something
+ * the first place -- so coloring them as either direction would say something
  * untrue about what they are.
  *
  * --- Cards, kept ------------------------------------------------------------
@@ -311,7 +311,7 @@
   margin-bottom: 0;
 }
 
-/* The required marker. Not a colour anything else on the page uses, so it
+/* The required marker. Not a color anything else on the page uses, so it
    reads as a mark rather than as a state. */
 .req {
   color: var(--h-take);
@@ -384,9 +384,9 @@
   margin-bottom: 0;
 }
 
-/* The label of each side takes its own direction's colour, so the heading and
+/* The label of each side takes its own direction's color, so the heading and
    the chips underneath it agree. ink.css sets the shape of these labels and
-   reads their colour from --h-label, which is set here on the wrapper and
+   reads their color from --h-label, which is set here on the wrapper and
    inherited down -- see the note on that rule for why it is not a plain
    `color` on the label. */
 .trade-need  { --h-label: var(--h-give); }
@@ -411,7 +411,7 @@
 }
 
 /* Causes are not traded -- that is why they are kept out of the two lists
-   above -- so they get the third colour rather than either direction's. */
+   above -- so they get the third color rather than either direction's. */
 .focus-picker .category-chip.checked {
   background: var(--h-seal);
   border-color: var(--h-seal);

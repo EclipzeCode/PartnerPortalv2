@@ -56,7 +56,7 @@ function setBanner(banner, message, tone) {
 }
 
 // --- Submit button state -------------------------------------------------
-// Signing in used to only set disabled = true, which greys the button very
+// Signing in used to only set disabled = true, which grays the button very
 // slightly and says nothing. On a slow connection -- or a cold Render
 // instance, which is the realistic case here -- that reads as a click that
 // did not register, and the natural response is to click again. Both forms
@@ -109,7 +109,7 @@ function passwordIsAcceptable(checks) {
 // rule satisfied *and* real length margin above the 10-character floor, so
 // the meter rewards actually going further rather than just clearing the bar.
 const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-// The colours for these four levels live in pplogin.css, keyed off
+// The colors for these four levels live in pplogin.css, keyed off
 // data-score. They were four hardcoded hex values assigned inline from here,
 // which meant they could not follow the theme -- the same fix the settings
 // page's copy of this meter already has.

@@ -35,15 +35,15 @@
  *
  * The detail dialog's exchange block is the one place on this page where the
  * data is genuinely two-sided -- "They can offer you" against "They are
- * looking for" -- so it takes the two direction colours the rest of the
+ * looking for" -- so it takes the two direction colors the rest of the
  * design uses for exactly that: --h-give for what comes in, --h-take for what
- * goes out. Same two colours as the home page's match matrix and the
+ * goes out. Same two colors as the home page's match matrix and the
  * dashboard's proposal terms, meaning the same two things.
  *
- * The reason list on the card is deliberately NOT coloured that way. Those
+ * The reason list on the card is deliberately NOT colored that way. Those
  * strings are prose built server-side in matching.py and flattened before
  * they reach the browser -- the direction each one describes is known when
- * the sentence is written and discarded on the way out. Colouring them would
+ * the sentence is written and discarded on the way out. Coloring them would
  * mean parsing "They offer" out of the front of a sentence, which breaks the
  * first time the wording changes. If the direction is wanted here, the fix is
  * to send the key alongside the string, not to guess it back from the text.
@@ -303,13 +303,13 @@
 
 /* The results read as one table with shared hairlines rather than as a set of
    floating cards. The obvious way to build that -- a 1px grid gap over a
-   container painted in the rule colour -- is wrong here, and visibly so: a
+   container painted in the rule color -- is wrong here, and visibly so: a
    page holding four results in a three-column grid leaves two empty cells,
-   and the container paints straight through them as a large grey slab. The
+   and the container paints straight through them as a large gray slab. The
    page size is 6/4/4, so a partial last row is the normal case, not an edge
    one.
    The lines are drawn by the cards instead, and the container is painted in
-   the page colour, so an empty cell is simply empty. */
+   the page color, so an empty cell is simply empty. */
 .partners-grid {
     display: grid;
     /* Explicit column counts rather than auto-fill: the page size in
@@ -375,7 +375,7 @@
 }
 
 /* Browse lists organizations that have nothing to exchange with you, which
-   matches never did. A bare 0 reads as a judgement on them rather than on the
+   matches never did. A bare 0 reads as a judgment on them rather than on the
    pairing, so ppsearch.js writes an em dash instead. */
 .partner-score.none {
     color: var(--h-dim);
@@ -567,8 +567,8 @@
 }
 
 /* The default mark is neutral. Only the reasons that actually name a
-   direction are coloured -- see REASON_CLASS in ppsearch.js and the kinds
-   score_pair emits. Colouring all of them, which is what this did before the
+   direction are colored -- see REASON_CLASS in ppsearch.js and the kinds
+   score_pair emits. Coloring all of them, which is what this did before the
    direction reached the browser, made "Both based in Riverside, CA" look like
    part of the exchange. */
 .match-reasons li::before {
@@ -613,12 +613,12 @@
  * along the bottom, so no clipped line can ever show through it -- reading it
  * over a half-faded sentence was the problem with drawing it straight onto
  * the gradient. The fade then sits directly above that strip and ends at the
- * same colour, so the two meet without a visible seam.
+ * same color, so the two meet without a visible seam.
  *
  * Both ignore pointer events: the card underneath is the click target, and the
  * label is describing that, not offering a second one.
  *
- * The colour has to be the card's own background, and the card changes colour
+ * The color has to be the card's own background, and the card changes color
  * on hover -- so both layers follow it rather than naming a surface. */
 .match-reasons.is-truncated::after {
     content: '';
@@ -810,50 +810,6 @@
  * Filter dialog
  * ------------------------------------------------------------------------- */
 
-/* Neither forms.css nor ink.css gives a form group any spacing of its own --
-   each page has set it locally so far. These three dialogs stack five or six
-   in a column, so without it the select of one sits against the label of the
-   next. */
-.modal-body .form-group {
-    margin-bottom: 1.1rem;
-}
-
-.checkbox-row {
-    margin-bottom: 1.1rem;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
-    margin-top: 0.15rem;
-    flex-shrink: 0;
-    accent-color: var(--h-give);
-    cursor: pointer;
-}
-
-.checkbox-label strong {
-    display: block;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--h-ink);
-}
-
-.checkbox-label em {
-    display: block;
-    margin-top: 0.15rem;
-    font-style: normal;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: var(--h-dim);
-}
-
 /* --- Collapsible category sections ---------------------------------------- */
 
 .filter-picker {
@@ -925,7 +881,7 @@
 /* --- Category chips -------------------------------------------------------
    The picker itself is ink.css's, shared with onboarding. What is here is the
    two things specific to this page: the compact scrolling variant used inside
-   the propose dialog, and the checked colour, which is set per direction with
+   the propose dialog, and the checked color, which is set per direction with
    the propose grid rules further down. The filter dialog's chips are not
    directional -- they are asking about the other organization, not about an
    exchange -- so they take the accent. */
@@ -936,7 +892,12 @@
     padding-right: 0.35rem;
 }
 
-.category-chip.checked {
+/* body.ink prefixed to clear ink.css's own `body.ink .category-chip`, which
+   sets the resting text color and otherwise outranks a bare `.checked` on
+   specificity -- which painted a checked chip's label --h-ink-soft on top of
+   the --h-give fill, near enough to invisible. The propose dialog's own
+   per-direction rules are more specific still and are unaffected. */
+body.ink .category-chip.checked {
     background: var(--h-give);
     border-color: var(--h-give);
     color: var(--h-on-give);
@@ -1099,7 +1060,7 @@
 
 /* --- The exchange ---------------------------------------------------------
  * The one genuinely two-sided block on this page, so it takes the two
- * direction colours: what comes in, and what goes out. Split by a hairline
+ * direction colors: what comes in, and what goes out. Split by a hairline
  * rather than by two pale tinted panels -- the tints were a lavender and a
  * mint that existed only relative to white, and this is the block that has to
  * survive being read quickly.
@@ -1167,7 +1128,7 @@
 .exchange-side:last-child li::before  { background: var(--h-take); }
 
 /* A category that actually overlaps with your profile -- the reason this
-   organization is in the list at all. Stated rather than left to the colour,
+   organization is in the list at all. Stated rather than left to the color,
    which is carrying the direction and cannot also carry this. */
 .exchange-side li.matched {
     font-weight: 500;
@@ -1358,7 +1319,7 @@
 /* The two halves of a proposal are the same two directions as everywhere
    else: what you provide leaves, what they provide arrives.
    Direct children only -- the chips inside each picker are labels too, and
-   colouring those here paints a checked chip's text the same colour as its
+   coloring those here paints a checked chip's text the same color as its
    own fill. */
 .modal-body .propose-grid > .form-group > label {
     display: flex;

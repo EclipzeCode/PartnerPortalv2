@@ -1,4 +1,4 @@
-"""What the server does with input it does not recognise.
+"""What the server does with input it does not recognize.
 
 The rule throughout is: drop what is unknown, keep what is not, and never
 fail a whole submission because one value was stale. A browser tab left open

@@ -80,7 +80,7 @@ def reset_rate_limits():
     touch them.
 
     Clearing here rather than raising the limits keeps the production
-    behaviour under test elsewhere, and makes each test independent of how
+    behavior under test elsewhere, and makes each test independent of how
     many ran before it.
     """
     # The sweep timer goes with the buckets. Left alone, a test that pushed

@@ -3,7 +3,7 @@
 // Standalone, like verify-email.js: reached from an emailed link with no
 // guarantee the reader is signed in on this device, so this does not load
 // common.js -- there is no nav state to show, and window.api's redirect-on-401
-// behaviour is the wrong default for a page that must work fully logged out.
+// behavior is the wrong default for a page that must work fully logged out.
 
 document.addEventListener('DOMContentLoaded', () => {
     const card = document.getElementById('resetCard');
@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-    // The colours for these four levels live in notice.css, keyed off
+    // The colors for these four levels live in notice.css, keyed off
     // data-score. They were four hardcoded hex values assigned inline from
     // here, which meant they could not follow the theme -- the third copy of
     // this meter to be fixed the same way, after settings and sign-up.

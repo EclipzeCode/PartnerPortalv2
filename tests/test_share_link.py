@@ -2,7 +2,7 @@
 
 The token was minted once, on acceptance, and lived forever. Anyone ever sent
 the link kept it -- a funder no longer involved, a list it was forwarded to, a
-board pack that travelled further than intended -- and there was nothing
+board pack that traveled further than intended -- and there was nothing
 either organization could do about that short of asking support.
 """
 

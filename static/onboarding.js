@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Debounced: this serialises the whole form, and doing that on every
+  // Debounced: this serializes the whole form, and doing that on every
   // keystroke of a 2000-character description is work nobody asked for.
   function scheduleDraftSave() {
     clearTimeout(draftTimer);

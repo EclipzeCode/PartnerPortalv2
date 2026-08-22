@@ -15,7 +15,7 @@ from matching import (
 def test_mutual_match_scores_above_one_way(make_org):
     """The asymmetry the whole module is built around.
 
-    A one-sided match is a request for a favour; a two-way one is a
+    A one-sided match is a request for a favor; a two-way one is a
     partnership. No amount of one-directional overlap should reorder that.
     """
     me = make_org(needs=["web_development"], offers=["grant_writing"])

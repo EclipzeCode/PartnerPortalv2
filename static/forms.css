@@ -6,11 +6,11 @@
  * modal belongs here, not in a page stylesheet.
  *
  * The --ctl-* block below is the one :root outside tokens.css. It stays
- * because a control's border radius is not a palette colour -- but the two
- * colours in it were, and holding their own copies meant they never
+ * because a control's border radius is not a palette color -- but the two
+ * colors in it were, and holding their own copies meant they never
  * themed: .btn-danger kept the light theme's red on a near-black page,
  * which is the same failure --bg-color had on the login card. They are
- * aliases now, so there is still one definition of each colour and it is
+ * aliases now, so there is still one definition of each color and it is
  * the one in tokens.css.
  */
 
@@ -111,6 +111,17 @@ textarea {
     font-weight: 500;
 }
 
+/* The other note a field can carry: what to put in it, rather than what went
+   wrong. Quieter than .field-error and always present, so it reads as part of
+   the label rather than as a complaint. */
+.field-hint {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-light, #6c757d);
+}
+
 /* --- Buttons ------------------------------------------------------------ */
 /* .btn-primary and .btn-secondary were written for anchors in some
    stylesheets; these fill in what a <button> does not inherit. */
@@ -184,6 +195,104 @@ button.btn-action {
 .form-actions .btn-danger {
     width: auto;
     margin-top: 0;
+}
+
+/* Neither this file nor ink.css gave a form group any spacing of its own, so
+   each page had set it locally. Every dialog in the app stacks five or six in
+   a column, and without it the select of one sits against the label of the
+   next. */
+.modal-body .form-group {
+    margin-bottom: 1.1rem;
+}
+
+/* --- Checkbox rows ------------------------------------------------------- *
+ * A checkbox with a label and a line of explanation under it. Was in
+ * ppsearch.css for the filter dialog; the dashboard's meeting form asks the
+ * same shape of question, and two copies of a control is how they drift.
+ *
+ * Scoped to a dialog on purpose: onboarding.css styles a plainer
+ * .checkbox-label for the inline checkboxes on that page, and loads before
+ * this file. */
+
+.modal-body .checkbox-row {
+    margin-bottom: 1.1rem;
+}
+
+.modal-body .checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    cursor: pointer;
+}
+
+/* Drawn rather than left native. accent-color only tints the browser's own
+   control, which is rounded and shaded -- next to the square controls around
+   it, it read as a different app. The input is still the real control:
+   appearance:none removes the painting, not the checkbox. */
+.modal-body .checkbox-label input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0.1rem 0 0;
+    flex-shrink: 0;
+    background: var(--h-cell);
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+/* The tick: two borders of an empty box, rotated. Drawn a hair above center
+   because the rotation puts the stroke's weight low. */
+.modal-body .checkbox-label input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 0.11rem;
+    left: 0.3rem;
+    width: 0.25rem;
+    height: 0.5rem;
+    border: solid var(--h-on-give);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) scale(0.6);
+    opacity: 0;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.modal-body .checkbox-label:hover input[type="checkbox"] {
+    border-color: var(--h-edge);
+}
+
+.modal-body .checkbox-label input[type="checkbox"]:checked {
+    background: var(--h-give);
+    border-color: var(--h-give);
+}
+
+.modal-body .checkbox-label input[type="checkbox"]:checked::after {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+}
+
+.modal-body .checkbox-label input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+.modal-body .checkbox-label strong {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+.modal-body .checkbox-label em {
+    display: block;
+    margin-top: 0.15rem;
+    font-style: normal;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--h-dim);
 }
 
 /* --- Category chips ----------------------------------------------------- */
@@ -305,7 +414,7 @@ button.btn-action {
     padding: 1.5rem;
 }
 
-/* Forms inside a modal inherit the same column behaviour so their own
+/* Forms inside a modal inherit the same column behavior so their own
    scrollable regions can shrink correctly. */
 .modal-body form {
     display: flex;
@@ -318,6 +427,46 @@ button.btn-action {
     flex: 0 0 auto;
     padding-top: 1.25rem;
     border-top: 1px solid var(--border, var(--ctl-border));
+}
+
+/* --- Modal copy ---------------------------------------------------------- *
+ * The two blocks a confirmation dialog is made of: the line that names what
+ * is about to happen, and the rule-marked note saying what it costs. Here
+ * rather than in one page's stylesheet because more than one page asks before
+ * destroying something -- deleting an account in Settings, removing a meeting
+ * on the dashboard -- and they should ask in the same voice. */
+
+.modal-lede {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--h-ink-soft);
+    margin-bottom: 1rem;
+}
+
+.modal-lede strong {
+    font-family: var(--h-mono);
+    font-size: 0.87rem;
+    font-weight: 500;
+    color: var(--h-ink);
+    word-break: break-word;
+}
+
+.modal-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.85rem 0 0.85rem 1rem;
+    border-left: 3px solid var(--h-danger);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+    margin-bottom: 1.5rem;
+}
+
+.modal-warning i {
+    color: var(--h-danger);
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .modal-footer {
@@ -384,7 +533,7 @@ button.btn-action {
 
 /* --- Reduced motion ------------------------------------------------------
    The dialog slides up and scales in as it opens. That is movement nobody
-   asked for on every modal on the site, so it is skipped in favour of the
+   asked for on every modal on the site, so it is skipped in favor of the
    dialog simply being there. Opacity is left to fade: it does not move. */
 @media (prefers-reduced-motion: reduce) {
     .modal .modal-container,

@@ -71,7 +71,7 @@
                 aria-label="Menu" aria-expanded="false"></button>
         <nav class="navbar">
             <a href="index.html" class="active">Home</a>
-            <a href="ppsearch.html">Search</a>
+            <a href="ppsearch.html">Connect</a>
             <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
@@ -103,6 +103,15 @@
 
     <!-- Hero -->
     <section class="hero" id="main" tabindex="-1">
+        <!-- The dot lattice, drawn rather than tiled, for the first screen
+             only. pp.js paints the same 24px grid body.home carries as a CSS
+             texture -- aligned to it, so the two meet without a seam at the
+             fold -- and lets the dots near the cursor lift and brighten.
+             Decorative and inert: it is a texture that answers the mouse, and
+             there is nothing in it to read or operate. Left empty and unused
+             when the visitor has asked for reduced motion, in which case the
+             page texture underneath simply shows through. -->
+        <canvas class="hero-field" id="heroField" aria-hidden="true"></canvas>
         <div class="hero-inner">
             <div class="hero-content">
                 <div class="hero-badge eyebrow">Built for two-way partnerships</div>
@@ -110,12 +119,6 @@
                 <h1 class="hero-title">
                     Find a partner who needs what you <em>already have</em>
                 </h1>
-
-                <p class="hero-subtitle">
-                    Most partnerships fall apart because one side is doing a favour. PartnerPortal
-                    matches organizations on both what they need <em>and</em> what they can offer &mdash;
-                    so both sides walk in with something to gain.
-                </p>
 
                 <div class="hero-buttons">
                     <a href="onboarding.html" class="btn-primary">Get matched free</a>
@@ -161,7 +164,7 @@
                     </div>
 
                     <!-- Filled by pp.js. Decorative: the exchange rows below
-                         say in words what the grid says in colour. -->
+                         say in words what the grid says in color. -->
                     <div class="match-lattice" id="matchLattice" aria-hidden="true"></div>
                     <div class="lattice-axis" aria-hidden="true">
                         <span>they need &#9656;</span>
@@ -209,6 +212,53 @@
                     <button type="button" class="match-arrow" id="matchNext" aria-label="Next example match">
                         <i class='bx bx-chevron-right'></i>
                     </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- The argument the whole product rests on. It used to sit under the
+         headline, where it was the fourth thing stacked in a column that also
+         had to hold the buttons, the three facts and a match panel beside it.
+         On its own band it gets the width to be read as a statement, and it
+         is the first thing under the fold -- which is where someone who has
+         scrolled past the headline is asking exactly this question. -->
+    <section class="hero-lede">
+      <div class="lede-inner">
+        <p class="lede-text">
+            Most partnerships fall apart because one side is doing a favor. PartnerPortal
+            matches organizations on both what they need <em>and</em> what they can offer &mdash;
+            so both sides walk in with something to gain.
+        </p>
+      </div>
+    </section>
+
+    <!-- The span
+         A suspension bridge in the same square cells the match matrix is made
+         of, built from both ends inward as the page is scrolled. The metaphor
+         is the product's: neither side builds the whole thing, and the span
+         is only closed when both have reached the middle. Which is why it
+         builds from the outside in rather than left to right, and why the two
+         halves carry the two direction colors.
+
+         Decorative, and marked so. The heading and the line under the grid
+         say in words what the cells say in shape, so nothing here is the only
+         copy of anything. -->
+    <section class="bridge-section" id="span">
+        <div class="bridge-track" id="bridgeTrack">
+            <div class="bridge-stage">
+                <div class="bridge-head">
+                    <p class="eyebrow">Built from both ends</p>
+                    <h2 class="bridge-title">
+                        A partnership is a <em>structure</em>, not a favor
+                    </h2>
+                </div>
+
+                <div class="bridge-grid" id="bridgeGrid" aria-hidden="true"></div>
+
+                <div class="bridge-foot">
+                    <span class="bridge-side">You</span>
+                    <span class="bridge-side">Them</span>
                 </div>
             </div>
         </div>
@@ -275,7 +325,7 @@
                 <div class="text-content">
                     <h3 class="section-subtitle eyebrow">What makes it different</h3>
                     <h2 class="section-title">Built around what each side <span>brings</span>, not just what they <span>want</span></h2>
-                    <p class="section-description">A partnership where only one side gains is a favour, and favours run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
+                    <p class="section-description">A partnership where only one side gains is a favor, and favors run out. Matching on both directions is the whole design, from the categories an organization picks during onboarding through to the terms of the final agreement.</p>
                     <a href="onboarding.html" class="btn-primary">Set up your profile</a>
                 </div>
             </div>

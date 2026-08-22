@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         {
             score: 88,
             a: { initials: 'GE', name: 'Green Earth Initiative', type: 'NGO', offer: 'Volunteer Network' },
-            b: { initials: 'LC', name: 'Lakeside Community Centre', type: 'Community Org', offer: 'Event Space' }
+            b: { initials: 'LC', name: 'Lakeside Community Center', type: 'Community Org', offer: 'Event Space' }
         },
         {
             score: 85,
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         while (chosen.size < lit && guard++ < total * 8) {
             const i = Math.floor(rand() * total);
             if (chosen.has(i)) continue;
-            // Alternating directions, so neither colour dominates and the
+            // Alternating directions, so neither color dominates and the
             // grid reads as an exchange rather than as one side's inventory.
             chosen.set(i, chosen.size % 2 === 0 ? 'give' : 'take');
         }
@@ -416,8 +416,587 @@ document.addEventListener('DOMContentLoaded', function() {
     // screen and loses the animation, which is the right way round.
     const canAnimate = document.visibilityState === 'visible';
 
-    document.querySelectorAll('.scroll-section').forEach(section => {
+    // The lede band rides the same observer. It is not a .scroll-section --
+    // it holds one sentence, not a two-column block -- but it is under the
+    // fold, so it should arrive the way everything under the fold arrives.
+    document.querySelectorAll('.scroll-section, .hero-lede').forEach(section => {
         if (canAnimate) section.classList.add('pending');
         observer.observe(section);
     });
+});
+
+// ---------------------------------------------------------------------------
+// The headline, word by word
+//
+// The h1 carries an <em> around half of it, so this cannot be an innerHTML
+// split on spaces -- that would flatten the emphasis the sentence is built
+// on. It walks the text nodes instead and rewrites only those, which leaves
+// every element in place and every word inside the element it belongs to.
+//
+// Each word becomes a clipped wrapper around a span, and the span is what
+// moves; pp.css animates it out from under the clip. The words are numbered
+// through a custom property so the stagger is one rule rather than one per
+// word.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const title = document.querySelector('.hero-title');
+    if (!title) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Collected first: wrapping a text node replaces it, and a live walk
+    // would then be standing on a node that is no longer in the tree.
+    const walker = document.createTreeWalker(title, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) textNodes.push(n);
+
+    let index = 0;
+    textNodes.forEach((node) => {
+        // Kept: the separators are the spaces between words, and dropping
+        // them would run the sentence together once each word is a box.
+        const parts = node.nodeValue.split(/(\s+)/).filter((p) => p !== '');
+        if (parts.length === 0) return;
+
+        const frag = document.createDocumentFragment();
+        parts.forEach((part) => {
+            if (/^\s+$/.test(part)) {
+                frag.appendChild(document.createTextNode(part));
+                return;
+            }
+            const outer = document.createElement('span');
+            outer.className = 'rise-word';
+            const inner = document.createElement('span');
+            inner.style.setProperty('--word-index', String(index));
+            inner.textContent = part;
+            index += 1;
+            outer.appendChild(inner);
+            frag.appendChild(outer);
+        });
+        node.parentNode.replaceChild(frag, node);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The hero's dot field
+//
+// body.home tiles a 24px dot lattice across the whole page as a CSS texture.
+// Over the first screen the same lattice is drawn here instead, so it can
+// answer the cursor: dots near the pointer lift away from it, grow, and warm
+// towards the accent, and settle back when it leaves.
+//
+// It is painted on the same grid, measured from the same origin, so the drawn
+// half and the tiled half meet without a seam at the fold. The hero is the
+// first thing in the body and the header above it is position:fixed, so the
+// canvas's top-left corner really is the document's -- which is what the CSS
+// background-position resolves against too.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('heroField');
+    const hero = canvas && canvas.closest('.hero');
+    if (!canvas || !hero) return;
+
+    // Nothing is drawn at all in that case: the canvas stays empty and
+    // transparent, and the page's own texture shows through it unchanged.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
+
+    // Matches body.home's background-size, and the circle a radial-gradient
+    // tile puts at its center.
+    const STEP = 24;
+    const HALF = STEP / 2;
+    const BASE_RADIUS = 1;
+    // How far the cursor is felt, and how hard. Both in CSS pixels.
+    const REACH = 165;
+    const PUSH = 9;
+
+    let width = 0;
+    let height = 0;
+    let cols = 0;
+    let rows = 0;
+    let dpr = 1;
+
+    // Where the pointer is, and where the field currently believes it is.
+    // The gap between the two is the whole easing: the field chases, so a
+    // fast flick draws a trail that catches up rather than teleporting.
+    let pointerX = -9999;
+    let pointerY = -9999;
+    let fieldX = -9999;
+    let fieldY = -9999;
+    let strength = 0;      // 0 when the pointer is away, 1 when it is over
+    let targetStrength = 0;
+
+    let paper = '#F5F2EB';
+    let dotColor = 'rgba(0,0,0,0.06)';
+    let accent = '#1E3A6E';
+    let accentRGB = [30, 58, 110];
+
+    function readColors() {
+        const style = getComputedStyle(document.body);
+        paper = style.getPropertyValue('--h-paper').trim() || paper;
+        dotColor = style.getPropertyValue('--h-dot').trim() || dotColor;
+        accent = style.getPropertyValue('--h-give').trim() || accent;
+        accentRGB = parseColor(accent) || accentRGB;
+    }
+
+    // --h-give is a hex literal in both palettes; this is deliberately not a
+    // general CSS color parser, and falls back rather than guessing.
+    function parseColor(value) {
+        const hex = value.replace('#', '');
+        if (hex.length === 6) {
+            return [
+                parseInt(hex.slice(0, 2), 16),
+                parseInt(hex.slice(2, 4), 16),
+                parseInt(hex.slice(4, 6), 16),
+            ];
+        }
+        const m = value.match(/rgba?\(([^)]+)\)/);
+        if (m) {
+            const parts = m[1].split(',').map((p) => parseFloat(p));
+            if (parts.length >= 3) return [parts[0], parts[1], parts[2]];
+        }
+        return null;
+    }
+
+    function resize() {
+        const rect = hero.getBoundingClientRect();
+        width = Math.ceil(rect.width);
+        height = Math.ceil(rect.height);
+        // Capped: a 3x display over a full-screen hero is a lot of pixels to
+        // repaint every frame for a texture, and the difference above 2x is
+        // not visible on a 2px dot.
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cols = Math.ceil(width / STEP);
+        rows = Math.ceil(height / STEP);
+        readColors();
+        // Immediately, not on the next frame. Setting canvas.width resets the
+        // bitmap, and an alpha:false canvas resets to opaque black -- so any
+        // moment between here and the next paint is a black rectangle over
+        // the hero. That gap is the whole first screen when the loop is
+        // paused, which is exactly the case on a page opened in a background
+        // tab: no frames arrive until it is looked at.
+        draw(performance.now());
+    }
+
+    // Smoothstep. Linear falloff leaves a visible circular edge where the
+    // reach ends; this one arrives at zero flat.
+    function ease(t) {
+        return t * t * (3 - 2 * t);
+    }
+
+    function draw(now) {
+        ctx.fillStyle = paper;
+        ctx.fillRect(0, 0, width, height);
+
+        // The field eases towards the pointer rather than snapping to it.
+        fieldX += (pointerX - fieldX) * 0.14;
+        fieldY += (pointerY - fieldY) * 0.14;
+        // Quick to light, slow to let go. Symmetrical easing made the field
+        // feel like it was catching up with the cursor rather than answering
+        // it, and made the fade an abrupt switching-off.
+        strength += (targetStrength - strength) * (targetStrength > strength ? 0.16 : 0.05);
+
+        const reach = REACH;
+        const reachSq = reach * reach;
+        // Only the block of dots the cursor can actually reach is considered
+        // for the lit pass; the rest are one batched path.
+        const minCol = Math.max(0, Math.floor((fieldX - reach - HALF) / STEP));
+        const maxCol = Math.min(cols, Math.ceil((fieldX + reach - HALF) / STEP) + 1);
+        const minRow = Math.max(0, Math.floor((fieldY - reach - HALF) / STEP));
+        const maxRow = Math.min(rows, Math.ceil((fieldY + reach - HALF) / STEP) + 1);
+
+        // A slow diagonal swell, so the field is not perfectly still when
+        // nobody is touching it. Small enough to read as the paper breathing.
+        const t = now / 1000;
+
+        ctx.fillStyle = dotColor;
+        ctx.beginPath();
+        for (let row = 0; row < rows; row += 1) {
+            const y = row * STEP + HALF;
+            for (let col = 0; col < cols; col += 1) {
+                if (strength > 0.01
+                    && col >= minCol && col < maxCol
+                    && row >= minRow && row < maxRow) {
+                    const dx = col * STEP + HALF - fieldX;
+                    const dy = y - fieldY;
+                    if (dx * dx + dy * dy < reachSq) continue;   // drawn lit, below
+                }
+                const x = col * STEP + HALF;
+                const breathe = 0.9 + 0.1 * Math.sin(t * 0.6 + (col + row) * 0.22);
+                ctx.moveTo(x + BASE_RADIUS * breathe, y);
+                ctx.arc(x, y, BASE_RADIUS * breathe, 0, Math.PI * 2);
+            }
+        }
+        ctx.fill();
+
+        // The lit neighborhood, one dot at a time -- each has its own offset,
+        // size and alpha, so there is nothing to batch.
+        if (strength > 0.01) {
+            for (let row = minRow; row < maxRow; row += 1) {
+                for (let col = minCol; col < maxCol; col += 1) {
+                    const x = col * STEP + HALF;
+                    const y = row * STEP + HALF;
+                    const dx = x - fieldX;
+                    const dy = y - fieldY;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq >= reachSq) continue;
+
+                    const dist = Math.sqrt(distSq) || 0.0001;
+                    const falloff = ease(1 - dist / reach) * strength;
+
+                    // Pushed away from the cursor, so the lattice opens
+                    // around it rather than lighting up in place.
+                    const offset = falloff * PUSH;
+                    const px = x + (dx / dist) * offset;
+                    const py = y + (dy / dist) * offset;
+
+                    const radius = BASE_RADIUS + falloff * 1.7;
+                    const alpha = 0.1 + falloff * 0.75;
+                    ctx.fillStyle =
+                        `rgba(${accentRGB[0]}, ${accentRGB[1]}, ${accentRGB[2]}, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(px, py, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+    }
+
+    // --- The loop ---------------------------------------------------------
+    // Running only while the hero is on screen and the tab is being looked
+    // at. A texture is not worth a frame of work behind a scrolled-past fold
+    // or in a background tab.
+    let frame = null;
+    let visible = document.visibilityState === 'visible';
+    let onScreen = true;
+
+    function tick(now) {
+        draw(now);
+        frame = requestAnimationFrame(tick);
+    }
+
+    function play() {
+        if (frame === null && visible && onScreen) frame = requestAnimationFrame(tick);
+    }
+
+    function pause() {
+        if (frame !== null) {
+            cancelAnimationFrame(frame);
+            frame = null;
+        }
+    }
+
+    hero.addEventListener('pointermove', (e) => {
+        const rect = hero.getBoundingClientRect();
+        pointerX = e.clientX - rect.left;
+        pointerY = e.clientY - rect.top;
+        // First contact: start the field where the cursor is rather than
+        // easing it in from the corner it was parked in.
+        if (targetStrength === 0) {
+            fieldX = pointerX;
+            fieldY = pointerY;
+        }
+        targetStrength = 1;
+    });
+
+    hero.addEventListener('pointerleave', () => { targetStrength = 0; });
+
+    // A touch is a tap, not a hover: the field answers it and then lets go,
+    // rather than leaving a bright patch where a finger last was.
+    hero.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'touch') return;
+        const rect = hero.getBoundingClientRect();
+        pointerX = fieldX = e.clientX - rect.left;
+        pointerY = fieldY = e.clientY - rect.top;
+        targetStrength = 1;
+        setTimeout(() => { targetStrength = 0; }, 900);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        visible = document.visibilityState === 'visible';
+        if (visible) play(); else pause();
+    });
+
+    if ('IntersectionObserver' in window) {
+        new IntersectionObserver((entries) => {
+            onScreen = entries[0].isIntersecting;
+            if (onScreen) play(); else pause();
+        }, { threshold: 0 }).observe(hero);
+    }
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 120);
+    });
+
+    // resize() paints its own first frame, so the field is already the right
+    // texture before the loop has run once -- including when the loop is not
+    // going to run at all yet.
+    resize();
+    play();
+});
+
+// ---------------------------------------------------------------------------
+// The span
+//
+// A suspension bridge drawn in the same square cells as the match matrix, and
+// built from both ends inward as the page scrolls past it. Neither side builds
+// the whole thing; the span is closed only when both halves reach the middle.
+//
+// The shape is generated rather than drawn by hand, so the same code produces
+// a coarse bridge on a phone and a fine one on a desktop -- the features are
+// placed as fractions of the grid, not as pixel coordinates.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const section = document.getElementById('span');
+    const track = document.getElementById('bridgeTrack');
+    const stage = track && track.querySelector('.bridge-stage');
+    const grid = document.getElementById('bridgeGrid');
+    if (!section || !track || !stage || !grid) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /**
+     * Every cell of the bridge, as {c, r} on a cols x rows lattice.
+     *
+     * Deck, two towers, the main cable between them, the backstays out to the
+     * ends, the hangers under the cable, and the piers below the deck. Set
+     * rather than array: the parts overlap, and a cell drawn twice is a cell
+     * that fades in twice.
+     */
+    function shape(cols, rows) {
+        const cells = new Set();
+        const add = (c, r) => {
+            const ci = Math.round(c);
+            const ri = Math.round(r);
+            if (ci < 0 || ci >= cols || ri < 0 || ri >= rows) return;
+            cells.add(`${ci},${ri}`);
+        };
+
+        const deckRow = Math.round(rows * 0.6);
+        const deckThickness = Math.max(1, Math.round(rows * 0.09));
+        const towerTop = Math.max(1, Math.round(rows * 0.14));
+        const towerWidth = Math.max(1, Math.round(cols * 0.045));
+        const leftTower = Math.round(cols * 0.21);
+        const rightTower = cols - leftTower - towerWidth;
+
+        // The deck, all the way across.
+        for (let c = 0; c < cols; c += 1) {
+            for (let k = 0; k < deckThickness; k += 1) add(c, deckRow + k);
+        }
+
+        // The two towers, standing on the deck.
+        [leftTower, rightTower].forEach((t) => {
+            for (let w = 0; w < towerWidth; w += 1) {
+                for (let r = towerTop; r < deckRow; r += 1) add(t + w, r);
+            }
+        });
+
+        // The main cable. A parabola is close enough to a catenary at this
+        // resolution, and it is the shape the eye is expecting.
+        const leftTop = leftTower + towerWidth - 1;
+        const rightTop = rightTower;
+        const mid = (leftTop + rightTop) / 2;
+        const halfSpan = Math.max(1, mid - leftTop);
+        const dip = Math.max(1, Math.round((deckRow - towerTop) * 0.66));
+        const cableAt = (c) => {
+            const k = (c - mid) / halfSpan;
+            return towerTop + dip * (1 - k * k);
+        };
+        for (let c = leftTop; c <= rightTop; c += 1) add(c, cableAt(c));
+
+        // The backstays, from each tower top out to the deck at the ends.
+        const stay = (towerCol, endCol) => {
+            const run = Math.max(1, Math.abs(endCol - towerCol));
+            const step = endCol > towerCol ? 1 : -1;
+            for (let i = 0; i <= run; i += 1) {
+                const k = i / run;
+                add(towerCol + i * step, towerTop + (deckRow - towerTop) * k * k);
+            }
+        };
+        stay(leftTop, 0);
+        stay(rightTop, cols - 1);
+
+        // Hangers, every few columns, from the cable down to the deck.
+        const spacing = Math.max(2, Math.round(cols * 0.06));
+        for (let c = leftTop + spacing; c < rightTop; c += spacing) {
+            for (let r = Math.round(cableAt(c)) + 1; r < deckRow; r += 1) add(c, r);
+        }
+
+        // Piers, under each tower, holding the deck up out of the water.
+        const pierBottom = Math.min(rows - 1, deckRow + deckThickness + Math.round(rows * 0.2));
+        [leftTower, rightTower].forEach((t) => {
+            for (let w = 0; w < towerWidth; w += 1) {
+                for (let r = deckRow + deckThickness; r <= pierBottom; r += 1) add(t + w, r);
+            }
+        });
+
+        return [...cells].map((key) => {
+            const [c, r] = key.split(',').map(Number);
+            return { c, r };
+        });
+    }
+
+    let cells = [];
+    let maxOrder = 1;
+    let cols = 0;
+    let built = -1;         // how many orders are currently shown
+
+    // The build only ever goes forwards. Scrolling back up leaves the span
+    // closed rather than taking it apart again: a structure that dismantles
+    // itself when you look away from it is a gimmick, and re-reading the
+    // heading above it should not cost you the thing it is describing.
+    //
+    // Held as a fraction rather than as a count of orders, so it survives the
+    // re-render a resize causes -- the order numbers themselves change with
+    // the column count, and a fraction does not.
+    let reached = 0;
+
+    function render() {
+        // Coarser on a narrow screen: forty-five columns across a phone is a
+        // five-pixel cell, and the bridge stops being a bridge.
+        const w = window.innerWidth;
+        cols = w < 34 * 16 ? 25 : (w < 62 * 16 ? 33 : 45);
+        const rows = Math.round(cols * 0.42);
+
+        grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        grid.innerHTML = '';
+
+        // The middle column is where the two halves meet, and is the last
+        // thing to land whichever side it is counted from.
+        const centre = (cols - 1) / 2;
+        cells = shape(cols, rows).map((cell) => {
+            const el = document.createElement('span');
+            const side = cell.c < centre ? 'give' : 'take';
+            // Distance from the outer end this cell is built from, so both
+            // halves advance at the same rate towards the middle.
+            const order = cell.c < centre ? cell.c : (cols - 1 - cell.c);
+            el.className = `bridge-cell ${side}`;
+            if (order >= Math.floor(centre)) el.classList.add('keystone');
+            el.style.gridColumn = String(cell.c + 1);
+            el.style.gridRow = String(cell.r + 1);
+            grid.appendChild(el);
+            return { el, order };
+        });
+
+        maxOrder = cells.reduce((m, c) => Math.max(m, c.order), 1);
+        built = -1;
+        apply(reduced ? 1 : reached);
+    }
+
+    /** Show every cell whose turn has come, and nothing beyond it. */
+    function apply(progress) {
+        reached = Math.max(reached, Math.min(1, Math.max(0, progress)));
+        const reach = Math.round(reached * (maxOrder + 1)) - 1;
+        // Only when the frontier has actually moved: a scroll of a few pixels
+        // does not change which cells are shown, and touching several hundred
+        // class lists for it would be the expensive part of this whole thing.
+        if (reach === built) return;
+        built = reach;
+
+        cells.forEach((cell) => {
+            cell.el.classList.toggle('built', cell.order <= reach);
+        });
+    }
+
+    function progress() {
+        const rect = track.getBoundingClientRect();
+        // The distance the track can travel with the stage pinned: its own
+        // height less the one screen the stage occupies.
+        const travel = rect.height - window.innerHeight;
+        if (travel <= 0) return 1;
+        return Math.min(1, Math.max(0, -rect.top / travel));
+    }
+
+    render();
+
+    if (reduced) return;   // render() has already built it
+
+    // Coalesced onto a frame: scroll fires far more often than the screen is
+    // painted, and every one of those extra calls would be measuring a layout
+    // that has not changed yet.
+    // Give the scroll distance back the moment there is nothing left to
+    // reveal.
+    //
+    // The extra height exists to be scrolled through while the span closes.
+    // After that it is a screen and a half of pinning in front of a finished
+    // picture, and the page should simply carry on.
+    //
+    // The span closes at the far end of the track, which is exactly where the
+    // sticky stage's pinned position and its resting position coincide -- so
+    // dropping the height there leaves the stage on the same pixels it was
+    // already on, and the reader sees the page start moving again rather than
+    // anything jump. The scroll position moves a long way underneath that,
+    // because a screen and a half has just left the document above it, and
+    // none of it is visible.
+    //
+    // Anywhere the stage is not pinned, collapsing the section would move what
+    // is on screen, so it waits until there is nothing on screen to move: the
+    // section entirely above the viewport (correcting for the height that
+    // leaves from above it) or entirely below it (nothing to correct).
+    //
+    // The correction is measured rather than assumed. Chrome's scroll
+    // anchoring already adjusts for content shrinking above the viewport, and
+    // subtracting the collapsed height on top of that moved the page twice as
+    // far as it should have, in the wrong direction. Reading what a reference
+    // element actually did works whether or not the browser has done the job:
+    // there is nothing left to correct when it has.
+    let released = false;
+    function release() {
+        // Tested against the build, not against the progress fraction. The
+        // last cell lands a hair before the end of the track -- and a track
+        // whose top is at a fractional pixel never reports a progress of
+        // exactly 1 anyway -- so `reached >= 1` was a condition that could sit
+        // there unmet with the span visibly closed.
+        if (released || built < maxOrder) return;
+
+        const rect = section.getBoundingClientRect();
+        // Within a pixel of the top: sticky is holding it there, which is the
+        // one on-screen position the swap is invisible from.
+        const pinned = Math.abs(stage.getBoundingClientRect().top) < 1.5;
+        const above = rect.bottom <= 0;
+        const below = rect.top >= window.innerHeight;
+        if (!pinned && !above && !below) return;
+
+        // Whatever must not appear to move: the stage itself while it is
+        // pinned, otherwise whatever follows the section.
+        const anchor = pinned ? stage : (above ? section.nextElementSibling : null);
+        const before = anchor ? anchor.getBoundingClientRect().top : null;
+        section.classList.add('released');
+        if (anchor) {
+            const moved = anchor.getBoundingClientRect().top - before;
+            if (moved) window.scrollBy(0, moved);
+        }
+
+        released = true;
+        window.removeEventListener('scroll', onScroll);
+    }
+
+    let queued = false;
+    function onScroll() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+            queued = false;
+            apply(progress());
+            release();
+        });
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            render();
+            apply(progress());
+        }, 150);
+    });
+
+    apply(progress());
 });

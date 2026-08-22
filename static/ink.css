@@ -60,7 +60,7 @@ body.ink {
        thing on the page that wants attention. */
     --h-give: #1E3A6E;
     /* #C7522A was the first choice and is 4.02:1 on the paper -- it is used
-       as a text colour, not only as a fill, and failed AA there. Darkened
+       as a text color, not only as a fill, and failed AA there. Darkened
        until one value serves both jobs: 4.8:1 as text on the paper, 5.4:1
        for a label sitting on top of it as a fill. */
     --h-take: #B4491F;
@@ -76,8 +76,8 @@ body.ink {
     --h-on-seal: #ffffff;
 
     /* Destructive. Kept distinct from --h-take, which is a highlight and gets
-       used decoratively -- the colour that means "this cannot be undone" must
-       not also be the colour of a section label. */
+       used decoratively -- the color that means "this cannot be undone" must
+       not also be the color of a section label. */
     --h-danger: #A32020;
     --h-on-danger: #ffffff;
     --h-surface-danger: #FBF0EE;
@@ -87,10 +87,10 @@ body.ink {
 
     /* The footer is a dark band in BOTH themes -- that is the whole point of
        it, the same role tokens.css gives --dark. It cannot be --h-ink: that
-       token is the text colour, and in the dark palette it is bone, so a
+       token is the text color, and in the dark palette it is bone, so a
        footer painted with it flipped to a cream block with near-black text
        sitting under a near-black page. Named separately so the role and the
-       ink colour cannot be confused again. */
+       ink color cannot be confused again. */
     --h-footer: #17191F;
     --h-on-footer: #F5F2EB;
 
@@ -120,7 +120,7 @@ body.ink {
     --h-take: #E8845C;
     --h-seal: #5FAE8C;
     /* All three fills are light here, so what sits on them is the page
-       colour rather than white. */
+       color rather than white. */
     --h-on-give: #0C0C0E;
     --h-on-take: #0C0C0E;
     --h-on-seal: #0C0C0E;
@@ -156,7 +156,7 @@ body.ink select {
     font-family: inherit;
 }
 
-/* The default heading colour, wrapped in :where() so it contributes no
+/* The default heading color, wrapped in :where() so it contributes no
  * specificity of its own -- the rule lands at (0,0,1), the weight of a bare
  * element selector, and any page rule at all outranks it.
  *
@@ -210,7 +210,7 @@ body.ink summary:focus-visible {
  * Loading skeletons
  *
  * shared.css owns .skeleton for the whole app and paints it from tokens.css's
- * --skeleton-* pair, which is a cool blue-grey mixed for the old palette and
+ * --skeleton-* pair, which is a cool blue-gray mixed for the old palette and
  * reads as a patch of a different page on the cream. It also gives it a
  * 0.375rem radius, which is the one shape nothing else in this design has.
  *
@@ -413,10 +413,10 @@ body.ink .modal-body textarea::placeholder {
  * controls. A bare `.form-group label` reaches every label nested anywhere
  * inside the group, and on the search page that is the category chips and the
  * filter checkboxes -- both of which are <label> elements wrapping a hidden
- * input. They were being letterspaced, uppercased and recoloured as if they
- * were captions, which on a checked chip meant the label colour beat
+ * input. They were being letterspaced, uppercased and recolored as if they
+ * were captions, which on a checked chip meant the label color beat
  * .category-chip.checked's on specificity and painted the text the same
- * colour as the fill behind it. */
+ * color as the fill behind it. */
 body.ink .form-group > label:not(.checkbox-label):not(.category-chip) {
     display: block;
     font-family: var(--h-mono);
@@ -426,7 +426,7 @@ body.ink .form-group > label:not(.checkbox-label):not(.category-chip) {
     text-transform: uppercase;
     /* Through a custom property, not a plain value. The two :not()s above
        push this selector to (0,4,2), which a page cannot realistically beat
-       without repeating them -- so the direction colours on the onboarding
+       without repeating them -- so the direction colors on the onboarding
        trade labels and the propose dialog's two sides were being written and
        silently discarded. A custom property inherits from the field's own
        wrapper, so a page sets --h-label on .trade-need and the label picks it
@@ -464,7 +464,7 @@ body.ink .field-error {
  * is how the two pages ended up with chips at different sizes and different
  * radii for the same list of words.
  *
- * The checked colour is deliberately NOT set here. A chip means something
+ * The checked color is deliberately NOT set here. A chip means something
  * different depending on which side of the exchange it is on, and the page
  * says which by qualifying the selector (see .trade-need / .trade-offer in
  * onboarding.css and the propose grid in ppsearch.css). A shared default
@@ -544,7 +544,7 @@ body.ink .picker-empty {
  * ------------------------------------------------------------------------- */
 
 /* The scrim. Deeper than forms.css's default: over a cream page a 55% wash
-   still reads as "the page, slightly greyer" rather than as a layer, and a
+   still reads as "the page, slightly grayer" rather than as a layer, and a
    confirm dialog that does not clearly sit in front of everything else is the
    wrong dialog to be subtle with. */
 body.ink .modal {
@@ -685,6 +685,42 @@ body.ink .account-dropdown button:hover {
     color: var(--h-ink);
 }
 
+/* nav.css rounds every row in this menu and pads the panel, so the hover fill
+   lands as a floating pill inset from the border -- the last piece of the old
+   UI still visible in the header. Squared off and run edge to edge, the way a
+   row reads everywhere else in this design. */
+body.ink .account-dropdown {
+    padding: 0;
+}
+
+body.ink .navbar .account-dropdown a,
+body.ink .account-dropdown button {
+    border-radius: 0;
+    padding: 0.65rem 0.9rem;
+}
+
+body.ink .account-identity {
+    padding: 0.75rem 0.9rem 0.7rem;
+    border-bottom-color: var(--h-rule);
+    margin-bottom: 0;
+}
+
+/* Signing out keeps its own rule above it, but in this palette's hairline
+   rather than the old blue-gray. */
+body.ink .account-dropdown .account-signout {
+    margin-top: 0;
+    border-radius: 0;
+    border-top-color: var(--h-rule);
+}
+
+/* The one row in the menu that does something you cannot take back says so on
+   hover. nav.css tints it with the old red, and the generic row hover above
+   is more specific than that rule, so on these pages it said nothing at all. */
+body.ink .account-dropdown .account-signout:hover {
+    background: var(--h-surface-danger);
+    color: var(--h-danger);
+}
+
 body.ink .account-identity .account-name {
     color: var(--h-ink);
 }
@@ -721,11 +757,56 @@ body.ink #menu-icon {
         border-bottom: 1px solid var(--h-edge);
     }
 
-    /* In the drawer the avatar is a row, not a square marker, and nav.css
-       gives the circle beside it a blue tint from the old palette. */
+    /* The drawer's own hairlines. nav.css draws them in #eef0f6, a blue-gray
+       from the old palette that is visibly cool against this paper and does
+       not darken at all under the dark theme. */
+    body.ink .navbar a {
+        border-bottom-color: var(--h-rule);
+    }
+
+    /* In the drawer the account is a row in the list, not a marker at the end
+       of a bar -- but every rule that made it one lives on a bare
+       `.avatar-button` in nav.css's drawer block, and `body.ink
+       .avatar-button` above outranks all of them regardless of the media
+       query, which does nothing for specificity. So the row collapsed back to
+       a 2.3rem square, right-aligned by the slot's grid, with its menu
+       hanging off the side of the drawer. Restated here at a weight that
+       wins.
+       The chain is given its width explicitly for the same reason: the slot
+       is a shrink-to-fit grid in the bar above, and the row can only fill the
+       drawer if everything between it and the drawer does too. */
+    body.ink .nav-account,
+    body.ink .account-menu,
+    body.ink .account-dropdown {
+        width: 100%;
+    }
+
     body.ink .avatar-button {
+        width: 100%;
+        height: auto;
+        justify-content: flex-start;
+        gap: 0.7rem;
+        padding: 0.9rem 0.25rem;
         background: none;
         border-bottom-color: var(--h-rule);
+    }
+
+    /* A whole row going near-black under the cursor is the bar's treatment,
+       where the target is a 2.3rem square. Here the row is the width of the
+       drawer and the label carries the meaning, so it stays flat. */
+    body.ink .avatar-button:hover,
+    body.ink .avatar-button[aria-expanded="true"] {
+        background: none;
+    }
+
+    /* Part of the list, not a panel floating over the page: nav.css already
+       makes it static and borderless, but the border and shadow come back
+       from `body.ink .account-dropdown` above on specificity. */
+    body.ink .account-dropdown {
+        position: static;
+        border: none;
+        box-shadow: none;
+        padding: 0.2rem 0 0.5rem;
     }
 
     body.ink .avatar-button .avatar-initials {
@@ -734,7 +815,14 @@ body.ink #menu-icon {
         color: var(--h-on-give);
     }
 
+    /* The button is mono because the initials in the square are metadata; the
+       name beside them is not, and reads as a name in the same face the rest
+       of the drawer uses. */
     body.ink .avatar-button .avatar-label {
+        font-family: var(--h-sans);
+        font-size: 0.95rem;
+        font-weight: 500;
+        letter-spacing: 0;
         color: var(--h-ink);
     }
 }
@@ -799,7 +887,7 @@ body.ink .footer-bottom {
     color: color-mix(in srgb, var(--h-on-footer) 52%, transparent);
 }
 
-/* Both footer colours are dark, so on the dark theme the band and the page
+/* Both footer colors are dark, so on the dark theme the band and the page
    are close enough to merge. A hairline gives it an edge. */
 :root[data-theme="dark"] body.ink .site-footer {
     border-top: 1px solid var(--h-rule);
