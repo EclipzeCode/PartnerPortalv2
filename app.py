@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 import os
@@ -25,14 +26,19 @@ from flask import (
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.routing import IntegerConverter
 
 from categories import (
     CATEGORY_GROUPS, CATEGORY_TOTAL, FOCUS_AREAS, FOCUS_TOTAL,
     ORGANIZATION_TYPES, TIMELINE_OPTIONS, VALID_TIMELINES, clean_categories,
-    clean_focus_areas, labels_for,
+    clean_focus_areas, label_for, labels_for,
 )
 from db import SessionLocal
 from links import LinkError, parse_links
+from units import (
+    DEFAULT_UNITS, MAX_AMOUNT, MAX_UNIT_DETAIL, UNITS, clean_unit,
+    default_unit_for,
+)
 from matching import find_matches, match_overview, score_pair
 from moderation import name_problem
 from models import (
@@ -44,7 +50,7 @@ from notifications import (
     notify_email_verification, notify_message_received,
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
-    notify_proposal_responded,
+    notify_proposal_responded, notify_proposal_updated,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +73,52 @@ app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 # trusts exactly one proxy hop, matching Render's setup; a value too high
 # would let a client forge its own IP by sending its own X-Forwarded-For.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
+# --- Row ids ----------------------------------------------------------------
+# Every id column in models.py is a Postgres `integer`. A number larger than
+# one cannot be a row that happens to be missing -- it cannot be compared
+# against the column at all. psycopg raises NumericValueOutOfRange, which
+# reaches SQLAlchemy as a DataError; that is not an IntegrityError, so
+# nothing here catches it, and it surfaces as a 500.
+#
+# `<int:org_id>` accepts arbitrary-precision integers, so producing one took
+# nothing more than a mangled link:
+#
+#   GET /api/organizations/99999999999999999999/public   ->   500
+#
+# on an unauthenticated route, which means any crawler following a broken
+# profile URL could fill the error log with them.
+#
+# Bounding the converter rather than each handler, because the answer is the
+# same everywhere and there are a dozen of these routes: over the ceiling,
+# the rule simply does not match, and the request lands on the 404 it should
+# always have been. Registered before the first @app.route below, since a
+# rule compiles its converters when it is added to the map.
+PG_INT_MAX = 2147483647
+
+
+class BoundedIntegerConverter(IntegerConverter):
+    """`<int:...>`, refusing anything Postgres could not hold."""
+
+    def __init__(self, map, *args, **kwargs):
+        kwargs.setdefault("max", PG_INT_MAX)
+        super().__init__(map, *args, **kwargs)
+
+
+app.url_map.converters["int"] = BoundedIntegerConverter
+
+
+def valid_id(value):
+    """Whether `value` could name a row at all.
+
+    For the ids that arrive in a JSON body rather than in the path, where the
+    converter above never sees them. Out of range is answered as "not found",
+    exactly as an id that is merely absent is -- from the caller's side there
+    is no difference worth drawing, and inventing one would say more about
+    the schema than about the request.
+    """
+    return 0 < value <= PG_INT_MAX
+
 
 # Sessions are signed with this key. A generated fallback keeps local
 # development working, but it changes on every restart -- so every session is
@@ -105,6 +157,17 @@ app.config.update(
     # Only send the cookie over HTTPS in production. Left off locally because
     # the dev server is plain HTTP and the cookie would never be set.
     SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
+    # How long a session survives without being used. Stated rather than
+    # inherited: every sign-in sets session.permanent, and the ceiling was
+    # whatever Flask's default happened to be (31 days) -- a number nothing
+    # here had chosen and which could move underneath the app on an upgrade.
+    #
+    # Thirty days is the same order as that default, because this is a tool
+    # organizations check when something is happening rather than daily, and
+    # a shorter window would mostly mean signing in again to read one
+    # proposal. Lower it here if that trade stops being the right one; the
+    # sliding refresh means an active account is never interrupted.
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
 )
 
 # bcrypt refuses passwords longer than this; hashing silently truncated them in
@@ -364,11 +427,55 @@ def get_db():
 
 
 def current_org(db):
-    """The signed-in organization, or None."""
+    """The signed-in organization, or None.
+
+    None also covers a session that was valid once and has since been
+    revoked -- see Organization.session_epoch. A cookie stamped with an
+    older epoch is treated exactly like one pointing at a deleted row: not
+    signed in, rather than signed in as somebody who has since locked this
+    session out.
+    """
     org_id = session.get("org_id")
     if not org_id:
         return None
-    return db.get(Organization, org_id)
+    org = db.get(Organization, org_id)
+    if org is None:
+        return None
+    # Defaulting to 0 rather than failing closed on a missing key, so the
+    # deploy that adds this does not sign out everyone holding a cookie
+    # issued before it existed: those sessions read as epoch 0, which is what
+    # every existing row was backfilled with. Once an account has revoked
+    # anything, its epoch is above 0 and a cookie with no epoch is refused
+    # like any other stale one.
+    if session.get("epoch", 0) != org.session_epoch:
+        return None
+    return org
+
+
+def _start_session(org):
+    """Sign `org` in, replacing whatever was in the session before.
+
+    One place, because the epoch has to be stamped alongside org_id every
+    time and a sign-in path that forgot it would hand out a cookie that
+    stops working the first time the account revokes anything.
+    """
+    session.clear()
+    session["org_id"] = org.id
+    session["epoch"] = org.session_epoch
+    session.permanent = True
+
+
+def _end_other_sessions(org):
+    """Revoke every session on this account except the one making the call.
+
+    The caller is responsible for committing -- this only moves the counter
+    and re-stamps the current cookie to match, so whoever is doing the
+    revoking stays signed in on the device they are doing it from. Everybody
+    else, including whoever the change is meant to lock out, is refused by
+    current_org on their next request.
+    """
+    org.session_epoch = (org.session_epoch or 0) + 1
+    session["epoch"] = org.session_epoch
 
 
 def login_required(view):
@@ -543,6 +650,124 @@ def add_cache_headers(response):
     return response
 
 
+# --- Security headers -------------------------------------------------------
+# The app answered with none of these, which left the browser to guess at
+# every question they settle: whether a response may be reinterpreted as a
+# different content type, whether the site may be framed by somebody else,
+# how much of a URL to hand to a third party, and -- the one that matters --
+# where scripts are allowed to come from.
+#
+# The last is worth the most here. Everything this site renders from user
+# input goes through escapeHtml or textContent, so there is no known
+# injection point; a Content-Security-Policy is what makes that a property
+# of the page rather than of every future edit to it.
+#
+# Only one inline <script> exists (the theme guard in every page's <head>,
+# which has to run before the first stylesheet), and it is byte-identical
+# across the pages, so a single hash covers all of them and script-src never
+# needs 'unsafe-inline'. Inline event handlers and javascript: URLs would
+# also have to be allowed by that keyword; there are none, and this policy
+# is what keeps it that way.
+_INLINE_SCRIPT_RE = re.compile(
+    r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S
+)
+
+_csp_value = None
+_csp_lock = threading.Lock()
+
+
+def _inline_script_hashes():
+    """A CSP source hash for every inline <script> in the served pages.
+
+    Computed from the files rather than written out as a constant, so
+    editing the theme guard cannot silently take the whole policy down with
+    it -- the hash simply follows the edit. This is the same reasoning
+    asset_version() uses for the cache stamps.
+    """
+    digests = set()
+    for name in _PAGES:
+        try:
+            with open(os.path.join(STATIC_DIR, name), encoding="utf-8") as f:
+                html = f.read()
+        except OSError:
+            continue
+        for body in _INLINE_SCRIPT_RE.findall(html):
+            digest = base64.b64encode(
+                hashlib.sha256(body.encode("utf-8")).digest()
+            ).decode("ascii")
+            digests.add(f"'sha256-{digest}'")
+    return sorted(digests)
+
+
+def content_security_policy():
+    """The policy string, built once on first use.
+
+    Lazily rather than at import because it reads every page in static/, and
+    because _PAGES is not built until further down this file.
+    """
+    global _csp_value
+    if _csp_value is not None:
+        return _csp_value
+    with _csp_lock:
+        if _csp_value is None:
+            scripts = " ".join(["'self'", *_inline_script_hashes()])
+            _csp_value = "; ".join([
+                "default-src 'self'",
+                f"script-src {scripts}",
+                # Google Fonts serves the stylesheet; unpkg serves boxicons.
+                # Self-hosting both would let these collapse to 'self'.
+                "style-src 'self' https://fonts.googleapis.com "
+                "https://unpkg.com",
+                "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
+                "img-src 'self' data:",
+                # Every fetch on this site is same-origin; see common.js.
+                "connect-src 'self'",
+                "form-action 'self'",
+                # Nobody may frame this, which is what stops a copy of the
+                # site being wrapped in someone else's page to harvest a
+                # login. X-Frame-Options below says the same to anything old
+                # enough not to read this.
+                "frame-ancestors 'none'",
+                "base-uri 'none'",
+                "object-src 'none'",
+            ])
+    return _csp_value
+
+
+@app.after_request
+def add_security_headers(response):
+    """Applied to every response, including the error pages."""
+    response.headers.setdefault(
+        "Content-Security-Policy", content_security_policy())
+    # Stops a response being reinterpreted as a type it did not declare --
+    # the trick that turns an uploaded or reflected value into script.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    # same-origin, not the browser default: the verification, password reset
+    # and email confirmation links all carry their token in the query string,
+    # and those pages load a stylesheet from Google and one from unpkg. The
+    # default policy trims the path for cross-origin requests, but saying so
+    # here means the tokens cannot reach a third party even if that default
+    # changes or a future page links out.
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    # None of these are used, and a page that never asks for a camera should
+    # not be able to start.
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    )
+    # Only where there is TLS to insist on. Sent over plain HTTP locally it
+    # would pin the dev server to a scheme it does not serve.
+    #
+    # No includeSubDomains: this is a single host today, and the directive
+    # would follow a future custom domain onto subdomains that may not have
+    # certificates yet.
+    if os.environ.get("FLASK_ENV") == "production":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
 # --- Static frontend --------------------------------------------------------
 @app.route("/")
 def index():
@@ -627,7 +852,10 @@ def organization_page():
         "See what this organization offers and needs, and get in touch to "
         "propose a partnership on PartnerPortal."
     )
-    if org_id.isdigit():
+    # isdigit() alone let "9" * 20 through to a lookup Postgres cannot answer
+    # -- see valid_id. A link with a mangled id falls back to the generic
+    # preview, which is what every other unresolvable id here already does.
+    if org_id.isdigit() and valid_id(int(org_id)):
         db = get_db()
         try:
             org = db.get(Organization, int(org_id))
@@ -765,6 +993,16 @@ def get_categories():
         "focus_areas": [
             {"slug": slug, "label": label} for slug, label in FOCUS_AREAS
         ],
+        # How much of a thing, and which unit each category starts on. Sent
+        # with the vocabulary rather than hardcoded in the proposal form: the
+        # form is not the only client, and a units list that lived in a
+        # script would drift from the one the server validates against.
+        "units": [
+            {"slug": slug, "label": plural, "singular": singular,
+             "dimension": dimension}
+            for slug, singular, plural, dimension, _base in UNITS
+        ],
+        "default_units": dict(DEFAULT_UNITS),
     }
 
     response = jsonify(payload)
@@ -971,9 +1209,7 @@ def register():
         # Registering signs you in -- otherwise the next step is a pointless
         # trip back through the login form. Verification is informational
         # only right now: nothing here or downstream checks email_verified.
-        session.clear()
-        session["org_id"] = org.id
-        session.permanent = True
+        _start_session(org)
         return jsonify({
             "message": "Account created",
             "organization": org.private_dict(),
@@ -1006,6 +1242,28 @@ def login():
                      "few minutes and try again.",
         }), 429
 
+    # The same limit again, keyed by the address being tried rather than by
+    # who is trying it. The bucket above is per connection, so it does
+    # nothing about the attack that matters most here: one known address,
+    # guessed at from many addresses at once, which is what a botnet or a
+    # proxy pool makes cheap. Each individual IP stays well under 20 while
+    # the account itself takes thousands of attempts.
+    #
+    # Keyed on what was submitted, not on an account that was found, so this
+    # runs before the lookup and costs the same whether or not the address is
+    # registered -- an attacker cannot tell a rate-limited real account from
+    # a rate-limited imaginary one, which would be exactly the enumeration
+    # oracle the identical "Invalid email or password" below exists to avoid.
+    #
+    # Ten rather than the twenty above: this counts one person's own typing,
+    # where the connection limit has to cover a whole office sharing an
+    # address.
+    if rate_limited("login_email", email, max_attempts=10, window_seconds=900):
+        return jsonify({
+            "error": "Too many attempts for that account. Please wait a few "
+                     "minutes and try again.",
+        }), 429
+
     db = get_db()
     try:
         org = db.query(Organization).filter(
@@ -1024,9 +1282,7 @@ def login():
         ):
             return invalid
 
-        session.clear()
-        session["org_id"] = org.id
-        session.permanent = True
+        _start_session(org)
         return jsonify({
             "message": "Signed in",
             "organization": org.private_dict(),
@@ -1160,15 +1416,20 @@ def reset_password():
         ).decode("utf-8")
         org.password_reset_token = None
         org.password_reset_sent_at = None
+        # Every session opened under the old password ends here. This is the
+        # path somebody locked out of their own account takes, so it is the
+        # one that most has to leave whoever locked them out behind: the
+        # attacker's session is the thing being reset away from. Bumped
+        # before the commit so the new epoch is what gets persisted, and
+        # _start_session below stamps the cookie with that same value.
+        org.session_epoch = (org.session_epoch or 0) + 1
         db.commit()
 
         # Proving control of the inbox and choosing a new password is the
         # same proof /login asks for; signing in here saves a redundant trip
         # back through it, the same reasoning /register signs someone in on
         # completion.
-        session.clear()
-        session["org_id"] = org.id
-        session.permanent = True
+        _start_session(org)
         return jsonify({
             "message": "Password reset",
             "organization": org.private_dict(),
@@ -1440,9 +1701,22 @@ def change_password(org, db):
     org.password_hash = bcrypt.hashpw(
         new_password.encode("utf-8"), bcrypt.gensalt()
     ).decode("utf-8")
+    # The point of changing a password is usually that somebody else might
+    # have the old one, and until now that did nothing to the sessions
+    # already open on the account -- a cookie taken from a shared machine
+    # kept working for weeks afterwards, while the person who changed the
+    # password had been told they had fixed it. This ends all of them except
+    # the one asking, which stays signed in.
+    _end_other_sessions(org)
     db.commit()
     notify_password_changed(org)
-    return jsonify({"message": "Password changed"}), 200
+    return jsonify({
+        "message": "Password changed",
+        # So the settings page can say what else just happened. Nothing else
+        # on the site would mention it, and "you have been signed out
+        # everywhere else" is the part worth confirming.
+        "other_sessions_ended": True,
+    }), 200
 
 
 # The same week a verification link gets. This one is less dangerous than a
@@ -2296,6 +2570,11 @@ def create_saved(org, db):
     if target_id == org.id:
         return jsonify({"error": "You cannot save your own organization."}), 400
 
+    # Checked before the lookup: an id no column could hold is not a row that
+    # is missing, it is a query the driver refuses. See valid_id.
+    if not valid_id(target_id):
+        return jsonify({"error": "Organization not found."}), 404
+
     other = db.get(Organization, target_id)
     if other is None or not other.onboarding_complete:
         return jsonify({"error": "Organization not found."}), 404
@@ -2374,11 +2653,19 @@ def delete_saved(org, db, org_id):
 @app.route("/api/organizations/<int:org_id>", methods=["GET"])
 @login_required
 def get_organization(org, db, org_id):
+    """One organization, named. This is where contact details live.
+
+    The listings -- matches, the directory, the shortlist -- deliberately do
+    not carry them (see Organization.public_dict), because a page of results
+    handing out fifty addresses at a time is a harvesting endpoint wearing a
+    search box. Asking about one organization is a different act, and it is
+    the one the detail views make when somebody opens a profile.
+    """
     other = db.get(Organization, org_id)
     if other is None or not other.onboarding_complete:
         return jsonify({"error": "Organization not found."}), 404
 
-    data = other.public_dict()
+    data = other.public_dict(contact=True)
     if other.id != org.id:
         score, reasons, detail = score_pair(org, other)
         data.update({
@@ -2413,6 +2700,383 @@ def public_organization(org_id):
         return jsonify({"organization": other.public_profile()})
     finally:
         db.close()
+
+
+# --- Invitations ------------------------------------------------------------
+# Matching has a cold start and nothing else here addresses it. An
+# organization whose needs and offers overlap with nobody opens a product
+# with nothing in it, and the honest answer to "who should I partner with"
+# is often one they already know -- who is not here.
+#
+# So: create an unclaimed profile for them and hand over a link. Deliberately
+# a link rather than only an email, because a link works in whatever channel
+# the two of them already use, and because outbound mail here is not yet a
+# reliable channel at all (see REQUIRE_EMAIL_VERIFICATION).
+#
+# An invited profile is invisible until it is claimed -- it has no password,
+# and onboarding_complete is false, which is the filter the directory and
+# matching already apply. So this cannot be used to put a name into the
+# directory that nobody agreed to put there.
+MAX_OUTSTANDING_INVITES = 25
+
+
+def _invite_dict(row, base_url=""):
+    return {
+        "id": row.id,
+        "name": row.name,
+        "claim_url": f"{base_url}/claim.html?token={row.claim_token}",
+        "invited_at": row.invited_at.isoformat() if row.invited_at else None,
+    }
+
+
+def _outstanding_invites(db, org):
+    """Invitations this org has sent that nobody has claimed yet."""
+    return db.query(Organization).filter(
+        Organization.invited_by_id == org.id,
+        Organization.claim_token.isnot(None),
+    ).order_by(Organization.invited_at.desc()).all()
+
+
+@app.route("/api/invites", methods=["GET"])
+@login_required
+def list_invites(org, db):
+    return jsonify({
+        "invites": [_invite_dict(r) for r in _outstanding_invites(db, org)],
+    })
+
+
+@app.route("/api/invites", methods=["POST"])
+@login_required
+def create_invite(org, db):
+    """Create an unclaimed profile and a link that turns it into an account."""
+    if not org.onboarding_complete:
+        return jsonify({
+            "error": "Finish your own profile first -- an invitation says who "
+                     "it is from.",
+            "needs_onboarding": True,
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+
+    if len(name) < 2:
+        return jsonify({
+            "error": "Enter the name of the organization you are inviting.",
+            "field": "name",
+        }), 400
+    problem = name_problem(name)
+    if problem:
+        return jsonify({"error": "Please provide " + problem + ".",
+                        "field": "name"}), 400
+    problem = length_problem("name", name)
+    if problem:
+        return jsonify({"error": problem, "field": "name"}), 400
+
+    # A ceiling rather than a rate limit, because the cost here is rows that
+    # sit unclaimed rather than work done per request. Somebody recruiting
+    # partners sends a handful; a script fills the table.
+    outstanding = _outstanding_invites(db, org)
+    if len(outstanding) >= MAX_OUTSTANDING_INVITES:
+        return jsonify({
+            "error": f"You have {MAX_OUTSTANDING_INVITES} invitations waiting "
+                     f"to be claimed. Revoke one before sending another.",
+        }), 429
+
+    # No address is collected. See the note on Organization.claim_token: the
+    # email column is NOT NULL and unique, so an unclaimed row needs
+    # something in it, and a .invalid address (RFC 2606, reserved and
+    # guaranteed never to resolve) cannot collide with anybody's real one or
+    # be mistaken for a deliverable address by anything downstream. The
+    # claimer replaces it with their own on the way in.
+    token = secrets.token_urlsafe(32)
+    invited = Organization(
+        email=f"invite-{secrets.token_hex(8)}@invite.invalid",
+        name=name,
+        password_hash=None,
+        onboarding_complete=False,
+        claim_token=token,
+        invited_at=datetime.now(timezone.utc),
+        invited_by_id=org.id,
+    )
+    db.add(invited)
+    db.commit()
+
+    return jsonify({
+        "message": "Invitation created",
+        "invite": _invite_dict(invited),
+    }), 201
+
+
+@app.route("/api/invites/<int:invite_id>", methods=["DELETE"])
+@login_required
+def revoke_invite(org, db, invite_id):
+    """Withdraw an unclaimed invitation, deleting the profile behind it."""
+    invited = db.query(Organization).filter(
+        Organization.id == invite_id,
+        # Scoped to the sender, so one org cannot revoke another's invitation
+        # -- or probe for one.
+        Organization.invited_by_id == org.id,
+        # Only while unclaimed. Once somebody has taken it over it is their
+        # account, and the organization that invited them has no more claim
+        # on it than on anybody else's.
+        Organization.claim_token.isnot(None),
+    ).one_or_none()
+    if invited is None:
+        return jsonify({"error": "Invitation not found."}), 404
+
+    db.delete(invited)
+    db.commit()
+    return jsonify({"message": "Invitation revoked"})
+
+
+@app.route("/api/invites/<token>", methods=["GET"])
+def read_invite(token):
+    """What the claim page shows before anybody signs up.
+
+    Unauthenticated, like the other token routes: whoever opens this has no
+    account yet, which is the entire point.
+    """
+    db = get_db()
+    try:
+        invited = db.query(Organization).filter(
+            Organization.claim_token == token
+        ).one_or_none()
+        if invited is None:
+            return jsonify({
+                "error": "This invitation link is invalid or has already been "
+                         "used.",
+            }), 404
+        inviter = invited.invited_by
+        return jsonify({
+            "invite": {
+                "name": invited.name,
+                # Only the name, and only of an organization that has finished
+                # its own profile -- this is served to anybody holding the
+                # link, so it says who is inviting and nothing else about them.
+                "invited_by": (inviter.name if inviter is not None
+                               and inviter.onboarding_complete else None),
+            },
+        })
+    finally:
+        db.close()
+
+
+@app.route("/api/invites/<token>/claim", methods=["POST"])
+def claim_invite(token):
+    """Turn an invited profile into an account.
+
+    The same checks /register makes, on the same fields, because this is a
+    signup -- it just starts from a row that already exists and a name
+    somebody else typed. The claimer supplies their own address and password
+    and can correct the name, which they know better than the inviter did.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    name = (data.get("name") or "").strip()
+
+    if rate_limited("claim_invite", client_ip(), max_attempts=10,
+                    window_seconds=3600):
+        return jsonify({
+            "error": "Too many attempts from this connection recently. Please "
+                     "try again in a while.",
+        }), 429
+
+    db = get_db()
+    try:
+        invited = db.query(Organization).filter(
+            Organization.claim_token == token
+        ).one_or_none()
+        if invited is None:
+            return jsonify({
+                "error": "This invitation link is invalid or has already been "
+                         "used.",
+            }), 404
+
+        if not email or not password:
+            return jsonify({
+                "error": "An email address and a password are both required.",
+            }), 400
+        if not is_valid_email(email) or length_problem("contact_email", email):
+            return jsonify({"error": "Please enter a valid email address.",
+                            "field": "email"}), 400
+        if email.rsplit("@", 1)[-1] in DISPOSABLE_EMAIL_DOMAINS:
+            return jsonify({
+                "error": "Please use a permanent email address -- that one "
+                         "looks like a temporary inbox provider.",
+                "field": "email",
+            }), 400
+
+        if name:
+            problem = name_problem(name) or length_problem("name", name)
+            if problem:
+                return jsonify({
+                    "error": (problem if problem.endswith(".")
+                              else "Please provide " + problem + "."),
+                    "field": "name",
+                }), 400
+            invited.name = name
+
+        problem = password_problem(password, email=email, name=invited.name)
+        if problem:
+            return jsonify({"error": problem, "field": "password"}), 400
+
+        invited.email = email
+        invited.password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+        # Spent. The link stops working the moment it is used, and the row
+        # stops being an invitation and starts being an account.
+        invited.claim_token = None
+        # Opening a link nobody else was given is not proof of the address
+        # they just typed, so this still starts unverified and gets the same
+        # verification mail a signup does.
+        invited.email_verify_token = secrets.token_urlsafe(32)
+        invited.email_verify_sent_at = datetime.now(timezone.utc)
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return jsonify({
+                "error": "That email is already registered. Sign in instead, "
+                         "or use a different address.",
+                "field": "email",
+            }), 409
+
+        notify_email_verification(invited, invited.email_verify_token)
+
+        _start_session(invited)
+        return jsonify({
+            "message": "Account created",
+            "organization": invited.private_dict(),
+        }), 201
+    finally:
+        db.close()
+
+
+# --- Notifications ----------------------------------------------------------
+# What has happened to this organization, in one list, on every page.
+#
+# The nav has carried a count for a while, and a count is the wrong half of
+# the answer: it says something is waiting without saying what, so the only
+# way to find out is to open the dashboard and compare it against memory.
+# Worse, the things that are not waiting on anybody -- a proposal accepted, a
+# partnership the other side ended -- were never counted at all, and reached
+# the organization only by email. Which, until a sending domain is verified,
+# reaches nobody (see REQUIRE_EMAIL_VERIFICATION).
+#
+# Derived rather than stored. Every one of these is a fact already on a
+# partnership row or a message: when it was created, when it was answered,
+# when each side marked it complete, when it ended. A notifications table
+# would be a second copy of all of that, kept in step by hand, and wrong the
+# first time somebody forgot to write to it.
+NOTIFICATION_WINDOW = timedelta(days=60)
+NOTIFICATION_LIMIT = 30
+
+
+def _notifications_for(db, org):
+    """This org's recent events, newest first.
+
+    Each entry is {kind, at, counterpart, proposal_id, href, actionable}.
+    The sentence is written by the client, the same way the dashboard's
+    activity feed writes its own -- the wording belongs with the rest of the
+    wording, not in the API.
+    """
+    since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
+    rows = db.query(Partnership).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id)
+    ).all()
+
+    items = []
+
+    def add(kind, at, proposal, *, actionable=False, tab="incoming", count=None):
+        if at is None or at < since:
+            return
+        entry = {
+            "kind": kind,
+            "at": at.isoformat(),
+            "counterpart": proposal.counterpart_party(org.id).get("name"),
+            "proposal_id": proposal.id,
+            "actionable": actionable,
+            "href": f"ppdashboard.html#{tab}",
+        }
+        if count is not None:
+            entry["count"] = count
+        items.append(entry)
+
+    for p in rows:
+        incoming = p.recipient_id == org.id
+
+        if incoming and p.status == Partnership.PENDING:
+            # The only one that is genuinely waiting on this organization.
+            add("proposal_received", p.created_at, p,
+                actionable=True, tab="incoming")
+        elif not incoming and p.status == Partnership.ACCEPTED:
+            add("proposal_accepted", p.responded_at, p, tab="agreed")
+        elif not incoming and p.status == Partnership.DECLINED:
+            add("proposal_declined", p.responded_at, p, tab="closed")
+        elif incoming and p.status == Partnership.WITHDRAWN:
+            add("proposal_withdrawn", p.responded_at, p, tab="closed")
+
+        if p.status == Partnership.COMPLETED:
+            add("partnership_completed", p.completed_at, p, tab="closed")
+        elif p.status == Partnership.ACCEPTED:
+            # The other side has finished and is waiting on this one. Nothing
+            # outside of email said so, which is what left agreements sitting
+            # half-closed.
+            theirs = p.counterpart_completed_at(org.id)
+            if theirs is not None and p.completed_at_for(org.id) is None:
+                add("completion_marked", theirs, p, actionable=True,
+                    tab="agreed")
+
+        if p.status == Partnership.ENDED and p.ended_by_id != org.id:
+            add("partnership_ended", p.ended_at, p, tab="closed")
+
+    # Unread messages, one entry per thread rather than one per message: a
+    # conversation is one thing that happened, and six lines saying the same
+    # name is how a notification list stops being read.
+    unread = db.query(
+        Message.partnership_id,
+        func.count(Message.id),
+        func.max(Message.created_at),
+    ).join(
+        Partnership, Message.partnership_id == Partnership.id
+    ).filter(
+        or_(
+            and_(Partnership.proposer_id == org.id,
+                 or_(Partnership.proposer_last_read_at.is_(None),
+                     Message.created_at > Partnership.proposer_last_read_at)),
+            and_(Partnership.recipient_id == org.id,
+                 or_(Partnership.recipient_last_read_at.is_(None),
+                     Message.created_at > Partnership.recipient_last_read_at)),
+        ),
+        or_(Message.sender_id.is_(None), Message.sender_id != org.id),
+    ).group_by(Message.partnership_id).all()
+
+    by_id = {p.id: p for p in rows}
+    for partnership_id, count, latest in unread:
+        proposal = by_id.get(partnership_id)
+        if proposal is None:
+            continue
+        add("message", latest, proposal, actionable=True,
+            tab=f"messages-{proposal.id}", count=count)
+
+    items.sort(key=lambda item: item["at"], reverse=True)
+    return items[:NOTIFICATION_LIMIT]
+
+
+@app.route("/api/notifications", methods=["GET"])
+@login_required
+def list_notifications(org, db):
+    items = _notifications_for(db, org)
+    return jsonify({
+        "notifications": items,
+        # What the nav dot reflects: things actually waiting on this
+        # organization, as opposed to things it may simply not have seen yet.
+        "actionable": sum(1 for i in items if i["actionable"]),
+    })
 
 
 # --- Dashboard --------------------------------------------------------------
@@ -2736,6 +3400,113 @@ def delete_event(org, db, event_id):
 
 
 # --- Partnership proposals --------------------------------------------------
+def _clean_quantities(raw, slugs):
+    """(quantities, problem) for one side of a proposal.
+
+    Keyed by category slug and pruned to `slugs`, which is what keeps this in
+    step with the array beside it -- a quantity for a term that was removed
+    from the proposal is not a quantity for anything, and leaving it would
+    make the two columns disagree about what the proposal says.
+
+    Every field is optional. A term with no amount is a term nobody put a
+    number on, which is what every proposal sent before quantities existed
+    is, and it renders as the bare category exactly as it always did.
+    """
+    if raw is None:
+        return {}, None
+    if not isinstance(raw, dict):
+        return None, {"error": "Quantities must be given per category."}
+
+    allowed = set(slugs or [])
+    cleaned = {}
+    for slug, entry in raw.items():
+        if slug not in allowed or not isinstance(entry, dict):
+            continue
+
+        amount = entry.get("amount")
+        if amount is None or (isinstance(amount, str) and not amount.strip()):
+            # A unit with no amount says nothing, so the whole entry goes
+            # rather than being stored as half a quantity.
+            continue
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError):
+            return None, {
+                "error": f"{label_for(slug)}: enter a number, or leave the "
+                         f"amount blank.",
+                "field": "quantities",
+            }
+        if amount <= 0 or amount > MAX_AMOUNT:
+            return None, {
+                "error": f"{label_for(slug)}: enter an amount between 1 and "
+                         f"{MAX_AMOUNT:,}.",
+                "field": "quantities",
+            }
+
+        unit = clean_unit(entry.get("unit")) or default_unit_for(slug)
+        if unit is None:
+            return None, {
+                "error": f"{label_for(slug)}: that is not a unit we know.",
+                "field": "quantities",
+            }
+
+        detail = (entry.get("detail") or "").strip() or None
+        if detail and len(detail) > MAX_UNIT_DETAIL:
+            return None, {
+                "error": f"{label_for(slug)}: keep the unit under "
+                         f"{MAX_UNIT_DETAIL} characters.",
+                "field": "quantities",
+            }
+        # `other` is the escape hatch, and an escape hatch with no label is
+        # just a number nobody can read.
+        if unit == "other" and not detail:
+            return None, {
+                "error": f"{label_for(slug)}: say what the amount is measured "
+                         f"in.",
+                "field": "quantities",
+            }
+
+        cleaned[slug] = {"amount": amount, "unit": unit, "detail": detail}
+
+    return cleaned, None
+
+
+def _partnership_dates(data):
+    """(starts_on, ends_on, problem) from a proposal body.
+
+    Both optional and independently so -- a start with no end is an
+    open-ended arrangement, which is a real thing to agree to. What is not
+    allowed is an end before a start, which is always a mistake rather than
+    an unusual arrangement.
+
+    strptime rather than date.fromisoformat, matching create_event: the
+    latter also accepts shapes a date input never produces.
+    """
+    parsed = {}
+    for field in ("starts_on", "ends_on"):
+        raw = data.get(field)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            parsed[field] = None
+            continue
+        try:
+            parsed[field] = datetime.strptime(str(raw).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None, None, {
+                "error": ("Enter a valid start date."
+                          if field == "starts_on"
+                          else "Enter a valid end date."),
+                "field": field,
+            }
+
+    starts_on, ends_on = parsed["starts_on"], parsed["ends_on"]
+    if starts_on and ends_on and ends_on < starts_on:
+        return None, None, {
+            "error": "The end date cannot be before the start date.",
+            "field": "ends_on",
+        }
+    return starts_on, ends_on, None
+
+
 @app.route("/api/proposals", methods=["POST"])
 @login_required
 def create_proposal(org, db):
@@ -2769,6 +3540,11 @@ def create_proposal(org, db):
 
     if recipient_id == org.id:
         return jsonify({"error": "You cannot propose a partnership with yourself."}), 400
+
+    # As in create_saved: out of range is answered as not found rather than
+    # left to become a DataError. See valid_id.
+    if not valid_id(recipient_id):
+        return jsonify({"error": "Organization not found."}), 404
 
     recipient = db.get(Organization, recipient_id)
     if recipient is None or not recipient.onboarding_complete:
@@ -2872,6 +3648,21 @@ def create_proposal(org, db):
     if timeline and timeline not in VALID_TIMELINES:
         return jsonify({"error": "That is not a valid timeline."}), 400
 
+    starts_on, ends_on, problem = _partnership_dates(data)
+    if problem:
+        return jsonify(problem), 400
+
+    # Pruned to the terms above, so a quantity can only ever qualify a
+    # category that is actually part of this proposal.
+    proposer_quantities, problem = _clean_quantities(
+        data.get("proposer_quantities"), proposer_gives)
+    if problem:
+        return jsonify(problem), 400
+    recipient_quantities, problem = _clean_quantities(
+        data.get("recipient_quantities"), recipient_gives)
+    if problem:
+        return jsonify(problem), 400
+
     message = (data.get("message") or "").strip()
     if len(message) > MAX_PROPOSAL_MESSAGE:
         return jsonify({
@@ -2887,6 +3678,10 @@ def create_proposal(org, db):
         proposer_gives=proposer_gives,
         recipient_gives=recipient_gives,
         timeline=timeline or None,
+        starts_on=starts_on,
+        ends_on=ends_on,
+        proposer_quantities=proposer_quantities,
+        recipient_quantities=recipient_quantities,
         message=message or None,
         # Filled properly by snapshot_parties() below, once the relationships
         # are attached. Set here because both columns are NOT NULL and the
@@ -3018,6 +3813,137 @@ def get_proposal(org, db, proposal_id):
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     return jsonify({"proposal": proposal.to_dict(viewer_id=org.id)})
+
+
+@app.route("/api/proposals/<int:proposal_id>", methods=["PATCH"])
+@login_required
+def update_proposal(org, db, proposal_id):
+    """Correct a proposal that has not been answered yet.
+
+    Only the proposer, and only while it is pending. Both halves matter.
+
+    Until now the only way to change a term was to withdraw and send again,
+    which loses the message thread with it -- so the cost of a typo in the
+    dates was the conversation that had been going on about them. Editing is
+    the same act without that cost.
+
+    And it stops at acceptance, deliberately. An accepted partnership is a
+    record of what two organizations agreed to, with a public summary either
+    of them may already have sent to a funder; one side editing that
+    afterwards would make it a claim about the other rather than an agreement
+    between them. There is no version of this where that is worth the
+    convenience. To change a settled partnership, end it and agree another --
+    which is what the lifecycle is for.
+
+    Only fields actually present in the body are touched, the same rule
+    /api/settings and /api/events follow.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+    if proposal.proposer_id != org.id:
+        return jsonify({
+            "error": "Only the organization that sent this proposal can "
+                     "change it.",
+        }), 403
+    if proposal.status != Partnership.PENDING:
+        return jsonify({
+            "error": f"This proposal was already {proposal.status}, so its "
+                     f"terms are fixed.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    recipient = proposal.recipient
+    if recipient is None:
+        return jsonify({
+            "error": "The other organization has closed its account.",
+        }), 409
+
+    # The same rule create_proposal enforces, re-checked rather than assumed:
+    # neither side may be committed to something it has not listed as an
+    # offer, and either profile may have changed since this was sent.
+    for key, offers, whose in (
+        ("proposer_gives", set(org.offers or []), "you"),
+        ("recipient_gives", set(recipient.offers or []), "they"),
+    ):
+        if key not in data:
+            continue
+        gives = clean_categories(data.get(key))
+        if not gives:
+            return jsonify({
+                "error": "A partnership needs something from both sides.",
+                "field": key,
+            }), 400
+        unlisted = [slug for slug in gives if slug not in offers]
+        if unlisted:
+            named = ", ".join(labels_for(unlisted))
+            return jsonify({
+                "error": (
+                    f"You cannot commit to {named} -- that is not on your "
+                    f"list of offers. Add it to your profile first."
+                    if whose == "you" else
+                    f"You cannot ask them for {named} -- that is not on "
+                    f"their list of offers."
+                ),
+                "field": key,
+            }), 400
+        setattr(proposal, key, gives)
+
+    # After the term lists above, so a quantity is pruned against the terms
+    # as they now stand rather than as they arrived. Re-pruned even when no
+    # quantities were sent, because editing the terms alone can orphan one.
+    for key, gives_attr, quantities_attr in (
+        ("proposer_quantities", "proposer_gives", "proposer_quantities"),
+        ("recipient_quantities", "recipient_gives", "recipient_quantities"),
+    ):
+        raw = data.get(key, getattr(proposal, quantities_attr))
+        cleaned, problem = _clean_quantities(raw, getattr(proposal, gives_attr))
+        if problem:
+            return jsonify(problem), 400
+        setattr(proposal, quantities_attr, cleaned)
+
+    if "timeline" in data:
+        timeline = (data.get("timeline") or "").strip()
+        if timeline and timeline not in VALID_TIMELINES:
+            return jsonify({"error": "That is not a valid timeline.",
+                            "field": "timeline"}), 400
+        proposal.timeline = timeline or None
+
+    if "starts_on" in data or "ends_on" in data:
+        # Read as a pair even when only one was sent, so a new start date
+        # cannot be accepted against an existing end date it comes after.
+        merged = {
+            "starts_on": data.get("starts_on", proposal.starts_on),
+            "ends_on": data.get("ends_on", proposal.ends_on),
+        }
+        merged = {k: (v.isoformat() if hasattr(v, "isoformat") else v)
+                  for k, v in merged.items()}
+        starts_on, ends_on, problem = _partnership_dates(merged)
+        if problem:
+            return jsonify(problem), 400
+        proposal.starts_on, proposal.ends_on = starts_on, ends_on
+
+    if "message" in data:
+        message = (data.get("message") or "").strip()
+        if len(message) > MAX_PROPOSAL_MESSAGE:
+            return jsonify({
+                "error": f"Keep your message under {MAX_PROPOSAL_MESSAGE} "
+                         f"characters.",
+                "field": "message",
+            }), 400
+        proposal.message = message or None
+
+    db.commit()
+
+    # The recipient is told, because the thing they were asked to answer has
+    # changed underneath them -- and because an edit nobody is told about is
+    # a way to alter what somebody is about to accept.
+    notify_proposal_updated(proposal)
+
+    return jsonify({
+        "message": "Proposal updated",
+        "proposal": proposal.to_dict(viewer_id=org.id),
+    })
 
 
 @app.route("/api/proposals/<int:proposal_id>/accept", methods=["POST"])

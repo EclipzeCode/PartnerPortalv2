@@ -518,3 +518,195 @@
         font-size: 1.75rem;
     }
 }
+
+/* --- Notification bell --------------------------------------------------
+   Built by notifications.js and inserted before the account slot, so it only
+   exists for a signed-in visitor. The count on it is the same one the
+   Dashboard link carries; this is the half that can say what it is made of. */
+.nav-notify {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.notify-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.15rem;
+    height: 2.15rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    background: none;
+    color: var(--h-ink-soft);
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.notify-button:hover {
+    color: var(--h-ink);
+    border-color: var(--h-rule);
+}
+
+.notify-button:focus-visible {
+    outline: 2px solid var(--h-seal);
+    outline-offset: 1px;
+}
+
+/* Sits on the bell rather than beside it: the nav is a fixed grid and a
+   number that changes width would move the account menu next to it. */
+.notify-dot {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.1rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.2rem;
+    border-radius: 999px;
+    background: var(--h-danger);
+    color: var(--h-on-danger, #fff);
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    line-height: 1rem;
+    text-align: center;
+}
+
+.notify-dot[hidden] {
+    display: none;
+}
+
+.notify-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 200;
+    width: min(22rem, calc(100vw - 2rem));
+    border: 1px solid var(--h-rule);
+    border-radius: 0.5rem;
+    background: var(--h-paper);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+}
+
+.notify-dropdown[hidden] {
+    display: none;
+}
+
+.notify-head {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--h-rule);
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-label);
+}
+
+.notify-list {
+    margin: 0;
+    padding: 0;
+    max-height: 24rem;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.notify-list li {
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.notify-list li:last-child {
+    border-bottom: 0;
+}
+
+/* The panel lives inside .navbar, so the nav's own link rules -- monospace,
+   uppercase, letter-spaced, nowrap -- cascade into it and turned these into
+   clipped shouting.
+   The link selectors carry three classes so they outrank
+   `body.ink .navbar a` in ink.css, which is two classes and two elements --
+   `.notify-dropdown a` and even `.nav-notify .notify-dropdown a` both lose
+   to it on the element count, however late they are declared. */
+.nav-notify .notify-dropdown .notify-list a,
+.nav-notify .notify-dropdown .notify-text,
+.nav-notify .notify-dropdown .notify-head,
+.nav-notify .notify-dropdown .notify-empty {
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+}
+
+.nav-notify .notify-dropdown .notify-head,
+.nav-notify .notify-dropdown .notify-when {
+    /* ...except these two, which are meant to look like the rest of the
+       metadata on this site. */
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.nav-notify .notify-dropdown .notify-list a,
+.nav-notify .notify-dropdown .notify-text,
+.nav-notify .notify-dropdown .notify-empty {
+    font-family: var(--h-sans);
+}
+
+.notify-list a {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'icon text' 'icon when';
+    gap: 0.1rem 0.6rem;
+    padding: 0.7rem 0.9rem;
+    text-decoration: none;
+    color: var(--h-ink-soft);
+    transition: background-color 0.12s ease;
+}
+
+.notify-list a:hover {
+    background: var(--h-cell);
+}
+
+.notify-list a i {
+    grid-area: icon;
+    align-self: center;
+    font-size: 1.05rem;
+    color: var(--h-dim);
+}
+
+.notify-text {
+    grid-area: text;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.notify-when {
+    grid-area: when;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
+/* Something actually waiting on this organization, as opposed to something
+   it may simply not have seen. */
+.notify-list li.is-actionable .notify-text {
+    color: var(--h-ink);
+    font-weight: 600;
+}
+
+.notify-list li.is-actionable a i {
+    color: var(--h-seal);
+}
+
+.notify-empty {
+    padding: 1.25rem 0.9rem;
+    font-size: 0.83rem;
+    line-height: 1.5;
+    color: var(--h-dim);
+}
+
+@media (max-width: 48em) {
+    .notify-dropdown {
+        right: -2rem;
+    }
+}

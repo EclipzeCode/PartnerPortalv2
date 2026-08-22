@@ -117,6 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function wireForm() {
+        // This form is built after DOMContentLoaded, so the pass
+        // password-field.js makes on load has already been and gone. Same
+        // reason common.js's character counters export a wiring function
+        // rather than only running once.
+        if (window.wirePasswordToggles) window.wirePasswordToggles();
+
         const form = document.getElementById('resetForm');
         const pwInput = document.getElementById('password');
         const pwError = document.getElementById('password-error');

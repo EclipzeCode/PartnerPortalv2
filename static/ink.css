@@ -892,3 +892,70 @@ body.ink .footer-bottom {
 :root[data-theme="dark"] body.ink .site-footer {
     border-top: 1px solid var(--h-rule);
 }
+
+/* --- Password fields ----------------------------------------------------
+   The reveal toggle and caps-lock warning that common.js wires onto every
+   input[type=password]. Here rather than in pplogin.css or settings.css
+   because ink.css is the one stylesheet every page loads, and these fields
+   appear on four of them -- including reset-password.html, which loads
+   neither of the other two. */
+.pw-field {
+    position: relative;
+    display: block;
+}
+
+/* The button sits inside the field, so the text needs room to end before it
+   rather than running underneath. */
+.pw-field input {
+    width: 100%;
+    padding-right: 2.75rem;
+}
+
+.pw-reveal {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.375rem;
+    background: none;
+    color: var(--h-dim, var(--text-note, #6b7280));
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.pw-reveal:hover {
+    color: var(--h-ink, var(--text, inherit));
+    background: var(--h-cell, rgba(0, 0, 0, 0.05));
+}
+
+/* Reachable by Shift+Tab from the submit button, so it still has to show
+   where focus is even though it is out of the forward tab order. */
+.pw-reveal:focus-visible {
+    outline: 2px solid var(--h-seal, var(--primary, currentColor));
+    outline-offset: 1px;
+    color: var(--h-ink, var(--text, inherit));
+}
+
+.pw-capslock {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0.35rem 0 0;
+    font-family: var(--h-mono, ui-monospace, monospace);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--h-danger, var(--text-danger, #b42318));
+}
+
+.pw-capslock[hidden] {
+    display: none;
+}

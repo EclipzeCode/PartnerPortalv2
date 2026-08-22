@@ -403,6 +403,7 @@ function wireCharacterCounters(root = document) {
 
 window.wireCharacterCounters = wireCharacterCounters;
 
+
 document.addEventListener('DOMContentLoaded', () => {
     wireCharacterCounters();
 
@@ -539,6 +540,9 @@ async function updateNavForSession() {
 
     slot.dataset.state = 'in';
     wireAccountMenu();
+    // Built here rather than in fifteen page templates; see notifications.js.
+    // Only for a signed-in visitor, which is the state this branch is.
+    if (window.mountNotificationBell) window.mountNotificationBell();
     // Both land on the same badge: from the nav's point of view they are the
     // same question -- is there something on the dashboard waiting for me --
     // and two competing numbers on one link would only make it ambiguous
@@ -571,6 +575,11 @@ window.refreshNavCounts = async function refreshNavCounts() {
 // than shown as "0", the same "nothing here" treatment the rest of the nav
 // uses.
 function updateProposalBadge(count) {
+    // The same number also lights the notification bell, which is the half
+    // that can say what the count is made of. Both are fed from here so they
+    // cannot disagree.
+    if (window.setNotificationDot) window.setNotificationDot(count);
+
     const badge = document.getElementById('navProposalBadge');
     if (!badge) return;
     if (count > 0) {

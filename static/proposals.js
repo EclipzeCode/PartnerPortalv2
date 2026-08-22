@@ -92,6 +92,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }
 
+    // "1 Mar 2026 - 30 Jun 2026", or half of it, or nothing. A start with no
+    // end is open-ended, which is a real arrangement rather than a gap.
+    function datesLine(p) {
+        const show = (iso) => {
+            // Parsed as parts, not as a string: `new Date('2026-03-01')` is
+            // read as UTC midnight and renders as the previous day for
+            // anyone west of Greenwich.
+            const [y, m, d] = String(iso).split('-').map(Number);
+            if (!y || !m || !d) return '';
+            return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+                day: 'numeric', month: 'short', year: 'numeric',
+            });
+        };
+        const from = p.starts_on ? show(p.starts_on) : '';
+        const to = p.ends_on ? show(p.ends_on) : '';
+        if (from && to) return `${from} - ${to}`;
+        if (from) return `From ${from}`;
+        if (to) return `Until ${to}`;
+        return '';
+    }
+
     // Where a partnership stands, in the cases the status pill cannot carry
     // on its own: waiting on one side to confirm, or finished with each
     // side's account of whether the other delivered.
@@ -175,6 +196,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 actions.push('<button class="btn-primary" data-act="accept">Accept</button>');
                 actions.push('<button class="btn-ghost" data-act="decline">Decline</button>');
             }
+            if (p.can_edit) {
+                // Before Withdraw, because correcting a term is the lighter
+                // of the two and used to be reachable only through it.
+                actions.push('<button class="btn-ghost" data-act="edit">Edit terms</button>');
+            }
             if (p.can_withdraw) {
                 actions.push('<button class="btn-ghost" data-act="withdraw">Withdraw</button>');
             }
@@ -231,6 +257,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${termsBlock(p)}
                 ${p.timeline_label
                     ? `<p class="proposal-timeline"><i class='bx bx-time-five'></i> ${esc(p.timeline_label)}</p>`
+                    : ''}
+                ${datesLine(p)
+                    ? `<p class="proposal-dates"><i class='bx bx-calendar'></i> ${esc(datesLine(p))}</p>`
                     : ''}
                 ${p.message
                     ? `<blockquote class="proposal-message">${esc(p.message)}</blockquote>`
@@ -501,6 +530,216 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- Editing a pending proposal --------------------------------------
+    // Only the sender, and only before it is answered -- the same window as
+    // withdrawing. Until now correcting a date meant withdrawing and sending
+    // again, which took the message thread with it: the cost of a typo was
+    // the conversation that had been going on about it.
+    //
+    // Terms themselves (who gives what) are deliberately not editable here.
+    // Those are built from both profiles by the picker on the matches page,
+    // which is where the rules about what each side may commit to live; a
+    // second copy of that picker in this dialog is a second place for them
+    // to be got wrong. What changes here is everything around them.
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editTimeline = document.getElementById('editTimeline');
+    const editStartsOn = document.getElementById('editStartsOn');
+    const editEndsOn = document.getElementById('editEndsOn');
+    const editMessage = document.getElementById('editMessage');
+    const editError = document.getElementById('editError');
+    const editSubmit = document.getElementById('editSubmit');
+    let editing = null;
+
+    async function fillTimelines(select, chosen) {
+        if (select.dataset.filled) {
+            select.value = chosen || '';
+            return;
+        }
+        try {
+            const data = await window.api('/api/categories');
+            select.innerHTML = '<option value="">No timeline</option>'
+                + (data.timelines || []).map((t) =>
+                    `<option value="${esc(t.slug)}">${esc(t.label)}</option>`).join('');
+            select.dataset.filled = '1';
+        } catch {
+            // The field is optional; leaving it as-is is better than
+            // refusing to open the dialog over it.
+        }
+        select.value = chosen || '';
+    }
+
+    // Amounts, for the same window in which anything else can be corrected.
+    // Built from the structured terms the proposal already carries, so this
+    // dialog does not need its own copy of the unit vocabulary beyond the
+    // labels to name them.
+    let editUnits = [];
+    let editDefaults = {};
+    const editQuantities = { proposer: {}, recipient: {} };
+
+    async function loadUnits() {
+        if (editUnits.length) return;
+        try {
+            const data = await window.api('/api/categories');
+            editUnits = data.units || [];
+            editDefaults = data.default_units || {};
+        } catch {
+            // The amounts block simply does not render; everything else in
+            // the dialog still works.
+        }
+    }
+
+    function renderEditAmounts(proposal) {
+        const host = document.getElementById('editAmounts');
+        if (!host || !editUnits.length) return;
+
+        const rows = [];
+        [['proposer', 'You provide', proposal.you_give_terms],
+         ['recipient', 'They provide', proposal.you_receive_terms],
+        ].forEach(([side, heading, terms]) => {
+            if (!terms || !terms.length) return;
+            rows.push(`<h4>${esc(heading)}</h4>`);
+            terms.forEach((term) => {
+                editQuantities[side][term.slug] = {
+                    amount: term.amount, unit: term.unit, detail: term.detail,
+                };
+                const unit = term.unit || editDefaults[term.slug] || 'items';
+                const options = editUnits.map((u) => `
+                    <option value="${esc(u.slug)}"${u.slug === unit ? ' selected' : ''}>${
+                        esc(u.slug === 'other' ? 'other...' : u.label)}</option>`).join('');
+                rows.push(`
+                    <div class="amount-row">
+                        <span class="amount-label">${esc(term.label)}</span>
+                        <input type="number" class="amount-value" min="0" step="any"
+                               data-side="${esc(side)}" data-slug="${esc(term.slug)}"
+                               value="${term.amount ?? ''}" placeholder="—"
+                               aria-label="Amount of ${esc(term.label)}">
+                        <select class="amount-unit" data-side="${esc(side)}"
+                                data-slug="${esc(term.slug)}"
+                                aria-label="Unit">${options}</select>
+                        <input type="text" class="amount-detail"
+                               data-side="${esc(side)}" data-slug="${esc(term.slug)}"
+                               value="${esc(term.detail || '')}" placeholder="unit"
+                               maxlength="100" aria-label="Unit name"
+                               ${unit === 'other' ? '' : 'hidden'}>
+                    </div>`);
+            });
+        });
+
+        host.hidden = rows.length === 0;
+        host.innerHTML = rows.join('');
+    }
+
+    const editAmountsHost = document.getElementById('editAmounts');
+    if (editAmountsHost) {
+        editAmountsHost.addEventListener('input', (e) => {
+            const el = e.target.closest('[data-side][data-slug]');
+            if (!el) return;
+            const { side, slug } = el.dataset;
+            const held = editQuantities[side][slug] || {};
+            if (el.classList.contains('amount-value')) {
+                held.amount = el.value === '' ? null : Number(el.value);
+            } else if (el.classList.contains('amount-unit')) {
+                held.unit = el.value;
+                const detail = editAmountsHost.querySelector(
+                    `.amount-detail[data-side="${side}"][data-slug="${slug}"]`);
+                if (detail) detail.hidden = el.value !== 'other';
+            } else if (el.classList.contains('amount-detail')) {
+                held.detail = el.value.trim() || null;
+            }
+            editQuantities[side][slug] = held;
+        });
+    }
+
+    function editQuantitiesFor(side) {
+        const out = {};
+        Object.entries(editQuantities[side]).forEach(([slug, q]) => {
+            if (q.amount === null || q.amount === undefined || q.amount === '') return;
+            out[slug] = {
+                amount: q.amount,
+                unit: q.unit || editDefaults[slug] || 'items',
+                detail: q.detail || null,
+            };
+        });
+        return out;
+    }
+
+    async function openEdit(proposal) {
+        editing = proposal;
+        editError.hidden = true;
+        editError.textContent = '';
+        editQuantities.proposer = {};
+        editQuantities.recipient = {};
+        editStartsOn.value = proposal.starts_on || '';
+        editEndsOn.value = proposal.ends_on || '';
+        editMessage.value = proposal.message || '';
+        await fillTimelines(editTimeline, proposal.timeline);
+        await loadUnits();
+        renderEditAmounts(proposal);
+
+        editModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        window.dialogOpened(editModal, editStartsOn);
+    }
+
+    function closeEdit() {
+        editing = null;
+        editModal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+        window.dialogClosed(editModal);
+    }
+
+    if (editModal) {
+        editModal.querySelector('.close-modal')
+            .addEventListener('click', closeEdit);
+        document.getElementById('editCancel')
+            .addEventListener('click', closeEdit);
+        editModal.addEventListener('click', (e) => {
+            if (e.target === editModal) closeEdit();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && editModal.classList.contains('active')) {
+                closeEdit();
+            }
+        });
+
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!editing) return;
+            editError.hidden = true;
+
+            const idle = editSubmit.textContent;
+            editSubmit.disabled = true;
+            editSubmit.textContent = 'Saving...';
+            try {
+                await window.api(`/api/proposals/${editing.id}`, {
+                    method: 'PATCH',
+                    body: {
+                        timeline: editTimeline.value,
+                        starts_on: editStartsOn.value,
+                        ends_on: editEndsOn.value,
+                        proposer_quantities: editQuantitiesFor('proposer'),
+                        recipient_quantities: editQuantitiesFor('recipient'),
+                        message: editMessage.value.trim(),
+                    },
+                });
+                const name = editing.counterpart.name;
+                closeEdit();
+                await load();
+                window.toast(`Proposal updated. ${name} has been told.`);
+            } catch (error) {
+                editError.textContent = error.message;
+                editError.hidden = false;
+                const field = error.data && error.data.field;
+                if (field === 'starts_on') editStartsOn.focus();
+                else if (field === 'ends_on') editEndsOn.focus();
+            } finally {
+                editSubmit.disabled = false;
+                editSubmit.textContent = idle;
+            }
+        });
+    }
+
     // --- Actions --------------------------------------------------------
     list.addEventListener('click', async (e) => {
         const btn = e.target.closest('button[data-act]');
@@ -512,6 +751,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (act === 'messages') {
             await openThread(proposal);
+            return;
+        }
+
+        if (act === 'edit') {
+            openEdit(proposal);
             return;
         }
 
@@ -756,5 +1000,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === hash));
     }
 
+    // ...or straight into one conversation: #messages-<proposal id>, which is
+    // what the "you have a new message" email links to. Without this the link
+    // landed on whichever tab happened to be first and left the reader to
+    // find the thread they had just been emailed about.
+    const threadMatch = /^messages-(\d+)$/.exec(hash);
+
     await load();
+
+    if (threadMatch) {
+        const wanted = Number(threadMatch[1]);
+        const proposal = proposals.find((p) => p.id === wanted);
+        if (proposal) {
+            // The thread may sit under any of the four tabs, and the one it
+            // is under is the one that should be showing behind it when the
+            // dialog is closed.
+            const tabFor = {
+                pending: proposal.direction === 'incoming' ? 'incoming' : 'outgoing',
+                accepted: 'agreed',
+            }[proposal.status] || 'closed';
+            activateTab(tabFor);
+            openThread(proposal);
+        } else {
+            // Party to it no longer, or it was deleted with the other
+            // organization's account. Saying so beats a dialog that never
+            // opens for reasons the page does not explain.
+            window.toast('That conversation is no longer available.', 'error');
+        }
+    }
 });

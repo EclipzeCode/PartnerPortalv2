@@ -90,6 +90,23 @@
                 { year: 'numeric', month: 'long', day: 'numeric' })
         : '';
 
+    // When it runs, which is the question `timeline_label` ("3-6 months")
+    // cannot answer for somebody reading this months later.
+    const onDay = (iso) => {
+        // Split rather than `new Date(iso)`: a bare date string is parsed as
+        // UTC midnight and renders as the day before west of Greenwich.
+        const [y, m, d] = String(iso || '').split('-').map(Number);
+        if (!y || !m || !d) return '';
+        return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+            day: 'numeric', month: 'long', year: 'numeric',
+        });
+    };
+    const from = partnership.starts_on ? onDay(partnership.starts_on) : '';
+    const until = partnership.ends_on ? onDay(partnership.ends_on) : '';
+    const runs = (from && until) ? `Runs ${from} to ${until}`
+        : from ? `Starts ${from}`
+        : until ? `Runs until ${until}` : '';
+
     card.innerHTML = `
         <div class="agreement-badge${finished ? ' ' + finished.cls : ''}">
             <i class='bx ${finished ? finished.icon : 'bx-check-shield'}'></i>
@@ -103,6 +120,9 @@
                     : ''
             }
         </p>
+        ${runs
+            ? `<p class="agreement-runs"><i class='bx bx-calendar'></i> ${esc(runs)}</p>`
+            : ''}
         ${finished
             ? `<p class="agreement-outcome">${finished.line(finishedOn)}</p>`
             : ''}

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Warm the connections to the two third-party origins every page uses,
+         before the local stylesheets below start downloading. Both the
+         boxicons stylesheet and the font stylesheet are render-blocking
+         and are discovered late, at the bottom of this head -- so without
+         these the browser pays a DNS lookup plus a TLS handshake to each
+         before it can even ask for them. gstatic serves the font files
+         themselves and is fetched in CORS mode, which is what crossorigin
+         matches; the other two are ordinary stylesheet requests. -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Help | PartnerPortal</title>
+    <!-- SVG first for anything modern (one file, sharp at every size); the
+         .ico is the legacy fallback and is also what a bare /favicon.ico
+         request gets. -->
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Light is the default: only an explicit
+         choice, stored by the toggle in Settings, turns this on -- the system
+         preference is deliberately not consulted, because the product ships
+         light and a dark OS is not the same thing as asking for a dark app. -->
+    <script>
+      try {
+        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+    </script>
+    <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, controls, nav,
+         footer. Between tokens.css and the page stylesheets, so those can
+         override it. -->
+    <link rel="stylesheet" href="ink.css">
+    <link rel="stylesheet" href="pphelp.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="nav.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'
+          integrity='sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2'
+          crossorigin='anonymous'>
+    <!-- Instrument Serif for the page heading, Space Grotesk for anything
+         read as a sentence, JetBrains Mono for metadata. Poppins is no longer
+         used on this page. -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="ink">
+    <a class="skip-link" href="#main">Skip to main content</a>
+<!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <button type="button" class="bx bx-menu" id="menu-icon"
+                aria-label="Menu" aria-expanded="false"></button>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="ppsearch.html">Connect</a>
+            <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
+            <a href="pphelp.html" class="active">Help</a>
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="help-main" id="main" tabindex="-1">
+        <div class="help-head">
+            <p class="eyebrow">Help</p>
+            <h1>How PartnerPortal works</h1>
+            <p class="help-lede">
+                Most partnerships between small organizations fall apart
+                because one side is doing a favor. Everything here is built
+                around the opposite: matching on what you need <em>and</em>
+                what you can offer, so both sides walk in with something to
+                gain.
+            </p>
+        </div>
+
+        <nav class="help-toc" aria-label="On this page">
+            <a href="#matching">Matching</a>
+            <a href="#proposals">Proposals</a>
+            <a href="#after">After you agree</a>
+            <a href="#privacy">Privacy</a>
+            <a href="#faq">Common questions</a>
+        </nav>
+
+        <section class="help-section" id="matching">
+            <h2>Matching</h2>
+            <p>
+                Every organization lists what it <strong>needs</strong> and
+                what it can <strong>offer</strong>, from a shared vocabulary of
+                about thirty categories. Everyone else is then ranked by how
+                well the two profiles fit <em>in both directions</em>.
+            </p>
+            <div class="help-cards">
+                <div class="help-card">
+                    <h3><i class='bx bx-transfer'></i> Two-way match</h3>
+                    <p>
+                        They offer something you need, <em>and</em> they need
+                        something you offer. These rank far above everything
+                        else, and are marked <strong>2-way</strong> wherever
+                        they appear.
+                    </p>
+                </div>
+                <div class="help-card">
+                    <h3><i class='bx bx-link'></i> One-way match</h3>
+                    <p>
+                        Only one direction is satisfied. Still worth seeing,
+                        but be honest about what it is: a request for a favor
+                        rather than an exchange.
+                    </p>
+                </div>
+            </div>
+            <p class="help-aside">
+                Shared focus areas — the causes you work on — nudge the
+                ranking, but never create a match on their own. Caring about
+                the same thing is not the same as having something to trade.
+            </p>
+            <p>
+                <strong>Seeing nobody?</strong> Widen what you list on either
+                side, browse the full directory rather than just your matches,
+                or invite an organization you already work with from the
+                button on your dashboard.
+            </p>
+        </section>
+
+        <section class="help-section" id="proposals">
+            <h2>Proposals</h2>
+            <ol class="help-steps">
+                <li>
+                    <h3>Open a match and propose</h3>
+                    <p>
+                        The terms start pre-filled from the overlap that
+                        produced the match. Each side can only commit to
+                        things it has actually listed as an offer — you
+                        cannot be signed up to something you never said you
+                        could do, and neither can they.
+                    </p>
+                </li>
+                <li>
+                    <h3>They accept or decline</h3>
+                    <p>
+                        Only the organization that received a proposal can
+                        answer it. You can withdraw yours any time before
+                        they do.
+                    </p>
+                </li>
+                <li>
+                    <h3>It becomes an agreement</h3>
+                    <p>
+                        Accepting generates a public summary page you can send
+                        to a board or a funder without them needing an account.
+                        You can rotate that link, or revoke it entirely, from
+                        the partnership itself.
+                    </p>
+                </li>
+            </ol>
+            <p class="help-aside">
+                You can hold one live proposal or partnership with any given
+                organization at a time. Finish or end the current one before
+                starting another.
+            </p>
+        </section>
+
+        <section class="help-section" id="after">
+            <h2>After you agree</h2>
+            <p>
+                A partnership can <strong>complete</strong> or <strong>end</strong>,
+                and the difference is deliberate.
+            </p>
+            <dl class="help-defs">
+                <dt>Completing takes both sides</dt>
+                <dd>
+                    You each mark it complete, and each record whether the
+                    other side delivered what it committed to. Nobody grades
+                    their own homework, and one organization cannot decide
+                    alone that the other one is finished.
+                </dd>
+                <dt>Ending takes one</dt>
+                <dd>
+                    Either side can end a partnership on its own, with a
+                    reason that goes to the other organization. Requiring
+                    agreement would mean being held to a partnership by
+                    somebody who simply never answers.
+                </dd>
+            </dl>
+            <p class="help-aside">
+                Delivery verdicts and the reason a partnership ended stay
+                between the two of you. Neither ever reaches the public
+                summary page.
+            </p>
+        </section>
+
+        <section class="help-section" id="privacy">
+            <h2>Privacy</h2>
+            <ul class="help-list">
+                <li>
+                    <strong>Your shortlist is private.</strong> Saving an
+                    organization is a bookmark, not an approach — they are
+                    never told.
+                </li>
+                <li>
+                    <strong>Profile views are counted, never itemized.</strong>
+                    You see how often your profile was opened, never by whom.
+                </li>
+                <li>
+                    <strong>Contact details are not published.</strong> The
+                    public profile page carries no email or phone number.
+                    Signed-in organizations see them on your profile, one
+                    organization at a time.
+                </li>
+                <li>
+                    <strong>Links are opt-in.</strong> Your website and social
+                    links appear on the public page only if you tick the box.
+                </li>
+                <li>
+                    <strong>Messages need a proposal.</strong> Nobody can
+                    message you out of the directory — a thread only exists on
+                    a proposal, and closes when that proposal settles.
+                </li>
+            </ul>
+        </section>
+
+        <section class="help-section" id="faq">
+            <h2>Common questions</h2>
+
+            <details class="help-faq">
+                <summary>Do I have to verify my email?</summary>
+                <p>
+                    Not right now. Verifying shows partners the address behind
+                    your account is real, but nothing is blocked while you have
+                    not.
+                </p>
+            </details>
+
+            <details class="help-faq">
+                <summary>Can I change my terms after sending a proposal?</summary>
+                <p>
+                    Yes, while it is still waiting for an answer — open it from
+                    your dashboard and edit the terms. Once the other side has
+                    accepted, the agreement is fixed: it is a record of what
+                    two organizations agreed to, and one of them editing it
+                    afterwards would make it worth nothing.
+                </p>
+            </details>
+
+            <details class="help-faq">
+                <summary>What happens if the other organization closes its account?</summary>
+                <p>
+                    An agreement you actually reached survives, and its public
+                    summary keeps working — it is a record of something that
+                    happened, and it is not theirs alone to delete. Proposals
+                    that never became agreements are removed.
+                </p>
+            </details>
+
+            <details class="help-faq">
+                <summary>Someone has a profile but has never signed in. Why?</summary>
+                <p>
+                    Profiles can be created by invitation, and stay unclaimed
+                    until that organization opens the link and sets a password.
+                    An unclaimed profile is invisible — it does not appear in
+                    the directory or in anybody's matches.
+                </p>
+            </details>
+
+            <details class="help-faq">
+                <summary>Why can I not propose to an example organization?</summary>
+                <p>
+                    The ones marked as examples are fictional, shown to
+                    demonstrate how matching works while the directory is
+                    small. They have nobody behind them to accept or decline,
+                    so a proposal would sit unanswered forever.
+                </p>
+            </details>
+
+            <details class="help-faq">
+                <summary>How do I delete my account?</summary>
+                <p>
+                    Settings &rarr; Delete account. It asks for your password,
+                    and it cannot be undone. Agreements you reached with
+                    organizations that are still here stay, so the other side
+                    does not lose its own history.
+                </p>
+            </details>
+        </section>
+
+        <section class="help-section help-contact">
+            <h2>Still stuck?</h2>
+            <p>
+                Send us the details and we will get back to you.
+            </p>
+            <a class="btn-primary" href="index.html#contact">
+                <i class='bx bx-envelope'></i> Contact us
+            </a>
+        </section>
+    </main>
+
+<footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="ppsearch.html">Find Partners</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="common.js"></script>
+    <script src="notifications.js"></script>
+</body>
+</html>

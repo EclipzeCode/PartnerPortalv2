@@ -451,3 +451,18 @@ body {
         display: none;
     }
 }
+
+/* When the partnership runs. Separate from .agreement-date, which is when it
+   was agreed -- a reader months later wants both, and they are not the same
+   fact. */
+.agreement-runs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0.5rem 0 0;
+    font-family: var(--h-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: var(--h-ink-soft);
+}

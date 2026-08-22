@@ -270,10 +270,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     // is a div with a width, and a label is text; neither needs a drawing
     // surface. Only the views chart below is a real plot, and it keeps its
     // SVG because a path is the thing it actually needs.
+    // The width travels as a data attribute and is applied by paintBars()
+    // once the markup is in the document, rather than as a style="" in the
+    // string. A style attribute written through innerHTML is inline CSS as
+    // far as the Content-Security-Policy is concerned, and allowing it would
+    // mean opening style-src to every inline style on the site to serve two
+    // bars. Setting .style from script is a CSSOM write, which the policy
+    // does not restrict.
     function bar(pct, cls) {
         const width = pct > 0 ? `${Math.max(1.5, pct)}%` : '0';
         return `<span class="bar-track"><span class="bar${
-            cls ? ` ${cls}` : ''}" style="width:${width}"></span></span>`;
+            cls ? ` ${cls}` : ''}" data-bar-width="${width}"></span></span>`;
+    }
+
+    // Give every bar just written into `root` its width. Safe to call more
+    // than once on the same subtree; a bar that already has its width is
+    // simply set to the same value again.
+    function paintBars(root) {
+        if (!root) return;
+        root.querySelectorAll('[data-bar-width]').forEach((el) => {
+            el.style.width = el.dataset.barWidth;
+        });
     }
 
     function renderMatchChart() {
@@ -310,6 +327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="rows-scale">
                 <span class="scale-ticks"><span>0</span><span>50</span><span>100</span></span>
             </div>`;
+        paintBars(host);
 
         const table = document.getElementById('matchTable');
         if (table) {
@@ -612,6 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 ${bar((r.value / r.of) * 100)}
             </div>`).join('');
+        paintBars(host);
 
         // Says what the meters are for. Without it they are three bars that
         // look like a score.

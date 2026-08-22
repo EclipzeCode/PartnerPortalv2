@@ -41,7 +41,9 @@
     <link rel="stylesheet" href="shared.css">
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="nav.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'
+          integrity='sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2'
+          crossorigin='anonymous'>
     <!-- Instrument Serif for the page heading, Space Grotesk for anything
          read as a sentence, JetBrains Mono for metadata. Poppins is no longer
          used on this page. -->
@@ -65,7 +67,7 @@
             <a href="index.html">Home</a>
             <a href="ppsearch.html" class="active">Connect</a>
             <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
-            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pphelp.html">Help</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
@@ -429,9 +431,30 @@
                         </div>
                     </div>
 
+                    <!-- Amounts for whatever has been picked above. Built
+                         by ppsearch.js and hidden until there is something
+                         chosen to qualify. -->
+                    <div class="propose-amounts" id="proposeAmounts" hidden></div>
+
                     <div class="form-group">
                         <label for="proposeTimeline">Timeline</label>
                         <select id="proposeTimeline"></select>
+                    </div>
+
+                    <!-- Both optional. The timeline above says roughly how
+                         long; these say when, which is what ends up on the
+                         agreement a funder reads. A start with no end is an
+                         open-ended arrangement and is accepted as one. -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="proposeStartsOn">Starts <span class="optional">optional</span></label>
+                            <input type="date" id="proposeStartsOn">
+                        </div>
+                        <div class="form-group">
+                            <label for="proposeEndsOn">Ends <span class="optional">optional</span></label>
+                            <input type="date" id="proposeEndsOn">
+                            <p class="field-error" id="proposeDates-error"></p>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -480,6 +503,7 @@
     </footer>
 
     <script src="common.js"></script>
+    <script src="notifications.js"></script>
     <script src="ppsearch.js"></script>
 </body>
 </html>

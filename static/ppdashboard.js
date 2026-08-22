@@ -1240,6 +1240,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>`;
     }
 
+    // How to reach one organization, fetched when that organization is
+    // opened rather than shipped with every row of every list.
+    //
+    // /api/dashboard's top_matches and the shortlist behind this dialog both
+    // stopped carrying contact details: a listing that hands out an address
+    // per row is a way to collect every organization's contact details by
+    // scrolling, which is what public_dict in models.py now declines to do.
+    // Asking about the one on screen is the case that was always legitimate.
+    const contactCache = new Map();
+
+    async function fillStatContact(m) {
+        const paint = (org) => {
+            const host = document.getElementById('statContact');
+            // The dialog may have been closed, or another organization
+            // opened, while the request was in the air.
+            if (!host || !statDetail || statDetail.kind !== 'match'
+                || String(statDetail.id) !== String(m.id)) return;
+            host.innerHTML = field('Contact', org.contact_email)
+                + field('Phone', org.contact_phone);
+        };
+
+        if (contactCache.has(m.id)) {
+            paint(contactCache.get(m.id));
+            return;
+        }
+        try {
+            const data = await window.api(
+                `/api/organizations/${encodeURIComponent(m.id)}`);
+            const org = (data && data.organization) || {};
+            contactCache.set(m.id, org);
+            paint(org);
+        } catch {
+            // Leaves the block empty, which is what field() already renders
+            // for an organization that listed no contact details -- so this
+            // fails into a state the dialog knows how to look like.
+        }
+    }
+
     function matchDetail(m) {
         const d = m.match_detail || {};
         const meta = [m.organization_type, m.location].filter(Boolean).map(esc).join(' · ');
@@ -1268,10 +1306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${list(d.i_give_labels)}
                 </div>
             </div>
-            <dl class="stat-detail-grid" style="margin-top:1rem">
-                ${field('Contact', m.contact_email)}
-                ${field('Phone', m.contact_phone)}
-            </dl>
+            <dl class="stat-detail-grid is-spaced" id="statContact"></dl>
             <div class="stat-detail-actions">
                 <a class="btn-primary" href="organization.html?id=${encodeURIComponent(m.id)}"
                    target="_blank" rel="noopener">
@@ -1349,6 +1384,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!m) { statDetail = null; return renderStat(); }
                 statTitle.textContent = m.name;
                 statBody.innerHTML = matchDetail(m);
+                // Fills the contact block once it arrives; see fillStatContact.
+                fillStatContact(m);
             }
             return;
         }

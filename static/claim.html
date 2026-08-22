@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <title>Reset password | PartnerPortal</title>
+    <title>Claim your profile | PartnerPortal</title>
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
          request gets. -->
@@ -34,9 +34,8 @@
         }
       } catch (e) { /* storage disabled; light theme is the right fallback */ }
     </script>
-    <!-- The redesign's shared layer, then the stylesheet the six
-         single-purpose pages share. This page used to load its own copy of
-         that second file; see the header of notice.css. -->
+    <!-- Same shared layer and single-purpose-page stylesheet the reset and
+         verification pages use; a claim is the same shape of errand. -->
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="ink.css">
     <link rel="stylesheet" href="notice.css">
@@ -51,10 +50,10 @@
 <body class="ink">
     <main class="reset-main">
         <div class="reset-page">
-            <div class="reset-card" id="resetCard">
-                <!-- Populated by reset-password.js once it knows whether the
-                     token in the URL is even present -- there is nothing
-                     useful to show a blank form for if it is missing. -->
+            <div class="reset-card" id="claimCard">
+                <!-- Populated by claim.js: it has to resolve the token before
+                     it knows whose invitation this is, and a form asking
+                     somebody to join is worth nothing without that name. -->
             </div>
 
             <p class="reset-footer">
@@ -64,6 +63,6 @@
     </main>
 
     <script src="password-field.js"></script>
-    <script src="reset-password.js"></script>
+    <script src="claim.js"></script>
 </body>
 </html>

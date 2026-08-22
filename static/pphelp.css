@@ -1,0 +1,289 @@
+/* Help page.
+   ---------------------------------------------------------------------------
+   A reading page, so it is one column at a measure rather than the grids the
+   rest of the app uses. Everything here is built from the shared tokens in
+   ink.css, so it follows the theme without knowing about it. */
+
+.help-main {
+    max-width: 46rem;
+    margin: 0 auto;
+    /* Top clears the fixed header, the same clamp the dashboard uses. */
+    padding: clamp(7rem, 11vh, 9rem) 1.5rem 5rem;
+}
+
+.help-head {
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.help-head h1 {
+    margin: 0.5rem 0 1rem;
+    font-family: var(--h-serif);
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--h-ink);
+}
+
+.help-lede {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--h-ink-soft);
+}
+
+.help-lede em {
+    font-family: var(--h-serif);
+    font-style: italic;
+}
+
+/* --- Contents ---------------------------------------------------------- */
+.help-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1.5rem 0 0;
+}
+
+.help-toc a {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 999px;
+    font-family: var(--h-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--h-ink-soft);
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.help-toc a:hover {
+    color: var(--h-ink);
+    border-color: var(--h-edge);
+}
+
+/* --- Sections ---------------------------------------------------------- */
+.help-section {
+    margin-top: 3rem;
+    /* So a jump from the contents above does not put the heading under the
+       fixed header. */
+    scroll-margin-top: 6rem;
+}
+
+.help-section h2 {
+    margin: 0 0 1rem;
+    font-family: var(--h-serif);
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: var(--h-ink);
+}
+
+.help-section h3 {
+    margin: 0 0 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--h-ink);
+}
+
+.help-section p {
+    margin: 0 0 1rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+}
+
+.help-section strong {
+    color: var(--h-ink);
+    font-weight: 600;
+}
+
+/* A note that qualifies what precedes it rather than continuing it. */
+.help-aside {
+    margin: 1.25rem 0 !important;
+    padding-left: 1rem;
+    border-left: 2px solid var(--h-rule);
+    font-size: 0.9rem;
+}
+
+/* --- The two match kinds ------------------------------------------------ */
+.help-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.help-card {
+    padding: 1.1rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 0.5rem;
+    background: var(--h-surface);
+}
+
+.help-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.help-card h3 i {
+    color: var(--h-seal);
+}
+
+.help-card p {
+    margin: 0;
+    font-size: 0.88rem;
+}
+
+/* --- Numbered steps ----------------------------------------------------- */
+.help-steps {
+    margin: 1.5rem 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: help-step;
+}
+
+.help-steps li {
+    position: relative;
+    padding: 0 0 1.5rem 2.75rem;
+    counter-increment: help-step;
+}
+
+.help-steps li::before {
+    content: counter(help-step);
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--h-seal);
+    color: var(--h-on-seal);
+    font-family: var(--h-mono);
+    font-size: 0.75rem;
+}
+
+/* The line joining the steps, stopping at the last one. */
+.help-steps li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 2rem;
+    left: 0.875rem;
+    bottom: 0.5rem;
+    width: 1px;
+    background: var(--h-rule);
+}
+
+.help-steps p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* --- Definitions and lists ---------------------------------------------- */
+.help-defs {
+    margin: 1.5rem 0;
+}
+
+.help-defs dt {
+    margin-top: 1rem;
+    font-weight: 600;
+    color: var(--h-ink);
+}
+
+.help-defs dd {
+    margin: 0.35rem 0 0;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+}
+
+.help-list {
+    margin: 1.5rem 0;
+    padding-left: 1.1rem;
+}
+
+.help-list li {
+    margin-bottom: 0.75rem;
+    line-height: 1.7;
+    color: var(--h-ink-soft);
+}
+
+/* --- FAQ ----------------------------------------------------------------
+   <details> rather than a scripted accordion: it opens without JavaScript,
+   is keyboard-operable and screen-reader-announced for free, and is one less
+   inline handler to exempt from the Content-Security-Policy. */
+.help-faq {
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.help-faq summary {
+    padding: 0.9rem 1.75rem 0.9rem 0;
+    position: relative;
+    font-weight: 600;
+    color: var(--h-ink);
+    cursor: pointer;
+    list-style: none;
+}
+
+/* The default disclosure triangle, replaced with one that matches. */
+.help-faq summary::-webkit-details-marker {
+    display: none;
+}
+
+.help-faq summary::after {
+    content: '+';
+    position: absolute;
+    top: 50%;
+    right: 0.25rem;
+    transform: translateY(-50%);
+    font-family: var(--h-mono);
+    font-size: 1.1rem;
+    color: var(--h-dim);
+}
+
+.help-faq[open] summary::after {
+    content: '\2013';   /* en dash */
+}
+
+.help-faq summary:focus-visible {
+    outline: 2px solid var(--h-seal);
+    outline-offset: 2px;
+}
+
+.help-faq p {
+    margin: 0 0 1rem;
+    padding-right: 1.75rem;
+    font-size: 0.92rem;
+}
+
+/* --- Contact ------------------------------------------------------------ */
+.help-contact {
+    margin-top: 3.5rem;
+    padding: 1.75rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 0.5rem;
+    background: var(--h-surface);
+    text-align: center;
+}
+
+.help-contact h2 {
+    margin-bottom: 0.5rem;
+}
+
+.help-contact .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+@media (max-width: 40em) {
+    .help-main {
+        padding: 7rem 1.25rem 4rem;
+    }
+
+    .help-section {
+        margin-top: 2.25rem;
+    }
+}

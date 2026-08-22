@@ -579,3 +579,16 @@
         flex: 1 1 auto;
     }
 }
+
+/* The concrete dates, beside the vague timeline. Same treatment as
+   .proposal-timeline, which sits directly above it. */
+.proposal-dates {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.25rem 0 0;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}

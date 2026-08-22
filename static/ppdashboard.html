@@ -42,7 +42,9 @@
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="proposals.css">
     <link rel="stylesheet" href="nav.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'
+          integrity='sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2'
+          crossorigin='anonymous'>
     <!-- Instrument Serif for the page heading, Space Grotesk for anything
          read as a sentence, JetBrains Mono for metadata. Poppins is no longer
          used on this page. -->
@@ -66,7 +68,7 @@
             <a href="index.html">Home</a>
             <a href="ppsearch.html">Connect</a>
             <a href="ppdashboard.html" class="active">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
-            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pphelp.html">Help</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
@@ -140,6 +142,12 @@
                     <p class="profile-summary" id="profileSummary"></p>
                 </div>
                 <div class="toolbar-actions">
+                    <!-- The one action available to an organization that
+                         matches with nobody yet: bring the partner it already
+                         has in mind. See the invitations section in app.py. -->
+                    <button type="button" class="btn-action ghost" id="inviteBtn">
+                        <i class='bx bx-user-plus'></i> Invite an organization
+                    </button>
                     <a href="analytics.html" class="btn-action ghost" id="analyticsBtn">
                         <i class='bx bx-line-chart'></i> Analytics
                     </a>
@@ -520,8 +528,123 @@
         </div>
     </footer>
 
+    <!-- Editing a proposal that has not been answered yet. Only the sender
+         sees the button that opens this, and only while it is pending; see
+         update_proposal in app.py for why it stops at acceptance. -->
+    <div id="editModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="editModalTitle">
+            <div class="modal-header">
+                <h2 id="editModalTitle">Edit proposal</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">
+                    They have not answered yet, so this can still change. What
+                    each side gives is set from your two profiles when you
+                    propose — to change that, withdraw and propose again.
+                </p>
+
+                <form id="editForm" novalidate>
+                    <p class="field-error" id="editError" hidden></p>
+
+                    <div class="form-group">
+                        <label for="editTimeline">Timeline</label>
+                        <select id="editTimeline"></select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editStartsOn">Starts <span class="optional">optional</span></label>
+                            <input type="date" id="editStartsOn">
+                        </div>
+                        <div class="form-group">
+                            <label for="editEndsOn">Ends <span class="optional">optional</span></label>
+                            <input type="date" id="editEndsOn">
+                        </div>
+                    </div>
+
+                    <!-- How much of each term. Built by proposals.js from
+                         the proposal's own structured terms. -->
+                    <div class="propose-amounts" id="editAmounts" hidden></div>
+
+                    <div class="form-group">
+                        <label for="editMessage">Message</label>
+                        <textarea id="editMessage" class="textarea-sm" rows="3"
+                                  maxlength="2000"></textarea>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-primary" id="editSubmit">Save changes</button>
+                        <button type="button" class="btn-ghost" id="editCancel">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invitations. An organization that overlaps with nobody sees an empty
+         product, and the only thing it can do about that is bring somebody.
+         The link is the deliverable here rather than an email: it works in
+         whatever channel these two organizations already use. -->
+    <div id="inviteModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="inviteModalTitle">
+            <div class="modal-header">
+                <h2 id="inviteModalTitle">Invite an organization</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">
+                    Create a profile for an organization you would like to
+                    partner with. You will get a link to send them; they choose
+                    their own email address and password when they open it.
+                </p>
+
+                <form id="inviteForm" novalidate>
+                    <div class="form-group">
+                        <label for="inviteName">Organization name</label>
+                        <input type="text" id="inviteName" autocomplete="off"
+                               placeholder="Riverside Community Trust">
+                        <p class="field-error" id="inviteName-error"></p>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-primary" id="inviteSubmitBtn">
+                            <i class='bx bx-link'></i> Create invitation link
+                        </button>
+                    </div>
+                </form>
+
+                <!-- The link, once there is one. Shown here rather than in a
+                     toast: it has to stay on screen long enough to be copied,
+                     and a toast that vanishes takes the whole point with it. -->
+                <div class="invite-result" id="inviteResult" hidden>
+                    <label for="inviteLink">Send them this link</label>
+                    <div class="invite-link-row">
+                        <input type="text" id="inviteLink" readonly>
+                        <button type="button" class="btn-secondary" id="inviteCopyBtn">
+                            <i class='bx bx-copy'></i> Copy
+                        </button>
+                    </div>
+                    <p class="invite-note">
+                        Anyone with this link can claim the profile, so send it
+                        to the organization itself rather than posting it
+                        somewhere public.
+                    </p>
+                </div>
+
+                <div class="invite-outstanding" id="inviteOutstanding" hidden>
+                    <h3>Waiting to be claimed</h3>
+                    <ul id="inviteList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="common.js"></script>
+    <script src="notifications.js"></script>
     <script src="ppdashboard.js"></script>
     <script src="proposals.js"></script>
+    <script src="invites.js"></script>
 </body>
 </html>

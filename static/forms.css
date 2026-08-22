@@ -542,3 +542,14 @@ button.btn-action {
         transform: none;
     }
 }
+
+/* "optional" beside a field label, so the two date inputs do not read as
+   something the form is waiting for. */
+.optional {
+    margin-left: 0.35rem;
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}

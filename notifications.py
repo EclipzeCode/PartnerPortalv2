@@ -158,6 +158,16 @@ def _config():
                       "PartnerPortal <onboarding@resend.dev>"),
         # Where the "View proposal" links point. Defaults to localhost so
         # local development stays self-contained.
+        #
+        # Every proposal link below is built against /ppdashboard.html, and
+        # NOT /proposals.html. There is no proposals.html -- proposals.js
+        # renders the partnership list and the message threads inside the
+        # dashboard page. The links pointed at the old filename long after it
+        # stopped existing, so every "Review proposal", "they accepted" and
+        # "you have a new message" email landed the reader on the 404 page:
+        # the whole propose -> confirm loop, broken for anyone who arrived
+        # the way this module exists to make them arrive. The #hash anchors
+        # are read by proposals.js and select a tab.
         "app_url": (os.environ.get("APP_BASE_URL") or
                     "http://127.0.0.1:5001").rstrip("/"),
         # Where the homepage contact form is delivered. No default: guessing
@@ -343,14 +353,15 @@ def notify_proposal_created(proposal):
     proposer = proposal.proposer.name
 
     subject = f"{proposer} proposed a partnership with you"
-    review_url = f"{cfg['app_url']}/proposals.html#incoming"
+    review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
 
     they_give_labels = [
         # public_summary is heavier than we need here; format the two lists
         # directly off the model.
         _label(s) for s in (proposal.proposer_gives or [])
     ]
-    you_give_labels = [_label(s) for s in (proposal.recipient_gives or [])]
+    you_give_labels = proposal.term_lines(proposal.recipient_gives,
+                                        proposal.recipient_quantities)
 
     quote_html = (
         f'<div class="quote">{escape(proposal.message)}</div>'
@@ -387,6 +398,69 @@ def notify_proposal_created(proposal):
     _dispatch(to_addr, subject, html, text)
 
 
+def notify_proposal_updated(proposal):
+    """The recipient is told when a pending proposal's terms change.
+
+    Not a courtesy. The recipient is being asked to accept a specific set of
+    terms, and an edit that arrived silently would mean the thing they said
+    yes to was not the thing they read. So this goes out on every change,
+    and it restates the terms rather than only announcing that they moved.
+    """
+    if proposal.recipient is None or not proposal.recipient.email_notifications:
+        return
+    cfg = _config()
+    to_addr = proposal.recipient.contact_email or proposal.recipient.email
+    proposer = proposal.proposer.name if proposal.proposer else "An organization"
+
+    subject = f"{proposer} updated their partnership proposal"
+    review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
+
+    they_give_labels = proposal.term_lines(proposal.proposer_gives,
+                                          proposal.proposer_quantities)
+    you_give_labels = proposal.term_lines(proposal.recipient_gives,
+                                        proposal.recipient_quantities)
+    dates = _dates_line(proposal)
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(proposer)} changed their proposal</h1>
+  <p class="meta">These are the terms as they stand now.</p>
+
+  {_terms_block("They would provide", they_give_labels)}
+  {_terms_block("You would provide", you_give_labels)}
+  {f'<p class="meta">{escape(dates)}</p>' if dates else ''}
+
+  <a class="cta" href="{escape(review_url)}">Review proposal</a>
+
+  <p class="foot">Nothing has been agreed yet — this is still waiting on
+  your answer.</p>
+</div></body></html>
+"""
+
+    text = (
+        f"{proposer} changed the terms of their partnership proposal.\n\n"
+        + _terms_text("They would provide", they_give_labels)
+        + _terms_text("You would provide", you_give_labels)
+        + (f"{dates}\n" if dates else "")
+        + f"\nReview it here: {review_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text)
+
+
+def _dates_line(proposal):
+    """"Runs from X to Y", or half of it, or nothing."""
+    starts = getattr(proposal, "starts_on", None)
+    ends = getattr(proposal, "ends_on", None)
+    if starts and ends:
+        return f"Runs from {starts.isoformat()} to {ends.isoformat()}."
+    if starts:
+        return f"Starts {starts.isoformat()}."
+    if ends:
+        return f"Ends {ends.isoformat()}."
+    return ""
+
+
 def notify_proposal_responded(proposal):
     """The proposer gets an email when the recipient accepts or declines."""
     if not proposal.proposer.email_notifications:
@@ -412,7 +486,7 @@ def notify_proposal_responded(proposal):
                      f"token={proposal.share_token}") if proposal.share_token else None
         headline = "Both sides confirmed. You have a partnership."
         cta_label = "View the agreement"
-        cta_url = share_url or f"{cfg['app_url']}/proposals.html#agreed"
+        cta_url = share_url or f"{cfg['app_url']}/ppdashboard.html#agreed"
         text_body = (
             f"{responder} accepted your partnership proposal on PartnerPortal.\n"
             f"You can now share the agreement summary with anyone: {cta_url}\n"
@@ -420,7 +494,7 @@ def notify_proposal_responded(proposal):
     else:
         headline = f"{responder} said no this time."
         cta_label = "See details"
-        cta_url = f"{cfg['app_url']}/proposals.html#closed"
+        cta_url = f"{cfg['app_url']}/ppdashboard.html#closed"
         text_body = (
             f"{responder} declined your partnership proposal on PartnerPortal.\n"
             f"You can propose again to them later, or find other partners: "
@@ -459,7 +533,7 @@ def notify_completion_marked(proposal, actor):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    review_url = f"{cfg['app_url']}/proposals.html#agreed"
+    review_url = f"{cfg['app_url']}/ppdashboard.html#agreed"
 
     subject = f"{actor.name} marked your partnership complete"
     html = f"""\
@@ -493,7 +567,7 @@ def notify_partnership_completed(proposal, other):
     to_addr = other.contact_email or other.email
     url = (f"{cfg['app_url']}/partnership.html?token={proposal.share_token}"
            if proposal.share_token
-           else f"{cfg['app_url']}/proposals.html#agreed")
+           else f"{cfg['app_url']}/ppdashboard.html#agreed")
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -526,7 +600,7 @@ def notify_partnership_ended(proposal, actor):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    url = f"{cfg['app_url']}/proposals.html#closed"
+    url = f"{cfg['app_url']}/ppdashboard.html#closed"
 
     reason_html = (f'<div class="quote">{escape(proposal.end_reason)}</div>'
                    if proposal.end_reason else "")
@@ -572,7 +646,7 @@ def notify_message_received(proposal, sender, message):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    thread_url = f"{cfg['app_url']}/proposals.html#messages-{proposal.id}"
+    thread_url = f"{cfg['app_url']}/ppdashboard.html#messages-{proposal.id}"
 
     subject = f"{sender.name} sent you a message"
     html = f"""\
@@ -695,7 +769,7 @@ def notify_share_link_changed(proposal, actor, revoked):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    url = f"{cfg['app_url']}/proposals.html#agreed"
+    url = f"{cfg['app_url']}/ppdashboard.html#agreed"
 
     what = ("revoked the public link for" if revoked
             else "created a new public link for")

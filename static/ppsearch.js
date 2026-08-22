@@ -688,6 +688,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Detail ---------------------------------------------------------
+    // How to reach an organization, asked for one organization at a time.
+    //
+    // The listings deliberately no longer carry an address or a phone number
+    // on every row: a page of results that did was a way to collect the
+    // contact details of every organization on the site by paging through
+    // it, from an account that costs nothing to make. Opening a profile is a
+    // different act, and this is it.
+    //
+    // Cached for the life of the page, because the same organization is
+    // routinely opened, closed and opened again while someone compares two
+    // of them, and the endpoint is a database round trip.
+    const contactCache = new Map();
+
+    // Example organizations are deliberately not skipped: their sample
+    // addresses are part of what the example cards are demonstrating, and
+    // the endpoint resolves them like any other finished profile.
+    async function fillContactDetails(m, set) {
+        if (contactCache.has(m.id)) {
+            const hit = contactCache.get(m.id);
+            set('partnerDetailEmail', hit.contact_email);
+            set('partnerDetailPhone', hit.contact_phone);
+            return;
+        }
+
+        let org;
+        try {
+            const data = await window.api(
+                `/api/organizations/${encodeURIComponent(m.id)}`);
+            org = (data && data.organization) || {};
+        } catch {
+            // Leaves the placeholder dashes. Not worth an error state: the
+            // rest of the profile is on screen and the propose button --
+            // which is the actual next step -- is unaffected.
+            return;
+        }
+
+        contactCache.set(m.id, org);
+        // Another organization may have been opened while that was in the
+        // air, in which case these fields are no longer describing this one.
+        if (!detailTarget || detailTarget.id !== m.id) return;
+        set('partnerDetailEmail', org.contact_email);
+        set('partnerDetailPhone', org.contact_phone);
+    }
+
     function showDetail(m) {
         // Remembered so the Propose button knows who it is proposing to.
         detailTarget = m;
@@ -701,8 +745,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         set('partnerDetailLocation', m.location);
         set('partnerDetailScore', m.match_score);
         set('partnerDetailBio', m.description);
-        set('partnerDetailEmail', m.contact_email);
-        set('partnerDetailPhone', m.contact_phone);
+        // Contact details do not ride along with the list any more -- see
+        // public_dict in models.py -- so they are fetched for the one
+        // organization actually being looked at. Blanked first, or the
+        // previous organization's address would sit under this one's name
+        // for as long as the request takes.
+        set('partnerDetailEmail', '');
+        set('partnerDetailPhone', '');
+        fillContactDetails(m, set);
 
         // Highlight the categories that actually drove the match, so the two
         // lists are scannable rather than an undifferentiated wall of tags.
@@ -982,6 +1032,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const proposeSelected = { proposerGives: new Set(), recipientGives: new Set() };
     let me = null;
     let categoryGroups = [];
+    // The unit vocabulary and each category's starting unit, from the server
+    // rather than a copy kept here -- see /api/categories.
+    let unitOptions = [];
+    let defaultUnits = {};
     // The same payload already carries these two; the filter dialog builds
     // its type list and focus picker from them rather than making a second
     // request for a vocabulary this page has already been told.
@@ -1012,6 +1066,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
         me = meData.organization;
         categoryGroups = catData.groups;
+        unitOptions = catData.units || [];
+        defaultUnits = catData.default_units || {};
         organizationTypes = catData.organization_types || [];
         focusAreas = catData.focus_areas || [];
         catData.timelines.forEach((t) => {
@@ -1077,8 +1133,117 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else proposeSelected[side].delete(box.value);
                 box.closest('.category-chip').classList.toggle('checked', box.checked);
                 updateProposeCounts();
+                renderProposeAmounts();
             };
         });
+    }
+
+    // --- How much ---------------------------------------------------------
+    // A separate block under the two pickers rather than a number inside
+    // every chip: the pickers answer "what", and cramming an amount and a
+    // unit into a chip makes choosing a category harder in order to make
+    // qualifying one easier. Only the terms actually chosen appear here, so
+    // the form asks for nothing until there is something to ask about.
+    //
+    // Every field is optional. A term with no amount is exactly what every
+    // proposal was before this existed, and renders the same way.
+    const proposeQuantities = { proposerGives: {}, recipientGives: {} };
+
+    function unitSelect(side, slug, chosen) {
+        const options = unitOptions.map((u) => {
+            const selected = u.slug === chosen ? ' selected' : '';
+            const label = u.slug === 'other' ? 'other...' : u.label;
+            return `<option value="${esc(u.slug)}"${selected}>${esc(label)}</option>`;
+        }).join('');
+        return `<select class="amount-unit" data-side="${esc(side)}"
+                        data-slug="${esc(slug)}"
+                        aria-label="Unit">${options}</select>`;
+    }
+
+    function renderProposeAmounts() {
+        const host = document.getElementById('proposeAmounts');
+        if (!host) return;
+
+        const rows = [];
+        [['proposerGives', 'You provide'],
+         ['recipientGives', 'They provide']].forEach(([side, heading]) => {
+            const slugs = [...proposeSelected[side]];
+            if (slugs.length === 0) return;
+            rows.push(`<h4>${esc(heading)}</h4>`);
+            slugs.forEach((slug) => {
+                const held = proposeQuantities[side][slug] || {};
+                const unit = held.unit || defaultUnits[slug] || 'items';
+                rows.push(`
+                    <div class="amount-row">
+                        <span class="amount-label">${esc(categoryLabel(slug))}</span>
+                        <input type="number" class="amount-value" min="0" step="any"
+                               data-side="${esc(side)}" data-slug="${esc(slug)}"
+                               value="${held.amount ?? ''}" placeholder="—"
+                               aria-label="Amount of ${esc(categoryLabel(slug))}">
+                        ${unitSelect(side, slug, unit)}
+                        <input type="text" class="amount-detail"
+                               data-side="${esc(side)}" data-slug="${esc(slug)}"
+                               value="${esc(held.detail || '')}"
+                               placeholder="unit" maxlength="100"
+                               aria-label="Unit name"
+                               ${unit === 'other' ? '' : 'hidden'}>
+                    </div>`);
+            });
+        });
+
+        host.hidden = rows.length === 0;
+        host.innerHTML = rows.length
+            ? `<p class="amounts-intro">How much? Optional, but it is what
+                 makes the agreement checkable later.</p>${rows.join('')}`
+            : '';
+    }
+
+    function categoryLabel(slug) {
+        for (const group of categoryGroups) {
+            const hit = group.categories.find((c) => c.slug === slug);
+            if (hit) return hit.label;
+        }
+        return slug;
+    }
+
+    // One delegated listener for the whole block, so rows can be rebuilt
+    // freely without rewiring anything.
+    const amountsHost = document.getElementById('proposeAmounts');
+    if (amountsHost) {
+        amountsHost.addEventListener('input', (e) => {
+            const el = e.target.closest('[data-side][data-slug]');
+            if (!el) return;
+            const { side, slug } = el.dataset;
+            const held = proposeQuantities[side][slug] || {};
+
+            if (el.classList.contains('amount-value')) {
+                held.amount = el.value === '' ? null : Number(el.value);
+            } else if (el.classList.contains('amount-unit')) {
+                held.unit = el.value;
+                // The free-text name only exists for the escape hatch.
+                const detail = amountsHost.querySelector(
+                    `.amount-detail[data-side="${side}"][data-slug="${slug}"]`);
+                if (detail) detail.hidden = el.value !== 'other';
+            } else if (el.classList.contains('amount-detail')) {
+                held.detail = el.value.trim() || null;
+            }
+            proposeQuantities[side][slug] = held;
+        });
+    }
+
+    // What goes on the wire: only terms with an amount actually entered.
+    function quantitiesFor(side) {
+        const out = {};
+        Object.entries(proposeQuantities[side]).forEach(([slug, q]) => {
+            if (!proposeSelected[side].has(slug)) return;
+            if (q.amount === null || q.amount === undefined || q.amount === '') return;
+            out[slug] = {
+                amount: q.amount,
+                unit: q.unit || defaultUnits[slug] || 'items',
+                detail: q.detail || null,
+            };
+        });
+        return out;
     }
 
     function updateProposeCounts() {
@@ -1114,6 +1279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             proposeTitle.textContent = `Propose a Partnership with ${detailTarget.name}`;
             buildProposePickers(detailTarget);
             prefillFromMatch(detailTarget);
+            renderProposeAmounts();
             document.getElementById('proposeMessage').value = '';
             setProposeMessage('');
             closeModal(detailModal);
@@ -1153,7 +1319,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         recipient_id: detailTarget.id,
                         proposer_gives: [...proposeSelected.proposerGives],
                         recipient_gives: [...proposeSelected.recipientGives],
+                        proposer_quantities: quantitiesFor('proposerGives'),
+                        recipient_quantities: quantitiesFor('recipientGives'),
                         timeline: proposeTimeline.value,
+                        starts_on: document.getElementById('proposeStartsOn').value,
+                        ends_on: document.getElementById('proposeEndsOn').value,
                         message: document.getElementById('proposeMessage').value.trim()
                     }
                 });
@@ -1166,7 +1336,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `Proposal sent to ${detailTarget.name}.`);
                 window.location.href = 'ppdashboard.html#outgoing';
             } catch (error) {
-                setProposeMessage(error.message);
+                // The dates are the only fields on this form the server can
+                // reject by name, and a date problem shown at the top of a
+                // form is a message about something the reader has to go
+                // find. Point at it instead.
+                const field = error.data && error.data.field;
+                const dateError = document.getElementById('proposeDates-error');
+                if (dateError && (field === 'starts_on' || field === 'ends_on')) {
+                    dateError.textContent = error.message;
+                    document.getElementById(
+                        field === 'starts_on' ? 'proposeStartsOn' : 'proposeEndsOn'
+                    ).focus();
+                } else {
+                    setProposeMessage(error.message);
+                }
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Send proposal';

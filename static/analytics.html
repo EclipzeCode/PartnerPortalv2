@@ -42,7 +42,9 @@
     <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="analytics.css">
     <link rel="stylesheet" href="nav.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'
+          integrity='sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2'
+          crossorigin='anonymous'>
     <!-- Instrument Serif for the page heading, Space Grotesk for anything
          read as a sentence, JetBrains Mono for metadata. Poppins is no longer
          used on this page. -->
@@ -59,7 +61,7 @@
             <a href="index.html">Home</a>
             <a href="ppsearch.html">Connect</a>
             <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
-            <!-- <a href="pphelp.html">Help</a> -->
+            <a href="pphelp.html">Help</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
@@ -252,6 +254,7 @@
     </div>
 
     <script src="common.js"></script>
+    <script src="notifications.js"></script>
     <script src="analytics.js"></script>
 </body>
 </html>

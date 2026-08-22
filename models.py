@@ -13,13 +13,16 @@ fills in the matchable parts and flips `onboarding_complete`.
 from datetime import date as date_type, datetime, time as time_type
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index, String,
-    Text, Time, UniqueConstraint, func, text,
+    Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index,
+    Integer, String, Text, Time, UniqueConstraint, func, text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from categories import TIMELINE_LABELS, focus_labels_for, labels_for
+from categories import (
+    TIMELINE_LABELS, focus_labels_for, label_for, labels_for,
+)
+from units import format_quantity
 
 
 class Base(DeclarativeBase):
@@ -38,6 +41,38 @@ class Organization(Base):
     # covers seeded demo orgs and lets you pre-create a profile for an org you
     # are recruiting, which they can claim later.
     password_hash: Mapped[str | None] = mapped_column(String(255))
+
+    # --- Invitations -------------------------------------------------------
+    # An unclaimed profile someone created to bring another organization here.
+    # The token is the credential -- whoever opens the link finishes the
+    # account by choosing an address and a password -- so it is single-use and
+    # cleared the moment it is spent, like every other token in this file.
+    #
+    # This is the half of "profiles can exist without a password" that was
+    # described and never built. It exists because matching has a cold start
+    # that nothing else here addresses: an organization whose needs and offers
+    # overlap with nobody sees an empty product, and the one thing it can
+    # actually do about that is bring the partner it already has in mind.
+    #
+    # No address is asked for when the invite is made. Requiring one would
+    # mean answering "that organization is already registered" to anybody who
+    # guessed an address, which is the enumeration oracle /register works to
+    # avoid -- and the person doing the inviting often knows the organization
+    # without knowing which address it would sign up under. The claimer
+    # supplies their own on the way in.
+    claim_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who did the inviting, so the claim page can say whose invitation this is
+    # -- an invitation from nobody is a signup form with extra steps. SET NULL
+    # rather than CASCADE: the invitation still stands if the organization
+    # that sent it closes its account, and the page falls back to naming
+    # nobody rather than the link going dead.
+    invited_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    invited_by: Mapped["Organization | None"] = relationship(
+        "Organization", remote_side="Organization.id", foreign_keys=[invited_by_id],
+    )
 
     # --- Identity ----------------------------------------------------------
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -167,6 +202,33 @@ class Organization(Base):
     password_reset_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+
+    # Which generation of sessions is still valid for this account.
+    #
+    # A session cookie carried nothing but org_id, so it stayed valid until it
+    # expired however the account changed underneath it. Changing a password
+    # did not end any of the sessions already open on it -- which is exactly
+    # backwards, because the person most likely to change a password is the
+    # one who thinks somebody else has it. They would be told the password was
+    # changed, and the other session would keep working for weeks.
+    #
+    # So the session records the epoch it was issued under, login_required
+    # compares the two, and anything stamped with an older number is refused.
+    # Bumping this is the revoke-everywhere switch; see _end_other_sessions.
+    #
+    # An integer rather than a timestamp: the question is only "is this the
+    # current generation", and a counter cannot be confused by clock skew or
+    # by two changes landing inside the same second.
+    # default=0 as well as server_default: the server default fills existing
+    # rows, but a freshly constructed Organization would carry None in Python
+    # until it was reloaded -- and /register stamps the new session from this
+    # attribute the moment it commits. None there would be written into the
+    # cookie and then compared against the 0 in the database, signing every
+    # new account out of the session it had just been given.
+    session_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
+
     # Covers the optional emails only: a partnership proposal arriving, and a
     # proposal being accepted or declined. Verification mail ignores this,
     # because it is how someone proves they own the address in the first
@@ -203,14 +265,30 @@ class Organization(Base):
         return f"<Organization {self.id} {self.name!r}>"
 
     # --- Serialization -----------------------------------------------------
-    def public_dict(self):
+    def public_dict(self, *, contact=False):
         """Fields safe to show to any signed-in organization.
 
-        Deliberately excludes password_hash and the login email. Contact
-        details are included -- the point of a match is being able to reach
-        the other side.
+        Deliberately excludes password_hash and the login email.
+
+        Contact details are opt-in rather than always present, which is the
+        one thing to be careful about when calling this. Reaching the other
+        side is the point of a match, so it is tempting to include them
+        everywhere -- but this payload is also what the bulk listings are
+        built from, and those answer with up to a page of organizations at a
+        time. An address and a phone number on every row means one free
+        account can walk the directory and leave with the contact list for
+        every organization on the site: the same harvesting public_profile()
+        already refuses to serve anonymously, undone from behind a signup
+        form that costs nothing and verifies nothing.
+
+        So they travel only where somebody asked about one organization in
+        particular -- the single-org route the detail views read, the
+        caller's own record, and the other side of a proposal, who they are
+        already in a conversation with. The listings carry everything needed
+        to decide *whether* to approach an organization, and the profile is
+        one request away when the answer is yes.
         """
-        return {
+        data = {
             "id": self.id,
             "name": self.name,
             "organization_type": self.organization_type,
@@ -226,12 +304,18 @@ class Organization(Base):
             "needs_note": self.needs_note,
             "offers_note": self.offers_note,
             "partnership_goals": self.partnership_goals,
-            "contact_email": self.contact_email,
-            "contact_phone": self.contact_phone,
             **self._link_dict(),
             "links_public": self.links_public,
             "is_demo": self.is_demo,
         }
+        # Omitted rather than sent as null, so the absence is a fact about
+        # this payload rather than a claim that the organization has no
+        # address -- the same shape public_profile() uses for the links it
+        # withholds.
+        if contact:
+            data["contact_email"] = self.contact_email
+            data["contact_phone"] = self.contact_phone
+        return data
 
     def _link_dict(self):
         """The four link fields. Shared so public_dict and public_profile
@@ -283,8 +367,13 @@ class Organization(Base):
         return data
 
     def private_dict(self):
-        """The signed-in org's own record, including account-level fields."""
-        data = self.public_dict()
+        """The signed-in org's own record, including account-level fields.
+
+        contact=True because these are the caller's own details: the settings
+        and onboarding forms render them back into the fields they were typed
+        into, and withholding them here would blank both on every load.
+        """
+        data = self.public_dict(contact=True)
         data.update({
             "email": self.email,
             "onboarding_complete": self.onboarding_complete,
@@ -387,7 +476,52 @@ class Partnership(Base):
         ARRAY(String), nullable=False, server_default="{}"
     )
 
+    # How much of each of the above, keyed by the category slug it qualifies:
+    #
+    #   {"volunteers": {"amount": 30, "unit": "people", "detail": null},
+    #    "event_space": {"amount": 4000, "unit": "sqft", "detail": null}}
+    #
+    # Beside the arrays rather than replacing them, and that is the whole
+    # design. The arrays answer *which* categories, which is what the
+    # "neither side may commit to something it has not listed" rule checks
+    # and what every existing reader of a proposal is built on. These answer
+    # *how much*, for the subset that says. A category with no entry here is
+    # a term without a quantity, which is exactly what every proposal sent
+    # before this existed was -- so nothing needs backfilling and nothing
+    # already agreed is retroactively missing something.
+    #
+    # JSONB rather than a partnership_terms table, matching the choice
+    # `needs` and `offers` already make on Organization: this is data that
+    # belongs to one row, is read whole every time it is read at all, and
+    # never joins to anything. Postgres can still total it -- jsonb_each over
+    # completed partnerships is what the profile rollup will be -- and if
+    # that ever needs its own indexes it can become a table without any of
+    # the callers noticing.
+    #
+    # Kept in step with the arrays by _clean_quantities in app.py, which
+    # drops any key whose category is no longer part of the proposal.
+    proposer_quantities: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    recipient_quantities: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+
     timeline: Mapped[str | None] = mapped_column(String(32))
+    # When it actually runs, as opposed to roughly how long it lasts.
+    #
+    # `timeline` is a slug out of a fixed list -- "1-3 months" -- which is
+    # enough to say whether two organizations are talking about the same
+    # order of commitment, and not enough to put in an agreement. A funder
+    # reading the summary wants to know when this happened, and both parties
+    # want to know when it starts; neither is answerable from "3-6 months".
+    #
+    # Both optional, and independently so: a partnership with a start and no
+    # end is open-ended, which is a real arrangement rather than a half-filled
+    # form. Ordering is enforced in app.py rather than by a check constraint,
+    # so the message can name the field the person should fix.
+    starts_on: Mapped[date_type | None] = mapped_column(Date)
+    ends_on: Mapped[date_type | None] = mapped_column(Date)
     message: Mapped[str | None] = mapped_column(Text)
     # The recipient's note when accepting or declining.
     response_message: Mapped[str | None] = mapped_column(Text)
@@ -579,7 +713,10 @@ class Partnership(Base):
         """
         other = self.counterpart(org_id)
         if other is not None:
-            return other.public_dict()
+            # contact=True: a proposal is the two of them already talking, so
+            # this is the one listing where reaching the other side is the
+            # whole point and neither party is a stranger who did not ask.
+            return other.public_dict(contact=True)
 
         party = self.counterpart_party(org_id)
         return {
@@ -604,6 +741,57 @@ class Partnership(Base):
             (self.proposer_gives if self.proposer_id == org_id
              else self.recipient_gives) or []
         )
+
+    def quantities_for(self, org_id):
+        """The amounts attached to what `org_id` committed to providing."""
+        return dict(
+            (self.proposer_quantities if self.proposer_id == org_id
+             else self.recipient_quantities) or {}
+        )
+
+    def counterpart_quantities(self, org_id):
+        """The amounts attached to what `org_id` gets back."""
+        return dict(
+            (self.recipient_quantities if self.proposer_id == org_id
+             else self.proposer_quantities) or {}
+        )
+
+    @staticmethod
+    def term_lines(slugs, quantities):
+        """Each term as one line of display text, quantity included.
+
+        The label alone where nothing was stated -- "Event space" -- and the
+        label with the amount where something was: "Event space - 4,000 sq ft".
+        Returned in place of the bare labels these used to be, so every
+        surface that already renders a list of terms (the proposal card, the
+        public agreement, both emails) picks up quantities without knowing
+        they exist.
+        """
+        lines = []
+        for slug in (slugs or []):
+            label = label_for(slug)
+            entry = (quantities or {}).get(slug) or {}
+            text = format_quantity(
+                entry.get("amount"), entry.get("unit"), entry.get("detail"))
+            lines.append(f"{label} - {text}" if text else label)
+        return lines
+
+    @staticmethod
+    def terms(slugs, quantities):
+        """The same terms, structured, for anything that has to edit them."""
+        out = []
+        for slug in (slugs or []):
+            entry = (quantities or {}).get(slug) or {}
+            out.append({
+                "slug": slug,
+                "label": label_for(slug),
+                "amount": entry.get("amount"),
+                "unit": entry.get("unit"),
+                "detail": entry.get("detail"),
+                "text": format_quantity(
+                    entry.get("amount"), entry.get("unit"), entry.get("detail")),
+            })
+        return out
 
     def receives_for(self, org_id):
         """What `org_id` gets back."""
@@ -651,6 +839,8 @@ class Partnership(Base):
             "id": self.id,
             "status": self.status,
             "timeline": self.timeline,
+            "starts_on": self.starts_on.isoformat() if self.starts_on else None,
+            "ends_on": self.ends_on.isoformat() if self.ends_on else None,
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
             "message": self.message,
             "response_message": self.response_message,
@@ -669,9 +859,15 @@ class Partnership(Base):
             "proposer": self.proposer_party(),
             "recipient": self.recipient_party(),
             "proposer_gives": list(self.proposer_gives or []),
-            "proposer_gives_labels": labels_for(self.proposer_gives),
+            "proposer_gives_labels": self.term_lines(
+                self.proposer_gives, self.proposer_quantities),
+            "proposer_gives_terms": self.terms(
+                self.proposer_gives, self.proposer_quantities),
             "recipient_gives": list(self.recipient_gives or []),
-            "recipient_gives_labels": labels_for(self.recipient_gives),
+            "recipient_gives_labels": self.term_lines(
+                self.recipient_gives, self.recipient_quantities),
+            "recipient_gives_terms": self.terms(
+                self.recipient_gives, self.recipient_quantities),
         }
 
         if viewer_id is not None:
@@ -681,15 +877,32 @@ class Partnership(Base):
                 ),
                 "counterpart": self.counterpart_dict(viewer_id),
                 "you_give": self.gives_for(viewer_id),
-                "you_give_labels": labels_for(self.gives_for(viewer_id)),
+                "you_give_labels": self.term_lines(
+                    self.gives_for(viewer_id), self.quantities_for(viewer_id)),
+                "you_give_terms": self.terms(
+                    self.gives_for(viewer_id), self.quantities_for(viewer_id)),
                 "you_receive": self.receives_for(viewer_id),
-                "you_receive_labels": labels_for(self.receives_for(viewer_id)),
+                "you_receive_labels": self.term_lines(
+                    self.receives_for(viewer_id),
+                    self.counterpart_quantities(viewer_id)),
+                "you_receive_terms": self.terms(
+                    self.receives_for(viewer_id),
+                    self.counterpart_quantities(viewer_id)),
                 # Only the recipient of a pending proposal can accept or
                 # decline it; only the proposer can withdraw it.
                 "can_respond": (
                     self.status == self.PENDING and self.recipient_id == viewer_id
                 ),
                 "can_withdraw": (
+                    self.status == self.PENDING and self.proposer_id == viewer_id
+                ),
+                # The same window as withdrawing, and the same side. Editing
+                # stops at acceptance: from then on this is a record of what
+                # two organizations agreed to, with a public summary either
+                # may already have sent somewhere, and one of them changing
+                # it afterwards would make it a claim rather than an
+                # agreement. See update_proposal in app.py.
+                "can_edit": (
                     self.status == self.PENDING and self.proposer_id == viewer_id
                 ),
                 # Either party may close a live agreement. Completing needs
@@ -737,6 +950,8 @@ class Partnership(Base):
             ),
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "timeline": self.timeline,
+            "starts_on": self.starts_on.isoformat() if self.starts_on else None,
+            "ends_on": self.ends_on.isoformat() if self.ends_on else None,
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
             "message": self.message,
             # The reason the row outlives its parties. A funder holding this
@@ -746,13 +961,17 @@ class Partnership(Base):
             "parties": [
                 {
                     **self.proposer_party(),
-                    "gives": labels_for(self.proposer_gives),
-                    "receives": labels_for(self.recipient_gives),
+                    "gives": self.term_lines(
+                        self.proposer_gives, self.proposer_quantities),
+                    "receives": self.term_lines(
+                        self.recipient_gives, self.recipient_quantities),
                 },
                 {
                     **self.recipient_party(),
-                    "gives": labels_for(self.recipient_gives),
-                    "receives": labels_for(self.proposer_gives),
+                    "gives": self.term_lines(
+                        self.recipient_gives, self.recipient_quantities),
+                    "receives": self.term_lines(
+                        self.proposer_gives, self.proposer_quantities),
                 },
             ],
         }

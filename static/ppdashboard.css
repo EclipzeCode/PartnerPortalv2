@@ -1010,6 +1010,14 @@
     margin-bottom: 1.25rem;
 }
 
+/* The contact block sits under the tag columns rather than directly beneath
+   a heading, so it needs the gap the others get from what precedes them.
+   A class rather than a style="" attribute on the element: inline CSS is
+   what forces style-src to allow every inline style on the site. */
+.stat-detail-grid.is-spaced {
+    margin-top: 1rem;
+}
+
 .stat-field dt {
     font-family: var(--h-mono);
     font-size: 0.6rem;
@@ -1297,4 +1305,200 @@
         flex-direction: column;
         align-items: stretch;
     }
+}
+
+/* --- Invitations --------------------------------------------------------
+   The dialog behind "Invite an organization" on the profile header. The link
+   it produces is the deliverable, so it gets the weight here: a full-width
+   field that is already selected, next to the button that copies it. */
+.invite-result {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.invite-result label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-label);
+}
+
+.invite-link-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.invite-link-row input {
+    flex: 1;
+    min-width: 0;   /* or a long URL pushes the button off the dialog */
+    font-family: var(--h-mono);
+    font-size: 0.78rem;
+}
+
+.invite-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--h-dim);
+}
+
+.invite-outstanding {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.invite-outstanding h3 {
+    margin: 0 0 0.75rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-label);
+}
+
+.invite-outstanding ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.invite-outstanding li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.invite-outstanding li:last-child {
+    border-bottom: 0;
+}
+
+.invite-row-main {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.invite-row-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.invite-row-copy,
+.invite-row-revoke {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 0.375rem;
+    background: none;
+    font-family: var(--h-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    color: var(--h-ink-soft);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.invite-row-copy:hover,
+.invite-row-revoke:hover {
+    color: var(--h-ink);
+    border-color: var(--h-edge);
+}
+
+.invite-row-revoke:hover {
+    color: var(--h-danger);
+    border-color: var(--h-danger);
+}
+
+.invite-row-revoke:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+@media (max-width: 30em) {
+    .invite-link-row {
+        flex-direction: column;
+    }
+}
+
+/* The amount rows in the edit dialog reuse the propose dialog's layout
+   (ppsearch.css), which this page does not load -- so the few rules they
+   need are repeated here rather than either page pulling in the other's
+   stylesheet for one block. */
+.propose-amounts {
+    margin: 0 0 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.propose-amounts[hidden] {
+    display: none;
+}
+
+.propose-amounts h4 {
+    margin: 0.5rem 0 0.4rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-label);
+}
+
+.amount-row {
+    display: grid;
+    grid-template-columns: 1fr 5.5rem 8rem;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.3rem 0;
+}
+
+.amount-row .amount-detail {
+    grid-column: 2 / -1;
+}
+
+.amount-row .amount-detail[hidden] {
+    display: none;
+}
+
+.amount-label {
+    font-size: 0.85rem;
+    color: var(--h-ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.amount-row input,
+.amount-row select {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 34em) {
+    .amount-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .amount-label {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Same as the propose form in ppsearch.css: a flex column in a
+   height-constrained dialog shrinks its children, and a collapsed field
+   paints on top of the next one. The dialog body scrolls instead. */
+.modal-body #editForm > * {
+    flex-shrink: 0;
 }

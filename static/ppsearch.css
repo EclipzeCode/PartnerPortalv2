@@ -1434,3 +1434,85 @@ body.ink .category-chip.checked {
         animation: none;
     }
 }
+
+/* --- Term amounts -------------------------------------------------------
+   Under the two pickers in the propose dialog. Only the categories actually
+   chosen appear here, so the form asks for a number only once there is
+   something to attach one to. */
+.propose-amounts {
+    margin: 1rem 0 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.propose-amounts[hidden] {
+    display: none;
+}
+
+.amounts-intro {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--h-dim);
+}
+
+.propose-amounts h4 {
+    margin: 0.75rem 0 0.4rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-label);
+}
+
+.amount-row {
+    display: grid;
+    grid-template-columns: 1fr 5.5rem 8rem;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.3rem 0;
+}
+
+/* The free-text unit name only appears for `other`, and takes the row below
+   rather than squeezing a fourth column into it. */
+.amount-row .amount-detail {
+    grid-column: 2 / -1;
+}
+
+.amount-row .amount-detail[hidden] {
+    display: none;
+}
+
+.amount-label {
+    font-size: 0.85rem;
+    color: var(--h-ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.amount-row input,
+.amount-row select {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 34em) {
+    .amount-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .amount-label {
+        grid-column: 1 / -1;
+    }
+}
+
+/* The propose form is a flex column inside a height-constrained dialog, so
+   its children are flex items and shrink when the content is taller than the
+   space available. The category grid shrank all the way to zero -- its
+   pickers kept painting, outside the box, on top of whatever came next.
+   It only became visible once the amounts block pushed the form past the
+   dialog height, but the grid has been shrinkable all along. Nothing here
+   should shrink; the dialog body is what scrolls. */
+.modal-body #proposeForm > * {
+    flex-shrink: 0;
+}
