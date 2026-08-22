@@ -739,3 +739,203 @@ document.addEventListener('DOMContentLoaded', () => {
     resize();
     play();
 });
+
+// ---------------------------------------------------------------------------
+// The span
+//
+// A suspension bridge drawn in the same square cells as the match matrix, and
+// built from both ends inward as the page scrolls past it. Neither side builds
+// the whole thing; the span is closed only when both halves reach the middle.
+//
+// The shape is generated rather than drawn by hand, so the same code produces
+// a coarse bridge on a phone and a fine one on a desktop -- the features are
+// placed as fractions of the grid, not as pixel coordinates.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    const section = document.getElementById('span');
+    const track = document.getElementById('bridgeTrack');
+    const grid = document.getElementById('bridgeGrid');
+    const readout = document.getElementById('bridgeReadout');
+    if (!section || !track || !grid) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /**
+     * Every cell of the bridge, as {c, r} on a cols x rows lattice.
+     *
+     * Deck, two towers, the main cable between them, the backstays out to the
+     * ends, the hangers under the cable, and the piers below the deck. Set
+     * rather than array: the parts overlap, and a cell drawn twice is a cell
+     * that fades in twice.
+     */
+    function shape(cols, rows) {
+        const cells = new Set();
+        const add = (c, r) => {
+            const ci = Math.round(c);
+            const ri = Math.round(r);
+            if (ci < 0 || ci >= cols || ri < 0 || ri >= rows) return;
+            cells.add(`${ci},${ri}`);
+        };
+
+        const deckRow = Math.round(rows * 0.6);
+        const deckThickness = Math.max(1, Math.round(rows * 0.09));
+        const towerTop = Math.max(1, Math.round(rows * 0.14));
+        const towerWidth = Math.max(1, Math.round(cols * 0.045));
+        const leftTower = Math.round(cols * 0.21);
+        const rightTower = cols - leftTower - towerWidth;
+
+        // The deck, all the way across.
+        for (let c = 0; c < cols; c += 1) {
+            for (let k = 0; k < deckThickness; k += 1) add(c, deckRow + k);
+        }
+
+        // The two towers, standing on the deck.
+        [leftTower, rightTower].forEach((t) => {
+            for (let w = 0; w < towerWidth; w += 1) {
+                for (let r = towerTop; r < deckRow; r += 1) add(t + w, r);
+            }
+        });
+
+        // The main cable. A parabola is close enough to a catenary at this
+        // resolution, and it is the shape the eye is expecting.
+        const leftTop = leftTower + towerWidth - 1;
+        const rightTop = rightTower;
+        const mid = (leftTop + rightTop) / 2;
+        const halfSpan = Math.max(1, mid - leftTop);
+        const dip = Math.max(1, Math.round((deckRow - towerTop) * 0.66));
+        const cableAt = (c) => {
+            const k = (c - mid) / halfSpan;
+            return towerTop + dip * (1 - k * k);
+        };
+        for (let c = leftTop; c <= rightTop; c += 1) add(c, cableAt(c));
+
+        // The backstays, from each tower top out to the deck at the ends.
+        const stay = (towerCol, endCol) => {
+            const run = Math.max(1, Math.abs(endCol - towerCol));
+            const step = endCol > towerCol ? 1 : -1;
+            for (let i = 0; i <= run; i += 1) {
+                const k = i / run;
+                add(towerCol + i * step, towerTop + (deckRow - towerTop) * k * k);
+            }
+        };
+        stay(leftTop, 0);
+        stay(rightTop, cols - 1);
+
+        // Hangers, every few columns, from the cable down to the deck.
+        const spacing = Math.max(2, Math.round(cols * 0.06));
+        for (let c = leftTop + spacing; c < rightTop; c += spacing) {
+            for (let r = Math.round(cableAt(c)) + 1; r < deckRow; r += 1) add(c, r);
+        }
+
+        // Piers, under each tower, holding the deck up out of the water.
+        const pierBottom = Math.min(rows - 1, deckRow + deckThickness + Math.round(rows * 0.2));
+        [leftTower, rightTower].forEach((t) => {
+            for (let w = 0; w < towerWidth; w += 1) {
+                for (let r = deckRow + deckThickness; r <= pierBottom; r += 1) add(t + w, r);
+            }
+        });
+
+        return [...cells].map((key) => {
+            const [c, r] = key.split(',').map(Number);
+            return { c, r };
+        });
+    }
+
+    let cells = [];
+    let maxOrder = 1;
+    let cols = 0;
+    let built = -1;         // how many orders are currently shown
+
+    function render() {
+        // Coarser on a narrow screen: forty-five columns across a phone is a
+        // five-pixel cell, and the bridge stops being a bridge.
+        const w = window.innerWidth;
+        cols = w < 34 * 16 ? 25 : (w < 62 * 16 ? 33 : 45);
+        const rows = Math.round(cols * 0.42);
+
+        grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        grid.innerHTML = '';
+
+        // The middle column is where the two halves meet, and is the last
+        // thing to land whichever side it is counted from.
+        const centre = (cols - 1) / 2;
+        cells = shape(cols, rows).map((cell) => {
+            const el = document.createElement('span');
+            const side = cell.c < centre ? 'give' : 'take';
+            // Distance from the outer end this cell is built from, so both
+            // halves advance at the same rate towards the middle.
+            const order = cell.c < centre ? cell.c : (cols - 1 - cell.c);
+            el.className = `bridge-cell ${side}`;
+            if (order >= Math.floor(centre)) el.classList.add('keystone');
+            el.style.gridColumn = String(cell.c + 1);
+            el.style.gridRow = String(cell.r + 1);
+            grid.appendChild(el);
+            return { el, order };
+        });
+
+        maxOrder = cells.reduce((m, c) => Math.max(m, c.order), 1);
+        built = -1;
+        if (reduced) apply(1);
+    }
+
+    /** Show every cell whose turn has come, and nothing beyond it. */
+    function apply(progress) {
+        const reach = Math.round(progress * (maxOrder + 1)) - 1;
+        // Only when the frontier has actually moved: a scroll of a few pixels
+        // does not change which cells are shown, and touching several hundred
+        // class lists for it would be the expensive part of this whole thing.
+        if (reach === built) return;
+        built = reach;
+
+        cells.forEach((cell) => {
+            cell.el.classList.toggle('built', cell.order <= reach);
+        });
+
+        const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+        if (readout) {
+            readout.textContent = percent >= 100
+                ? 'Span closed'
+                : `Span ${percent}% closed`;
+        }
+        section.classList.toggle('joined', percent >= 100);
+    }
+
+    function progress() {
+        const rect = track.getBoundingClientRect();
+        // The distance the track can travel with the stage pinned: its own
+        // height less the one screen the stage occupies.
+        const travel = rect.height - window.innerHeight;
+        if (travel <= 0) return 1;
+        return Math.min(1, Math.max(0, -rect.top / travel));
+    }
+
+    render();
+
+    if (reduced) return;
+
+    // Coalesced onto a frame: scroll fires far more often than the screen is
+    // painted, and every one of those extra calls would be measuring a layout
+    // that has not changed yet.
+    let queued = false;
+    function onScroll() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+            queued = false;
+            apply(progress());
+        });
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            render();
+            apply(progress());
+        }, 150);
+    });
+
+    apply(progress());
+});

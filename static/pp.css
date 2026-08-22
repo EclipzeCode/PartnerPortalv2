@@ -874,6 +874,123 @@ body.home #contactForm .btn-primary {
 
 
 /* ------------------------------------------------------------------------- *
+ * The span
+ *
+ * A pixel bridge on the same square cells as the match matrix, built from both
+ * ends inward while the page scrolls past it.
+ *
+ * The track is the scroll distance; the stage is what stays on screen while
+ * that distance is covered. Sticky rather than fixed, so the section releases
+ * the page on its own at both ends and nothing has to be positioned or torn
+ * down at a scroll offset.
+ * ------------------------------------------------------------------------- */
+
+body.home .bridge-track {
+    /* How long the build takes, in screens. The stage is one of them, so this
+       leaves a little under two screens of scrolling to close the span. */
+    height: 280vh;
+}
+
+body.home .bridge-stage {
+    position: sticky;
+    top: 0;
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(1.75rem, 4vh, 3rem);
+    /* Clears the fixed header, which the sticky top: 0 would otherwise put
+       the heading under. */
+    padding: clamp(6rem, 11vh, 8rem) clamp(1.25rem, 5vw, 6rem) clamp(3rem, 6vh, 5rem);
+}
+
+body.home .bridge-head,
+body.home .bridge-grid,
+body.home .bridge-foot {
+    width: 100%;
+    max-width: 78rem;
+    margin-inline: auto;
+}
+
+body.home .bridge-title {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 3.6vw, 3rem);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+    max-width: 20ch;
+    margin-top: 1.15rem;
+}
+
+body.home .bridge-title em {
+    font-style: italic;
+    color: var(--h-give);
+}
+
+/* The cells. Only the bridge's own are in the DOM -- pp.js places each one by
+   grid line, so the empty lattice around it is the page's dot texture rather
+   than a few hundred blank divs. */
+body.home .bridge-grid {
+    display: grid;
+    gap: 2px;
+}
+
+body.home .bridge-cell {
+    aspect-ratio: 1;
+    /* The plan, before it is built. Faint enough to read as a drawing of what
+       is coming rather than as part of the structure. */
+    background: var(--h-cell);
+    transform: scale(0.55);
+    opacity: 0.55;
+    transition:
+        background 0.35s ease,
+        transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1),
+        opacity 0.35s ease;
+}
+
+body.home .bridge-cell.built {
+    transform: none;
+    opacity: 1;
+}
+
+/* Each half is the direction it comes from, the same two colors the matrix
+   uses. They meet in the middle, which is the whole point of the thing. */
+body.home .bridge-cell.built.give { background: var(--h-give); }
+body.home .bridge-cell.built.take { background: var(--h-take); }
+
+/* The last column to land. Sealed rather than either side's color: what
+   closes a span is the agreement, not either party. */
+body.home .bridge-cell.built.keystone { background: var(--h-seal); }
+
+body.home .bridge-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.9rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--h-rule);
+    font-family: var(--h-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+body.home .bridge-readout {
+    color: var(--h-ink-soft);
+    /* The number changes on every frame of the scroll; a proportional face
+       would reflow the line as the digits change width. */
+    font-variant-numeric: tabular-nums;
+}
+
+body.home .bridge-section.joined .bridge-readout {
+    color: var(--h-seal);
+}
+
+/* ------------------------------------------------------------------------- *
  * The arrival
  *
  * The hero is the one thing on the page that is already on screen when it
@@ -985,6 +1102,12 @@ body.home .hero-lede.pending .lede-text {
 }
 
 @media (max-width: 34rem) {
+    /* Nearly three screens of scrolling for one graphic is a long way to ask
+       someone to drag a thumb. The build is the same, over less distance. */
+    body.home .bridge-track {
+        height: 200vh;
+    }
+
     body.home .hero-stats {
         grid-template-columns: 1fr;
     }
@@ -1024,6 +1147,22 @@ body.home .hero-lede.pending .lede-text {
 
     body.home .lattice-cell {
         animation: none;
+    }
+
+    /* The span is built already, and the track collapses to the height of
+       what it holds -- there is no scroll distance to spend on an animation
+       that is not going to play. */
+    body.home .bridge-track {
+        height: auto;
+    }
+
+    body.home .bridge-stage {
+        position: static;
+        min-height: 0;
+    }
+
+    body.home .bridge-cell {
+        transition: none;
     }
 
     /* The hero's arrival, the word stagger and the lede's reveal. All three
