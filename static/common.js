@@ -568,26 +568,14 @@ window.refreshNavCounts = async function refreshNavCounts() {
     }
 };
 
-// The badge on the nav's Dashboard link. Proposals waiting on this org to
-// respond, and messages it has not read, were otherwise invisible outside of
-// email -- the dashboard is the only place either can be acted on, and
-// nothing on the rest of the site said one was there. Hidden entirely rather
-// than shown as "0", the same "nothing here" treatment the rest of the nav
-// uses.
+// How many proposals are waiting on this organization, shown on the bell.
+//
+// It used to light a second badge on the Dashboard nav link as well. That was
+// the same number in two places, and the weaker of the two: a bare count on a
+// link, with nothing to open and no way to say what it was made of. The bell
+// can list the actual items, so the count lives there alone now.
 function updateProposalBadge(count) {
-    // The same number also lights the notification bell, which is the half
-    // that can say what the count is made of. Both are fed from here so they
-    // cannot disagree.
     if (window.setNotificationDot) window.setNotificationDot(count);
-
-    const badge = document.getElementById('navProposalBadge');
-    if (!badge) return;
-    if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : String(count);
-        badge.hidden = false;
-    } else {
-        badge.hidden = true;
-    }
 }
 
 function wireAccountMenu() {

@@ -1123,6 +1123,26 @@ class Event(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # The IANA zone the date and time above are written in -- "3pm" is not a
+    # moment until something says where.
+    #
+    # This pair is stored as wall-clock time plus a zone, never as a UTC
+    # instant. Converting at write and back at read looks equivalent and is
+    # not, for anything in the future: the offset a zone will have on a date
+    # months away is a prediction, and when a government moves a DST boundary
+    # -- or the meeting is simply on the far side of one -- the stored instant
+    # keeps the old offset and the meeting silently moves an hour. "Three
+    # o'clock in Austin" has to stay three o'clock in Austin, so the wall
+    # clock is the thing recorded and the instant is derived when needed.
+    #
+    # Nullable, and null on every row written before this column existed.
+    # There is no honest backfill: nothing recorded where those meetings were
+    # entered, and picking a default would be inventing an answer for someone
+    # else's diary. Null reads as "no zone recorded" and the frontend falls
+    # back to the viewer's own, which is exactly what those rows have always
+    # meant.
+    timezone: Mapped[str | None] = mapped_column(String(64))
+
     partner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
@@ -1167,6 +1187,10 @@ class Event(Base):
             # only tell the difference if the absence survives the trip.
             "duration": self.duration,
             "all_day": self.all_day,
+            # null for a meeting saved before zones were recorded. The
+            # dashboard reads that as "the viewer's own zone", which is the
+            # assumption those rows were written under.
+            "timezone": self.timezone,
             "partner": self.partner_name,
             "description": self.description or "",
             "location": self.location or "",

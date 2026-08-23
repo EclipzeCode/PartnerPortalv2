@@ -731,13 +731,6 @@ body.ink .account-identity .account-email {
     color: var(--h-dim);
 }
 
-body.ink .nav-badge {
-    border-radius: 0;
-    background: var(--h-take);
-    color: var(--h-on-take);
-    font-family: var(--h-mono);
-}
-
 body.ink #menu-icon {
     color: var(--h-ink);
 }

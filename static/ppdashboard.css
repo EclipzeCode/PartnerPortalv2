@@ -777,6 +777,9 @@
     color: var(--h-dim);
 }
 
+/* Element-agnostic on purpose: the edit and remove controls are buttons, and
+   "add to calendar" is an <a download> because it fetches a file rather than
+   acting on the page. They have to look identical sitting next to each other. */
 .btn-event {
     flex-shrink: 0;
     width: 1.7rem;
@@ -784,6 +787,7 @@
     display: grid;
     place-items: center;
     background: transparent;
+    text-decoration: none;
     border: 1px solid var(--h-rule);
     border-radius: 0;
     color: var(--h-dim);

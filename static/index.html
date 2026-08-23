@@ -21,16 +21,42 @@
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <!-- Applied before the first stylesheet so the page never paints in one
-         theme and then switches. Light is the default: only an explicit
-         choice, stored by the toggle in Settings, turns this on -- the system
-         preference is deliberately not consulted, because the product ships
-         light and a dark OS is not the same thing as asking for a dark app. -->
+         theme and then switches. Three states: an explicit choice stored by
+         the control in Settings wins, and with nothing stored the operating
+         system decides.
+
+         This resolves to a real answer and always sets the attribute, rather
+         than leaving the light case unset and letting a prefers-color-scheme
+         block in the CSS carry it. There are seven dark rules across five
+         stylesheets, two of them inside print blocks that are load-bearing on
+         specificity -- a parallel copy of each under a media query is the
+         version of this that silently rots when one of them is edited and its
+         twin is not. Resolving here means every one of those rules stays an
+         ordinary [data-theme="dark"] match and none of them had to change.
+
+         The listener keeps a system choice honest if the OS flips while the
+         page is open; an explicit choice ignores it. -->
     <script>
-      try {
-        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
-          document.documentElement.setAttribute('data-theme', 'dark');
+      (function () {
+        var mq = window.matchMedia
+          && window.matchMedia('(prefers-color-scheme: dark)');
+        function chosen() {
+          try {
+            var v = localStorage.getItem('partnerPortalTheme');
+            return v === 'dark' || v === 'light' ? v : null;
+          } catch (e) {
+            return null; /* storage disabled; the OS still gets a say */
+          }
         }
-      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+        function apply() {
+          document.documentElement.setAttribute(
+            'data-theme', chosen() || (mq && mq.matches ? 'dark' : 'light'));
+        }
+        apply();
+        if (mq && mq.addEventListener) {
+          mq.addEventListener('change', function () { if (!chosen()) apply(); });
+        }
+      })();
     </script>
     <link rel="stylesheet" href="tokens.css">
     <!-- The redesign's shared layer: palette, type, buttons, nav, footer.
@@ -74,7 +100,7 @@
         <nav class="navbar">
             <a href="index.html" class="active">Home</a>
             <a href="ppsearch.html">Connect</a>
-            <a href="ppdashboard.html">Dashboard <span class="nav-badge" id="navProposalBadge" hidden></span></a>
+            <a href="ppdashboard.html">Dashboard</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
@@ -95,6 +121,7 @@
                         <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
                         <a href="analytics.html"><i class='bx bx-line-chart'></i> Analytics</a>
                         <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <a href="pphelp.html"><i class='bx bx-help-circle'></i> Help</a>
                         <button type="button" class="account-signout" id="accountSignOut">
                             <i class='bx bx-log-out'></i> Log out
                         </button>
@@ -403,7 +430,7 @@
                 <p class="cta-text">Setting up a profile takes a few minutes. You will see your matches, and the reasons behind each one, straight afterwards.</p>
                 <div class="cta-buttons">
                     <a href="onboarding.html" class="btn-primary">Get Started</a>
-                    <button type="button" id="contactBtn" class="btn-secondary">Contact us</button>
+                    <button type="button" class="btn-secondary" data-contact-open>Contact us</button>
                 </div>
             </div>
         </div>
@@ -533,6 +560,7 @@
 
     <script src="common.js"></script>
     <script src="notifications.js"></script>
+    <script src="contact.js"></script>
     <script src="pp.js"></script>
 </body>
 </html>

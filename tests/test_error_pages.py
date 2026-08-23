@@ -71,3 +71,30 @@ def test_shareable_pages_carry_real_open_graph_tags(client, make_org):
     fallback = client.get("/organization.html?id=999999999")
     assert fallback.status_code == 200
     assert 'property="og:title"' in fallback.get_data(as_text=True)
+
+
+def test_the_preview_image_is_absolute(client):
+    """The one property of og:image that fails silently.
+
+    A relative og:image is simply ignored -- crawlers do not resolve it
+    against the page they just fetched, so the card renders text-only and
+    nothing anywhere reports a problem. The tag has to carry a full URL, and
+    it is built from the request rather than a constant so that moving to a
+    custom domain does not leave every preview pointing at the old host.
+    """
+    import re
+
+    body = client.get("/organization.html?id=1",
+                      base_url="https://example.test").get_data(as_text=True)
+    image = re.search(r'<meta property="og:image" content="([^"]+)"', body)
+    assert image, "no og:image tag"
+    assert image.group(1).startswith("https://example.test/"), image.group(1)
+
+    # Stamped like any other asset, because it is served with a year-long
+    # cache header once it carries a version.
+    assert "og-default.png?v=" in image.group(1)
+    assert client.get("/og-default.png").status_code == 200
+
+    # summary, the default, crops a 1200x630 card to a square thumbnail.
+    assert 'name="twitter:card" content="summary_large_image"' in body
+    assert '<meta property="og:image:width" content="1200">' in body

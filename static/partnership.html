@@ -30,16 +30,42 @@
          the markup they fetch. -->
     <!-- og:meta -->
     <!-- Applied before the first stylesheet so the page never paints in one
-         theme and then switches. Light is the default: only an explicit
-         choice, stored by the toggle in Settings, turns this on -- the system
-         preference is deliberately not consulted, because the product ships
-         light and a dark OS is not the same thing as asking for a dark app. -->
+         theme and then switches. Three states: an explicit choice stored by
+         the control in Settings wins, and with nothing stored the operating
+         system decides.
+
+         This resolves to a real answer and always sets the attribute, rather
+         than leaving the light case unset and letting a prefers-color-scheme
+         block in the CSS carry it. There are seven dark rules across five
+         stylesheets, two of them inside print blocks that are load-bearing on
+         specificity -- a parallel copy of each under a media query is the
+         version of this that silently rots when one of them is edited and its
+         twin is not. Resolving here means every one of those rules stays an
+         ordinary [data-theme="dark"] match and none of them had to change.
+
+         The listener keeps a system choice honest if the OS flips while the
+         page is open; an explicit choice ignores it. -->
     <script>
-      try {
-        if (localStorage.getItem('partnerPortalTheme') === 'dark') {
-          document.documentElement.setAttribute('data-theme', 'dark');
+      (function () {
+        var mq = window.matchMedia
+          && window.matchMedia('(prefers-color-scheme: dark)');
+        function chosen() {
+          try {
+            var v = localStorage.getItem('partnerPortalTheme');
+            return v === 'dark' || v === 'light' ? v : null;
+          } catch (e) {
+            return null; /* storage disabled; the OS still gets a say */
+          }
         }
-      } catch (e) { /* storage disabled; light theme is the right fallback */ }
+        function apply() {
+          document.documentElement.setAttribute(
+            'data-theme', chosen() || (mq && mq.matches ? 'dark' : 'light'));
+        }
+        apply();
+        if (mq && mq.addEventListener) {
+          mq.addEventListener('change', function () { if (!chosen()) apply(); });
+        }
+      })();
     </script>
     <link rel="stylesheet" href="tokens.css">
     <!-- The redesign's shared layer, for the palette and the three typefaces.

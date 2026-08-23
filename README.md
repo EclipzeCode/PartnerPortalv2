@@ -134,7 +134,7 @@ there rather than on someone's first deploy.
 | `db.py` | Engine and session setup |
 | `seed.py` | Demo organizations |
 | `migrations/` | Alembic migrations — the schema's source of truth |
-| `static/` | The entire frontend — HTML, CSS, JS |
+| `static/` | The entire frontend — HTML, CSS, JS, and the link-preview card |
 | `tests/` | pytest suite — see below |
 | `render.yaml` | Deployment blueprint |
 
@@ -150,16 +150,79 @@ summary), and the five token landing pages — `verify-email.html`,
 There is no `proposals.html`: `proposals.js` renders the partnerships list
 and the message threads inside `ppdashboard.html`.
 
-Analytics is reachable from the account menu on every page and from a button
-on the dashboard. It is not in the main nav: the numbers are one
-organization's own and nobody signed out has anything to see there, so a
-link in the bar would be noise on most of the site.
+The "Get in touch" form is `contact.js` plus a block of modal markup, and any
+page can have it by including both — `index.html` and `pphelp.html` do. It
+began as part of `pp.js` on the home page only, which left the help page's
+Contact button pointing at `index.html#contact`: a fragment matching nothing,
+because the form is a modal rather than a section. Sending someone to another
+page for a form they asked for on this one is barely better than sending them
+nowhere, so the form goes to them. Both copies post to the same `/api/contact`.
+
+The main nav carries Home, Connect and Dashboard. Analytics and Help sit in
+the account dropdown instead, below Edit profile and Settings; analytics is
+also a button on the dashboard.
+
+For analytics that placement follows the page: the numbers are one
+organization's own, nobody signed out has anything to see there, and a link
+in the bar would be noise on most of the site. Help is a public page, so the
+same argument does not apply to it: the dropdown only renders when somebody
+is signed in, and no footer links to `pphelp.html`, so a signed-out visitor
+now reaches Help only through a search result or the URL. That is sharpest on
+`pplogin.html`, where by definition nobody is signed in yet — someone locked
+out of their account has no link to the page that would tell them what to do.
+The sitemap still offers it, so it stays findable from outside.
 
 Flask serves `static/` at the site root, so `/ppsearch.html` maps to
 `static/ppsearch.html`. The frontend lives in its own directory rather than at
 the project root for a reason: Flask hands out **everything** under its
 `static_folder` verbatim, so rooting it at the project would publish `.env`,
 `app.py` and the rest of the source to anyone who asked for them.
+
+Meetings store a wall-clock date and time plus the IANA zone they were
+written in — `15:00` and `America/Chicago` — never a UTC instant. Converting
+at write and back at read looks equivalent and is not, for anything in the
+future: the offset a zone will have months from now is a prediction, so a
+meeting on the far side of a DST boundary silently moves an hour. "Three
+o'clock in Austin" has to stay three o'clock in Austin, and the instant is
+derived only where one is actually needed. Meetings saved before the column
+existed have no zone and are read in the viewer's own, which is the
+assumption they were written under.
+
+Each meeting can be downloaded as an `.ics` from `/api/events/<id>.ics` —
+behind the session and scoped to its owner, like every other route on that
+table. It carries a `VTIMEZONE` built from `tzdata` for the meeting's year
+rather than a bare `TZID`, which is what makes it valid rather than merely
+widely accepted. A meeting with no recorded zone is written as floating time,
+which iCalendar defines as the same wall clock wherever the reader is — an
+exact statement of what those rows know. It is a download, not a subscribable
+feed: a feed is fetched by a calendar server with no cookie to send, so it
+would need a bearer token in the URL, which is a different feature with a
+different threat model.
+
+Theme is tri-state: **system** (the default), **light**, **dark**, chosen in
+Settings and stored in the browser rather than on the account, because it
+describes a screen rather than an organization. An inline script in every
+page's `<head>` resolves the three states to a real `data-theme` before the
+first stylesheet loads, so the page never paints in one theme and switches.
+
+That resolution happens in the script rather than through a
+`prefers-color-scheme` block in the CSS on purpose. There are seven dark
+rules across five stylesheets, two of them inside `@media print` blocks whose
+selectors are load-bearing on specificity — a parallel copy of each under a
+media query is the version that rots the first time one is edited and its
+twin is not. Resolving in the script means every one of those rules stays an
+ordinary `[data-theme="dark"]` match and none of them had to change. The
+cost is that with JavaScript off the theme is light regardless of the OS,
+which is exactly what it was before.
+
+Shareable pages carry Open Graph tags, and `static/og-default.png` is the
+1200×630 card behind them — one branded image for the whole site, not one
+generated per organization. A per-org card means a rendering pipeline and a
+cache, and it would put a profile's name into an image that crawlers hotlink
+and hosts keep indefinitely, which is the same publishing decision indexing
+is. The `og:image` URL is absolute and built from the request: a relative one
+is ignored by most crawlers, and a hardcoded origin would outlive a move to a
+custom domain.
 
 `/robots.txt` and `/sitemap.xml` are routes rather than files in `static/`,
 because both have to name this site's own origin and a file cannot know it.
@@ -193,7 +256,8 @@ filters and paging; a private shortlist; public organization profiles;
 partnership proposals with mutual confirmation; the lifecycle after that --
 completing takes both sides, ending takes one, and each side records whether
 the other delivered; shareable agreement summaries whose link can be rotated
-or revoked; message threads on a proposal; meetings; quantified partnership
+or revoked; message threads on a proposal; meetings, with the timezone they
+were arranged in and a calendar file per meeting; quantified partnership
 terms; inviting an organization that has no account yet and letting it claim
 the profile later; an analytics page for an organization's own numbers; and
 transactional email for all of it.

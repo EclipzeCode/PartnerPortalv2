@@ -80,34 +80,6 @@
 }
 
 /* --- Pending proposal badge ----------------------------------------------- */
-/* Set by common.js from /api/me's pending_proposals count. hidden by default
-   in the markup, both so a signed-out visitor never sees it and so nothing
-   flashes an empty circle before the count is known. The [hidden] rule is
-   needed alongside the attribute itself: this element's own `display` would
-   otherwise beat the browser's default `[hidden] { display: none }`, since
-   an author stylesheet always wins over the UA one regardless of
-   specificity. */
-.nav-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    padding: 0 0.3rem;
-    margin-left: 0.3rem;
-    border-radius: 62.4375rem;
-    background: var(--primary, #4361ee);
-    color: var(--on-primary);
-    font-size: 0.68rem;
-    font-weight: 700;
-    line-height: 1;
-    vertical-align: 0.1em;
-}
-
-.nav-badge[hidden] {
-    display: none;
-}
-
 /* Written to render identically whether the element is a <div> or a <button>.
    It should be a button -- it is a control, and as a div it is not focusable,
    answers neither Enter nor Space, and carries an aria-expanded that means
@@ -344,7 +316,8 @@
     display: none;
 }
 
-/* Signing out is separated from the two navigation items above it. */
+/* Signing out is separated from the navigation items above it: leaving is not
+   one more place to go. */
 .account-dropdown .account-signout {
     margin-top: 0.3rem;
     border-top: 1px solid #eef0f6;
@@ -521,8 +494,9 @@
 
 /* --- Notification bell --------------------------------------------------
    Built by notifications.js and inserted before the account slot, so it only
-   exists for a signed-in visitor. The count on it is the same one the
-   Dashboard link carries; this is the half that can say what it is made of. */
+   exists for a signed-in visitor. It is the only place the count appears: the
+   Dashboard link used to carry the same number, which said less (a bare count
+   with nothing to open) in a second place. */
 .nav-notify {
     position: relative;
     display: flex;
@@ -538,7 +512,10 @@
     height: 2.15rem;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: 0.375rem;
+    /* Square. The rounded rectangle it had was the odd one out in a bar of
+       hard corners -- the avatar beside it is a circle on purpose, which is
+       a different thing from a 6px radius that reads as an accident. */
+    border-radius: 0;
     background: none;
     color: var(--h-ink-soft);
     font-size: 1.15rem;

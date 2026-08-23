@@ -218,7 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Modals: the instructions guide and the contact form.
+// Modals: the instructions guide. The contact form is contact.js, which
+// owns its own dialog because the help page has one too.
 //
 // Close handlers are scoped per-modal with modal.querySelector rather than a
 // bare document.querySelector, so adding a second modal to the page cannot
@@ -241,7 +242,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dialogClosed(modal);
     }
 
-    document.querySelectorAll('.modal').forEach((modal) => {
+    // contact.js opens, closes and submits #contact-modal itself, because the
+    // help page has that modal without having this file. Binding it here as
+    // well would run every close twice, and dialogClosed twice with it.
+    document.querySelectorAll('.modal:not(#contact-modal)').forEach((modal) => {
         const closeBtn = modal.querySelector('.close-modal');
         if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal));
 
@@ -256,7 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        document.querySelectorAll('.modal.active').forEach((m) => closeModal(m));
+        document.querySelectorAll('.modal.active:not(#contact-modal)')
+            .forEach((m) => closeModal(m));
     });
 
     // The guide modal has no trigger button on the page yet, hence the guard.
@@ -266,76 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
         instructionsBtn.addEventListener('click', () => openModal(instructionsModal));
     }
 
-    // --- Contact us ---------------------------------------------------------
-    const contactModal = document.getElementById('contact-modal');
-    const contactForm = document.getElementById('contactForm');
-    const contactBtn = document.getElementById('contactBtn');
-
-    if (contactBtn && contactModal) {
-        contactBtn.addEventListener('click', () => {
-            setFormMessage(contactForm, '');
-            openModal(contactModal);
-        });
-    }
-
-    // The form carries no message element in the markup, so one is created on
-    // first use and reused after that.
-    function setFormMessage(form, text, kind = 'error') {
-        if (!form) return;
-        let box = form.querySelector('.form-message');
-        if (!box) {
-            box = document.createElement('p');
-            box.className = 'form-message';
-            form.prepend(box);
-        }
-        box.textContent = text;
-        box.classList.toggle('success', kind === 'success');
-        box.classList.toggle('hidden', !text);
-    }
-
-    if (contactForm) {
-        contactForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const submitBtn = contactForm.querySelector('button[type="submit"]');
-            const payload = {
-                name: document.getElementById('contactName').value.trim(),
-                email: document.getElementById('contactEmail').value.trim(),
-                phone: document.getElementById('contactPhone').value.trim(),
-                message: document.getElementById('contactMessage').value.trim(),
-                website: document.getElementById('contactWebsite').value
-            };
-
-            setFormMessage(contactForm, '');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Sending...';
-            }
-
-            try {
-                const res = await fetch(`${window.API_BASE}/api/contact`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (!res.ok) {
-                    throw new Error(result.error || `Could not send message (${res.status})`);
-                }
-
-                contactForm.reset();
-                setFormMessage(contactForm, 'Thanks — we got your message and will be in touch.', 'success');
-            } catch (error) {
-                console.error('Contact form failed:', error);
-                setFormMessage(contactForm, error.message);
-            } finally {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Send message';
-                }
-            }
-        });
-    }
 });
 
 document.addEventListener('DOMContentLoaded', function() {

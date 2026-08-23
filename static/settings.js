@@ -20,28 +20,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     // The attribute itself is set twice: here, and by the inline script in
     // every page's <head>, which runs before the first stylesheet so a dark
     // visitor never sees a white flash. This half only has to keep the two in
-    // step from the moment the switch is used.
+    // step from the moment the control is used.
+    //
+    // The head script also watches prefers-color-scheme and re-applies while
+    // nothing is stored, so choosing System here hands the page back to it
+    // without either needing to know about the other.
     const THEME_KEY = 'partnerPortalTheme';
-    const darkToggle = document.getElementById('darkMode');
+    const themeChoice = document.getElementById('themeChoice');
 
-    if (darkToggle) {
+    if (themeChoice) {
+        // Three states stored as two values: 'dark', 'light', or the key
+        // absent. Absent means "follow the device" rather than a third
+        // string, so a browser that has never touched this setting and one
+        // that chose System are the same state -- there is no way for the
+        // stored value and the default to drift apart, and nothing to
+        // migrate for anyone who set a theme before System existed.
         const stored = (() => {
-            try { return localStorage.getItem(THEME_KEY); } catch { return null; }
-        })();
-        // Light unless dark was explicitly chosen. The system preference is
-        // deliberately not read: the product ships light, and a dark OS is
-        // not the same thing as asking for a dark app.
-        darkToggle.checked = stored === 'dark';
-
-        darkToggle.addEventListener('change', () => {
-            const dark = darkToggle.checked;
-            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
             try {
-                localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+                const v = localStorage.getItem(THEME_KEY);
+                return v === 'dark' || v === 'light' ? v : null;
+            } catch { return null; }
+        })();
+
+        const selected = themeChoice.querySelector(
+            `input[value="${stored || 'system'}"]`);
+        if (selected) selected.checked = true;
+
+        themeChoice.addEventListener('change', (event) => {
+            const choice = event.target.value;
+            // What the head script does, done again here so the page changes
+            // under the pointer rather than on the next navigation. System
+            // resolves through the same query the head script reads.
+            const dark = choice === 'dark' || (choice === 'system'
+                && window.matchMedia
+                && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme',
+                dark ? 'dark' : 'light');
+            try {
+                if (choice === 'system') localStorage.removeItem(THEME_KEY);
+                else localStorage.setItem(THEME_KEY, choice);
             } catch {
                 // Private browsing, or storage disabled. The theme still
                 // applies for this page; it just will not be remembered.
-                window.toast('Dark mode is on for now, but this browser will '
+                window.toast('That applies for now, but this browser will '
                              + 'not remember it.', 'error');
             }
         });

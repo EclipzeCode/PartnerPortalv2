@@ -278,12 +278,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Local datetime for an event; a bare date string would be read as UTC.
-    function eventDateTime(ev) {
+    // --- Meetings and zones -------------------------------------------------
+    // A meeting is stored as a wall clock plus the IANA zone it was written
+    // in -- "15:00" and "America/Chicago" -- never as a UTC instant. That is
+    // deliberate on the server (see the Event model), and it means the
+    // browser has to do the conversion the other way: turn a wall clock in
+    // someone else's zone into a moment, rather than assuming its own.
+    //
+    // Everything below used to assume the viewer's zone, so the same meeting
+    // moved when its owner opened the dashboard from another country, and
+    // "is it over yet" was answered against the wrong clock.
+
+    function localZone() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+        } catch { return null; }
+    }
+
+    // What `zone` was offset from UTC at a given instant, in milliseconds.
+    // Read by formatting the instant into that zone and asking what wall
+    // clock came out -- there is no API that returns an offset directly.
+    function zoneOffset(utcMs, zone) {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: zone, hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }).formatToParts(new Date(utcMs));
+        const f = {};
+        for (const p of parts) f[p.type] = p.value;
+        // hour comes back as '24' at midnight in some engines, which Date.UTC
+        // would roll into the next day.
+        return Date.UTC(+f.year, +f.month - 1, +f.day,
+                        +f.hour % 24, +f.minute, +f.second) - utcMs;
+    }
+
+    // The instant at which a wall clock happens in `zone`.
+    //
+    // Two passes, and the second is not belt-and-braces: the first offset is
+    // read at a guessed instant, and if that guess falls on the far side of a
+    // DST change from the real answer, it is the wrong offset by an hour.
+    // Reading it again at the corrected instant settles it.
+    function instantIn(y, mo, d, hh, mm, zone) {
+        const guess = Date.UTC(y, mo - 1, d, hh, mm);
+        return guess - zoneOffset(guess - zoneOffset(guess, zone), zone);
+    }
+
+    // The moment a meeting starts, in milliseconds.
+    //
+    // A meeting with no zone predates the column and is read in the viewer's
+    // own, which is the assumption it was written under -- so those rows
+    // behave exactly as they always have.
+    function eventInstant(ev, hh, mm) {
         if (!ev.date) return null;
         const [y, m, d] = ev.date.split('-').map(Number);
-        const [hh, mm] = (ev.time || '00:00').split(':').map(Number);
-        return new Date(y, m - 1, d, hh || 0, mm || 0).toISOString();
+        if (hh === undefined) {
+            [hh, mm] = (ev.time || '00:00').split(':').map(Number);
+        }
+        hh = hh || 0;
+        mm = mm || 0;
+        if (ev.timezone) {
+            try { return instantIn(y, m, d, hh, mm, ev.timezone); }
+            catch { /* a zone this browser's tzdata lacks; fall through */ }
+        }
+        return new Date(y, m - 1, d, hh, mm).getTime();
+    }
+
+    function eventDateTime(ev) {
+        const at = eventInstant(ev);
+        return at === null ? null : new Date(at).toISOString();
+    }
+
+    // The zone's short name, but only when it is not the viewer's own. "3:00
+    // PM" is unambiguous when the meeting is in your zone and a guess when it
+    // is not, and labelling every meeting with a zone nobody needed is the
+    // noise that makes people stop reading the label at all.
+    function zoneSuffix(ev) {
+        if (!ev.timezone || ev.all_day) return '';
+        if (ev.timezone === localZone()) return '';
+        try {
+            const named = new Intl.DateTimeFormat('en-US', {
+                timeZone: ev.timezone, timeZoneName: 'short',
+            }).formatToParts(new Date(eventInstant(ev)))
+                .find((p) => p.type === 'timeZoneName');
+            return named ? ` ${named.value}` : '';
+        } catch { return ''; }
     }
 
     function relativeTime(iso) {
@@ -719,6 +797,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Local time; a bare "YYYY-MM-DD" is treated as UTC by Date and would
     // render as the previous day in western timezones.
+    // The day a meeting is filed under, as a local Date purely so the render
+    // can read .getDate() and the month name off it. Built from the stored
+    // date parts rather than from the instant, because the instant in the
+    // viewer's zone can land on the day before or after -- a 9am meeting in
+    // Sydney is still filed under that date for someone reading it in Texas,
+    // and the square on the card has to say so.
     function eventDate(event) {
         const [year, month, day] = event.date.split('-').map(Number);
         return new Date(year, month - 1, day);
@@ -730,29 +814,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // something coming up. Measured from the end of the meeting rather than
     // its start, so one that is running right now still counts as upcoming.
     function isPastEvent(ev) {
-        const start = eventDateTime(ev);
-        if (!start) return false;
+        const start = eventInstant(ev);
+        if (start === null) return false;
 
         // An all-day meeting, or one nobody gave a length, has no stated end
         // -- so it stays upcoming until the day it is filed under is over.
         // The alternative for an untimed meeting is to treat it as finishing
         // the moment it starts, which drops a three o'clock call off the card
         // at 3:01, while the call is still happening.
+        //
+        // "The day is over" is measured in the meeting's own zone, not the
+        // reader's. A meeting filed under Friday in Sydney is not finished
+        // because it has stopped being Friday in Texas.
         if (ev.all_day || !Number(ev.duration)) {
-            const endOfDay = eventDate(ev);
-            endOfDay.setHours(23, 59, 59, 999);
-            return endOfDay.getTime() < Date.now();
+            return eventInstant(ev, 23, 59) + 59999 < Date.now();
         }
 
-        const finishes = new Date(start);
-        finishes.setMinutes(
-            finishes.getMinutes() + Math.round(Number(ev.duration) * 60),
-        );
-        return finishes.getTime() < Date.now();
+        return start + Math.round(Number(ev.duration) * 3600000) < Date.now();
     }
 
     function eventTimeLabel(event) {
         if (event.all_day) return 'All day';
+        return eventTimeRange(event) + zoneSuffix(event);
+    }
+
+    function eventTimeRange(event) {
         // No length given: a start and nothing after it. Writing "3:00 PM -
         // 4:00 PM" from a default would state an end time nobody agreed to.
         if (!Number(event.duration)) return formatTime(event.time);
@@ -779,6 +865,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <p>With ${esc(event.partner)}</p>
                 <span class="event-time"><i class='bx bx-time'></i> ${timeLabel}</span>
             </div>
+            <a class="btn-event" title="Add to calendar" download
+               href="/api/events/${encodeURIComponent(event.id)}.ics">
+                <i class='bx bx-calendar-plus'></i>
+            </a>
             <button class="btn-event" title="Edit meeting" data-edit-event-id="${event.id}">
                 <i class='bx bx-pencil'></i>
             </button>
@@ -1105,8 +1195,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 eventSubmitBtn.textContent = 'Saving…';
             }
             try {
-                if (editingEventId !== null) await patchEvent(editingEventId, payload);
-                else await addEvent(payload);
+                if (editingEventId !== null) {
+                    // No timezone: the zone belongs to the meeting, not to
+                    // wherever its owner happens to be editing it from. An
+                    // edit made in another country must not re-file it.
+                    await patchEvent(editingEventId, payload);
+                } else {
+                    await addEvent({ ...payload, timezone: localZone() });
+                }
             } catch (error) {
                 showEventFormError(
                     error.message || 'Could not save that meeting. Please try again.',

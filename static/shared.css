@@ -374,9 +374,10 @@ textarea:focus-visible {
    unreachable.
 
    Lives here rather than in pplogin.css because two forms use it now -- the
-   signup form and the homepage contact form -- and index.html does not load
-   pplogin.css. Defined there, the homepage's honeypot would simply be a
-   visible input asking people to leave it blank. */
+   signup form and the contact form, the latter on both the home and help
+   pages -- and neither of those loads pplogin.css. Defined there, their
+   honeypots would simply be visible inputs asking people to leave them
+   blank. */
 .hp-field {
     position: absolute;
     width: 1px;

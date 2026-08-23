@@ -10,6 +10,7 @@ from collections import defaultdict
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
 from html import escape
+from zoneinfo import ZoneInfo, available_timezones
 
 import bcrypt
 
@@ -553,6 +554,26 @@ def asset_version(filename):
     return digest
 
 
+# The link preview card, 1200x630. One image for the whole site -- see
+# _render_og_page for why it is not generated per organization.
+OG_IMAGE = "og-default.png"
+OG_IMAGE_SIZE = (1200, 630)
+OG_IMAGE_ALT = (
+    "PartnerPortal: find a partner who needs what you already have."
+)
+
+
+def _stamp_asset_ref(filename):
+    """One filename with its content hash, or bare if it is missing.
+
+    The regex below rewrites references inside a page. This is the same rule
+    for a filename that is not in any page's markup -- the og: image, which
+    is named in a meta tag built here rather than in the HTML on disk.
+    """
+    version = asset_version(filename)
+    return f"{filename}?v={version}" if version else filename
+
+
 def _stamp_asset_refs(html):
     """Rewrite local asset references to carry their content hash.
 
@@ -985,24 +1006,43 @@ def _render_og_page(filename, title, description):
     preview) fetch the URL and read the HTML directly -- they do not run
     organization.js or partnership.js, so a preview built by those scripts
     is invisible to them. This gives crawlers the same title/description a
-    signed-in visitor would see, without a screenshot-style og:image: there
-    is no image generation pipeline behind this site, and a text-only
-    preview beats the bare URL these links show today.
+    signed-in visitor would see.
+
+    One branded card for every page rather than a generated one per
+    organization. A per-org image means a rendering pipeline and a cache, and
+    it would put a profile's name into an image crawlers hotlink and hosts
+    cache indefinitely -- which is a publishing decision the same as indexing
+    is, and one nobody opted into. The card carries no page-specific text for
+    that reason; the title and description beside it already do that job.
     """
     with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
         html = f.read()
 
     title = _truncate(title, 70)
     description = _truncate(description, 200)
+    # Absolute, and built from the request rather than a constant. A relative
+    # og:image is ignored by most crawlers -- they never resolve it against
+    # the page they just fetched -- and a hardcoded origin would advertise
+    # the old host the day this moves to a custom domain. Stamped like any
+    # other asset so the year-long cache header is safe on it.
+    image = request.url_root.rstrip("/") + "/" + _stamp_asset_ref(OG_IMAGE)
     tags = (
         '<meta property="og:type" content="website">\n'
         '    <meta property="og:site_name" content="PartnerPortal">\n'
         f'    <meta property="og:title" content="{_esc_attr(title)}">\n'
         f'    <meta property="og:description" content="{_esc_attr(description)}">\n'
         f'    <meta property="og:url" content="{_esc_attr(request.url)}">\n'
-        '    <meta name="twitter:card" content="summary">\n'
+        f'    <meta property="og:image" content="{_esc_attr(image)}">\n'
+        f'    <meta property="og:image:width" content="{OG_IMAGE_SIZE[0]}">\n'
+        f'    <meta property="og:image:height" content="{OG_IMAGE_SIZE[1]}">\n'
+        f'    <meta property="og:image:alt" content="{_esc_attr(OG_IMAGE_ALT)}">\n'
+        # summary_large_image, not summary: the card is 1200x630, and the
+        # small variant crops it to a square thumbnail that loses the
+        # headline entirely.
+        '    <meta name="twitter:card" content="summary_large_image">\n'
         f'    <meta name="twitter:title" content="{_esc_attr(title)}">\n'
-        f'    <meta name="twitter:description" content="{_esc_attr(description)}">'
+        f'    <meta name="twitter:description" content="{_esc_attr(description)}">\n'
+        f'    <meta name="twitter:image" content="{_esc_attr(image)}">'
     )
     html = html.replace("<!-- og:meta -->", tags, 1)
     html = re.sub(
@@ -3396,6 +3436,31 @@ def _events_for(db, org):
     ).order_by(Event.date, Event.time).all()
 
 
+# Reading the zone list is a directory walk, so it is done once. The set is
+# what tzdata shipped with this process; a name outside it is one nothing here
+# could resolve later, which is the whole test.
+_zone_names = None
+_zone_lock = threading.Lock()
+
+
+def _known_zone(name):
+    """The IANA zone `name` names, or None if it is not one.
+
+    Validated against the list rather than by trying to construct it, because
+    ZoneInfo happily accepts a relative path and will read a file off disk to
+    prove it -- "../../etc/passwd" is not a timezone, and the constructor is
+    not the place to find that out.
+    """
+    global _zone_names
+    if not isinstance(name, str) or not name or len(name) > 64:
+        return None
+    if _zone_names is None:
+        with _zone_lock:
+            if _zone_names is None:
+                _zone_names = available_timezones()
+    return name if name in _zone_names else None
+
+
 def _event_duration(raw):
     """How long a meeting runs, or None if nobody said.
 
@@ -3479,6 +3544,15 @@ def create_event(org, db):
     if len(title) > 200 or len(partner) > 255 or len(location) > 255:
         return jsonify({"error": "That is longer than this field allows."}), 400
 
+    # The browser sends its own zone. An unrecognised one is dropped rather
+    # than refused: the meeting is the thing being saved, and a browser
+    # reporting a name this tzdata has never heard of should not cost someone
+    # their entry. Null lands in the same place a pre-zone row does -- read
+    # as the viewer's own -- which is where it would have been anyway.
+    # Named `zone`, not `timezone`: this module imports datetime.timezone,
+    # and a local of that name would shadow it for the whole function.
+    zone = _known_zone(data.get("timezone"))
+
     event = Event(
         organization_id=org.id,
         title=title,
@@ -3486,6 +3560,7 @@ def create_event(org, db):
         time=event_time,
         duration=duration,
         all_day=all_day,
+        timezone=zone,
         partner_name=partner,
         description=description or None,
         location=location or None,
@@ -3562,6 +3637,20 @@ def update_event(org, db, event_id):
     if "all_day" in data:
         event.all_day = bool(data.get("all_day"))
 
+    # Only when named, and only to something real. Editing a meeting's title
+    # from a laptop in another country must not silently re-file it: the zone
+    # belongs to the meeting, not to whoever last opened the form. The
+    # dashboard sends it on create and leaves it alone afterwards, so this
+    # branch exists for a client that means it.
+    if "timezone" in data:
+        raw = data.get("timezone")
+        if raw in (None, ""):
+            event.timezone = None
+        elif _known_zone(raw):
+            event.timezone = raw
+        else:
+            problems.append("a timezone this server recognises")
+
     # Applied after the fields above rather than inside the all_day branch:
     # whether a meeting is all-day and what time it starts can arrive in the
     # same body or in separate ones, and either way the row has to come out
@@ -3589,6 +3678,253 @@ def update_event(org, db, event_id):
 
     db.commit()
     return jsonify({"message": "Meeting updated", "event": event.to_dict()})
+
+
+# --- Calendar export --------------------------------------------------------
+# A meeting saved here is a meeting somebody also has to be at, and until now
+# the only way to get it into the calendar they actually use was to type it
+# again. This is the smallest thing that fixes that: one file, per meeting,
+# on request.
+
+
+def _ics_escape(text):
+    """Escape a value for an iCalendar TEXT property (RFC 5545 3.3.11).
+
+    Backslash first, or it would escape the escapes added after it.
+    """
+    return (
+        str(text)
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+        .replace("\r", "\\n")
+    )
+
+
+def _ics_fold(line):
+    """Fold to 75 octets per line, continuations marked by a leading space.
+
+    Counted in octets rather than characters, which is what the spec says and
+    what matters the moment a description contains anything non-ASCII: a
+    75-character line of accented text is 90-odd bytes, and a reader that
+    trusts the limit truncates it. The split is made on encoded bytes and
+    backed up to a character boundary so a multi-byte character is never cut
+    in half.
+    """
+    raw = line.encode("utf-8")
+    if len(raw) <= 75:
+        return line
+
+    out = []
+    start, limit = 0, 75
+    while start < len(raw):
+        end = min(start + limit, len(raw))
+        if end < len(raw):
+            # 0b10xxxxxx is a UTF-8 continuation byte; back up off it.
+            while end > start and (raw[end] & 0xC0) == 0x80:
+                end -= 1
+        out.append(raw[start:end].decode("utf-8"))
+        start = end
+        limit = 74           # a continuation spends one octet on its space
+    return out[0] + "".join("\r\n " + part for part in out[1:])
+
+
+def _vtimezone(zone_name, year):
+    """A VTIMEZONE for `zone_name` covering `year`, built from tzdata.
+
+    A DTSTART;TZID= that names a zone no VTIMEZONE defines is not valid
+    iCalendar, however widely clients get away with it -- so the observances
+    are emitted rather than assumed.
+
+    The transitions are found by walking the year a day at a time and
+    bisecting whichever day the offset changes on, because zoneinfo exposes
+    no transition list. A year is 365 offset lookups and at most a couple of
+    bisections; this runs on an explicit download, not on the dashboard.
+
+    Explicit observances, not RRULEs. A rule would claim the pattern holds
+    indefinitely, and DST rules are legislation -- they change, and they have
+    changed in most of the last ten years somewhere. One year of facts is
+    what this file actually needs and all it can honestly assert.
+    """
+    tz = ZoneInfo(zone_name)
+
+    def offset_at(moment):
+        return moment.astimezone(tz).utcoffset()
+
+    def fmt_offset(delta):
+        total = int(delta.total_seconds())
+        sign = "-" if total < 0 else "+"
+        total = abs(total)
+        return f"{sign}{total // 3600:02d}{(total % 3600) // 60:02d}"
+
+    start = datetime(year, 1, 1, tzinfo=timezone.utc)
+    end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+
+    transitions = []
+    probe, current = start, offset_at(start)
+    while probe < end:
+        nxt = min(probe + timedelta(days=1), end)
+        if offset_at(nxt) != current:
+            low, high = probe, nxt
+            while high - low > timedelta(seconds=1):
+                mid = low + (high - low) / 2
+                if offset_at(mid) == current:
+                    low = mid
+                else:
+                    high = mid
+            transitions.append((high, current, offset_at(high)))
+            current = offset_at(high)
+        probe = nxt
+
+    lines = ["BEGIN:VTIMEZONE", f"TZID:{zone_name}"]
+
+    if not transitions:
+        # A zone with no change this year still needs one observance for the
+        # TZID to resolve against.
+        moment = start.astimezone(tz)
+        lines += [
+            "BEGIN:STANDARD",
+            f"DTSTART:{year}0101T000000",
+            f"TZOFFSETFROM:{fmt_offset(moment.utcoffset())}",
+            f"TZOFFSETTO:{fmt_offset(moment.utcoffset())}",
+            f"TZNAME:{moment.tzname()}",
+            "END:STANDARD",
+        ]
+    else:
+        # The span the year opens in, before the first change. Its FROM and
+        # TO are the same offset: nothing transitioned into it inside this
+        # file, and an observance still has to state both.
+        opening = start.astimezone(tz)
+        opening_kind = "DAYLIGHT" if opening.dst() else "STANDARD"
+        opening_offset = transitions[0][1]
+        lines += [
+            f"BEGIN:{opening_kind}",
+            f"DTSTART:{year}0101T000000",
+            f"TZOFFSETFROM:{fmt_offset(opening_offset)}",
+            f"TZOFFSETTO:{fmt_offset(opening_offset)}",
+            f"TZNAME:{opening.tzname()}",
+            f"END:{opening_kind}",
+        ]
+        for moment, was, now in transitions:
+            local = moment.astimezone(tz)
+            kind = "DAYLIGHT" if local.dst() else "STANDARD"
+            # The observance's DTSTART is the wall clock the change lands on,
+            # read in the *old* offset -- 2am becoming 3am is written as 2am.
+            wall = moment + was
+            lines += [
+                f"BEGIN:{kind}",
+                f"DTSTART:{wall.strftime('%Y%m%dT%H%M%S')}",
+                f"TZOFFSETFROM:{fmt_offset(was)}",
+                f"TZOFFSETTO:{fmt_offset(now)}",
+                f"TZNAME:{local.tzname()}",
+                f"END:{kind}",
+            ]
+
+    lines.append("END:VTIMEZONE")
+    return lines
+
+
+def _event_ics(event, host):
+    """One meeting as an iCalendar document.
+
+    Three shapes, because a meeting can be three different kinds of thing:
+
+    * All day -- DATE values, and DTEND the following day, because the spec's
+      end is exclusive. No zone is involved: a date is a date everywhere.
+    * A start with a stated length -- DTSTART and DTEND in the meeting's own
+      zone, carried by TZID rather than converted to UTC, so the entry still
+      reads as the hour that was agreed if the rules under it change.
+    * A start with no length -- DTSTART and no DTEND. Nobody said how long,
+      and inventing an hour here would put a time in someone's calendar that
+      no one agreed to. The card on the dashboard makes the same choice.
+
+    A meeting saved before zones were recorded has none, and is written as
+    floating time: no TZID and no Z, which iCalendar defines as the same wall
+    clock in whatever zone the reader is in. That is not a fallback so much as
+    an exact statement of what those rows know.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//PartnerPortal//Meetings//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+
+    zone = event.timezone if not event.all_day else None
+    if zone and _known_zone(zone):
+        lines += _vtimezone(zone, event.date.year)
+    else:
+        zone = None
+
+    lines.append("BEGIN:VEVENT")
+    # Stable across downloads, so re-importing updates the entry rather than
+    # producing a second copy of the same meeting.
+    lines.append(f"UID:event-{event.id}@{host}")
+    lines.append(f"DTSTAMP:{stamp}")
+
+    if event.all_day:
+        lines.append(f"DTSTART;VALUE=DATE:{event.date.strftime('%Y%m%d')}")
+        lines.append(
+            "DTEND;VALUE=DATE:"
+            + (event.date + timedelta(days=1)).strftime("%Y%m%d")
+        )
+    else:
+        begins = datetime.combine(event.date, event.time)
+        prefix = f";TZID={zone}" if zone else ""
+        lines.append(f"DTSTART{prefix}:{begins.strftime('%Y%m%dT%H%M%S')}")
+        if event.duration:
+            ends = begins + timedelta(minutes=round(event.duration * 60))
+            lines.append(f"DTEND{prefix}:{ends.strftime('%Y%m%dT%H%M%S')}")
+
+    lines.append(f"SUMMARY:{_ics_escape(event.title)}")
+    # Who it is with is the one thing on the card that has nowhere else to go
+    # in a calendar entry, so it leads the description.
+    detail = f"With {event.partner_name}"
+    if event.description:
+        detail += "\n\n" + event.description
+    lines.append(f"DESCRIPTION:{_ics_escape(detail)}")
+    if event.location:
+        lines.append(f"LOCATION:{_ics_escape(event.location)}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+
+    # CRLF throughout, which the spec requires and some readers enforce.
+    return "\r\n".join(_ics_fold(line) for line in lines) + "\r\n"
+
+
+@app.route("/api/events/<int:event_id>.ics", methods=["GET"])
+@login_required
+def event_calendar(org, db, event_id):
+    """One meeting, as a file a calendar will import.
+
+    Behind the session and scoped to the caller like every other route on
+    this table. A meeting is private to the organization that wrote it, and a
+    guessable .ics URL that answered without a session would publish the
+    diary this table exists to keep -- which is also why it is a download
+    rather than a subscribable feed: a feed is fetched by a calendar server
+    with no cookie to send, so it would need a bearer token in the URL, and
+    that is a different feature with a different threat model.
+    """
+    event = db.query(Event).filter(
+        Event.id == event_id,
+        Event.organization_id == org.id,
+    ).one_or_none()
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+
+    body = _event_ics(event, request.host.split(":")[0] or "partnerportal")
+    response = app.response_class(body, mimetype="text/calendar")
+    response.headers["Content-Type"] = "text/calendar; charset=utf-8"
+    # A filename made from the title would have to be sanitised for quotes,
+    # slashes and newlines before it went in a header. The date and id say
+    # enough and cannot carry any of that.
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="meeting-{event.date:%Y-%m-%d}-{event.id}.ics"'
+    )
+    return response
 
 
 @app.route("/api/events/<int:event_id>", methods=["DELETE"])
