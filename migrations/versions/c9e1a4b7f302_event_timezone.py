@@ -4,7 +4,7 @@ A meeting was stored as a date and a wall-clock time and nothing else, which
 is a complete thought only while everyone involved is in one place. Two
 organizations agreeing to meet at three had no way to say whose three, and
 the dashboard read every meeting in whatever zone the browser happened to be
-in -- so the same meeting moved when its owner travelled.
+in -- so the same meeting moved when its owner traveled.
 
 The zone is recorded rather than the time being converted to UTC. Converting
 looks equivalent and is not, for anything in the future: the offset a zone

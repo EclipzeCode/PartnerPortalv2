@@ -208,7 +208,7 @@ class Organization(Base):
     # A session cookie carried nothing but org_id, so it stayed valid until it
     # expired however the account changed underneath it. Changing a password
     # did not end any of the sessions already open on it -- which is exactly
-    # backwards, because the person most likely to change a password is the
+    # backward, because the person most likely to change a password is the
     # one who thinks somebody else has it. They would be told the password was
     # changed, and the other session would keep working for weeks.
     #
@@ -930,7 +930,7 @@ class Partnership(Base):
                 # stops at acceptance: from then on this is a record of what
                 # two organizations agreed to, with a public summary either
                 # may already have sent somewhere, and one of them changing
-                # it afterwards would make it a claim rather than an
+                # it afterward would make it a claim rather than an
                 # agreement. See update_proposal in app.py.
                 "can_edit": (
                     self.status == self.PENDING and self.proposer_id == viewer_id

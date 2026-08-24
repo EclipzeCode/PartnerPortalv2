@@ -81,7 +81,7 @@ def test_editing_a_file_changes_what_the_page_asks_for(client, tmp_path):
 def test_a_changed_stylesheet_reaches_someone_who_already_has_the_page(client):
     """The bug the first version of this shipped with.
 
-    Serving the page with send_from_directory and rewriting it afterwards
+    Serving the page with send_from_directory and rewriting it afterward
     looks equivalent and is not: Flask builds the ETag from the HTML file's
     own mtime and size, and answers the conditional request before any
     after_request hook runs. Editing nav.css therefore left index.html's

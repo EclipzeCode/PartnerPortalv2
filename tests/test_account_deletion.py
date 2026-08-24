@@ -57,7 +57,7 @@ def test_an_agreement_outlives_the_other_party(client, login, make_org):
     assert client.delete(
         "/api/account", json={"password": PASSWORD}).status_code == 200
 
-    # ...and still works afterwards. This used to be a 404.
+    # ...and still works afterward. This used to be a 404.
     response = client.get(f"/api/partnerships/{token}")
     assert response.status_code == 200
 

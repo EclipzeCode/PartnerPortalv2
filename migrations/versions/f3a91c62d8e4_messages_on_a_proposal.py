@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column('partnership_id', sa.Integer(), nullable=False),
         # SET NULL rather than CASCADE: an organization closing its account
         # must not delete its half of a conversation the other side is still
-        # party to. sender_name keeps the thread readable afterwards.
+        # party to. sender_name keeps the thread readable afterward.
         sa.Column('sender_id', sa.Integer(), nullable=True),
         sa.Column('sender_name', sa.String(length=255), nullable=False),
         sa.Column('body', sa.Text(), nullable=False),

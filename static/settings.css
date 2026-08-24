@@ -174,7 +174,7 @@
 }
 
 /* .setting-label is the same thing for a control that cannot use a <label>:
-   the theme radiogroup, which is labelled by it rather than wrapping it. */
+   the theme radiogroup, which is labeled by it rather than wrapping it. */
 .setting-copy label,
 .setting-copy .setting-label {
     display: block;

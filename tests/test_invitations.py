@@ -74,7 +74,7 @@ def test_claiming_creates_an_account_and_spends_the_link(
         "email": "pytest-second@example.com", "password": "Claimed-Pass-7!",
     }).status_code == 404
 
-    # And the account works from the front door afterwards.
+    # And the account works from the front door afterward.
     client.post("/logout")
     assert client.post("/login", json={
         "email": "pytest-claimer@example.com", "password": "Claimed-Pass-7!",

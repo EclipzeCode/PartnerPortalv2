@@ -508,12 +508,16 @@ async function updateNavForSession() {
 
     let me = null;
     let pendingProposals = 0;
-    let unreadMessages = 0;
+    let unreadThreads = 0;
     try {
         const data = await window.api('/api/me', { allowUnauthenticated: true });
         me = data && data.organization;
         pendingProposals = (data && data.pending_proposals) || 0;
-        unreadMessages = (data && data.unread_messages) || 0;
+        // Threads, not messages. The badge is a count of things waiting on
+        // you and the notification panel behind it lists one entry per
+        // conversation, so counting messages here made the number on the
+        // bell disagree with the list it opens.
+        unreadThreads = (data && data.unread_threads) || 0;
     } catch {
         // Signed out, or the server is down. The signed-out call to action is
         // the honest thing to show in both cases.
@@ -547,7 +551,7 @@ async function updateNavForSession() {
     // same question -- is there something on the dashboard waiting for me --
     // and two competing numbers on one link would only make it ambiguous
     // which one the reader is meant to act on.
-    updateProposalBadge(pendingProposals + unreadMessages);
+    updateProposalBadge(pendingProposals + unreadThreads);
 }
 
 // Re-reads the counts without redrawing the account menu. For pages that
@@ -561,7 +565,7 @@ window.refreshNavCounts = async function refreshNavCounts() {
             '/api/me', { allowUnauthenticated: true, fresh: true });
         updateProposalBadge(
             ((data && data.pending_proposals) || 0)
-            + ((data && data.unread_messages) || 0));
+            + ((data && data.unread_threads) || 0));
     } catch {
         // Signed out or offline. The badge keeps whatever it last knew,
         // which is no worse than the page it is sitting on.

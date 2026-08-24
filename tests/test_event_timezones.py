@@ -275,7 +275,7 @@ def test_the_calendar_file_needs_a_session(client, org):
 
 
 def test_the_file_is_never_cached_by_anything_in_between(client, org):
-    """It is one organization's diary travelling over a shared network."""
+    """It is one organization's diary traveling over a shared network."""
     _, body = create(client, timezone="America/Chicago")
     response = client.get(f"/api/events/{body['event']['id']}.ics")
     assert response.headers["Cache-Control"] == "no-store"

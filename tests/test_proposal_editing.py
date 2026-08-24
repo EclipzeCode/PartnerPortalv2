@@ -2,7 +2,7 @@
 
 The window is the load-bearing part: editing stops at acceptance, because an
 accepted partnership is a record of what two organizations agreed to and one
-of them changing it afterwards would make it a claim about the other.
+of them changing it afterward would make it a claim about the other.
 """
 
 import pytest

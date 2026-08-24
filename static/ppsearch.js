@@ -93,6 +93,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         remote: false,
     };
     let browseTimer = null;
+    // Which directory request is the current one.
+    //
+    // The typing above is debounced, which narrows the window but does not
+    // close it: a filter toggle and a keystroke are two different triggers
+    // and can each start a request, and nothing said which answer was still
+    // wanted by the time they came back. The slower one won, so the grid
+    // could end up showing results for a query that was no longer in the box
+    // -- with a page count to match, which is the part that does not correct
+    // itself on the next keystroke.
+    //
+    // Same guard pollThread uses in proposals.js: take a ticket on the way
+    // in, and drop the response if the ticket has moved on.
+    let browseGeneration = 0;
     const browseToggle = document.getElementById('browseToggle');
     const browseBar = document.getElementById('browseBar');
     const browseSort = document.getElementById('browseSort');
@@ -195,6 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadBrowse() {
+        const generation = ++browseGeneration;
         partnersGrid.setAttribute('aria-busy', 'true');
         renderSkeletonCards();
         const params = new URLSearchParams({
@@ -224,6 +238,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             const data = await window.api(`/api/organizations?${params}`);
+            // A newer request started while this one was in the air. Its
+            // skeletons are on screen and its answer is the one that should
+            // land, so this one is dropped entirely -- including the
+            // aria-busy release, which belongs to whoever is still loading.
+            if (generation !== browseGeneration) return;
             displayed = data.organizations || [];
             browseState.page = data.page;
             browseState.pages = data.pages;
@@ -233,6 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             savedIds = new Set(data.saved_ids || []);
             updateSavedCount();
         } catch (error) {
+            if (generation !== browseGeneration) return;
             partnersGrid.removeAttribute('aria-busy');
             partnersGrid.innerHTML =
                 `<div class="empty-state"><p>${esc(error.message)}</p></div>`;
@@ -259,6 +279,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function setViewMode(mode) {
         viewMode = mode;
+        // Abandons a directory request still in the air. Switching to
+        // matches or the shortlist while one is loading would otherwise let
+        // it land afterward and repaint the grid with the wrong list.
+        browseGeneration += 1;
         if (savedToggle) {
             savedToggle.setAttribute('aria-pressed', String(mode === 'saved'));
             savedToggle.classList.toggle('active', mode === 'saved');
@@ -530,7 +554,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Every region below is given a fixed height in CSS, and the
             // badge gets a slot whether or not there is one to put in it.
             // Without that, a card with no badge or a one-line name pulled
-            // everything under it upwards, so "Why match" started at a
+            // everything under it upward, so "Why match" started at a
             // different height on each card and the tallest card in a row
             // stretched the rest to match it.
             card.innerHTML = `

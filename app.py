@@ -6,7 +6,7 @@ import re
 import secrets
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
 from html import escape
@@ -352,7 +352,22 @@ EXISTENCE_DISCLOSURE_WINDOW = 3600
 # all for the actual threat here -- a script hammering /register -- and
 # adding Redis or another store for a nonprofit tool at this scale is not
 # worth the operational cost it would add.
-_rate_buckets = defaultdict(list)
+_rate_buckets = defaultdict(deque)
+
+# Every read and write of _rate_buckets goes through this lock.
+#
+# The sweep below walks the whole dict, and a request handler on another
+# thread inserts into it simply by asking about a key -- which is a
+# `RuntimeError: dictionary changed size during iteration` raised in the
+# middle of somebody's login, surfacing as a 500 that nothing in the traffic
+# would explain. Dormant under gunicorn's sync workers, which is what this
+# deploys on; live on Flask's dev server, which is threaded by default, and
+# live the day `--threads` is added to render.yaml by somebody who has no
+# reason to think it would matter.
+#
+# A plain Lock, not an RLock: nothing here is reentrant, and the one function
+# called with the lock already held (_sweep_rate_buckets) says so.
+_rate_lock = threading.Lock()
 
 # Nothing removed a key from _rate_buckets once it appeared. Every address
 # that ever hit a limited endpoint, and every address ever typed into
@@ -372,7 +387,12 @@ _rate_sweep_after = 0.0
 
 
 def _sweep_rate_buckets(now):
-    """Drop keys that can no longer affect any limit."""
+    """Drop keys that can no longer affect any limit.
+
+    Caller holds _rate_lock. Not acquired here because the only production
+    caller is rate_limited(), which is already inside it, and a second
+    acquisition on a plain Lock is a deadlock rather than a no-op.
+    """
     global _rate_sweep_after
     if now < _rate_sweep_after:
         return
@@ -390,17 +410,22 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
     """True (and records nothing further) if `key` has hit the limit in
     `bucket` within the last `window_seconds`; otherwise records this attempt
     and returns False.
+
+    A deque rather than a list: the trim below drops from the front, and
+    list.pop(0) rewrites the whole list to do it. Nothing at these limits is
+    long enough for that to matter, but the right structure costs the same.
     """
     now = time.time()
-    _sweep_rate_buckets(now)
-    attempts = _rate_buckets[(bucket, key)]
-    cutoff = now - window_seconds
-    while attempts and attempts[0] < cutoff:
-        attempts.pop(0)
-    if len(attempts) >= max_attempts:
-        return True
-    attempts.append(now)
-    return False
+    with _rate_lock:
+        _sweep_rate_buckets(now)
+        attempts = _rate_buckets[(bucket, key)]
+        cutoff = now - window_seconds
+        while attempts and attempts[0] < cutoff:
+            attempts.popleft()
+        if len(attempts) >= max_attempts:
+            return True
+        attempts.append(now)
+        return False
 
 
 def rate_limit_reached(bucket, key, max_attempts, window_seconds):
@@ -410,11 +435,51 @@ def rate_limit_reached(bucket, key, max_attempts, window_seconds):
     wrong for a budget that gates an endpoint rather than one that meters
     each call: checking would spend the thing being checked.
     """
-    attempts = _rate_buckets.get((bucket, key))
-    if not attempts:
-        return False
     cutoff = time.time() - window_seconds
-    return sum(1 for t in attempts if t >= cutoff) >= max_attempts
+    with _rate_lock:
+        attempts = _rate_buckets.get((bucket, key))
+        if not attempts:
+            return False
+        return sum(1 for t in attempts if t >= cutoff) >= max_attempts
+
+
+def clear_rate_limit(bucket, key):
+    """Forget every attempt recorded against `key` in `bucket`.
+
+    For the moment a run of attempts turns out to have been the account
+    holder all along.
+
+    Some of the buckets in this file meter *guessing*: the login password,
+    and the current password on a change. Those have to count an attempt
+    before they know whether it was right -- that is the whole point. But
+    they then went on counting the ones that were right, so ten legitimate
+    sign-ins in fifteen minutes locked the account out with "Too many
+    attempts for that account": a shared office login, or one person moving
+    between a phone and a laptop, told they were under attack by their own
+    use of the site. Those two are what this is for.
+
+    Every other bucket here meters *volume* rather than guessing --
+    verification resends, reset emails, email-change requests, contact
+    messages, proposals sent. Each of those attempts is a success by
+    construction, so refunding one would empty the budget of its meaning;
+    several of them protect an inbox the caller chose rather than anything
+    belonging to the caller, which is exactly the case where succeeding is
+    not a reason to be trusted with more. Those are metered late instead --
+    checked immediately before the send, so a request that is turned away
+    never costs anything.
+
+    Deleting an account is neither, and is not called from here: the row is
+    gone on success, so there is nobody left to lock out and no id that will
+    be issued again.
+
+    What this deliberately never touches is a bucket keyed by IP. Proving one
+    account's password says nothing about the other people behind a shared
+    address, and refunding a per-connection budget on a successful login
+    would let anyone holding one valid account clear the limit that exists to
+    slow down guessing at everybody else's.
+    """
+    with _rate_lock:
+        _rate_buckets.pop((bucket, key), None)
 
 
 def client_ip():
@@ -1278,15 +1343,6 @@ def contact():
     phone = (data.get("phone") or "").strip()
     message = (data.get("message") or "").strip()
 
-    # Per-IP, and tighter than /register: this endpoint puts mail in an inbox
-    # that a person reads by hand, so the cost of abuse is somebody's morning
-    # rather than a database row.
-    if rate_limited("contact", client_ip(), max_attempts=5, window_seconds=3600):
-        return jsonify({
-            "error": "Too many messages from this connection recently. "
-                     "Please try again in a while.",
-        }), 429
-
     problems = []
     if not name:
         problems.append("your name")
@@ -1310,6 +1366,22 @@ def contact():
         }), 400
     if len(name) > 255 or len(phone) > 64:
         return jsonify({"error": "That is longer than this field allows."}), 400
+
+    # Per-IP, and tighter than /register: this endpoint puts mail in an inbox
+    # that a person reads by hand, so the cost of abuse is somebody's morning
+    # rather than a database row.
+    #
+    # Checked here rather than at the top of the handler. What this budget is
+    # for is messages delivered, and a submission rejected above delivers
+    # nothing -- so counting those spent the hour on somebody filling the form
+    # in wrong, who then could not send the message once they had it right.
+    # The honeypot stays first: a bot should be answered without learning
+    # anything, including whether it has a budget left.
+    if rate_limited("contact", client_ip(), max_attempts=5, window_seconds=3600):
+        return jsonify({
+            "error": "Too many messages from this connection recently. "
+                     "Please try again in a while.",
+        }), 429
 
     notify_contact_message(name=name, email=email, phone=phone, message=message)
     return jsonify({"message": "Message sent"}), 200
@@ -1507,6 +1579,13 @@ def login():
             password.encode("utf-8"), org.password_hash.encode("utf-8")
         ):
             return invalid
+
+        # The attempts that led here were this account's owner typing, so the
+        # per-account budget is refunded. Only that one: the per-IP bucket
+        # above covers a whole shared connection, and clearing it on a
+        # successful sign-in would let anyone with one valid account reset
+        # the limit protecting every other account behind the same address.
+        clear_rate_limit("login_email", email)
 
         _start_session(org)
         return jsonify({
@@ -1805,14 +1884,21 @@ def get_me(org, db):
         Partnership.recipient_id == org.id,
         Partnership.status == Partnership.PENDING,
     ).count()
+    # Same reasoning as pending_proposals above: every page calls this, so
+    # one indexed query here beats a second request per page just to find out
+    # whether anything is waiting.
+    unread_messages, unread_threads = _unread_message_count(db, org)
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
         "pending_proposals": pending_proposals,
-        # Same reasoning as pending_proposals above: every page calls this, so
-        # one indexed query here beats a second request per page just to find
-        # out whether anything is waiting.
-        "unread_messages": _unread_message_count(db, org),
+        "unread_messages": unread_messages,
+        # What the nav badge adds to pending_proposals. One per conversation,
+        # matching how the notification list counts the same thing -- see
+        # _unread_message_count. unread_messages stays beside it because it
+        # is a different and equally true number, and the two are told apart
+        # by name rather than by whichever caller happened to read it.
+        "unread_threads": unread_threads,
     })
 
 
@@ -1924,13 +2010,19 @@ def change_password(org, db):
     if problem:
         return jsonify({"error": problem, "field": "new_password"}), 400
 
+    # The current password was right, so the attempts spent getting here were
+    # this account's owner. Refunded, or somebody who mistypes their old
+    # password a few times and then gets it right is locked out of doing it
+    # again for a quarter of an hour.
+    clear_rate_limit("change_password", str(org.id))
+
     org.password_hash = bcrypt.hashpw(
         new_password.encode("utf-8"), bcrypt.gensalt()
     ).decode("utf-8")
     # The point of changing a password is usually that somebody else might
     # have the old one, and until now that did nothing to the sessions
     # already open on the account -- a cookie taken from a shared machine
-    # kept working for weeks afterwards, while the person who changed the
+    # kept working for weeks afterward, while the person who changed the
     # password had been told they had fixed it. This ends all of them except
     # the one asking, which stays signed in.
     _end_other_sessions(org)
@@ -1995,13 +2087,6 @@ def change_email(org, db):
             "error": "That is already your email address.", "field": "email",
         }), 400
 
-    if rate_limited("change_email", str(org.id), max_attempts=5,
-                    window_seconds=3600):
-        return jsonify({
-            "error": "Too many attempts. Please wait a few minutes and try "
-                     "again.",
-        }), 429
-
     # The same budget /register keeps, for the same reason: "that address is
     # already registered" is the same disclosure here, and a signed-in
     # account asking it repeatedly is doing what a script does, not what
@@ -2046,6 +2131,28 @@ def change_email(org, db):
             "error": "That email is already registered to another account.",
             "field": "email",
         }), 409
+
+    # Deliberately NOT refunded on success, unlike the password checks above.
+    # What this budget protects is not this account -- the password has
+    # already settled who is asking -- it is the two inboxes each call writes
+    # to: a confirmation link to an address the caller chose, and a notice to
+    # the old one. A session holder who could clear this by succeeding could
+    # mail an arbitrary address as often as they liked, which is the thing
+    # the limit exists for. It is metered like the resend and reset budgets,
+    # because it is the same kind of budget.
+    #
+    # Checked here rather than at the top of the handler, for the reason
+    # /api/contact checks late: only a request that actually sends should
+    # count. A mistyped address, a wrong password or an address already
+    # taken all return above this line having sent nothing, and used to
+    # spend the hour anyway -- so correcting a typo four times locked
+    # somebody out of changing their own email.
+    if rate_limited("change_email", str(org.id), max_attempts=5,
+                    window_seconds=3600):
+        return jsonify({
+            "error": "Too many change requests recently. Check your inbox, "
+                     "then try again in a little while.",
+        }), 429
 
     org.pending_email = new_email
     org.pending_email_token = secrets.token_urlsafe(32)
@@ -2733,7 +2840,7 @@ def _profile_view_prior(db, org, days=VIEW_SERIES_DAYS):
 # A private shortlist. Matching answers "who could work with me", and that
 # answer moves as either side edits its profile and as the directory grows --
 # so it is a poor place to keep a decision. Saving records that someone picked
-# an organization out, and keeps it reachable afterwards whatever the ranking
+# an organization out, and keeps it reachable afterward whatever the ranking
 # does. Never visible to the organization saved: this is a bookmark, not an
 # approach.
 def _saved_ids(db, org):
@@ -3249,7 +3356,14 @@ def _notifications_for(db, org):
     items = []
 
     def add(kind, at, proposal, *, actionable=False, tab="incoming", count=None):
-        if at is None or at < since:
+        if at is None:
+            return
+        # The window trims history, not the inbox. Something still waiting on
+        # this organization has not stopped waiting because it is old -- a
+        # proposal nobody answered for two months is exactly the one worth
+        # surfacing -- and dropping it here also made the nav badge disagree
+        # with the list it opens, since the count is taken from these items.
+        if not actionable and at < since:
             return
         entry = {
             "kind": kind,
@@ -3544,7 +3658,7 @@ def create_event(org, db):
     if len(title) > 200 or len(partner) > 255 or len(location) > 255:
         return jsonify({"error": "That is longer than this field allows."}), 400
 
-    # The browser sends its own zone. An unrecognised one is dropped rather
+    # The browser sends its own zone. An unrecognized one is dropped rather
     # than refused: the meeting is the thing being saved, and a browser
     # reporting a name this tzdata has never heard of should not cost someone
     # their entry. Null lands in the same place a pre-zone row does -- read
@@ -3635,12 +3749,23 @@ def update_event(org, db, event_id):
             event.duration = duration
 
     if "all_day" in data:
+        was_all_day = event.all_day
         event.all_day = bool(data.get("all_day"))
+        # Coming off all-day, a start time has to arrive with it. An all-day
+        # meeting stores midnight as its way of saying "filed under the date
+        # alone" (see the Event model), so dropping the flag on its own left
+        # that midnight behind as a real start -- and the meeting silently
+        # became one at 12:00 AM with no length, which is not what anybody
+        # asked for and reads as a bug in the calendar rather than in the
+        # request that caused it.
+        if was_all_day and not event.all_day and "time" not in data:
+            problems.append("a start time for a meeting that is no longer "
+                            "all day")
 
     # Only when named, and only to something real. Editing a meeting's title
     # from a laptop in another country must not silently re-file it: the zone
     # belongs to the meeting, not to whoever last opened the form. The
-    # dashboard sends it on create and leaves it alone afterwards, so this
+    # dashboard sends it on create and leaves it alone afterward, so this
     # branch exists for a client that means it.
     if "timezone" in data:
         raw = data.get("timezone")
@@ -3649,7 +3774,7 @@ def update_event(org, db, event_id):
         elif _known_zone(raw):
             event.timezone = raw
         else:
-            problems.append("a timezone this server recognises")
+            problems.append("a timezone this server recognizes")
 
     # Applied after the fields above rather than inside the all_day branch:
     # whether a meeting is all-day and what time it starts can arrive in the
@@ -3918,7 +4043,7 @@ def event_calendar(org, db, event_id):
     body = _event_ics(event, request.host.split(":")[0] or "partnerportal")
     response = app.response_class(body, mimetype="text/calendar")
     response.headers["Content-Type"] = "text/calendar; charset=utf-8"
-    # A filename made from the title would have to be sanitised for quotes,
+    # A filename made from the title would have to be sanitized for quotes,
     # slashes and newlines before it went in a header. The date and id say
     # enough and cannot carry any of that.
     response.headers["Content-Disposition"] = (
@@ -4228,9 +4353,10 @@ def create_proposal(org, db):
         proposer_quantities=proposer_quantities,
         recipient_quantities=recipient_quantities,
         message=message or None,
-        # Filled properly by snapshot_parties() below, once the relationships
-        # are attached. Set here because both columns are NOT NULL and the
-        # flush happens before that call can run.
+        # Placeholders. Both name columns are NOT NULL, so something has to
+        # be here before the flush; snapshot_parties() below re-reads all six
+        # from the live rows once the relationships are attached, and is the
+        # one place that decides what a party snapshot contains.
         proposer_name=org.name,
         proposer_type=org.organization_type,
         proposer_location=org.location,
@@ -4240,6 +4366,15 @@ def create_proposal(org, db):
     )
     db.add(proposal)
     try:
+        # Flushed explicitly so `proposer` and `recipient` resolve before the
+        # snapshot is taken. It writes the same six values assigned above --
+        # the point is that they are written by the same method acceptance
+        # uses, rather than by a second copy of the rule that can drift.
+        #
+        # Inside the try, because the flush is where the INSERT actually goes
+        # down: the partial unique index raises here now, not at the commit.
+        db.flush()
+        proposal.snapshot_parties()
         db.commit()
     except IntegrityError:
         # The partial unique index caught a second live proposal in the same
@@ -4366,7 +4501,7 @@ def update_proposal(org, db, proposal_id):
     And it stops at acceptance, deliberately. An accepted partnership is a
     record of what two organizations agreed to, with a public summary either
     of them may already have sent to a funder; one side editing that
-    afterwards would make it a claim about the other rather than an agreement
+    afterward would make it a claim about the other rather than an agreement
     between them. There is no version of this where that is worth the
     convenience. To change a settled partnership, end it and agree another --
     which is what the lifecycle is for.
@@ -4762,6 +4897,16 @@ def revoke_share_link(org, db, proposal_id):
     proposal = _load_party_proposal(db, org, proposal_id)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
+    # The same guard rotating uses, and for the same reason: a proposal that
+    # was never agreed has no public link, and answering "Public link
+    # revoked" to a request against one says something untrue about what just
+    # happened. On status rather than on `share_token is None`, so revoking
+    # twice on a real agreement stays the quiet no-op below rather than
+    # becoming an error the second time.
+    if proposal.status not in Partnership.PUBLIC:
+        return jsonify({
+            "error": "This proposal has no public link.",
+        }), 409
 
     if proposal.share_token is not None:
         proposal.share_token = None
@@ -4939,16 +5084,29 @@ def _maybe_notify_message(db, proposal, sender, message):
 
 
 def _unread_message_count(db, org):
-    """How many messages are waiting on `org`, across every thread it is in.
+    """(messages, threads) waiting on `org`, across everything it is party to.
 
-    One query rather than a thread at a time: this rides along with /api/me,
-    which every page calls, so it has to stay cheap.
+    Both, from one query rather than a thread at a time: this rides along
+    with /api/me, which every page calls, so it has to stay cheap.
+
+    Two numbers because the two callers are asking different questions and
+    were being given the same answer. "You have unread messages" is a count
+    of messages. The nav badge is a count of *things waiting on you*, and the
+    notification list underneath it deliberately collapses a conversation
+    into one entry -- "a conversation is one thing that happened, and six
+    lines saying the same name is how a notification list stops being read".
+    So the badge said 6 and the panel it opened listed 1, and neither was
+    wrong about what it was counting.
     """
-    return db.query(Message.id).join(
+    row = db.query(
+        func.count(Message.id),
+        func.count(func.distinct(Message.partnership_id)),
+    ).join(
         Partnership, Message.partnership_id == Partnership.id
     ).filter(
         _unread_by(org.id)
-    ).count()
+    ).one()
+    return row[0] or 0, row[1] or 0
 
 
 @app.route("/api/partnerships/<token>", methods=["GET"])

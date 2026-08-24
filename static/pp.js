@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // body.home tiles a 24px dot lattice across the whole page as a CSS texture.
 // Over the first screen the same lattice is drawn here instead, so it can
 // answer the cursor: dots near the pointer lift away from it, grow, and warm
-// towards the accent, and settle back when it leaves.
+// toward the accent, and settle back when it leaves.
 //
 // It is painted on the same grid, measured from the same origin, so the drawn
 // half and the tiled half meet without a seam at the fold. The hero is the
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = paper;
         ctx.fillRect(0, 0, width, height);
 
-        // The field eases towards the pointer rather than snapping to it.
+        // The field eases toward the pointer rather than snapping to it.
         fieldX += (pointerX - fieldX) * 0.14;
         fieldY += (pointerY - fieldY) * 0.14;
         // Quick to light, slow to let go. Symmetrical easing made the field
@@ -781,7 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cols = 0;
     let built = -1;         // how many orders are currently shown
 
-    // The build only ever goes forwards. Scrolling back up leaves the span
+    // The build only ever goes forward. Scrolling back up leaves the span
     // closed rather than taking it apart again: a structure that dismantles
     // itself when you look away from it is a gimmick, and re-reading the
     // heading above it should not cost you the thing it is describing.
@@ -803,15 +803,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // The middle column is where the two halves meet, and is the last
         // thing to land whichever side it is counted from.
-        const centre = (cols - 1) / 2;
+        const center = (cols - 1) / 2;
         cells = shape(cols, rows).map((cell) => {
             const el = document.createElement('span');
-            const side = cell.c < centre ? 'give' : 'take';
+            const side = cell.c < center ? 'give' : 'take';
             // Distance from the outer end this cell is built from, so both
-            // halves advance at the same rate towards the middle.
-            const order = cell.c < centre ? cell.c : (cols - 1 - cell.c);
+            // halves advance at the same rate toward the middle.
+            const order = cell.c < center ? cell.c : (cols - 1 - cell.c);
             el.className = `bridge-cell ${side}`;
-            if (order >= Math.floor(centre)) el.classList.add('keystone');
+            if (order >= Math.floor(center)) el.classList.add('keystone');
             el.style.gridColumn = String(cell.c + 1);
             el.style.gridRow = String(cell.r + 1);
             grid.appendChild(el);

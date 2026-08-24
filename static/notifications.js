@@ -141,19 +141,57 @@
         const toggle = document.getElementById('notifyToggle');
         const dropdown = document.getElementById('notifyDropdown');
         const list = document.getElementById('notifyList');
-        let loaded = false;
+        // Whether anything has ever been drawn here. Not a "do not fetch
+        // again" latch, which is what this used to be: the panel was
+        // populated on the first open and never afterward, so acting on
+        // everything in it and opening it again showed the same list, and a
+        // proposal that arrived while the page sat open never appeared at
+        // all. It now refetches on every open; this only decides whether
+        // there is anything worth leaving on screen while that happens.
+        let everRendered = false;
+        let fetching = false;
 
         const setOpen = async (open) => {
             dropdown.hidden = !open;
             toggle.setAttribute('aria-expanded', String(open));
-            if (!open || loaded) return;
+            if (!open) return;
+            // Two opens in quick succession should not race each other into
+            // the list; the one already running will paint.
+            if (fetching) return;
+            // Only on a first open. On every open after it the previous list
+            // stays put until the new one is ready, so the panel does not
+            // blink through a loading state to arrive at what it was
+            // already showing.
+            if (!everRendered) {
+                list.innerHTML = '<li class="notify-empty">Loading...</li>';
+            }
+            fetching = true;
             try {
                 const data = await window.api('/api/notifications');
                 render(list, data.notifications || []);
-                loaded = true;
+                everRendered = true;
+                // The dot and this list are two counts of the same thing,
+                // from two endpoints, and they disagreed: the dot adds
+                // pending proposals to unread messages from /api/me, while
+                // this counts what is actionable across a 60-day window.
+                // Opening the panel is the moment to settle that -- the
+                // reader is looking at the items the number is supposed to
+                // describe.
+                if (typeof data.actionable === 'number'
+                    && window.setNotificationDot) {
+                    window.setNotificationDot(data.actionable);
+                }
             } catch {
-                list.innerHTML =
-                    '<li class="notify-empty">Could not load these just now.</li>';
+                // Only when there is nothing better to show. Replacing a
+                // list the reader is looking at with an error, because a
+                // background refresh of it failed, loses more than it says.
+                if (!everRendered) {
+                    list.innerHTML =
+                        '<li class="notify-empty">Could not load these just '
+                        + 'now.</li>';
+                }
+            } finally {
+                fetching = false;
             }
         };
 

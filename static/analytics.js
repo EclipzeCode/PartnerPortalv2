@@ -8,7 +8,7 @@
 //
 // One request, the same /api/dashboard the dashboard itself reads. Nothing
 // here is computed that the payload does not already carry, and nothing is
-// modelled or projected: every number drawn is one the server counted.
+// modeled or projected: every number drawn is one the server counted.
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
     const esc = window.escapeHtml;
@@ -439,7 +439,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Wall and face are one group per segment so they move together, and
         // every wall is drawn before every face -- one segment's wall must
-        // never sit on top of its neighbour's face, which is what happens if
+        // never sit on top of its neighbor's face, which is what happens if
         // each pair is grouped in the document and the groups are stacked.
         //
         // So: two passes over the same arcs, and the hover transform is
@@ -451,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         drawn.forEach((a) => {
             // The direction this segment points, from the middle outwards.
             // The lift below rides along it, so a slice separates from its
-            // neighbours rather than sliding across them.
+            // neighbors rather than sliding across them.
             const mid = (a.from + a.to) / 2;
             a.dx = Math.cos(mid).toFixed(3);
             a.dy = Math.sin(mid).toFixed(3);
@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         //
         // These are the shapes the pointer is actually tested against: they
         // stay where they are whatever the face does, they carry the gaps back
-        // in so neighbours touch and there is no dead band between two slices,
+        // in so neighbors touch and there is no dead band between two slices,
         // and they run wider than the ring on both sides so the whole lifted
         // position stays inside the region that lifted it.
         const hits = svgEl('g', { class: 'donut-hits' });
@@ -531,7 +531,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // makes it read as rising rather than sliding: the wall stays on the
         // ground and only steps outward, so the gap between the two grows and
         // the slice looks taller. Both halves move along the same outward
-        // direction, so the slice separates from its neighbours instead of
+        // direction, so the slice separates from its neighbors instead of
         // crossing them.
         //
         // Driven from the group, not from :hover on each path -- a pointer

@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // The zone's short name, but only when it is not the viewer's own. "3:00
     // PM" is unambiguous when the meeting is in your zone and a guess when it
-    // is not, and labelling every meeting with a zone nobody needed is the
+    // is not, and labeling every meeting with a zone nobody needed is the
     // noise that makes people stop reading the label at all.
     function zoneSuffix(ev) {
         if (!ev.timezone || ev.all_day) return '';
