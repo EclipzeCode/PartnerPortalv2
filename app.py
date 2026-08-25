@@ -25,7 +25,7 @@ from flask import (
     Flask, jsonify, request, session
 )
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
@@ -1040,11 +1040,13 @@ def content_security_policy():
             _csp_value = "; ".join([
                 "default-src 'self'",
                 f"script-src {scripts}",
-                # Google Fonts serves the stylesheet; unpkg serves boxicons.
-                # Self-hosting both would let these collapse to 'self'.
-                "style-src 'self' https://fonts.googleapis.com "
-                "https://unpkg.com",
-                "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
+                # Both were self-hosted, so both collapsed to 'self'. There
+                # is now no origin but this one in the whole policy: nothing
+                # this site renders can be changed by anybody else's deploy,
+                # and no visitor's request for a font tells a third party
+                # which page they were reading.
+                "style-src 'self'",
+                "font-src 'self'",
                 "img-src 'self' data:",
                 # Every fetch on this site is same-origin; see common.js.
                 "connect-src 'self'",
@@ -2963,81 +2965,79 @@ def _record_profile_view(db, target):
         app.logger.exception("Could not record a profile view")
 
 
-def _profile_view_counts(db, org):
-    total = db.query(ProfileView.id).filter(
-        ProfileView.organization_id == org.id
-    ).count()
-    since = datetime.now(timezone.utc) - timedelta(days=30)
-    recent = db.query(ProfileView.id).filter(
-        ProfileView.organization_id == org.id,
-        ProfileView.viewed_at >= since,
-    ).count()
-    return total, recent
-
-
+# How many days the dashboard chart covers, and therefore how far back the
+# comparison window reaches: the query below spans twice this.
 VIEW_SERIES_DAYS = 30
 
 
-def _profile_view_series(db, org, days=VIEW_SERIES_DAYS):
-    """One count per day for the last `days` days, oldest first.
+def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
+    """Every profile-view number the dashboard shows, from two queries.
 
-    The dashboard had two numbers for this -- all time, and the last thirty
-    days -- which can only ever be drawn as two numbers. A count per day is the
-    same rows grouped differently, and is the difference between "you have had
-    some views" and "you have had views ever since you shared the link".
+    Returns (total, recent, series, prior).
+
+    This was four. Two counts for all-time and the last thirty days, one
+    grouped query for the daily series, and a fourth for the window before it
+    -- four round trips to a database a network hop away, on the page every
+    signed-in visit lands on, to answer four questions about the same rows.
+
+    Three of them are the same scan. The series needs one count per day over
+    `days`; the prior window needs the same over the `days` before that; and
+    the recent figure is the series added up. So one grouped query covers the
+    whole 2 x `days` span and the three are read out of it in Python. Only
+    the all-time total needs its own, because no window contains it.
 
     Days are UTC. viewed_at is a timestamptz and the cast resolves in the
     session's timezone, which is UTC here. A visitor's own midnight is not
-    knowable from a salted digest, and would be the wrong boundary anyway:
+    knowable from a salted digest, and would be the wrong boundary anyway --
     these are the profile owner's days, not the visitor's.
 
-    Every day in the window is present, including the empty ones. A series with
-    the gaps left out would draw a line straight across a fortnight of silence
-    as though it were a plateau.
+    Every day in the window is present, including the empty ones. A series
+    with the gaps left out would draw a line straight across a fortnight of
+    silence as though it were a plateau.
+
+    One number moved. `recent` used to be a rolling thirty times twenty-four
+    hours from the moment of the request, while the chart beside it is thirty
+    UTC days -- so "Last 30 days" and the sum of the bars under it could
+    disagree, by up to a day's views, for no reason a reader could see. It is
+    now the sum of exactly those bars.
     """
     today = datetime.now(timezone.utc).date()
     first = today - timedelta(days=days - 1)
+    prior_first = first - timedelta(days=days)
+
+    def midnight(day):
+        return datetime.combine(day, time_type(0, 0), tzinfo=timezone.utc)
 
     rows = db.query(
         func.date(ProfileView.viewed_at).label("day"),
         func.count(ProfileView.id),
     ).filter(
         ProfileView.organization_id == org.id,
-        ProfileView.viewed_at >= datetime.combine(
-            first, time_type(0, 0), tzinfo=timezone.utc
-        ),
+        ProfileView.viewed_at >= midnight(prior_first),
     ).group_by("day").all()
-
     counts = {str(day): n for day, n in rows}
-    return [
+
+    series = [
         {
             "date": (first + timedelta(days=i)).strftime("%Y-%m-%d"),
             "count": counts.get(str(first + timedelta(days=i)), 0),
         }
         for i in range(days)
     ]
+    recent = sum(point["count"] for point in series)
+    # The window immediately before the one the chart draws, so the panel can
+    # say which way the line is going rather than only how high it is. The
+    # two meet exactly at `first`, so no view is counted in both or neither.
+    prior = sum(
+        counts.get(str(prior_first + timedelta(days=i)), 0)
+        for i in range(days)
+    )
 
-
-def _profile_view_prior(db, org, days=VIEW_SERIES_DAYS):
-    """Views in the window before the one the chart draws.
-
-    The chart says "n views"; on its own that is a number with nothing to
-    measure it against. This is the same length of window immediately before
-    it, so the panel can say whether the line is going up or down.
-
-    Same UTC day boundaries as the series, so the two windows meet exactly and
-    no view is counted in both or in neither.
-    """
-    today = datetime.now(timezone.utc).date()
-    first = today - timedelta(days=days - 1)
-    start = datetime.combine(first - timedelta(days=days), time_type(0, 0),
-                             tzinfo=timezone.utc)
-    end = datetime.combine(first, time_type(0, 0), tzinfo=timezone.utc)
-    return db.query(ProfileView.id).filter(
-        ProfileView.organization_id == org.id,
-        ProfileView.viewed_at >= start,
-        ProfileView.viewed_at < end,
+    total = db.query(ProfileView.id).filter(
+        ProfileView.organization_id == org.id
     ).count()
+
+    return total, recent, series, prior
 
 
 # --- Saved leads ------------------------------------------------------------
@@ -3648,6 +3648,42 @@ def list_notifications(org, db):
 
 
 # --- Dashboard --------------------------------------------------------------
+def _partnership_counts(db, org):
+    """The four partnership numbers on the dashboard, from one query.
+
+    Grouped by status and by which side of each row this organization is on,
+    which is the only thing that separates "waiting on you" from "waiting on
+    them" -- both are pending, and the direction is whether org.id sits in
+    proposer_id or recipient_id.
+
+    Counted rather than derived from a list. The four used to be four passes
+    over every partnership this organization had ever been part of, which is
+    why that list was loaded in full: not because anything rendered it, but
+    because the counts needed it. Nothing is serialized here, both parties
+    stay unloaded, and the answer is one row per status per direction --
+    at most twelve rows, whatever the history behind them.
+    """
+    incoming = case((Partnership.recipient_id == org.id, True), else_=False)
+    rows = db.query(
+        Partnership.status,
+        incoming.label("incoming"),
+        func.count(Partnership.id),
+    ).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id)
+    ).group_by(Partnership.status, incoming).all()
+
+    tally = {(status, bool(inbound)): n for status, inbound, n in rows}
+    return {
+        "awaiting_you": tally.get((Partnership.PENDING, True), 0),
+        "sent_pending": tally.get((Partnership.PENDING, False), 0),
+        "agreed": sum(n for (status, _), n in tally.items()
+                      if status == Partnership.ACCEPTED),
+        "completed": sum(n for (status, _), n in tally.items()
+                         if status == Partnership.COMPLETED),
+    }
+
+
 @app.route("/api/dashboard", methods=["GET"])
 @login_required
 def get_dashboard(org, db):
@@ -3662,9 +3698,8 @@ def get_dashboard(org, db):
     # organizations themselves when it is opened, the same way the matches
     # views do.
     saved_count = len(_saved_ids(db, org))
-    views_total, views_recent = _profile_view_counts(db, org)
-    views_series = _profile_view_series(db, org)
-    views_prior = _profile_view_prior(db, org)
+    views_total, views_recent, views_series, views_prior = (
+        _profile_view_stats(db, org))
 
     if not org.onboarding_complete:
         return jsonify({
@@ -3693,12 +3728,21 @@ def get_dashboard(org, db):
     # five cards, on the page every signed-in visit lands on.
     total_matches, mutual_matches, top_matches = match_overview(db, org, top=5)
 
+    counts = _partnership_counts(db, org)
+
+    # Five, in SQL. This used to load every partnership this organization has
+    # ever been part of -- with lazy="joined" pulling both parties in with
+    # each -- serialize all of them, and slice five off the front, because the
+    # same list also produced the counts above. Splitting the two means
+    # neither has to be the shape the other needs: the counts are one grouped
+    # query over rows nobody serializes, and the cards are the five that are
+    # actually rendered.
     rows = db.query(Partnership).filter(
         or_(Partnership.proposer_id == org.id,
             Partnership.recipient_id == org.id)
-    ).order_by(Partnership.created_at.desc()).all()
-    proposals = [p.to_dict(viewer_id=org.id) for p in rows]
-    _annotate_message_counts(db, org, rows, proposals)
+    ).order_by(Partnership.created_at.desc()).limit(5).all()
+    recent_proposals = [p.to_dict(viewer_id=org.id) for p in rows]
+    _annotate_message_counts(db, org, rows, recent_proposals)
 
     return jsonify({
         "organization": org.private_dict(),
@@ -3709,21 +3753,13 @@ def get_dashboard(org, db):
             "mutual_matches": mutual_matches,
             "needs_count": len(org.needs or []),
             "offers_count": len(org.offers or []),
-            "awaiting_you": sum(
-                1 for p in proposals
-                if p["direction"] == "incoming" and p["status"] == "pending"
-            ),
-            "sent_pending": sum(
-                1 for p in proposals
-                if p["direction"] == "outgoing" and p["status"] == "pending"
-            ),
+            "awaiting_you": counts["awaiting_you"],
+            "sent_pending": counts["sent_pending"],
             # Live agreements only. Counting completed and ended ones here
             # would make the number climb forever and stop meaning "how many
             # partnerships do I have running".
-            "agreed": sum(1 for p in proposals if p["status"] == "accepted"),
-            "completed": sum(
-                1 for p in proposals if p["status"] == Partnership.COMPLETED
-            ),
+            "agreed": counts["agreed"],
+            "completed": counts["completed"],
             "saved": saved_count,
             "profile_views": views_total,
             "profile_views_recent": views_recent,
@@ -3738,7 +3774,7 @@ def get_dashboard(org, db):
             "focus_total": FOCUS_TOTAL,
         },
         "top_matches": top_matches,
-        "recent_proposals": proposals[:5],
+        "recent_proposals": recent_proposals,
         "events": events,
     })
 

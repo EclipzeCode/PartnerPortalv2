@@ -230,21 +230,38 @@ def _join(labels):
     return ", ".join(labels[:-1]) + f" and {labels[-1]}"
 
 
-def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
-    """Rank other organizations as partners for `me`.
+def _candidates(session, me, *, demo_only=False):
+    """Every organization that could match `me`, as rows cheap enough to rank.
 
-    Only orgs with at least one category in common in either direction are
-    considered -- everything else scores nothing, so pulling it out of the
-    database would be wasted work.
+    Eight columns, not the whole row. Both callers below used to
+    `select(Organization)` -- every description, every note, every URL, every
+    token column on every organization that overlaps the caller -- in order to
+    compute a number and, in match_overview's case, keep five of them. On the
+    dashboard, which is the page every signed-in visit lands on, that is the
+    whole overlapping directory pulled across the network to answer "how
+    many".
 
-    Seeded example organizations are excluded by default: a real signup should
-    never be paired with something fictional. `demo_only=True` returns exactly
-    those instead, for the clearly-labeled "example matches" view shown when
-    the real directory is still small.
+    What comes back is a SQLAlchemy Row, and rank_pair and score_pair read it
+    unchanged: both only ever touch attributes, and a Row named by column has
+    them. Nothing about the scoring had to learn about this.
+
+    The WHERE lived twice, once in each caller, and had already drifted --
+    find_matches filtered `is_demo.is_(demo_only)` and match_overview
+    hardcoded False. Same query now, with the one real difference as an
+    argument.
     """
     from models import Organization
 
-    stmt = select(Organization).where(
+    stmt = select(
+        Organization.id,
+        Organization.name,
+        Organization.needs,
+        Organization.offers,
+        Organization.focus_areas,
+        Organization.location,
+        Organization.remote_friendly,
+        Organization.organization_type,
+    ).where(
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
         Organization.is_demo.is_(demo_only),
@@ -257,36 +274,83 @@ def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
         conditions.append(Organization.offers.overlap(me.needs))
     if me.offers:
         conditions.append(Organization.needs.overlap(me.offers))
-
     if not conditions:
         return []
 
-    stmt = stmt.where(or_(*conditions))
+    return session.execute(stmt.where(or_(*conditions))).all()
 
-    results = []
-    for them in session.scalars(stmt):
-        score, reasons, detail = score_pair(me, them)
+
+def _hydrate(session, rows):
+    """The full organizations for `rows`, in the order given.
+
+    One query for the whole page rather than one per row, and only for the
+    ones that survived ranking -- which is the entire point of ranking on
+    eight columns first. `in_` on a primary key, so the database does the
+    cheapest thing it knows how to do.
+    """
+    from models import Organization
+
+    if not rows:
+        return []
+    ids = [row.id for row in rows]
+    found = {
+        org.id: org
+        for org in session.query(Organization).filter(
+            Organization.id.in_(ids)
+        ).all()
+    }
+    # Missing means deleted between the two queries, which is a row that
+    # should not be in the results anyway.
+    return [found[i] for i in ids if i in found]
+
+
+def _entry(me, them):
+    """One organization as the frontend reads it: profile, score, reasons."""
+    score, reasons, detail = score_pair(me, them)
+    data = them.public_dict()
+    data.update({
+        "match_score": score,
+        "reasons": reasons,
+        "match_detail": detail,
+    })
+    return data
+
+
+# Mutual matches first, then score, then name -- the one ordering both
+# callers use, written once so they cannot drift on what "best" means.
+def _rank_key(item):
+    mutual, score, name = item
+    return (not mutual, -score, (name or "").casefold())
+
+
+def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
+    """Rank other organizations as partners for `me`.
+
+    Only orgs with at least one category in common in either direction are
+    considered -- everything else scores nothing, so pulling it out of the
+    database would be wasted work.
+
+    Seeded example organizations are excluded by default: a real signup should
+    never be paired with something fictional. `demo_only=True` returns exactly
+    those instead, for the clearly-labeled "example matches" view shown when
+    the real directory is still small.
+
+    Ranked on eight columns, then the survivors are fetched in full. The cap
+    is what makes that worth doing: at most `limit` organizations are ever
+    hydrated, however many overlap.
+    """
+    ranked = []
+    for them in _candidates(session, me, demo_only=demo_only):
+        score, mutual, parts, *_ = rank_pair(me, them)
         if score <= 0:
             continue
-        if mutual_only and not detail["mutual"]:
+        if mutual_only and not mutual:
             continue
-        entry = them.public_dict()
-        entry.update({
-            "match_score": score,
-            "reasons": reasons,
-            "match_detail": detail,
-        })
-        results.append(entry)
+        ranked.append((mutual, score, them.name, them))
 
-    # Mutual matches first, then score, then name for a stable order.
-    results.sort(
-        key=lambda r: (
-            not r["match_detail"]["mutual"],
-            -r["match_score"],
-            (r["name"] or "").casefold(),
-        )
-    )
-    return results[:limit]
+    ranked.sort(key=lambda r: _rank_key(r[:3]))
+    return [_entry(me, org)
+            for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
 
 
 def match_overview(session, me, top=5):
@@ -294,56 +358,25 @@ def match_overview(session, me, top=5):
 
     What the dashboard actually needs. It used to call find_matches, which
     answers a different question -- "give me every match, fully rendered" --
-    and then threw almost all of it away: three numbers and five cards out
-    of a full public_dict, reasons list and points breakdown built for every
-    organization overlapping the caller.
+    and then threw almost all of it away.
 
-    Same SQL and same scoring; the difference is that the prose is built for
-    `top` organizations instead of all of them. Everything else is the
-    arithmetic in rank_pair, which is what the two paths share.
+    Same candidates and same scoring; the difference is that only `top`
+    organizations are fetched in full and given their prose. Everything else
+    is the arithmetic in rank_pair, which is what the two paths share.
 
     Returns (total, mutual_count, top_matches).
     """
-    from models import Organization
-
-    stmt = select(Organization).where(
-        Organization.id != me.id,
-        Organization.onboarding_complete.is_(True),
-        Organization.is_demo.is_(False),
-    )
-    conditions = []
-    if me.needs:
-        conditions.append(Organization.offers.overlap(me.needs))
-    if me.offers:
-        conditions.append(Organization.needs.overlap(me.offers))
-    if not conditions:
-        return 0, 0, []
-    stmt = stmt.where(or_(*conditions))
-
     ranked = []
     mutual_count = 0
-    for them in session.scalars(stmt):
+    for them in _candidates(session, me):
         score, mutual, parts, *_ = rank_pair(me, them)
         if score <= 0:
             continue
         if mutual:
             mutual_count += 1
-        ranked.append((not mutual, -score, (them.name or "").casefold(), them))
+        ranked.append((mutual, score, them.name, them))
 
-    # The same ordering find_matches applies: two-way first, then score, then
-    # name. Sorted on the tuple rather than a key function so the comparison
-    # is the one written above and nothing falls back to comparing rows.
-    ranked.sort(key=lambda r: r[:3])
-
-    best = []
-    for _, _, _, them in ranked[:top]:
-        score, reasons, detail = score_pair(me, them)
-        entry = them.public_dict()
-        entry.update({
-            "match_score": score,
-            "reasons": reasons,
-            "match_detail": detail,
-        })
-        best.append(entry)
-
+    ranked.sort(key=lambda r: _rank_key(r[:3]))
+    best = [_entry(me, org)
+            for org in _hydrate(session, [r[3] for r in ranked[:top]])]
     return len(ranked), mutual_count, best

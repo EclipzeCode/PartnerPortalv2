@@ -1,0 +1,19 @@
+The three typefaces in this directory are licensed under the
+SIL Open Font License, Version 1.1.
+
+    Instrument Serif   Copyright (c) 2022 The Instrument Serif Project Authors
+                       https://github.com/Instrument/instrument-serif
+    Space Grotesk      Copyright (c) 2020 The Space Grotesk Project Authors
+                       https://github.com/floriankarsten/space-grotesk
+    JetBrains Mono     Copyright (c) 2020 The JetBrains Mono Project Authors
+                       https://github.com/JetBrains/JetBrainsMono
+
+The full license text is available at https://openfontlicense.org and in each
+project's repository above. In summary, the OFL permits the fonts to be used,
+studied, modified and redistributed freely -- including bundled with a web
+application as they are here -- provided they are not sold by themselves and
+that any derivative retains this license.
+
+The .woff2 files here were retrieved from Google Fonts, which serves the same
+upstream sources split into unicode-range subsets; fonts.css is Google's own
+stylesheet with the URLs rewritten to point at this directory.
