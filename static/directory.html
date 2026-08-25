@@ -14,14 +14,17 @@
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <title>Page not found | PartnerPortal</title>
+    <title>Browse organizations | PartnerPortal</title>
+    <!-- Public, and meant to be found: this is the one signed-out view of the
+         directory, and the reason the home page's "Browse partners" leads
+         somewhere now. Individual profiles stay out of the index until there
+         is a per-organization opt-in -- see robots_txt in app.py. -->
+    <meta name="description" content="Browse the organizations on PartnerPortal. See what each one offers and needs, and find a partner who needs what you already have.">
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
          request gets. -->
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <!-- A 404 has no business in an index. -->
-    <meta name="robots" content="noindex, nofollow">
     <!-- Applied before the first stylesheet so the page never paints in one
          theme and then switches. Three states: an explicit choice stored by
          the control in Settings wins, and with nothing stored the operating
@@ -60,38 +63,27 @@
         }
       })();
     </script>
-    <!-- The redesign's shared layer, then the stylesheet the six
-         single-purpose pages share. This page used to load its own copy of
-         that second file; see the header of notice.css. -->
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="ink.css">
-    <link rel="stylesheet" href="notice.css">
+    <link rel="stylesheet" href="directory.css">
     <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
     <link rel="stylesheet" href="nav.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'
           integrity='sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2'
           crossorigin='anonymous'>
-    <!-- Instrument Serif for the heading, Space Grotesk for the copy,
-         JetBrains Mono for labels. Poppins is no longer used on this page. -->
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<!-- .ink opts this page into the shared redesign in ink.css. -->
 <body class="ink">
-    <!-- Carries the real nav rather than a bare apology: whoever landed here
-         mistyped a URL or followed a stale link, and the useful thing is a way
-         back into the product. common.js fills the account slot as usual, so
-         a signed-in visitor still sees their own menu. -->
+    <a class="skip-link" href="#main">Skip to main content</a>
     <header class="header">
         <a href="index.html" class="logo">PartnerPortal</a>
         <button type="button" class="bx bx-menu" id="menu-icon"
                 aria-label="Menu" aria-expanded="false"></button>
         <nav class="navbar">
             <a href="index.html">Home</a>
-            <a href="directory.html">Connect</a>
-            <a href="ppdashboard.html">Dashboard</a>
-            <!-- Account slot. Both states ship in the markup and share one grid
-                 cell (nav.css), so the bar reserves the CTA's width either way and
-                 signing in never shifts the links. common.js picks the state. -->
+            <a href="directory.html" class="active" id="navConnect">Connect</a>
+            <a href="ppdashboard.html" id="navDashboard">Dashboard</a>
             <div class="nav-account" id="navAccount" data-state="loading">
                 <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
                 <div class="account-menu">
@@ -119,39 +111,115 @@
         </nav>
     </header>
 
-    <main class="notfound-main">
-        <div class="notfound-card">
-            <p class="notfound-code" aria-hidden="true">404</p>
-            <h1>We couldn't find that page</h1>
-            <p class="notfound-body">
-                The link may be out of date, or the address may have a typo in
-                it. Nothing has gone wrong with your account.
-            </p>
-
-            <div class="notfound-actions">
-                <a class="btn-primary" href="index.html">Back to home</a>
-                <a class="btn-ghost" href="directory.html">Find partners</a>
-            </div>
-
-            <p class="notfound-hint">
-                Looking for your own profile or proposals? They are on your
-                <a href="ppdashboard.html">dashboard</a>.
+    <main class="dir-main" id="main" tabindex="-1">
+        <div class="dir-head">
+            <p class="eyebrow">Directory</p>
+            <h1>Every organization on PartnerPortal</h1>
+            <p class="dir-lede">
+                What each one can offer, and what it needs. Matching scores
+                the two against your own profile &mdash;
+                <a href="pplogin.html">sign in</a> or
+                <a href="onboarding.html">create a profile</a> to see fit.
             </p>
         </div>
+
+        <!-- Shown only to a signed-in visitor, who has a better version of
+             this page to be on. Hidden in the markup so it never flashes for
+             the signed-out majority this page is for. -->
+        <div class="dir-signedin" id="signedInNote" hidden>
+            <i class='bx bx-info-circle' aria-hidden="true"></i>
+            <span>You are signed in, so your matches are scored and ranked for you.</span>
+            <a class="btn-ghost" href="ppsearch.html">Go to your matches</a>
+        </div>
+
+        <form class="dir-controls" id="dirControls" role="search"
+              aria-label="Search the directory">
+            <div class="dir-search">
+                <i class='bx bx-search' aria-hidden="true"></i>
+                <label class="sr-only" for="dirSearch">Search organizations</label>
+                <input type="search" id="dirSearch" name="q" autocomplete="off"
+                       placeholder="Search by name, place or description">
+            </div>
+            <div class="dir-filters">
+                <label class="sr-only" for="dirType">Organization type</label>
+                <select id="dirType" name="type">
+                    <option value="">Any type</option>
+                </select>
+                <label class="sr-only" for="dirOffers">Offers</label>
+                <select id="dirOffers" name="offers">
+                    <option value="">Offers anything</option>
+                </select>
+                <label class="sr-only" for="dirNeeds">Needs</label>
+                <select id="dirNeeds" name="needs">
+                    <option value="">Needs anything</option>
+                </select>
+                <label class="sr-only" for="dirSort">Sort</label>
+                <select id="dirSort" name="sort">
+                    <option value="name">A&ndash;Z</option>
+                    <option value="newest">Newest first</option>
+                </select>
+                <label class="dir-remote">
+                    <input type="checkbox" id="dirRemote" name="remote">
+                    <span>Open to remote</span>
+                </label>
+                <button type="button" class="btn-ghost" id="dirClear" hidden>Clear</button>
+            </div>
+        </form>
+
+        <p class="dir-count" id="dirCount" role="status" aria-live="polite"></p>
+
+        <div class="dir-grid" id="dirGrid" aria-busy="true"></div>
+
+        <nav class="dir-pager" id="dirPager" aria-label="Directory pages" hidden>
+            <button type="button" class="btn-ghost" id="dirPrev">
+                <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="dir-page-indicator" id="dirPageIndicator"></span>
+            <button type="button" class="btn-ghost" id="dirNext">
+                Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+        </nav>
+
+        <section class="dir-cta">
+            <h2>Seeing someone you could work with?</h2>
+            <p>Tell us what your organization needs and what it can offer.
+               Matching scores both directions, so you only meet partners who
+               get something out of it too.</p>
+            <a class="btn-primary" href="onboarding.html">Get matched free</a>
+        </section>
     </main>
 
-    <footer class="site-footer compact">
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="onboarding.html">Get Started</a></li>
+                    <li><a href="directory.html">Browse Organizations</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html">Create Account</a></li>
+                    <li><a href="pphelp.html">Help</a></li>
+                </ul>
+            </div>
+        </div>
         <div class="footer-bottom">
             <span>&copy; 2026 PartnerPortal</span>
-            <nav class="footer-links">
-                <a href="index.html">Home</a>
-                <a href="onboarding.html">Get Started</a>
-                <a href="directory.html">Find Partners</a>
-            </nav>
+            <span>Built for organizations that lift each other up.</span>
         </div>
     </footer>
 
     <script src="common.js"></script>
     <script src="notifications.js"></script>
+    <script src="directory.js"></script>
 </body>
 </html>

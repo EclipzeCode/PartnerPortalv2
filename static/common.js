@@ -495,6 +495,33 @@ window.forgetSession = function forgetSession() {
     rememberSessionHint(false);
 };
 
+// Where "Connect" and "Find partners" go, and whether "Dashboard" is offered
+// at all.
+//
+// Both used to be one hardcoded answer -- ppsearch.html -- on every page,
+// which for a signed-out visitor was a link to a login form wearing the name
+// of the thing they wanted. The home page's own "Browse partners" button was
+// the worst of them: the directory is what this product has to show, and the
+// only route to it required the account it exists to justify.
+//
+// Decided here rather than in fifteen templates because this function is
+// already the one place that knows the answer, and it runs on every page.
+// The markup ships the signed-out destination, so a crawler and a visitor
+// with no JavaScript both get the page that works without an account; being
+// signed in is what upgrades it.
+function routeSessionLinks(signedIn) {
+    document.querySelectorAll(
+        'a[href="ppsearch.html"], a[href="directory.html"]'
+    ).forEach((link) => {
+        link.href = signedIn ? 'ppsearch.html' : 'directory.html';
+    });
+
+    // Offered only when it leads somewhere. Signed out it redirects to the
+    // login page, which is a nav item that punishes the click.
+    document.querySelectorAll('.navbar a[href="ppdashboard.html"]')
+        .forEach((link) => { link.hidden = !signedIn; });
+}
+
 async function updateNavForSession() {
     const slot = document.getElementById('navAccount');
     if (!slot) return;
@@ -528,6 +555,7 @@ async function updateNavForSession() {
 
     if (!me) {
         slot.dataset.state = 'out';
+        routeSessionLinks(false);
         updateProposalBadge(0);
         return;
     }
@@ -543,6 +571,7 @@ async function updateNavForSession() {
     set('accountEmail', me.email || '');
 
     slot.dataset.state = 'in';
+    routeSessionLinks(true);
     wireAccountMenu();
     // Built here rather than in fifteen page templates; see notifications.js.
     // Only for a signed-in visitor, which is the state this branch is.

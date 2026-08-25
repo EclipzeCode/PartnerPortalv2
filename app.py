@@ -843,7 +843,18 @@ def html_page(page):
 # offering them here would decide that on their behalf. Listing them wants a
 # per-organization opt-in driving both this and the noindex tag on the page --
 # the same shape links_public already has.
-_SITEMAP_PAGES = ("index.html", "pphelp.html", "pplogin.html")
+#
+# directory.html is here, and the distinction is worth stating because it
+# looks like the same question and is not. The page is a list this site
+# publishes about itself; a profile is a page about somebody else. Indexing
+# the directory puts "organizations looking for partners" in front of a
+# search, which is what everyone listed came here for; indexing each profile
+# would put their name in a search result, which is a separate decision
+# nobody has been asked. The page is paged and carries no contact details, so
+# what a crawler gets is what a visitor gets.
+_SITEMAP_PAGES = (
+    "index.html", "directory.html", "pphelp.html", "pplogin.html",
+)
 
 
 @app.route("/robots.txt")
@@ -968,12 +979,15 @@ def add_cache_headers(response):
 # injection point; a Content-Security-Policy is what makes that a property
 # of the page rather than of every future edit to it.
 #
-# Only one inline <script> exists (the theme guard in every page's <head>,
-# which has to run before the first stylesheet), and it is byte-identical
-# across the pages, so a single hash covers all of them and script-src never
-# needs 'unsafe-inline'. Inline event handlers and javascript: URLs would
-# also have to be allowed by that keyword; there are none, and this policy
-# is what keeps it that way.
+# Almost every inline <script> here is the same one: the theme guard in every
+# page's <head>, which has to run before the first stylesheet. It is
+# byte-identical across all of them, so one hash covers the lot. The 500 page
+# carries a second (its retry button), which is why this collects a set
+# rather than assuming a single value -- and why it is computed from the
+# files instead of written out as a constant. script-src never needs
+# 'unsafe-inline' either way. Inline event handlers and javascript: URLs
+# would also have to be allowed by that keyword; there are none, and this
+# policy is what keeps it that way.
 _INLINE_SCRIPT_RE = re.compile(
     r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S
 )
@@ -2620,15 +2634,29 @@ def _slug_list(raw):
     return clean_categories([part.strip() for part in (raw or "").split(",")])
 
 
-@app.route("/api/organizations", methods=["GET"])
-@login_required
-def list_organizations(org, db):
-    args = request.args
+def _directory_query(db, args, *, exclude_id=None):
+    """The directory, filtered/sorted/paged from `args`.
 
+    Returns (rows, meta) where meta carries what the page control needs --
+    total, page, pages, per_page, sort.
+
+    Extracted because there are two endpoints reading the same directory with
+    the same vocabulary of filters and two different ideas of who is asking:
+    the signed-in one below, which excludes the caller and scores what it
+    returns, and the public one further down, which excludes nobody and
+    scores nothing. Written twice they would have drifted inside a month --
+    a filter added to one, a clamp fixed in the other -- and the failure mode
+    is that the directory answers a question differently depending on whether
+    you happen to be signed in.
+
+    `exclude_id` is the only thing that differs about the query itself. What
+    each caller does with the rows is its own business and stays there.
+    """
     query = db.query(Organization).filter(
         Organization.onboarding_complete.is_(True),
-        Organization.id != org.id,
     )
+    if exclude_id is not None:
+        query = query.filter(Organization.id != exclude_id)
 
     # Seeded examples are excluded by default, exactly as they are from
     # matches -- they have no owner and nothing to follow up on. Available on
@@ -2704,6 +2732,19 @@ def list_organizations(org, db):
     page = max(1, min(page, pages))
 
     rows = query.offset((page - 1) * per_page).limit(per_page).all()
+    return rows, {
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+        "sort": sort,
+    }
+
+
+@app.route("/api/organizations", methods=["GET"])
+@login_required
+def list_organizations(org, db):
+    rows, meta = _directory_query(db, request.args, exclude_id=org.id)
 
     saved_ids = _saved_ids(db, org)
     organizations = []
@@ -2720,13 +2761,85 @@ def list_organizations(org, db):
 
     return jsonify({
         "organizations": organizations,
-        "total": total,
-        "page": page,
-        "pages": pages,
-        "per_page": per_page,
-        "sort": sort,
+        **meta,
         "saved_ids": sorted(saved_ids),
     })
+
+
+# The public directory's own ceiling, lower than the signed-in one.
+#
+# Not because the payload is sensitive -- public_profile() is what an
+# organization already publishes at its own URL, and it carries no contact
+# details at all. It is that this route answers without a session, so the
+# only thing bounding how fast somebody can walk the whole directory is the
+# page size and the limit below. Twelve is a screen; a caller asking for
+# forty-eight at a time is not reading.
+PUBLIC_DIRECTORY_MAX_PAGE_SIZE = 24
+
+
+@app.route("/api/directory", methods=["GET"])
+def public_directory():
+    """The directory, to anybody. Deliberately unauthenticated.
+
+    Every route into the directory required a session, which put the one
+    thing that demonstrates this product behind the signup it exists to
+    justify. "Browse partners" on the home page led to a login form. So did
+    the nav. A visitor could read about two-way matching and could not see a
+    single organization doing it.
+
+    Safe by construction rather than by care: the rows are serialized with
+    public_profile(), the same payload /api/organizations/<id>/public has
+    always served to anyone with a link, and the reason that payload exists
+    is that it withholds contact_email and contact_phone and publishes the
+    four profile links only when links_public was ticked. There is no
+    harvesting to do here that walking the profile URLs would not already
+    allow -- and this route, unlike those, is paged and rate limited.
+
+    No match scores. A score is a comparison between two profiles and there
+    is no second profile: rather than send zeros, or invent a ranking from
+    one side, the public view sorts by name and says nothing about fit. That
+    is also the honest pitch -- what fit looks like is what an account is
+    for.
+
+    Demo organizations are included rather than excluded. The signed-in
+    listing hides them by default because a real account has real matches to
+    look at and seeded examples are noise; a stranger looking at an empty
+    directory learns nothing at all. They carry is_demo so the page can label
+    them, which it does.
+    """
+    if rate_limited("public_directory", client_ip(),
+                    max_attempts=120, window_seconds=3600):
+        return jsonify({
+            "error": "Too many requests from this connection. Please try "
+                     "again in a little while.",
+        }), 429
+
+    # per_page is clamped harder here than for a signed-in caller. Passed by
+    # rewriting the arg rather than by adding a parameter to
+    # _directory_query, so the shared builder keeps one idea of what a page
+    # is and this route keeps its own idea of how big one may be.
+    args = request.args.to_dict(flat=True)
+    try:
+        requested = int(args.get("per_page", DIRECTORY_PAGE_SIZE))
+    except (TypeError, ValueError):
+        requested = DIRECTORY_PAGE_SIZE
+    args["per_page"] = str(min(max(1, requested),
+                               PUBLIC_DIRECTORY_MAX_PAGE_SIZE))
+    # The shared builder hides seeded examples unless asked; here the default
+    # is the other way round, for the reason in the docstring. setdefault, so
+    # ?include_examples=0 still turns them off -- the default is an opinion
+    # about the common case, not a rule.
+    args.setdefault("include_examples", "1")
+
+    db = get_db()
+    try:
+        rows, meta = _directory_query(db, args, exclude_id=None)
+        return jsonify({
+            "organizations": [row.public_profile() for row in rows],
+            **meta,
+        })
+    finally:
+        db.close()
 
 
 # --- Profile views ----------------------------------------------------------

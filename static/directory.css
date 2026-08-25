@@ -1,0 +1,368 @@
+/* The public directory.
+ *
+ * Built on the ink layer like every other page in the redesign, so every
+ * color here is one of ink.css's --h-* tokens and the dark palette follows
+ * for free -- those tokens are already redefined under
+ * :root[data-theme="dark"] body.ink, and nothing below hardcodes a value
+ * that would have to be redefined alongside them.
+ *
+ * Deliberately much smaller than ppsearch.css. That file styles a scored
+ * card: a score dial, a save star, a reasons block, a propose button. None
+ * of those exist signed out, and the page reads better without a column of
+ * dashes where they would be.
+ */
+
+/* The header is width:100% with 4rem of horizontal padding, so without this
+ * it computes to viewport + 128px: the bar shifts right and the account CTA
+ * -- the last thing in it -- leaves the screen. Which is precisely what this
+ * page did before the reset was added, because every page stylesheet here
+ * carries its own copy and a new one starts without it.
+ *
+ * Ten files now say this. It belongs in one of the sheets every page already
+ * loads, with the copies deleted -- worth doing, and not while adding a page,
+ * since it changes the box model under every existing layout at once. */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+.dir-main {
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 1rem + 4vw, 4.5rem) clamp(1rem, .5rem + 3vw, 2.5rem) 5rem;
+}
+
+/* --- Head --------------------------------------------------------------- */
+
+.dir-head { max-width: 46rem; margin-bottom: 2rem; }
+
+.dir-head h1 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: clamp(2.1rem, 1.5rem + 2.6vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -.01em;
+    color: var(--h-ink);
+    margin: .35rem 0 .75rem;
+    text-wrap: balance;
+}
+
+.dir-lede {
+    color: var(--h-ink-soft);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 40rem;
+}
+
+.dir-lede a { color: var(--h-give); }
+
+/* Only ever shown to a signed-in visitor, who has a better page to be on. */
+.dir-signedin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-left: 3px solid var(--h-give);
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    margin-bottom: 1.75rem;
+    color: var(--h-ink-soft);
+    font-size: .93rem;
+}
+
+.dir-signedin i { color: var(--h-give); font-size: 1.15rem; }
+.dir-signedin span { flex: 1 1 16rem; }
+
+/* --- Controls ----------------------------------------------------------- */
+
+.dir-controls {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--h-rule);
+    margin-bottom: 1.25rem;
+}
+
+.dir-search { position: relative; display: flex; align-items: center; }
+
+.dir-search i {
+    position: absolute;
+    left: .85rem;
+    color: var(--h-dim);
+    font-size: 1.15rem;
+    pointer-events: none;
+}
+
+.dir-search input {
+    width: 100%;
+    padding: .75rem 1rem .75rem 2.65rem;
+    font: inherit;
+    color: var(--h-ink);
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 8px;
+}
+
+.dir-search input::placeholder { color: var(--h-dim); }
+
+.dir-search input:focus-visible,
+.dir-filters select:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 1px;
+    border-color: var(--h-give);
+}
+
+.dir-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .6rem;
+}
+
+.dir-filters select {
+    font: inherit;
+    font-size: .92rem;
+    color: var(--h-ink);
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 8px;
+    padding: .5rem .7rem;
+    max-width: 14rem;
+}
+
+.dir-remote {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .92rem;
+    color: var(--h-ink-soft);
+    cursor: pointer;
+    padding: .5rem .2rem;
+}
+
+.dir-remote input { accent-color: var(--h-give); }
+
+.dir-count {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .82rem;
+    color: var(--h-dim);
+    margin: 0 0 1.25rem;
+    min-height: 1.2em;   /* holds its line so the grid does not jump */
+}
+
+/* --- Grid --------------------------------------------------------------- */
+
+.dir-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.dir-card {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 10px;
+    padding: 1.15rem 1.25rem 1rem;
+}
+
+.dir-demo {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--h-take);
+    margin: 0;
+}
+
+.dir-name {
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.dir-name a { color: var(--h-ink); text-decoration: none; }
+.dir-name a:hover { color: var(--h-give); text-decoration: underline; }
+
+.dir-meta, .dir-remote-tag {
+    font-size: .85rem;
+    color: var(--h-dim);
+    margin: 0;
+}
+
+.dir-remote-tag {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--h-seal);
+}
+
+.dir-bio {
+    font-size: .92rem;
+    line-height: 1.55;
+    color: var(--h-ink-soft);
+    margin: .15rem 0 .35rem;
+    /* Three lines, then it stops. A card is a reason to open a profile. */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dir-exchange {
+    display: grid;
+    gap: .75rem;
+    padding-top: .6rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.dir-side h3 {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--h-dim);
+    margin: 0 0 .4rem;
+}
+
+.dir-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+
+.dir-chip {
+    font-size: .78rem;
+    line-height: 1.3;
+    padding: .2rem .5rem;
+    border-radius: 5px;
+    border: 1px solid transparent;
+}
+
+/* The two directions, the same way every other surface here paints them. */
+.dir-chip.give {
+    background: color-mix(in srgb, var(--h-give) 10%, transparent);
+    border-color: color-mix(in srgb, var(--h-give) 25%, transparent);
+    color: var(--h-give);
+}
+
+.dir-chip.take {
+    background: color-mix(in srgb, var(--h-take) 10%, transparent);
+    border-color: color-mix(in srgb, var(--h-take) 25%, transparent);
+    color: var(--h-take);
+}
+
+.dir-chip.more, .dir-chip.empty {
+    color: var(--h-dim);
+    border-color: var(--h-rule);
+}
+
+.dir-open {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    margin-top: auto;
+    padding-top: .5rem;
+    font-size: .88rem;
+    font-weight: 500;
+    color: var(--h-give);
+    text-decoration: none;
+}
+
+.dir-open:hover { text-decoration: underline; }
+
+/* --- Empty and error ---------------------------------------------------- */
+
+.dir-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .75rem;
+    padding: 3.5rem 1rem;
+    text-align: center;
+    color: var(--h-ink-soft);
+    background: var(--h-surface);
+    border: 1px dashed var(--h-rule);
+    border-radius: 10px;
+}
+
+.dir-empty i { font-size: 2rem; color: var(--h-dim); }
+.dir-empty p { margin: 0; max-width: 30rem; }
+
+/* --- Pager -------------------------------------------------------------- */
+
+.dir-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.dir-pager button[disabled] { opacity: .45; cursor: not-allowed; }
+
+.dir-page-indicator {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .85rem;
+    color: var(--h-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Closing call ------------------------------------------------------- */
+
+.dir-cta {
+    margin-top: 3.5rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid var(--h-rule);
+    text-align: center;
+}
+
+.dir-cta h2 {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2.1rem);
+    color: var(--h-ink);
+    margin: 0 0 .6rem;
+    text-wrap: balance;
+}
+
+.dir-cta p {
+    color: var(--h-ink-soft);
+    max-width: 34rem;
+    margin: 0 auto 1.5rem;
+    line-height: 1.6;
+}
+
+/* --- Loading ------------------------------------------------------------ */
+/* shared.css owns .skeleton and paints it from the tokens; these are only
+   the shapes this page's cards need while they wait. */
+
+.skeleton-card {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    min-height: 14rem;
+}
+
+.skeleton-card .skeleton-line { height: .8rem; border-radius: 4px; }
+.skeleton-card .skeleton-line.title { height: 1.15rem; width: 65%; }
+.skeleton-card .skeleton-line.short { width: 40%; }
+
+/* --- Narrow ------------------------------------------------------------- */
+
+@media (max-width: 40em) {
+    .dir-filters select { max-width: none; flex: 1 1 100%; }
+    .dir-grid { grid-template-columns: 1fr; }
+}

@@ -203,3 +203,86 @@ def test_each_row_carries_its_match_score(client, login, directory):
 def test_it_requires_a_session(client, directory):
     """The directory carries contact details, the same payload matches use."""
     assert client.get("/api/organizations").status_code == 401
+
+
+# --- The public directory ---------------------------------------------------
+# Same rows, no session, and a payload that carries nothing an account is
+# needed to see. This is what the home page's "Browse partners" leads to.
+
+def test_the_public_directory_answers_without_a_session(client, directory):
+    response = client.get(f"/api/directory?{SCOPE}")
+    assert response.status_code == 200
+    assert len(response.get_json()["organizations"]) >= 4
+
+
+def test_it_carries_no_contact_details(client, directory, make_org):
+    """The line public_profile() draws, checked from this end too.
+
+    A listing that hands out addresses is a harvesting endpoint wearing a
+    search box, and this one needs no account at all.
+    """
+    make_org(name="pytest-dir Reachable",
+             contact_email="pytest-reach@example.com",
+             contact_phone="555-0100")
+    payload = client.get(f"/api/directory?{SCOPE}").get_json()
+    for org in payload["organizations"]:
+        assert "contact_email" not in org
+        assert "contact_phone" not in org
+        assert "email" not in org
+
+
+def test_it_publishes_links_only_when_they_were_opted_in(client, make_org):
+    make_org(name="pytest-dirpub Open", links_public=True,
+             website_url="https://open.example.org")
+    make_org(name="pytest-dirpub Shut", links_public=False,
+             website_url="https://shut.example.org")
+    by_name = {o["name"]: o
+               for o in client.get(
+                   "/api/directory?q=pytest-dirpub").get_json()["organizations"]}
+    assert by_name["pytest-dirpub Open"]["website_url"] == "https://open.example.org"
+    assert "website_url" not in by_name["pytest-dirpub Shut"]
+
+
+def test_it_says_nothing_about_fit(client, directory):
+    """There is no second profile to compare against, so there is no score.
+
+    Sending a zero would be a claim, and inventing a ranking from one side
+    would be a worse one.
+    """
+    for org in client.get(f"/api/directory?{SCOPE}").get_json()["organizations"]:
+        assert "match_score" not in org
+        assert "match_detail" not in org
+
+
+def test_it_filters_and_pages_like_the_signed_in_one(client, directory):
+    """Same builder, so a filter cannot mean two things."""
+    names = _names(client.get(f"/api/directory?{SCOPE}&offers=web_development"))
+    assert names == ["pytest-dir Alpha Web"]
+
+    first = client.get(f"/api/directory?{SCOPE}&per_page=2&page=1").get_json()
+    assert first["per_page"] == 2
+    assert len(first["organizations"]) == 2
+    assert first["pages"] >= 2
+
+
+def test_it_clamps_the_page_size_harder_than_the_signed_in_one(client, directory):
+    payload = client.get(f"/api/directory?{SCOPE}&per_page=48").get_json()
+    assert payload["per_page"] == 24
+
+
+def test_an_unfinished_profile_is_not_in_it(client, make_org):
+    make_org(name="pytest-dirhalf Unfinished", onboarding_complete=False)
+    assert _names(client.get("/api/directory?q=pytest-dirhalf")) == []
+
+
+def test_examples_show_by_default_and_can_be_turned_off(client, make_org):
+    """An empty directory teaches a stranger nothing, so the seeded examples
+    are in by default here -- labeled, and refusable."""
+    make_org(name="pytest-dirdemo Sample", is_demo=True)
+    shown = client.get("/api/directory?q=pytest-dirdemo").get_json()
+    assert [o["name"] for o in shown["organizations"]] == ["pytest-dirdemo Sample"]
+    assert shown["organizations"][0]["is_demo"] is True
+
+    hidden = client.get(
+        "/api/directory?q=pytest-dirdemo&include_examples=0").get_json()
+    assert hidden["organizations"] == []
