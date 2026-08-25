@@ -42,7 +42,7 @@ from units import (
     default_unit_for,
 )
 from matching import find_matches, match_overview, score_pair
-from moderation import name_problem
+from moderation import screen_name
 from models import (
     Event, Message, Organization, Partnership, ProfileView, SavedLead,
 )
@@ -480,6 +480,46 @@ def clear_rate_limit(bucket, key):
     """
     with _rate_lock:
         _rate_buckets.pop((bucket, key), None)
+
+
+# Where somebody refused by the name filter is told to go.
+#
+# The address itself rather than a link to the contact form, and that is the
+# whole point: the form is delivered by outbound mail, which does not leave
+# this app until a sending domain is verified, so pointing at it right now is
+# pointing at a hole in the floor. An address a person types into their own
+# mail client works today and keeps working afterward.
+#
+# It does mean the address is returned in a 400 body and can be scraped. It
+# is already the published destination of the homepage contact form, so this
+# reveals nothing new -- and a dead end for a real organization is a worse
+# thing to ship than a scrapeable address.
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
+
+
+def screened_name(name, where):
+    """moderation.screen_name(), with somewhere to go and something to read.
+
+    Two things happen on the way past. A refusal picks up the contact address
+    when one is configured, because the message it carries otherwise ends in
+    "get in touch" without saying where -- which is the half of this bug that
+    is not about word lists.
+
+    And a flagged name is written to the log. The flag's whole purpose is
+    that a person eventually looks at the name, and there is nowhere for a
+    person to look yet -- the admin review page is still ahead. A warning is
+    not that page, but it lands in Render's log stream beside everything else
+    worth noticing, which is more than a boolean nothing reads would do.
+
+    Delete the logging half once there is a queue to read instead.
+    """
+    problem, flagged = screen_name(name)
+    if problem and CONTACT_EMAIL:
+        problem = f"{problem} You can reach us at {CONTACT_EMAIL}."
+    if flagged:
+        app.logger.warning(
+            "Organization name flagged for review (%s): %r", where, name)
+    return problem, flagged
 
 
 def client_ip():
@@ -1430,9 +1470,9 @@ def register():
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
-    problem = name_problem(name)
+    problem, name_flagged = screened_name(name, "register")
     if problem:
-        return jsonify({"error": "Please provide " + problem + "."}), 400
+        return jsonify({"error": problem, "field": "name"}), 400
     problem = length_problem("name", name)
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
@@ -1487,6 +1527,7 @@ def register():
             email=email,
             name=name,
             password_hash=password_hash,
+            name_flagged=name_flagged,
             email_verify_token=secrets.token_urlsafe(32),
             email_verify_sent_at=datetime.now(timezone.utc),
         )
@@ -2386,12 +2427,17 @@ def save_onboarding(org, db):
     # passes a presence check while telling a prospective partner nothing, and
     # the client is not the only way into this endpoint.
     problems = []
+    # Answered on its own rather than folded into the list below. That list
+    # is "please provide a, b and c" -- things that are missing -- and a
+    # blocked name is something already typed, which reads wrong in the
+    # middle of it and needs to point at the field.
+    name_flagged = False
     if len(name) < 2:
         problems.append("a full organization name")
     else:
-        problem = name_problem(name)
+        problem, name_flagged = screened_name(name, f"onboarding org={org.id}")
         if problem:
-            problems.append(problem)
+            return jsonify({"error": problem, "field": "organization_name"}), 400
     if not organization_type:
         problems.append("an organization type")
     if len(location) < 2:
@@ -2467,6 +2513,7 @@ def save_onboarding(org, db):
         return jsonify({"error": str(e), "field": e.field}), 400
 
     org.name = name
+    org.name_flagged = name_flagged
     org.organization_type = organization_type
     org.location = location
     org.remote_friendly = bool(data.get("remote_friendly"))
@@ -3097,10 +3144,9 @@ def create_invite(org, db):
             "error": "Enter the name of the organization you are inviting.",
             "field": "name",
         }), 400
-    problem = name_problem(name)
+    problem, name_flagged = screened_name(name, f"invite from org={org.id}")
     if problem:
-        return jsonify({"error": "Please provide " + problem + ".",
-                        "field": "name"}), 400
+        return jsonify({"error": problem, "field": "name"}), 400
     problem = length_problem("name", name)
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
@@ -3125,6 +3171,7 @@ def create_invite(org, db):
     invited = Organization(
         email=f"invite-{secrets.token_hex(8)}@invite.invalid",
         name=name,
+        name_flagged=name_flagged,
         password_hash=None,
         onboarding_complete=False,
         claim_token=token,
@@ -3241,14 +3288,15 @@ def claim_invite(token):
             }), 400
 
         if name:
-            problem = name_problem(name) or length_problem("name", name)
+            problem, name_flagged = screened_name(name, "invite claim")
+            problem = problem or length_problem("name", name)
             if problem:
-                return jsonify({
-                    "error": (problem if problem.endswith(".")
-                              else "Please provide " + problem + "."),
-                    "field": "name",
-                }), 400
+                return jsonify({"error": problem, "field": "name"}), 400
             invited.name = name
+            # Replaces whatever the inviter's name was screened as. The
+            # claimer is correcting a name somebody else typed for them, so
+            # the flag has to follow the name that is actually kept.
+            invited.name_flagged = name_flagged
 
         problem = password_problem(password, email=email, name=invited.name)
         if problem:

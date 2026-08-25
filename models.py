@@ -243,6 +243,23 @@ class Organization(Base):
     # Seeded example organizations. Kept out of real orgs' match results so a
     # new signup is never paired with something fictional, but still shown --
     # clearly labeled -- as example matches while the directory is small.
+    # This organization's name matched something ambiguous in
+    # moderation.SOFT_FLAGGED -- a term that is a slur or a vulgarity in one
+    # reading and a place name, a surname or a deliberate choice in another.
+    #
+    # Never a reason to hide or refuse anything. The row is live, matchable
+    # and public exactly as any other; this only records that a person should
+    # look at the name eventually. Refusing on a maybe is what this column
+    # exists to stop: the filter used to do that, and it turned away
+    # organizations named after Coon Rapids and Cripple Creek.
+    #
+    # Nothing reads it yet. The admin review page is what will, and until it
+    # exists a flagged signup writes a warning to the log, which is the
+    # cheapest place a person can actually come across one.
+    name_flagged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+
     is_demo: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
