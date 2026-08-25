@@ -52,7 +52,6 @@
 * {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 /* JS toggles this on a dozen elements. Kept at the top, and kept important:

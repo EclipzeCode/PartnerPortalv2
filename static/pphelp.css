@@ -4,19 +4,6 @@
    rest of the app uses. Everything here is built from the shared tokens in
    ink.css, so it follows the theme without knowing about it. */
 
-/* The same reset every other page stylesheet opens with, and the reason this
-   one needed it: .header is fixed, 100% wide and padded 4rem either side, so
-   without border-box it laid out 128px wider than the viewport. Everything in
-   the bar shifted right by that much and the account avatar -- the last thing
-   in it -- went off the edge of the screen entirely. The bell survived only
-   because it sits further left. */
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
-}
-
-
 .help-main {
     max-width: 46rem;
     margin: 0 auto;

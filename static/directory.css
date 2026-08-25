@@ -12,21 +12,6 @@
  * dashes where they would be.
  */
 
-/* The header is width:100% with 4rem of horizontal padding, so without this
- * it computes to viewport + 128px: the bar shifts right and the account CTA
- * -- the last thing in it -- leaves the screen. Which is precisely what this
- * page did before the reset was added, because every page stylesheet here
- * carries its own copy and a new one starts without it.
- *
- * Ten files now say this. It belongs in one of the sheets every page already
- * loads, with the copies deleted -- worth doing, and not while adding a page,
- * since it changes the box model under every existing layout at once. */
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
-}
-
 .dir-main {
     max-width: 76rem;
     margin: 0 auto;

@@ -266,3 +266,35 @@
     --bridge-tower: #8b78c9;
     --bridge-deck: #9d8ad6;
 }
+
+
+/* --- The box model ---------------------------------------------------------
+ *
+ * Here for the same reason the palette is: this file is loaded first by every
+ * page, and a rule that has to be repeated per page is a rule a new page gets
+ * wrong. Eleven stylesheets carried their own copy of this, and directory.css
+ * had to be given a twelfth after the page it styles shipped with a header
+ * 128px wider than the viewport and an account CTA off the right edge. There
+ * is a note in pphelp.css about the same thing happening when that page was
+ * added. Twice is a pattern.
+ *
+ * Nine of those copies were `* { margin: 0; padding: 0; box-sizing: ... }`,
+ * and only the box-sizing third moved here. Zeroing every margin and padding
+ * is a much larger opinion -- pphelp and directory deliberately do not hold
+ * it, and hoisting it would silently flatten both -- so those nine keep their
+ * `margin: 0; padding: 0` and lose only the line that is now said here.
+ *
+ * The pseudo-elements are included, which the bare `*` in those nine did not
+ * cover: `*` does not match ::before or ::after. Two rules in this codebase
+ * draw a glyph out of the borders of an empty fixed-size box -- the checkbox
+ * tick in forms.css and the select chevron in ppdashboard.css -- and were
+ * sized against the content-box those pages happened to give them. Both now
+ * say `box-sizing: content-box` where they are defined, so the geometry they
+ * were drawn for is stated rather than inherited from whichever reset the
+ * page happened to load.
+ */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}

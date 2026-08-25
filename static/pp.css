@@ -47,7 +47,6 @@
 * {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 /* The lattice at rest, across the whole page. Faint enough to read as paper

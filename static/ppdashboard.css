@@ -39,7 +39,6 @@
 * {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -627,6 +626,9 @@
    hides its own and this draws one. */
 .activity-filter::after {
     content: '';
+    /* Same as the tick in forms.css: the arrow is two borders of an empty
+       box, so its size is the content box plus them. */
+    box-sizing: content-box;
     position: absolute;
     right: 0.6rem;
     width: 0.4rem;

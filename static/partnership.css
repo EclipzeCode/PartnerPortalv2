@@ -38,7 +38,7 @@
  * reading the app in dark mode who hits Print should not get a black page.
  */
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin: 0; padding: 0; }
 
 body {
     font-family: var(--h-sans);
