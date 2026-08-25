@@ -188,24 +188,65 @@
                     <p>Choose what PartnerPortal emails you about.</p>
                 </div>
 
+                <!-- Three rows, not one. The single switch that used to be here
+                     covered every kind of mail, so the only way to stop a busy
+                     message thread reaching your inbox was also the way to stop
+                     hearing that somebody had proposed a partnership -- the one
+                     thing this site exists to tell you. -->
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <label for="emailNotifications">Partnership emails</label>
+                        <label for="emailProposals">Proposals</label>
                         <p>
-                            Get an email when another organization proposes a partnership,
-                            and when someone accepts or declines one of yours. With this
-                            off, proposals still arrive &mdash; you will only see them on
-                            your dashboard.
+                            When another organization proposes a partnership, changes
+                            one it has sent you, or answers one of yours.
                         </p>
                     </div>
                     <!-- The checkbox is the real control; .switch is drawn from
                          it, so keyboard and screen-reader users get a plain
                          checkbox and everyone else gets the toggle. -->
                     <label class="switch">
-                        <input type="checkbox" id="emailNotifications" disabled>
+                        <input type="checkbox" id="emailProposals"
+                               data-category="proposals" disabled>
                         <span class="switch-track" aria-hidden="true"></span>
                     </label>
                 </div>
+
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="emailMessages">Messages</label>
+                        <p>
+                            When someone writes in a partnership conversation. At most
+                            one an hour per thread, however much is said.
+                        </p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="emailMessages"
+                               data-category="messages" disabled>
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="emailPartnerships">Partnership updates</label>
+                        <p>
+                            When a partnership is marked complete or ended, or when its
+                            shared link is replaced or taken down.
+                        </p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="emailPartnerships"
+                               data-category="partnerships" disabled>
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+
+                <p class="setting-note">
+                    <i class='bx bx-lock-alt' aria-hidden="true"></i>
+                    Emails about your account itself &mdash; verifying your address,
+                    resetting your password, confirming an email change &mdash; are
+                    always sent. They are the only way back in if you are locked out.
+                </p>
 
                 <p class="setting-status" id="settingStatus" role="status" hidden></p>
             </div>

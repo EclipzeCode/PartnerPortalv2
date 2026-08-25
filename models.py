@@ -237,12 +237,32 @@ class Organization(Base):
     # Defaults to true, unlike links_public: these emails are the only way to
     # learn a proposal is waiting without signing in to check, so silence has
     # to be chosen rather than arrived at by default.
+    # Superseded by email_preferences below and still written, so that rolling
+    # this code back does not silently mute every organization that has since
+    # turned one category off. Nothing reads it. Removed, with its column,
+    # once this has settled -- the same arrangement the read markers use.
     email_notifications: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
-    # Seeded example organizations. Kept out of real orgs' match results so a
-    # new signup is never paired with something fictional, but still shown --
-    # clearly labeled -- as example matches while the directory is small.
+
+    # Which kinds of email this organization wants, by category.
+    #
+    # One switch used to cover all of it, which made the only way to stop a
+    # busy thread mailing you also the way to stop hearing that somebody
+    # proposed a partnership. Those are not the same decision, and the second
+    # is the one this product exists to deliver -- so the switch people
+    # actually reached for turned off the thing they came for.
+    #
+    # Stored as an object rather than a column per category so that adding a
+    # category is a code change instead of a migration, and so a future
+    # setting that is not a boolean (a digest, say) has somewhere to live.
+    # An absent key means yes: a category added later is on for everybody
+    # without a backfill, and only an explicit false is silence. That
+    # direction matters -- see wants_email.
+    email_preferences: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
     # This organization's name matched something ambiguous in
     # moderation.SOFT_FLAGGED -- a term that is a slur or a vulgarity in one
     # reading and a place name, a surname or a deliberate choice in another.
@@ -260,6 +280,9 @@ class Organization(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # Seeded example organizations. Kept out of real orgs' match results so a
+    # new signup is never paired with something fictional, but still shown --
+    # clearly labeled -- as example matches while the directory is small.
     is_demo: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
@@ -277,6 +300,43 @@ class Organization(Base):
         Index("ix_organizations_needs", "needs", postgresql_using="gin"),
         Index("ix_organizations_offers", "offers", postgresql_using="gin"),
     )
+
+    # What an organization can be mailed about, and what each category covers.
+    #
+    # Three, not eight. A preferences screen with one row per message type is
+    # a screen nobody finishes reading, and the categories people actually
+    # think in are: somebody wants to work with me, somebody is talking to me,
+    # something changed about a partnership I already have.
+    #
+    # Account security -- verification, password reset, the notice that an
+    # email change was requested -- is deliberately absent and always sent.
+    # Those are not notifications about other people's activity; they are the
+    # only channel back to somebody locked out of their own account, and a
+    # preference that can silence them is a preference that can lock somebody
+    # out permanently. See the senders in notifications.py, which say so at
+    # each one.
+    EMAIL_CATEGORIES = {
+        "proposals": "Proposals sent to you, and answers to yours",
+        "messages": "Messages in a partnership conversation",
+        "partnerships": "Partnerships completing, ending, or their shared link changing",
+    }
+
+    def wants_email(self, category):
+        """Whether this organization wants mail in `category`.
+
+        Absent means yes, and only an explicit false is no. Two things follow.
+        A category added in a later release is on for everybody without a
+        backfill; and a preferences object that is empty, malformed, or from
+        a version that had never heard of this category fails toward sending
+        rather than toward silence.
+
+        That direction is chosen. Sending an email somebody did not want is a
+        message they delete. Not sending one is an organization never learning
+        a partnership was proposed to them -- and, because there is no other
+        channel, never learning it at all.
+        """
+        prefs = self.email_preferences or {}
+        return prefs.get(category) is not False
 
     def __repr__(self):
         return f"<Organization {self.id} {self.name!r}>"
@@ -396,7 +456,13 @@ class Organization(Base):
             "onboarding_complete": self.onboarding_complete,
             "has_password": self.password_hash is not None,
             "email_verified": self.email_verified,
-            "email_notifications": self.email_notifications,
+            # Resolved rather than sent raw. The column stores only what has
+            # been chosen -- an absent key is a default, not a value -- and a
+            # settings page that has to know that rule in order to draw three
+            # switches is a second place for it to be got wrong.
+            "email_preferences": {
+                key: self.wants_email(key) for key in self.EMAIL_CATEGORIES
+            },
             # So the settings page can say a change is waiting rather than
             # showing the old address with no sign anything is in flight.
             "pending_email": self.pending_email,

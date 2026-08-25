@@ -346,7 +346,7 @@ def notify_proposal_created(proposal):
 
     Called after commit so the proposal.id and share_token are stable.
     """
-    if not proposal.recipient.email_notifications:
+    if not proposal.recipient.wants_email("proposals"):
         return
     cfg = _config()
     to_addr = proposal.recipient.contact_email or proposal.recipient.email
@@ -406,7 +406,7 @@ def notify_proposal_updated(proposal):
     yes to was not the thing they read. So this goes out on every change,
     and it restates the terms rather than only announcing that they moved.
     """
-    if proposal.recipient is None or not proposal.recipient.email_notifications:
+    if proposal.recipient is None or not proposal.recipient.wants_email("proposals"):
         return
     cfg = _config()
     to_addr = proposal.recipient.contact_email or proposal.recipient.email
@@ -463,7 +463,7 @@ def _dates_line(proposal):
 
 def notify_proposal_responded(proposal):
     """The proposer gets an email when the recipient accepts or declines."""
-    if not proposal.proposer.email_notifications:
+    if not proposal.proposer.wants_email("proposals"):
         return
     cfg = _config()
     to_addr = proposal.proposer.contact_email or proposal.proposer.email
@@ -529,7 +529,7 @@ def notify_completion_marked(proposal, actor):
     notify_proposal_created exists for the propose step.
     """
     other = proposal.counterpart(actor.id)
-    if other is None or not other.email_notifications:
+    if other is None or not other.wants_email("partnerships"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
@@ -561,7 +561,7 @@ def notify_completion_marked(proposal, actor):
 
 def notify_partnership_completed(proposal, other):
     """Both sides have now confirmed. Tells whoever marked it first."""
-    if other is None or not other.email_notifications:
+    if other is None or not other.wants_email("partnerships"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
@@ -596,7 +596,7 @@ def notify_partnership_ended(proposal, actor):
     changing on a page they may not open for weeks.
     """
     other = proposal.counterpart(actor.id)
-    if other is None or not other.email_notifications:
+    if other is None or not other.wants_email("partnerships"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
@@ -642,7 +642,7 @@ def notify_message_received(proposal, sender, message):
     this file sends says what happened.
     """
     other = proposal.counterpart(sender.id)
-    if other is None or not other.email_notifications:
+    if other is None or not other.wants_email("messages"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
@@ -682,10 +682,10 @@ def notify_email_verification(org, token):
     would see. On a resend the two are often both set and different, and the
     login address is still the right one -- it is what this link confirms.
 
-    Deliberately ignores org.email_notifications, which the other two senders
-    here honor. That setting covers optional partnership mail; this is how
-    someone proves the address is theirs, and it now gates whether they can
-    propose a partnership at all. An org that had turned notifications off
+    Deliberately consults no email preference, which the partnership
+    senders here all do. Those cover mail about other people's activity; this
+    is how someone proves the address is theirs, and it gates whether they
+    can propose a partnership at all. An org that had turned a category off
     could otherwise never verify, and never find out why.
     """
     cfg = _config()
@@ -725,9 +725,11 @@ def notify_password_reset(org, token):
     reason -- this is about the account's own credentials, not the profile a
     partner would see.
 
-    Deliberately ignores org.email_notifications for the same reason
-    notify_email_verification does: that setting is about optional
-    partnership mail, and an account-security action is not optional.
+    Deliberately consults no email preference, for the same reason
+    notify_email_verification does not: those cover mail about other people's
+    activity, and getting back into your own account is not that. A
+    preference able to silence this is one that can lock somebody out for
+    good.
     """
     cfg = _config()
     reset_url = f"{cfg['app_url']}/reset-password.html?token={token}"
@@ -765,7 +767,7 @@ def notify_share_link_changed(proposal, actor, revoked):
     funder is worse than finding out here.
     """
     other = proposal.counterpart(actor.id)
-    if other is None or not other.email_notifications:
+    if other is None or not other.wants_email("partnerships"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
@@ -804,10 +806,10 @@ def notify_share_link_changed(proposal, actor, revoked):
 def notify_email_change_requested(org, token):
     """The confirmation link, sent to the address being moved to.
 
-    Deliberately ignores email_notifications, like the other account-security
-    mail: this is how somebody proves they own the address, and an account
-    that opted out of partnership mail could otherwise never finish a change
-    it had started.
+    Deliberately consults no email preference, like the other
+    account-security mail: this is how somebody proves they own the address,
+    and an account that had silenced a category could otherwise never finish
+    a change it had started.
     """
     cfg = _config()
     confirm_url = f"{cfg['app_url']}/confirm-email.html?token={token}"
@@ -889,8 +891,8 @@ def notify_password_changed(org):
     Uses the login email, like the other two account emails, and for the
     same reason -- this is about the account's own credentials.
 
-    Deliberately ignores org.email_notifications, like the other two: that
-    setting is about optional partnership mail, not this.
+    Deliberately consults no email preference, like the other two: those
+    are about other people's activity, not about your own account.
     """
     cfg = _config()
     reset_url = f"{cfg['app_url']}/forgot-password.html"

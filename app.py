@@ -1977,22 +1977,66 @@ def update_settings(org, db):
     # for an action that did not happen -- and the one case where that is not
     # pedantic is a client sending a setting this version has never heard of,
     # where "saved" is exactly the wrong answer.
-    if not any(field in data for field in ("email_notifications",)):
+    if not any(field in data
+               for field in ("email_notifications", "email_preferences")):
         return jsonify({
             "error": "No known setting was included in that request.",
         }), 400
 
+    # Read into a copy and assigned back at the end. JSONB columns are
+    # mutable objects that SQLAlchemy does not watch: editing
+    # org.email_preferences in place changes what the attribute returns and
+    # leaves the session with nothing to flush, so the request answers
+    # "Settings saved" and saves nothing. Rebinding the attribute is what
+    # makes the change visible to the unit of work.
+    prefs = dict(org.email_preferences or {})
+
+    if "email_preferences" in data:
+        value = data["email_preferences"]
+        if not isinstance(value, dict):
+            return jsonify({
+                "error": "Email preferences must be given per category.",
+                "field": "email_preferences",
+            }), 400
+        # Partial by design, like the rest of this endpoint: a client sending
+        # one category must not silence the two it did not mention.
+        for key, wanted in value.items():
+            if key not in Organization.EMAIL_CATEGORIES:
+                return jsonify({
+                    "error": f"There is no email category called {key!r}.",
+                    "field": "email_preferences",
+                }), 400
+            # Strictly a boolean rather than truthiness: "false" and 0 are
+            # both things a client might send, and both read as the wrong
+            # answer under bool(). Rejecting beats guessing which was meant.
+            if not isinstance(wanted, bool):
+                return jsonify({
+                    "error": f"{key} must be true or false.",
+                    "field": "email_preferences",
+                }), 400
+            prefs[key] = wanted
+
     if "email_notifications" in data:
         value = data["email_notifications"]
-        # Strictly a boolean rather than truthiness: "false" and 0 are both
-        # things a client might send, and both read as the wrong answer under
-        # bool(). Rejecting is safer than guessing which one was meant.
         if not isinstance(value, bool):
             return jsonify({
                 "error": "Email notifications must be true or false.",
                 "field": "email_notifications",
             }), 400
-        org.email_notifications = value
+        # The old all-or-nothing switch, kept working. A client that predates
+        # categories -- or anybody's bookmarked script -- still means "all of
+        # it" by this, so it sets every category rather than a fourth thing
+        # sitting alongside them that nothing consults.
+        for key in Organization.EMAIL_CATEGORIES:
+            prefs[key] = value
+
+    org.email_preferences = prefs
+    # Still written, and never read. See the column: a rollback that found
+    # this stale would un-mute everybody who had turned notifications off.
+    # True when anything is on, which is what the old switch meant.
+    org.email_notifications = any(
+        prefs.get(key) is not False for key in Organization.EMAIL_CATEGORIES
+    )
 
     db.commit()
     return jsonify({

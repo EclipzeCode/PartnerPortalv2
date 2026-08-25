@@ -5,7 +5,14 @@
 // complete (open, confirm, then re-enter the password).
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const toggle = document.getElementById('emailNotifications');
+    const toggles = [...document.querySelectorAll(
+        '.setting-row input[type="checkbox"][data-category]')];
+    // What each switch is called in the line confirming it saved.
+    const LABELS = {
+        proposals: 'Proposal emails are',
+        messages: 'Message emails are',
+        partnerships: 'Partnership update emails are',
+    };
     const status = document.getElementById('settingStatus');
     const container = document.querySelector('.settings-container');
 
@@ -69,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Load ------------------------------------------------------------
-    // The toggle and the account facts below all come from this request, so
+    // The switches and the account facts below all come from this request, so
     // they shimmer (settings.css, [data-loading="true"]) until it settles --
     // otherwise they show "off" and "—" first, which read as real answers
     // rather than "not loaded yet".
@@ -82,13 +89,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('Could not load settings:', error);
         container.removeAttribute('data-loading');
-        toggle.disabled = false;
+        // Left disabled: without the current values there is nothing
+        // truthful to draw, and an enabled switch showing a guess is worse
+        // than one that cannot be moved.
         return; // api() redirects on 401; anything else leaves the page as-is
     }
 
     container.removeAttribute('data-loading');
-    toggle.disabled = false;
-    toggle.checked = Boolean(me.email_notifications);
+    // Resolved by the server -- an absent key in the stored object means
+    // "yes", and the settings page is not the place for a second copy of
+    // that rule. See Organization.wants_email.
+    const prefs = me.email_preferences || {};
+    toggles.forEach((box) => {
+        box.checked = prefs[box.dataset.category] !== false;
+        box.disabled = false;
+    });
 
     document.getElementById('accountEmailValue').textContent = me.email || '—';
     document.getElementById('verifiedValue').innerHTML = me.email_verified
@@ -255,34 +270,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    toggle.addEventListener('change', async () => {
-        const wanted = toggle.checked;
-        // Disabled while in flight so a fast double-toggle cannot leave the
-        // switch showing the result of the request that happened to land
-        // second rather than the one clicked last.
-        toggle.disabled = true;
-        try {
-            await window.api('/api/settings', {
-                method: 'PATCH',
-                body: { email_notifications: wanted },
-            });
-            showStatus(
-                wanted
-                    ? 'Partnership emails are on.'
-                    : 'Partnership emails are off.',
-                'ok',
-            );
-        } catch (error) {
-            // Put the switch back where it was: it should never show a state
-            // the server did not accept.
-            toggle.checked = !wanted;
-            showStatus(
-                error.message || 'Could not save that. Please try again.',
-                'error',
-            );
-        } finally {
-            toggle.disabled = false;
-        }
+    // One handler for all three switches, keyed off the category in the
+    // markup. A listener per switch would be three copies of the same
+    // in-flight-and-revert dance, which is three chances for one of them to
+    // get it slightly different.
+    toggles.forEach((box) => {
+        box.addEventListener('change', async () => {
+            const category = box.dataset.category;
+            const wanted = box.checked;
+            // Disabled while in flight so a fast double-toggle cannot leave
+            // the switch showing the result of the request that happened to
+            // land second rather than the one clicked last.
+            box.disabled = true;
+            try {
+                // Only the category that moved. The endpoint treats a
+                // missing key as "not this one", so sending all three would
+                // mean a stale switch elsewhere on the page could overwrite
+                // a change made in another tab.
+                await window.api('/api/settings', {
+                    method: 'PATCH',
+                    body: { email_preferences: { [category]: wanted } },
+                });
+                showStatus(
+                    `${LABELS[category]} ${wanted ? 'on' : 'off'}.`, 'ok');
+            } catch (error) {
+                // Put the switch back where it was: it should never show a
+                // state the server did not accept.
+                box.checked = !wanted;
+                showStatus(
+                    error.message || 'Could not save that. Please try again.',
+                    'error',
+                );
+            } finally {
+                box.disabled = false;
+            }
+        });
     });
 
     // --- Modals ------------------------------------------------------------

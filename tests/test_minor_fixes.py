@@ -72,11 +72,18 @@ def test_settings_refuses_a_body_it_understands_nothing_in(client, make_org, log
 
 
 def test_settings_still_saves_what_it_does_understand(client, make_org, login):
+    """The old all-or-nothing switch still means all of it.
+
+    It predates the per-category preferences and is what any older client
+    sends, so it sets every category rather than becoming a fourth thing
+    alongside them that nothing consults.
+    """
     org = make_org()
     login(org)
     response = client.patch("/api/settings", json={"email_notifications": False})
     assert response.status_code == 200
-    assert response.get_json()["organization"]["email_notifications"] is False
+    prefs = response.get_json()["organization"]["email_preferences"]
+    assert prefs == {"proposals": False, "messages": False, "partnerships": False}
 
 
 def test_the_view_salt_is_independent_of_the_secret_key(client, make_org):

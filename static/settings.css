@@ -318,6 +318,29 @@
 
 /* --- Inline status line --------------------------------------------------- */
 
+/* The line under the notification switches saying which emails no switch can
+   turn off. Set apart from .setting-copy p because it is not describing a
+   control -- it is the boundary around all three of them. */
+.setting-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+    max-width: 58ch;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.setting-note i {
+    flex: none;
+    font-size: 0.95rem;
+    /* Optical, not arithmetic: the glyph sits high in its box next to text
+       this size. */
+    margin-top: 0.15em;
+}
+
 .setting-status {
     font-family: var(--h-mono);
     font-size: 0.68rem;
