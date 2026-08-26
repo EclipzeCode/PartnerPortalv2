@@ -43,6 +43,13 @@ def no_outbound_email(monkeypatch):
 
     Autouse rather than opt-in: forgetting it on one test is all it takes,
     and the failure is invisible from here.
+
+    The names are discovered rather than listed. A hardcoded list has to be
+    edited every time a sender is added, and the cost of forgetting is not a
+    failing test -- it is a test run that quietly mails somebody, which is
+    what happened when notify_profile_hidden was written. Anything on app.py
+    called notify_* is a sender by construction, so asking the module is both
+    complete and self-maintaining.
     """
     sent = []
 
@@ -51,13 +58,11 @@ def no_outbound_email(monkeypatch):
             sent.append((kind, args, kwargs))
         return _fn
 
-    for name in ("notify_proposal_created", "notify_proposal_responded",
-                 "notify_email_verification", "notify_password_changed",
-                 "notify_password_reset", "notify_contact_message",
-                 "notify_completion_marked", "notify_partnership_completed",
-                 "notify_partnership_ended", "notify_message_received",
-                 "notify_email_change_requested", "notify_email_change_notice",
-                 "notify_share_link_changed"):
+    senders = [name for name in dir(app_module)
+               if name.startswith("notify_")
+               and callable(getattr(app_module, name))]
+    assert senders, "no notify_* names on app -- has the import shape changed?"
+    for name in senders:
         monkeypatch.setattr(app_module, name, _record(name))
     return sent
 

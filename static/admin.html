@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Every stylesheet and font on this page is served from here.
+         The Google Fonts and unpkg <link>s that used to sit at the end
+         of this head, and the three preconnects that existed to warm
+         them, are gone -- see fonts.css and boxicons.css. -->
+    <title>Admin | PartnerPortal</title>
+    <!-- Not for anybody but an operator. robots.txt disallows it too; this is
+         the half that works on a crawler which never fetches robots.txt. The
+         page itself only ever holds a login form until the API answers, and
+         the API answers 404 without an admin session. -->
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Three states: an explicit choice stored by
+         the control in Settings wins, and with nothing stored the operating
+         system decides.
+
+         This resolves to a real answer and always sets the attribute, rather
+         than leaving the light case unset and letting a prefers-color-scheme
+         block in the CSS carry it. There are seven dark rules across five
+         stylesheets, two of them inside print blocks that are load-bearing on
+         specificity -- a parallel copy of each under a media query is the
+         version of this that silently rots when one of them is edited and its
+         twin is not. Resolving here means every one of those rules stays an
+         ordinary [data-theme="dark"] match and none of them had to change.
+
+         The listener keeps a system choice honest if the OS flips while the
+         page is open; an explicit choice ignores it. -->
+    <script>
+      (function () {
+        var mq = window.matchMedia
+          && window.matchMedia('(prefers-color-scheme: dark)');
+        function chosen() {
+          try {
+            var v = localStorage.getItem('partnerPortalTheme');
+            return v === 'dark' || v === 'light' ? v : null;
+          } catch (e) {
+            return null; /* storage disabled; the OS still gets a say */
+          }
+        }
+        function apply() {
+          document.documentElement.setAttribute(
+            'data-theme', chosen() || (mq && mq.matches ? 'dark' : 'light'));
+        }
+        apply();
+        if (mq && mq.addEventListener) {
+          mq.addEventListener('change', function () { if (!chosen()) apply(); });
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="tokens.css">
+    <link rel="stylesheet" href="ink.css">
+    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="boxicons.css">
+    <link rel="stylesheet" href="fonts.css">
+</head>
+<body class="ink">
+    <!-- No site nav. This is not part of the product and linking it from the
+         product is how it stops being separate. -->
+    <main class="admin-main" id="main" tabindex="-1">
+
+      <!-- Signed out. All a stranger ever sees. -->
+      <section class="admin-gate" id="adminGate" hidden>
+        <p class="eyebrow">PartnerPortal</p>
+        <h1>Admin</h1>
+        <form class="admin-login" id="adminLoginForm" novalidate>
+          <label for="adminEmail">Email</label>
+          <input type="email" id="adminEmail" autocomplete="username" required>
+          <label for="adminPassword">Password</label>
+          <input type="password" id="adminPassword"
+                 autocomplete="current-password" required>
+          <p class="form-banner" id="adminLoginError" role="alert" hidden></p>
+          <button type="submit" class="btn-primary" id="adminLoginBtn">Sign in</button>
+        </form>
+        <p class="admin-gate-note">
+          There is no sign-up here. Accounts are created with
+          <code>manage.py create-admin</code>.
+        </p>
+      </section>
+
+      <!-- Signed in. -->
+      <section class="admin-panel" id="adminPanel" hidden>
+        <header class="admin-head">
+          <div>
+            <p class="eyebrow">Admin</p>
+            <h1>Queues</h1>
+          </div>
+          <div class="admin-who">
+            <span id="adminWho"></span>
+            <button type="button" class="btn-ghost" id="adminSignOut">Sign out</button>
+          </div>
+        </header>
+
+        <div class="admin-counts" id="adminCounts"></div>
+
+        <section class="admin-section">
+          <h2><i class='bx bx-envelope' aria-hidden="true"></i> Contact messages</h2>
+          <p class="admin-lede">Written down before they are mailed, so these
+             survive the mail not going. Marking one handled takes it off the
+             queue and keeps the record.</p>
+          <div id="adminMessages"></div>
+        </section>
+
+        <section class="admin-section">
+          <h2><i class='bx bx-flag' aria-hidden="true"></i> Flagged names</h2>
+          <p class="admin-lede">Matched something ambiguous at signup. These
+             organizations are live, matchable and public exactly like any
+             other &mdash; the flag only says somebody should look.</p>
+          <div id="adminFlagged"></div>
+        </section>
+
+        <section class="admin-section">
+          <h2><i class='bx bx-hide' aria-hidden="true"></i> Hidden organizations</h2>
+          <p class="admin-lede">Out of the directory, out of matches and off
+             their own public URL. They can still sign in and answer proposals,
+             and partnerships they already agreed are untouched.</p>
+          <div id="adminHidden"></div>
+        </section>
+
+        <section class="admin-section">
+          <h2><i class='bx bx-history' aria-hidden="true"></i> Recent actions</h2>
+          <p class="admin-lede">Both powers here are reversible, so this is not
+             an undo log &mdash; it is the answer to who did that.</p>
+          <div id="adminActions"></div>
+        </section>
+      </section>
+    </main>
+
+    <!-- The hide dialog. A reason is required and is sent to the
+         organization unedited. -->
+    <div class="modal" id="hideModal" role="dialog" aria-modal="true"
+         aria-labelledby="hideTitle" hidden>
+      <div class="modal-content">
+        <h3 id="hideTitle">Hide an organization</h3>
+        <p class="modal-note" id="hideWho"></p>
+        <label for="hideReason">Reason &mdash; this is emailed to them</label>
+        <textarea id="hideReason" rows="4" maxlength="1000"></textarea>
+        <p class="form-banner" id="hideError" role="alert" hidden></p>
+        <div class="form-actions">
+          <button type="button" class="btn-ghost" id="hideCancel">Cancel</button>
+          <button type="button" class="btn-danger" id="hideConfirm">Hide profile</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

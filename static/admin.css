@@ -1,0 +1,294 @@
+/* The admin panel.
+ *
+ * Built on the ink layer like the rest of the redesign, so every color is one
+ * of ink.css's --h-* tokens and both themes follow without a second palette.
+ *
+ * Deliberately plainer than any page in the product. This is an instrument,
+ * not a surface anybody is being sold anything on: the useful properties are
+ * that a queue is scannable, that the destructive control does not look like
+ * the safe one, and that nothing here is pleasant enough to encourage
+ * spending time in it.
+ *
+ * box-sizing comes from tokens.css, which every page loads first.
+ */
+
+.admin-main {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 1rem + 4vw, 4rem) clamp(1rem, .5rem + 3vw, 2.5rem) 5rem;
+}
+
+/* --- Signed out --------------------------------------------------------- */
+
+.admin-gate {
+    max-width: 22rem;
+    margin: clamp(2rem, 8vh, 6rem) auto 0;
+}
+
+.admin-gate h1 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 5vw, 2.6rem);
+    line-height: 1.05;
+    color: var(--h-ink);
+    margin: .35rem 0 1.5rem;
+}
+
+.admin-login { display: flex; flex-direction: column; gap: .4rem; }
+
+.admin-login label {
+    font-size: .85rem;
+    font-weight: 500;
+    color: var(--h-ink-soft);
+    margin-top: .6rem;
+}
+
+.admin-login input {
+    font: inherit;
+    color: var(--h-ink);
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 6px;
+    padding: .6rem .7rem;
+}
+
+.admin-login input:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 1px;
+    border-color: var(--h-give);
+}
+
+.admin-login .btn-primary { margin-top: 1.2rem; }
+
+.admin-gate-note {
+    margin-top: 1.5rem;
+    font-size: .82rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+}
+
+.admin-gate-note code {
+    font-family: var(--h-mono);
+    font-size: .95em;
+    color: var(--h-ink-soft);
+}
+
+/* --- Head --------------------------------------------------------------- */
+
+.admin-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--h-edge);
+}
+
+.admin-head h1 {
+    font-family: var(--h-serif);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 4vw, 2.5rem);
+    line-height: 1.05;
+    color: var(--h-ink);
+    margin: .3rem 0 0;
+}
+
+.admin-who {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    font-family: var(--h-mono);
+    font-size: .78rem;
+    color: var(--h-dim);
+}
+
+/* --- Counts ------------------------------------------------------------- */
+
+.admin-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.5rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.admin-count { display: flex; flex-direction: column; gap: .2rem; }
+
+.admin-count-n {
+    font-size: 1.9rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--h-dim);
+}
+
+/* A queue with something in it is the only thing on this page that gets a
+   color. Everything else is ink on paper, so the one that is not reads as
+   the thing to look at. */
+.admin-count.has .admin-count-n { color: var(--h-take); }
+
+.admin-count-label {
+    font-family: var(--h-mono);
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--h-dim);
+}
+
+/* --- Sections ----------------------------------------------------------- */
+
+.admin-section { padding-top: 2.25rem; }
+
+.admin-section h2 {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-family: var(--h-mono);
+    font-size: .7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--h-ink);
+    margin: 0 0 .5rem;
+}
+
+.admin-section h2 i { font-size: 1rem; color: var(--h-dim); }
+
+.admin-lede {
+    font-size: .85rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+    max-width: 60ch;
+    margin: 0 0 1rem;
+}
+
+/* --- A row -------------------------------------------------------------- */
+
+.admin-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--h-rule);
+}
+
+.admin-row-main { flex: 1 1 24rem; min-width: 0; }
+
+.admin-row-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem;
+    font-size: .98rem;
+    font-weight: 500;
+    color: var(--h-ink);
+    margin: 0 0 .3rem;
+}
+
+.admin-row-title a { color: var(--h-give); font-weight: 400; }
+
+.admin-row-body {
+    font-size: .9rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
+    margin: 0 0 .35rem;
+    white-space: pre-wrap;   /* a contact message keeps its own line breaks */
+    overflow-wrap: anywhere;
+}
+
+.admin-reason {
+    font-size: .85rem;
+    line-height: 1.55;
+    color: var(--h-take);
+    border-left: 2px solid var(--h-take);
+    padding-left: .6rem;
+    margin: .4rem 0;
+}
+
+.admin-dim {
+    font-family: var(--h-mono);
+    font-size: .72rem;
+    color: var(--h-dim);
+    margin: 0;
+}
+
+.admin-dim a { color: var(--h-give); }
+
+.admin-tag {
+    font-family: var(--h-mono);
+    font-size: .62rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--h-dim);
+    border: 1px solid var(--h-rule);
+    border-radius: 3px;
+    padding: .1rem .35rem;
+}
+
+.admin-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    flex: none;
+}
+
+.admin-empty {
+    font-size: .88rem;
+    color: var(--h-dim);
+    padding: 1rem 0;
+    border-top: 1px solid var(--h-rule);
+    margin: 0;
+}
+
+/* --- Audit -------------------------------------------------------------- */
+
+.admin-action {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: baseline;
+    padding: .5rem 0;
+    border-top: 1px solid var(--h-rule);
+    margin: 0;
+    font-size: .8rem;
+}
+
+.admin-action code {
+    font-family: var(--h-mono);
+    font-size: .78rem;
+    color: var(--h-ink);
+}
+
+/* --- The hide dialog ---------------------------------------------------- */
+/* forms.css owns .modal; these are the parts this one adds. */
+
+.modal-note {
+    font-family: var(--h-mono);
+    font-size: .78rem;
+    color: var(--h-dim);
+    margin: 0 0 1rem;
+}
+
+#hideReason {
+    width: 100%;
+    font: inherit;
+    font-size: .9rem;
+    color: var(--h-ink);
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 6px;
+    padding: .6rem .7rem;
+    resize: vertical;
+}
+
+#hideReason:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 1px;
+}
+
+@media (max-width: 40em) {
+    .admin-counts { gap: 1.75rem; }
+    .admin-row-actions { flex: 1 1 100%; }
+}

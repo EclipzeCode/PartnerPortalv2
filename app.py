@@ -45,10 +45,11 @@ from units import (
 from matching import find_matches, match_overview, score_pair
 from moderation import screen_name
 from models import (
-    ContactMessage, Event, Message, Organization, Partnership, ProfileView,
-    SavedLead,
+    Admin, AdminAction, ContactMessage, Event, Message, Organization,
+    Partnership, ProfileView, SavedLead,
 )
 from notifications import (
+    notify_profile_hidden,
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
     notify_email_change_notice, notify_email_change_requested,
     notify_email_verification, notify_message_received,
@@ -644,6 +645,78 @@ def _end_other_sessions(org):
     session["epoch"] = org.session_epoch
 
 
+# --- Admin identity ---------------------------------------------------------
+# A second authentication path, sharing none of the first.
+#
+# That is the cost of admins being their own table rather than a flag, and it
+# is the cost worth paying: nothing a registration writes can make somebody an
+# admin, because the answer is not in `organizations` at all.
+#
+# The session carries admin_id beside org_id rather than instead of it. Being
+# an admin does not sign you out of your own organization, and doing admin
+# work does not mean losing your place in the product -- which also means the
+# two can be reasoned about separately, since neither key can be mistaken for
+# the other.
+
+def current_admin(db):
+    """The signed-in admin, or None.
+
+    Same epoch check current_org makes, for the same reason and with more at
+    stake: a cookie stamped with an older epoch is treated as not signed in
+    rather than as somebody whose password has since been changed.
+    """
+    admin_id = session.get("admin_id")
+    if not admin_id:
+        return None
+    admin = db.get(Admin, admin_id)
+    if admin is None:
+        return None
+    if session.get("admin_epoch", 0) != admin.session_epoch:
+        return None
+    return admin
+
+
+def _start_admin_session(admin):
+    """Sign `admin` in, leaving any organization session alone.
+
+    session.clear() would be wrong here, unlike in _start_session: an admin
+    signing in has not stopped being whoever they were signed in as.
+    """
+    session["admin_id"] = admin.id
+    session["admin_epoch"] = admin.session_epoch
+    session.permanent = True
+
+
+def admin_required(view):
+    """Behind an admin session, and invisible without one.
+
+    404 rather than 401 or 403, which is the one place this file deliberately
+    lies about what exists. Every other route here answers "not found" only
+    when a thing is genuinely not there -- but an admin surface that says
+    "unauthorized" has confirmed it is an admin surface, and the whole set of
+    them can then be mapped by anybody with a wordlist. There is no link to
+    these pages, they are not in the sitemap, and robots.txt disallows them;
+    answering 404 is what makes those three consistent rather than decorative.
+
+    It also means an ordinary visitor who mistypes a URL gets the same page
+    they would get for any other mistyped URL, which is the truthful answer
+    from where they are standing.
+    """
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        db = get_db()
+        try:
+            admin = current_admin(db)
+            if admin is None:
+                if request.path.startswith("/api/"):
+                    return jsonify({"error": "Not found."}), 404
+                return serve_page("404.html", status=404)
+            return view(admin, db, *args, **kwargs)
+        finally:
+            db.close()
+    return wrapper
+
+
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
@@ -1056,6 +1129,11 @@ def robots_txt():
         "Disallow: /ppdashboard.html",
         "Disallow: /ppsearch.html",
         "Disallow: /settings.html",
+        # Not a page anybody but an operator has business fetching. It
+        # answers 404 without an admin session, so this is not what keeps it
+        # private -- it saves a crawler the request, and says out loud that
+        # the page is not for them.
+        "Disallow: /admin.html",
         # Reached only from a link in an email, and single-use. They carry
         # noindex too; this saves the fetch that would read it.
         "Disallow: /claim.html",
@@ -1846,6 +1924,301 @@ def login():
         }), 200
     finally:
         db.close()
+
+
+# --- Admin actions ----------------------------------------------------------
+def record_admin_action(db, admin, action, *, target_type, target_id=None,
+                        **detail):
+    """Write down what an admin did.
+
+    Added to the session, not committed: the log entry and the change it
+    describes belong to one transaction, so an action that fails to apply
+    cannot leave a record saying it did, and a record that fails to write
+    takes the action down with it. There is no version of this worth having
+    where the two can disagree.
+
+    admin_email is a snapshot rather than a join. The row survives the admin
+    being removed -- the foreign key is SET NULL -- and a log line naming
+    nobody is a log line for nothing.
+    """
+    db.add(AdminAction(
+        admin_id=admin.id,
+        admin_email=admin.email,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        detail=detail,
+    ))
+
+
+# --- Admin auth -------------------------------------------------------------
+# Tighter than the organization login on purpose. That one is generous because
+# an office shares an address and a mistyped password is normal; this one
+# guards a surface that can act on other people's accounts, and the set of
+# people who should be reaching it is small enough that five wrong attempts in
+# a quarter of an hour is already an unusual afternoon.
+ADMIN_LOGIN_ATTEMPTS = 5
+ADMIN_LOGIN_WINDOW = 900
+
+
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    """Sign in as an admin, leaving any organization session in place.
+
+    Deliberately not behind admin_required: this is how you get one.
+
+    The same identical-answer rule /login follows -- an unknown address and a
+    wrong password are one response -- and here it matters more, because the
+    set of admin addresses is small and confirming one is most of the work of
+    attacking it.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required."}), 400
+
+    wait = rate_limited("admin_login_ip", client_ip(),
+                        ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW)
+    if wait:
+        return too_many("Too many attempts from this connection.", wait)
+    wait = rate_limited("admin_login_email", email,
+                        ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW)
+    if wait:
+        return too_many("Too many attempts for that account.", wait)
+
+    db = get_db()
+    try:
+        admin = db.query(Admin).filter(Admin.email == email).one_or_none()
+
+        invalid = jsonify({"error": "Invalid email or password."}), 401
+        if admin is None:
+            # Hash anyway, so a missing address and a wrong password cost the
+            # same. /register makes this argument at length; the clock is a
+            # side channel whatever the wording says.
+            bcrypt.checkpw(b"x", bcrypt.hashpw(b"x", bcrypt.gensalt()))
+            return invalid
+        if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            return invalid
+        if not bcrypt.checkpw(password.encode("utf-8"),
+                              admin.password_hash.encode("utf-8")):
+            return invalid
+
+        clear_rate_limit("admin_login_email", email)
+        admin.last_seen_at = datetime.now(timezone.utc)
+        db.commit()
+        _start_admin_session(admin)
+        return jsonify({"message": "Signed in", "admin": admin.to_dict()}), 200
+    finally:
+        db.close()
+
+
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_logout():
+    """Drop the admin half of the session and nothing else.
+
+    Popping the two keys rather than clearing: signing out of the admin
+    surface must not sign you out of your own organization, which is the same
+    separation _start_admin_session keeps on the way in.
+    """
+    session.pop("admin_id", None)
+    session.pop("admin_epoch", None)
+    return jsonify({"message": "Signed out"}), 200
+
+
+@app.route("/api/admin/me", methods=["GET"])
+@admin_required
+def admin_me(admin, db):
+    """Who the panel is talking to. 404 to anybody else, like every route here."""
+    return jsonify({"admin": admin.to_dict()})
+
+
+# --- The panel --------------------------------------------------------------
+# Two queues and two powers, and both powers are reversible. Nothing here can
+# suspend an account, edit somebody's profile, act as them, or delete
+# anything: locking a person out of their own account needs an appeal process
+# rather than a button, and an admin delete would destroy partnership records
+# the *other* party may be relying on.
+ADMIN_PAGE_SIZE = 50
+
+
+@app.route("/api/admin/overview", methods=["GET"])
+@admin_required
+def admin_overview(admin, db):
+    """Everything the panel draws, in one request.
+
+    One call rather than four, because the page has no state worth loading
+    incrementally and four round trips to a database a network hop away is
+    the thing the dashboard work spent an afternoon undoing.
+    """
+    messages = db.query(ContactMessage).filter(
+        ContactMessage.handled_at.is_(None)
+    ).order_by(ContactMessage.created_at).limit(ADMIN_PAGE_SIZE).all()
+
+    flagged = db.query(Organization).filter(
+        Organization.name_flagged.is_(True)
+    ).order_by(Organization.created_at.desc()).limit(ADMIN_PAGE_SIZE).all()
+
+    hidden = db.query(Organization).filter(
+        Organization.hidden_at.isnot(None)
+    ).order_by(Organization.hidden_at.desc()).limit(ADMIN_PAGE_SIZE).all()
+
+    recent = db.query(AdminAction).order_by(
+        AdminAction.created_at.desc()
+    ).limit(ADMIN_PAGE_SIZE).all()
+
+    def summarize(org):
+        """Enough to judge a name by, and no more.
+
+        Not public_dict: this is the one surface that reads other people's
+        rows, so what it sends is chosen rather than inherited from a
+        serializer written for a different question.
+        """
+        return {
+            "id": org.id,
+            "name": org.name,
+            "organization_type": org.organization_type,
+            "location": org.location,
+            "description": org.description,
+            "email": org.email,
+            "created_at": org.created_at.isoformat() if org.created_at else None,
+            "name_flagged": org.name_flagged,
+            "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
+            "hidden_reason": org.hidden_reason,
+            "is_demo": org.is_demo,
+        }
+
+    return jsonify({
+        "admin": admin.to_dict(),
+        "contact_messages": [m.to_dict() for m in messages],
+        "flagged": [summarize(o) for o in flagged],
+        "hidden": [summarize(o) for o in hidden],
+        "actions": [a.to_dict() for a in recent],
+        "counts": {
+            "contact_messages": db.query(ContactMessage.id).filter(
+                ContactMessage.handled_at.is_(None)).count(),
+            "flagged": db.query(Organization.id).filter(
+                Organization.name_flagged.is_(True)).count(),
+            "hidden": db.query(Organization.id).filter(
+                Organization.hidden_at.isnot(None)).count(),
+        },
+    })
+
+
+@app.route("/api/admin/contact-messages/<int:message_id>/handled",
+           methods=["POST"])
+@admin_required
+def admin_handle_message(admin, db, message_id):
+    """Take a message off the queue, or put it back.
+
+    Not deleted. A handled message is still the record of somebody having
+    written in, and the only thing that changes is whether it is waiting.
+    """
+    row = db.get(ContactMessage, message_id)
+    if row is None:
+        return jsonify({"error": "Message not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    handled = data.get("handled", True)
+    if not isinstance(handled, bool):
+        return jsonify({"error": "Handled must be true or false."}), 400
+
+    row.handled_at = datetime.now(timezone.utc) if handled else None
+    record_admin_action(
+        db, admin,
+        "handle_contact_message" if handled else "reopen_contact_message",
+        target_type="contact_message", target_id=row.id, email=row.email)
+    db.commit()
+    return jsonify({"message": "Saved", "contact_message": row.to_dict()})
+
+
+@app.route("/api/admin/organizations/<int:org_id>/flag", methods=["DELETE"])
+@admin_required
+def admin_clear_flag(admin, db, org_id):
+    """Clear a name flag: this name has been looked at and is fine.
+
+    The flag was never a punishment -- a flagged organization is live,
+    matchable and public exactly like any other, and the mark only says
+    somebody should eventually look. This is the looking.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+    if not org.name_flagged:
+        return jsonify({"error": "That name is not flagged."}), 409
+
+    org.name_flagged = False
+    record_admin_action(db, admin, "clear_name_flag",
+                        target_type="organization", target_id=org.id,
+                        name=org.name)
+    db.commit()
+    return jsonify({"message": "Flag cleared", "organization_id": org.id})
+
+
+@app.route("/api/admin/organizations/<int:org_id>/hidden", methods=["POST"])
+@admin_required
+def admin_set_hidden(admin, db, org_id):
+    """Take an organization out of the directory, or put it back.
+
+    Discovery only. It can still sign in, edit its profile, read its messages
+    and answer proposals; it stops appearing in the directory, in matches and
+    at its own public URL. Partnerships it is already party to are untouched,
+    because taking a profile out of a listing is not the same act as
+    withdrawing somebody from an agreement they made.
+
+    A reason is required to hide and ignored to unhide. It goes to the
+    organization unedited, so it is a sentence for them rather than a note to
+    self -- and requiring it is most of what stops this being used casually.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    hidden = data.get("hidden")
+    if not isinstance(hidden, bool):
+        return jsonify({"error": "Hidden must be true or false.",
+                        "field": "hidden"}), 400
+
+    reason = (data.get("reason") or "").strip()
+    if hidden:
+        if not reason:
+            return jsonify({
+                "error": "Give a reason. It is sent to the organization.",
+                "field": "reason",
+            }), 400
+        if len(reason) > MAX_END_REASON:
+            return jsonify({
+                "error": f"Keep the reason under {MAX_END_REASON} characters.",
+                "field": "reason",
+            }), 400
+        if org.hidden_at:
+            return jsonify({"error": "That organization is already hidden."}), 409
+        org.hidden_at = datetime.now(timezone.utc)
+        org.hidden_reason = reason
+    else:
+        if not org.hidden_at:
+            return jsonify({"error": "That organization is not hidden."}), 409
+        org.hidden_at = None
+        org.hidden_reason = None
+
+    record_admin_action(
+        db, admin, "hide_organization" if hidden else "unhide_organization",
+        target_type="organization", target_id=org.id,
+        name=org.name, reason=reason or None)
+    db.commit()
+
+    # After the commit: the organization is told about a thing that has
+    # happened, and a send fired before the write would be a claim about one
+    # that might not.
+    notify_profile_hidden(org, reason, hidden)
+
+    return jsonify({
+        "message": "Organization hidden" if hidden else "Organization listed again",
+        "organization_id": org.id,
+        "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
+    })
 
 
 @app.route("/logout", methods=["POST"])
@@ -2885,6 +3258,11 @@ def _directory_query(db, args, *, exclude_id=None):
     """
     query = db.query(Organization).filter(
         Organization.onboarding_complete.is_(True),
+        # Hidden by an admin. One of four places this is asked -- see
+        # Organization.hidden_at -- and they are all discovery: hiding takes a
+        # profile out of the listings and off its own public URL, and does
+        # nothing to the partnerships it is already party to.
+        Organization.hidden_at.is_(None),
     )
     if exclude_id is not None:
         query = query.filter(Organization.id != exclude_id)
@@ -3382,7 +3760,7 @@ def get_organization(org, db, org_id):
     the one the detail views make when somebody opens a profile.
     """
     other = db.get(Organization, org_id)
-    if other is None or not other.onboarding_complete:
+    if other is None or not other.onboarding_complete or other.hidden_at:
         return jsonify({"error": "Organization not found."}), 404
 
     data = other.public_dict(contact=True)
@@ -3409,7 +3787,7 @@ def public_organization(org_id):
     db = get_db()
     try:
         other = db.get(Organization, org_id)
-        if other is None or not other.onboarding_complete:
+        if other is None or not other.onboarding_complete or other.hidden_at:
             return jsonify({"error": "Organization not found."}), 404
         # Counted here rather than on the /organization.html route: this is
         # what organization.js fetches on every profile load, signed in or

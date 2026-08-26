@@ -265,6 +265,10 @@ def _candidates(session, me, *, demo_only=False):
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
         Organization.is_demo.is_(demo_only),
+        # Hidden by an admin. Matching is discovery like the directory is, so
+        # it asks the same question -- an organization taken out of the
+        # listings should not reappear as somebody's top match.
+        Organization.hidden_at.is_(None),
     )
 
     # `&&` is "arrays overlap" and is what the GIN indexes accelerate. An org

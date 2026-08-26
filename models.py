@@ -280,6 +280,26 @@ class Organization(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # --- Moderation --------------------------------------------------------
+    # When an admin took this organization out of the directory, if they did.
+    #
+    # A timestamp rather than a boolean, because "when" is the question
+    # anybody looking at a hidden profile has, and the audit log wants it
+    # anyway. Null is the normal state and is what every query below tests
+    # for, so a row that has never been touched needs nothing said about it.
+    #
+    # Hiding is discovery-only, and deliberately narrow. The organization can
+    # still sign in, edit its profile, read its messages and answer proposals;
+    # it stops appearing in the directory, in anybody's matches and at its own
+    # public URL. Existing partnerships are untouched -- counterpart_dict
+    # reads the relationship directly rather than going through those queries
+    # -- because taking a profile out of a listing is not the same act as
+    # withdrawing somebody from an agreement they already made.
+    hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the organization is told. Written into the email that goes out, so
+    # this is a sentence for them to read rather than a note to self.
+    hidden_reason: Mapped[str | None] = mapped_column(Text)
+
     # Seeded example organizations. Kept out of real orgs' match results so a
     # new signup is never paired with something fictional, but still shown --
     # clearly labeled -- as example matches while the directory is small.
@@ -1444,4 +1464,128 @@ class ContactMessage(Base):
             "message": self.message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "handled_at": self.handled_at.isoformat() if self.handled_at else None,
+        }
+
+
+class Admin(Base):
+    """Somebody who operates this site, which is not the same as somebody who
+    uses it.
+
+    A separate table rather than a flag on Organization, and the difference is
+    not tidiness. An account here *is* an organization -- the row a stranger
+    creates by filling in a signup form -- so a privilege bit living in that
+    table would sit in the same rows every registration writes to, and any bug
+    in any path that updates an organization becomes a potential escalation.
+    Nothing in `organizations` can make somebody an admin, because the answer
+    is not stored there.
+
+    There is no signup route for this table and there never will be. Rows come
+    from `python manage.py create-admin`, which is a thing you run on a machine
+    that already has the database credentials -- which is the point: the set of
+    people who can create an admin is exactly the set who could edit the table
+    by hand anyway.
+
+    The session carries admin_id beside org_id rather than instead of it, so
+    being an admin does not sign you out of your own organization and doing
+    admin work does not mean losing your place.
+    """
+
+    __tablename__ = "admins"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Lower-cased on the way in, like Organization.email, so signing in is not
+    # case-sensitive. Unique, but note it is a *different* namespace: the same
+    # address may be an organization and an admin, and those are two accounts
+    # with two passwords, not one account with two hats.
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # The same revocation mechanism organizations have, for the same reason:
+    # changing the password has to end the sessions opened under the old one,
+    # and a privileged session is the one where that matters most.
+    session_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    def __repr__(self):
+        return f"<Admin {self.id} {self.email!r}>"
+
+    def to_dict(self):
+        """Never includes the hash, and there is nothing else worth hiding."""
+        return {
+            "id": self.id,
+            "email": self.email,
+            "name": self.name,
+            "last_seen_at": (self.last_seen_at.isoformat()
+                             if self.last_seen_at else None),
+        }
+
+
+class AdminAction(Base):
+    """What an admin did, and when.
+
+    Both powers this records are reversible -- clearing a name flag, hiding
+    and unhiding an organization -- so this is not an undo log. It is the
+    answer to "who did that", which is a question with no answer at all
+    otherwise, and which becomes a real one the moment there is more than one
+    admin or more than a few weeks between the act and the asking.
+
+    admin_id is SET NULL rather than CASCADE, and admin_email is a snapshot
+    beside it: removing an admin must not quietly erase the record of what
+    they did, and a null id with no name attached would be a record of
+    nothing.
+    """
+
+    __tablename__ = "admin_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admins.id", ondelete="SET NULL")
+    )
+    admin_email: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # A short verb: "hide_organization", "clear_name_flag". Free text rather
+    # than an enum because a check constraint here would mean a migration
+    # every time a power is added, and the value is written by this codebase
+    # rather than by anything a caller controls.
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[int | None] = mapped_column(Integer)
+
+    # Whatever the action needs to be understood later -- the reason given for
+    # hiding, the name that was flagged. Not a foreign key to anything: the
+    # point of a log entry is that it still reads after the row it describes
+    # has changed underneath it.
+    detail: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_admin_actions_recent", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<AdminAction {self.action} by {self.admin_email!r}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "admin_email": self.admin_email,
+            "action": self.action,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "detail": dict(self.detail or {}),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -971,3 +971,78 @@ def _label(slug):
     """Category labels via the shared vocabulary."""
     from categories import label_for
     return label_for(slug)
+
+
+def notify_profile_hidden(org, reason, hidden):
+    """Tell an organization its profile was taken out of the directory, or put back.
+
+    Sending this at all is the decision worth stating. Hiding a profile
+    silently is the thing that makes people stop trusting a directory -- and
+    it does not even buy quiet, because they notice regardless the moment
+    their match count reaches zero and nobody can find them. The choice is
+    not between telling them and them not knowing; it is between telling them
+    and letting them work it out.
+
+    So it says what happened, why, and who to reply to. `reason` is written by
+    an admin and goes out unedited, which is worth knowing while writing one:
+    it is a sentence for the organization to read, not a note to self.
+
+    Uses the login email rather than the public contact address. This is about
+    the account, like a password change is, and the public address may be a
+    shared inbox that the person who signed up does not read.
+
+    Deliberately consults no email preference. An organization that turned
+    partnership mail off has not asked to stop being told that its profile is
+    no longer listed -- that is not activity by somebody else, it is a thing
+    that happened to them.
+    """
+    cfg = _config()
+    to_addr = org.email
+    settings_url = f"{cfg['app_url']}/settings.html"
+
+    if hidden:
+        subject = "Your PartnerPortal profile is not currently listed"
+        headline = "Your profile is not currently listed"
+        body = (
+            "An administrator has taken your organization out of the "
+            "directory and out of match results. You can still sign in, edit "
+            "your profile, read your messages and answer proposals, and any "
+            "partnership you have already agreed is unaffected."
+        )
+    else:
+        subject = "Your PartnerPortal profile is listed again"
+        headline = "Your profile is listed again"
+        body = (
+            "Your organization is back in the directory and in match results. "
+            "Nothing else about your account changed while it was not listed."
+        )
+
+    reason_html = (f'<div class="quote">{escape(reason)}</div>'
+                   if reason else "")
+    reason_text = f'\nReason given: "{reason}"\n' if reason else ""
+
+    contact_line = ""
+    if cfg["contact_to"]:
+        contact_line = (f"If you think this is wrong, reply to this message "
+                        f"or write to {cfg['contact_to']}.")
+    else:
+        contact_line = "If you think this is wrong, reply to this message."
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(headline)}</h1>
+  <p class="meta">{escape(org.name)}</p>
+  <p>{escape(body)}</p>
+  {reason_html}
+  <p>{escape(contact_line)}</p>
+  <a class="cta" href="{escape(settings_url)}">Open your settings</a>
+</div></body></html>
+"""
+    text = (
+        f"{headline}\n\n{org.name}\n\n{body}\n"
+        + reason_text
+        + f"\n{contact_line}\n\n{settings_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text,
+              reply_to=cfg["contact_to"] or None)
