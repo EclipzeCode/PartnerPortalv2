@@ -1,7 +1,8 @@
 """Load demo organizations so the matching engine has something to chew on.
 
-    python seed.py          # insert demo orgs (skips ones already present)
-    python seed.py --reset  # delete demo orgs first
+    python seed.py            # insert demo orgs (skips ones already present)
+    python seed.py --refresh  # also update the ones that are, in place
+    python seed.py --reset    # delete demo orgs first, then insert
 
 These are fictional, use .example.org addresses, and have no password set --
 they are unclaimed profiles, not accounts. That is deliberate: it is the same
@@ -174,7 +175,27 @@ DEMO_ORGS = [
 ]
 
 
-def seed(reset=False):
+def seed(reset=False, refresh=False):
+    """Insert the demo organizations, optionally bringing existing ones up to date.
+
+    Three modes, and the middle one is new because its absence caused a bug.
+
+    Plain: insert what is missing, leave what is there. Safe to re-run, and
+    what you want when adding an organization to the list above.
+
+    --refresh: also write this file's copy over the rows that already exist.
+    Without it, correcting the text here reached nothing -- the rows keep
+    whatever an older version of this file said, forever, and the two drift
+    apart silently. That is exactly what happened: this file was corrected to
+    American spellings and the database went on saying "Lakeside Community
+    Centre" and "mobilise" until a migration went and fixed them by hand.
+    Only the copy is rewritten; ids, timestamps and anything pointing at these
+    rows are left alone, which is what makes this different from --reset.
+
+    --reset: delete every demo organization and insert again. The blunt one,
+    and it renumbers: a shortlist entry or a recorded profile view pointing at
+    a demo org does not survive it.
+    """
     db = SessionLocal()
     try:
         if reset:
@@ -184,13 +205,24 @@ def seed(reset=False):
             db.commit()
             print(f"Removed {removed} demo organizations.")
 
-        added = skipped = 0
+        added = skipped = updated = 0
         for spec in DEMO_ORGS:
             exists = db.query(Organization).filter(
                 Organization.email == spec["email"]
             ).one_or_none()
             if exists is not None:
-                skipped += 1
+                if not refresh:
+                    skipped += 1
+                    continue
+                changed = [
+                    field for field, value in spec.items()
+                    if getattr(exists, field, None) != value
+                ]
+                for field in changed:
+                    setattr(exists, field, spec[field])
+                if changed:
+                    updated += 1
+                    print(f"  {spec['name']}: {', '.join(sorted(changed))}")
                 continue
             db.add(Organization(
                 **spec,
@@ -201,7 +233,10 @@ def seed(reset=False):
             ))
             added += 1
         db.commit()
-        print(f"Added {added} organizations, skipped {skipped} already present.")
+        if refresh:
+            print(f"Added {added} organizations, updated {updated}.")
+        else:
+            print(f"Added {added} organizations, skipped {skipped} already present.")
 
         total = db.query(Organization).count()
         print(f"organizations table now holds {total} rows.")
@@ -210,4 +245,4 @@ def seed(reset=False):
 
 
 if __name__ == "__main__":
-    seed(reset="--reset" in sys.argv)
+    seed(reset="--reset" in sys.argv, refresh="--refresh" in sys.argv)

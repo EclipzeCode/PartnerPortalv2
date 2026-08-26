@@ -8,6 +8,8 @@ returns a number, and a settings endpoint that saves nothing still answers
 
 import time
 
+import pytest
+
 import app as app_module
 
 
@@ -102,6 +104,72 @@ def test_the_view_salt_is_independent_of_the_secret_key(client, make_org):
     finally:
         app_module.app.secret_key = original
 
-    total, _recent = app_module._profile_view_counts(
+    total, _recent, _series, _prior = app_module._profile_view_stats(
         app_module.get_db(), target)
     assert total == 1
+
+
+# --- Saying how long -------------------------------------------------------
+# Every limit here used to end with some version of "please try again in a
+# while" -- eleven vaguenesses for a number the server knew exactly.
+
+def test_a_refusal_says_how_long_in_the_body_and_the_header(client):
+    for _ in range(5):
+        client.post("/api/contact", json={
+            "name": "T", "email": "t@example.com", "message": "hi"})
+    response = client.post("/api/contact", json={
+        "name": "T", "email": "t@example.com", "message": "hi"})
+
+    assert response.status_code == 429
+    payload = response.get_json()
+    assert payload["retry_after"] > 0
+    # The standard header carries the same fact, for the readers that are not
+    # going to parse an English sentence out of the body.
+    assert response.headers["Retry-After"] == str(payload["retry_after"])
+    assert "Try again in about" in payload["error"]
+
+
+def test_the_wait_is_measured_from_the_oldest_attempt_that_still_counts(client):
+    """The limit clears when the oldest attempt inside the window ages out,
+    which is the moment there is room for one more."""
+    app_module._rate_buckets.clear()
+    app_module._rate_sweep_after = 0.0
+
+    assert app_module.rate_limited("probe", "k", 2, 900) == 0
+    assert app_module.rate_limited("probe", "k", 2, 900) == 0
+    wait = app_module.rate_limited("probe", "k", 2, 900)
+    # Both attempts landed just now, so the first ages out in ~the window.
+    assert 890 <= wait <= 900
+
+
+def test_zero_reads_as_allowed(client):
+    """The return moved from a boolean to seconds, and every existing
+    `if rate_limited(...)` had to keep meaning the same thing."""
+    app_module._rate_buckets.clear()
+    assert not app_module.rate_limited("probe2", "k", 5, 900)
+    assert not app_module.rate_limit_reached("probe2", "k", 5, 900)
+
+
+def test_checking_still_does_not_spend_the_budget(client):
+    """rate_limit_reached returns seconds now too, and must still not count
+    the asking -- checking would spend the thing being checked."""
+    app_module._rate_buckets.clear()
+    for _ in range(20):
+        assert app_module.rate_limit_reached("probe3", "k", 2, 900) == 0
+    app_module.rate_limited("probe3", "k", 2, 900)
+    app_module.rate_limited("probe3", "k", 2, 900)
+    assert app_module.rate_limit_reached("probe3", "k", 2, 900) > 0
+
+
+@pytest.mark.parametrize("seconds,expected", [
+    (1, "in a moment"),
+    (45, "in a moment"),
+    (46, "in about a minute"),
+    (90, "in about 2 minutes"),
+    (900, "in about 15 minutes"),
+    (3600, "in about an hour"),
+    (7200, "in about 2 hours"),
+])
+def test_the_wait_is_rounded_up_not_reported_to_the_second(seconds, expected):
+    """Being told five minutes and waiting six is worse than the reverse."""
+    assert app_module._human_wait(seconds) == expected

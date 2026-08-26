@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import logging
+import math
 import os
 import re
 import secrets
@@ -407,9 +408,17 @@ def _sweep_rate_buckets(now):
 
 
 def rate_limited(bucket, key, max_attempts, window_seconds):
-    """True (and records nothing further) if `key` has hit the limit in
-    `bucket` within the last `window_seconds`; otherwise records this attempt
-    and returns False.
+    """Seconds until `key` may try again in `bucket`, or 0 if it may now.
+
+    Records this attempt when it is allowed, and nothing further when it is
+    not. The return moved from a boolean to a number of seconds, which every
+    existing `if rate_limited(...)` reads the same way -- zero is falsy -- but
+    which lets the caller say *how long*, instead of "a while".
+
+    The wait is until the oldest attempt still inside the window ages out of
+    it, because that is the moment there is room for one more. Never zero
+    while the limit holds: a caller told to wait no time at all would come
+    straight back and be refused again.
 
     A deque rather than a list: the trim below drops from the front, and
     list.pop(0) rewrites the whole list to do it. Nothing at these limits is
@@ -423,24 +432,73 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
         while attempts and attempts[0] < cutoff:
             attempts.popleft()
         if len(attempts) >= max_attempts:
-            return True
+            return max(1, math.ceil(attempts[0] + window_seconds - now))
         attempts.append(now)
-        return False
+        return 0
 
 
 def rate_limit_reached(bucket, key, max_attempts, window_seconds):
-    """Whether `key` is already at the limit, without recording an attempt.
+    """The same answer, without counting the asking.
 
-    rate_limited() answers the same question but counts the asking, which is
-    wrong for a budget that gates an endpoint rather than one that meters
-    each call: checking would spend the thing being checked.
+    rate_limited() records an attempt, which is wrong for a budget that gates
+    an endpoint rather than one that meters each call: checking would spend
+    the thing being checked.
+
+    Returns seconds-until-clear like rate_limited, and for the same reason.
+    The oldest attempt inside the window is the one whose expiry makes room,
+    and only the attempts inside it count toward the limit -- so the wait is
+    measured from the oldest of those, not from the oldest on record.
     """
-    cutoff = time.time() - window_seconds
+    now = time.time()
+    cutoff = now - window_seconds
     with _rate_lock:
         attempts = _rate_buckets.get((bucket, key))
         if not attempts:
-            return False
-        return sum(1 for t in attempts if t >= cutoff) >= max_attempts
+            return 0
+        live = [t for t in attempts if t >= cutoff]
+        if len(live) < max_attempts:
+            return 0
+        return max(1, math.ceil(live[0] + window_seconds - now))
+
+
+def _human_wait(seconds):
+    """"in about 20 minutes" -- rounded, and never more precise than useful.
+
+    The exact figure is in the payload for anything that wants to count down;
+    this is the sentence a person reads. "In 1,187 seconds" is arithmetic, and
+    rounding up is the honest direction to round: being told five minutes and
+    waiting six is worse than being told six and waiting five.
+    """
+    if seconds <= 45:
+        return "in a moment"
+    minutes = math.ceil(seconds / 60)
+    if minutes == 1:
+        return "in about a minute"
+    if minutes < 60:
+        return f"in about {minutes} minutes"
+    hours = math.ceil(minutes / 60)
+    return "in about an hour" if hours == 1 else f"in about {hours} hours"
+
+
+def too_many(message, seconds):
+    """A 429 that says how long, in the body and in the header.
+
+    Every limit in this file used to end its message with some version of
+    "please try again in a while" -- eleven different vaguenesses for a
+    number the server knew exactly. Written once here, so a new limit gets it
+    without being asked and none of them can drift into their own phrasing.
+
+    `retry_after` rides in the JSON for anything that wants to count down,
+    and Retry-After is the standard header for the same fact -- which is what
+    a proxy, a client library or a crawler reads, none of which are going to
+    parse an English sentence out of the body.
+    """
+    payload = jsonify({
+        "error": f"{message} Try again {_human_wait(seconds)}.",
+        "retry_after": seconds,
+    })
+    payload.headers["Retry-After"] = str(seconds)
+    return payload, 429
 
 
 def clear_rate_limit(bucket, key):
@@ -1550,11 +1608,11 @@ def contact():
     # in wrong, who then could not send the message once they had it right.
     # The honeypot stays first: a bot should be answered without learning
     # anything, including whether it has a budget left.
-    if rate_limited("contact", client_ip(), max_attempts=5, window_seconds=3600):
-        return jsonify({
-            "error": "Too many messages from this connection recently. "
-                     "Please try again in a while.",
-        }), 429
+    wait = rate_limited("contact", client_ip(), max_attempts=5,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many messages from this connection recently.", wait)
 
     notify_contact_message(name=name, email=email, phone=phone, message=message)
     return jsonify({"message": "Message sent"}), 200
@@ -1581,25 +1639,24 @@ def register():
             "organization": {"onboarding_complete": False},
         }), 201
 
-    if rate_limited("register", client_ip(), max_attempts=5, window_seconds=3600):
-        return jsonify({
-            "error": "Too many accounts created from this connection recently. "
-                     "Please try again in a while.",
-        }), 429
+    wait = rate_limited("register", client_ip(), max_attempts=5,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many accounts created from this connection recently.", wait)
 
     # Checked before anything is looked up, and answered the same way whatever
     # was asked for. A connection that has already been told twice that an
     # address is taken gets nothing further out of this endpoint -- not a
     # different message for taken addresses, which would be the same oracle
     # with a new status code, but the same closed door for every address.
-    if rate_limit_reached("register_exists", client_ip(),
-                          MAX_EXISTENCE_DISCLOSURES,
-                          EXISTENCE_DISCLOSURE_WINDOW):
-        return jsonify({
-            "error": "Too many sign-up attempts from this connection recently. "
-                     "Please try again in a while, or sign in if you already "
-                     "have an account.",
-        }), 429
+    wait = rate_limit_reached("register_exists", client_ip(),
+                              MAX_EXISTENCE_DISCLOSURES,
+                              EXISTENCE_DISCLOSURE_WINDOW)
+    if wait:
+        return too_many(
+            "Too many sign-up attempts from this connection recently. Sign in "
+            "if you already have an account.", wait)
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
@@ -1708,11 +1765,10 @@ def login():
     # many people, and a mistyped password is normal, not an attack. This
     # blunts a script trying passwords in a loop without punishing a shared
     # connection for one person fumbling their own login a few times.
-    if rate_limited("login", client_ip(), max_attempts=20, window_seconds=900):
-        return jsonify({
-            "error": "Too many attempts from this connection. Please wait a "
-                     "few minutes and try again.",
-        }), 429
+    wait = rate_limited("login", client_ip(), max_attempts=20,
+                        window_seconds=900)
+    if wait:
+        return too_many("Too many attempts from this connection.", wait)
 
     # The same limit again, keyed by the address being tried rather than by
     # who is trying it. The bucket above is per connection, so it does
@@ -1730,11 +1786,10 @@ def login():
     # Ten rather than the twenty above: this counts one person's own typing,
     # where the connection limit has to cover a whole office sharing an
     # address.
-    if rate_limited("login_email", email, max_attempts=10, window_seconds=900):
-        return jsonify({
-            "error": "Too many attempts for that account. Please wait a few "
-                     "minutes and try again.",
-        }), 429
+    wait = rate_limited("login_email", email, max_attempts=10,
+                        window_seconds=900)
+    if wait:
+        return too_many("Too many attempts for that account.", wait)
 
     db = get_db()
     try:
@@ -1806,19 +1861,16 @@ def forgot_password():
     # anyone who knows an address could bury it in reset emails from a
     # rotating set of IPs. Same 3/hour ceiling as verify-email's resend, for
     # the same reason: this protects mail delivery, not compute.
-    if rate_limited("forgot_password_ip", client_ip(),
-                    max_attempts=8, window_seconds=3600):
-        return jsonify({
-            "error": "Too many requests from this connection. Please try "
-                     "again in a while.",
-        }), 429
-    if rate_limited("forgot_password_email", email,
-                    max_attempts=3, window_seconds=3600):
-        return jsonify({
-            "error": "Too many reset emails have gone out for that address "
-                     "recently. Check your inbox and spam folder, then try "
-                     "again in a little while.",
-        }), 429
+    wait = rate_limited("forgot_password_ip", client_ip(),
+                        max_attempts=8, window_seconds=3600)
+    if wait:
+        return too_many("Too many requests from this connection.", wait)
+    wait = rate_limited("forgot_password_email", email,
+                        max_attempts=3, window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many reset emails have gone out for that address recently. "
+            "Check your inbox and spam folder.", wait)
 
     generic = jsonify({
         "message": "If an account exists for that email, we've sent a "
@@ -2016,13 +2068,12 @@ def resend_verification(org, db):
     # inbox, and the address is attacker-chosen at signup. Three an hour
     # covers "it did not arrive, send it again" without making the endpoint
     # a way to bury an address in mail.
-    if rate_limited("verify_resend", str(org.id),
-                    max_attempts=3, window_seconds=3600):
-        return jsonify({
-            "error": "Several verification emails have gone out recently. "
-                     "Check your inbox and spam folder, then try again in a "
-                     "little while.",
-        }), 429
+    wait = rate_limited("verify_resend", str(org.id),
+                        max_attempts=3, window_seconds=3600)
+    if wait:
+        return too_many(
+            "Several verification emails have gone out recently. Check your "
+            "inbox and spam folder.", wait)
 
     # Replacing the token invalidates whatever was in the previous email --
     # the column holds exactly one, so an older link stops working the moment
@@ -2194,12 +2245,10 @@ def change_password(org, db):
     # Keyed by account, like /api/account's own limit: the thing worth
     # slowing down is guessing against this one account's current password,
     # not volume from one address.
-    if rate_limited("change_password", str(org.id), max_attempts=5,
-                    window_seconds=900):
-        return jsonify({
-            "error": "Too many incorrect attempts. Please wait a few minutes "
-                     "and try again.",
-        }), 429
+    wait = rate_limited("change_password", str(org.id), max_attempts=5,
+                        window_seconds=900)
+    if wait:
+        return too_many("Too many incorrect attempts.", wait)
 
     if not org.password_hash:
         # Cannot happen through the normal session path -- both /register and
@@ -2310,12 +2359,11 @@ def change_email(org, db):
     # account asking it repeatedly is doing what a script does, not what
     # somebody moving their own email does. Keyed by account rather than
     # address, because that is what has to be held to get this far at all.
-    if rate_limit_reached("change_email_exists", str(org.id),
-                          MAX_EXISTENCE_DISCLOSURES,
-                          EXISTENCE_DISCLOSURE_WINDOW):
-        return jsonify({
-            "error": "Too many attempts. Please wait a while and try again.",
-        }), 429
+    wait = rate_limit_reached("change_email_exists", str(org.id),
+                              MAX_EXISTENCE_DISCLOSURES,
+                              EXISTENCE_DISCLOSURE_WINDOW)
+    if wait:
+        return too_many("Too many attempts.", wait)
 
     if not org.password_hash:
         return jsonify({
@@ -2365,12 +2413,11 @@ def change_email(org, db):
     # taken all return above this line having sent nothing, and used to
     # spend the hour anyway -- so correcting a typo four times locked
     # somebody out of changing their own email.
-    if rate_limited("change_email", str(org.id), max_attempts=5,
-                    window_seconds=3600):
-        return jsonify({
-            "error": "Too many change requests recently. Check your inbox, "
-                     "then try again in a little while.",
-        }), 429
+    wait = rate_limited("change_email", str(org.id), max_attempts=5,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many change requests recently. Check your inbox.", wait)
 
     org.pending_email = new_email
     org.pending_email_token = secrets.token_urlsafe(32)
@@ -2504,12 +2551,10 @@ def delete_account(org, db):
     # Keyed by account, not IP: this endpoint needs a valid session, so the
     # thing worth slowing down is repeated guessing against one account rather
     # than volume from one address.
-    if rate_limited("delete_account", str(org.id), max_attempts=5,
-                    window_seconds=900):
-        return jsonify({
-            "error": "Too many incorrect attempts. Please wait a few minutes "
-                     "and try again.",
-        }), 429
+    wait = rate_limited("delete_account", str(org.id), max_attempts=5,
+                        window_seconds=900)
+    if wait:
+        return too_many("Too many incorrect attempts.", wait)
 
     if not org.password_hash:
         # A profile pre-created for an org that never claimed it. There is no
@@ -2970,12 +3015,10 @@ def public_directory():
     directory learns nothing at all. They carry is_demo so the page can label
     them, which it does.
     """
-    if rate_limited("public_directory", client_ip(),
-                    max_attempts=120, window_seconds=3600):
-        return jsonify({
-            "error": "Too many requests from this connection. Please try "
-                     "again in a little while.",
-        }), 429
+    wait = rate_limited("public_directory", client_ip(),
+                        max_attempts=120, window_seconds=3600)
+    if wait:
+        return too_many("Too many requests from this connection.", wait)
 
     # per_page is clamped harder here than for a signed-in caller. Passed by
     # rewriting the arg rather than by adding a parameter to
@@ -3529,12 +3572,11 @@ def claim_invite(token):
     password = data.get("password") or ""
     name = (data.get("name") or "").strip()
 
-    if rate_limited("claim_invite", client_ip(), max_attempts=10,
-                    window_seconds=3600):
-        return jsonify({
-            "error": "Too many attempts from this connection recently. Please "
-                     "try again in a while.",
-        }), 429
+    wait = rate_limited("claim_invite", client_ip(), max_attempts=10,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many attempts from this connection recently.", wait)
 
     db = get_db()
     try:
@@ -5370,12 +5412,10 @@ def create_message(org, db, proposal_id):
     # Per account rather than per address: this reaches one specific inbox
     # that one specific organization chose to open a proposal with, and the
     # thing worth slowing down is flooding that thread.
-    if rate_limited("messages", str(org.id), max_attempts=60,
-                    window_seconds=3600):
-        return jsonify({
-            "error": "You have sent a lot of messages recently. Please wait a "
-                     "few minutes.",
-        }), 429
+    wait = rate_limited("messages", str(org.id), max_attempts=60,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have sent a lot of messages recently.", wait)
 
     message = Message(
         partnership_id=proposal.id,
