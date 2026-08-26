@@ -1381,3 +1381,67 @@ class ProfileView(Base):
 
     def __repr__(self):
         return f"<ProfileView org={self.organization_id} at={self.viewed_at}>"
+
+
+class ContactMessage(Base):
+    """A message from the homepage form.
+
+    These were delivered by email and not kept. That reads as a reasonable
+    decision -- there is no inbox in this schema and no admin view to read one
+    from, so a table would only move them somewhere nobody looks -- and it is
+    wrong in the one case that matters: outbound mail does not leave this app
+    until a sending domain is verified, so every message anybody has sent
+    through that form has gone nowhere at all, silently, and the sender was
+    told it worked.
+
+    So they are written down first and mailed second. Mail stays the way a
+    person actually finds out; this is the copy that survives the provider
+    being misconfigured, rate limited, or simply off.
+
+    Deliberately no IP address. The rest of this schema does not record who
+    somebody is unless it has to -- profile views are a salted digest for
+    exactly that reason -- and the honeypot and the per-connection limit on
+    /api/contact already do the abuse work an address would be kept for.
+    """
+
+    __tablename__ = "contact_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Widths match what the endpoint already enforces, so a value that passed
+    # validation cannot fail on the way into the column.
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(64))
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # When somebody dealt with it. Null is the queue; a timestamp is the
+    # record. A boolean would answer "is it done" and lose "when", which is
+    # the question anybody looking at an old message actually has.
+    handled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    __table_args__ = (
+        # The only read that matters: the unhandled ones, oldest first,
+        # because a support queue is worked from the front.
+        Index("ix_contact_messages_queue", "handled_at", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<ContactMessage {self.id} from {self.email!r}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "phone": self.phone,
+            "message": self.message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "handled_at": self.handled_at.isoformat() if self.handled_at else None,
+        }

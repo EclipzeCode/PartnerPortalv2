@@ -45,7 +45,8 @@ from units import (
 from matching import find_matches, match_overview, score_pair
 from moderation import screen_name
 from models import (
-    Event, Message, Organization, Partnership, ProfileView, SavedLead,
+    ContactMessage, Event, Message, Organization, Partnership, ProfileView,
+    SavedLead,
 )
 from notifications import (
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
@@ -1613,6 +1614,28 @@ def contact():
     if wait:
         return too_many(
             "Too many messages from this connection recently.", wait)
+
+    # Written down before it is mailed, and the order is the whole point.
+    #
+    # This form was delivered by email and kept nowhere, which is fine right
+    # up until the mail does not go -- and it does not, and has not, for as
+    # long as the sending domain has been unverified. Every message anybody
+    # has sent through here went nowhere while they were shown a success.
+    #
+    # Mail is still how a person finds out. This is the copy that survives the
+    # provider being misconfigured, rate limited, or off.
+    #
+    # A failure to store is a failure to answer, deliberately: telling
+    # somebody their message was sent when nothing recorded it is the bug
+    # being fixed, not a smaller version of it worth keeping.
+    stored = ContactMessage(
+        name=name, email=email, phone=phone or None, message=message)
+    db = get_db()
+    try:
+        db.add(stored)
+        db.commit()
+    finally:
+        db.close()
 
     notify_contact_message(name=name, email=email, phone=phone, message=message)
     return jsonify({"message": "Message sent"}), 200
