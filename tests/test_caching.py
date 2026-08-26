@@ -122,9 +122,11 @@ def test_the_page_itself_is_not_re_stamped_on_every_request(client):
     calls = []
     real = app_module._stamp_asset_refs
 
-    def counted(html):
+    # *args, because the rewriter now takes the pattern to apply as well --
+    # HTML references its stylesheets, and a stylesheet references its fonts.
+    def counted(html, *args, **kwargs):
         calls.append(html)
-        return real(html)
+        return real(html, *args, **kwargs)
 
     app_module._stamp_asset_refs = counted
     try:
@@ -244,3 +246,77 @@ def test_a_missing_asset_reference_is_left_as_written(client):
     # Recorded with a None version, so the page cache invalidates the day the
     # file appears rather than serving an unstamped reference to it forever.
     assert assets == (("no-such-file.css", None),)
+
+
+# --- Fonts -----------------------------------------------------------------
+# The stamps chain one level further than they used to: a page names a
+# stylesheet, and a stylesheet names a font. Without that second hop the
+# woff2 files were the only thing here served unversioned, which meant the
+# only thing that could not be kept for a year -- on files that never change.
+
+def _font_stamp(client, sheet="/boxicons.css"):
+    import re
+    body = client.get(sheet).get_data(as_text=True)
+    found = re.search(r"url\(fonts/[A-Za-z0-9._-]+\?v=([0-9a-f]+)\)", body)
+    return found.group(1) if found else None
+
+
+def test_a_stylesheet_stamps_the_fonts_it_names(client):
+    assert _font_stamp(client) is not None
+
+
+def test_a_stamped_font_is_kept_for_a_year(client):
+    import app as app_module
+    version = app_module.asset_version("fonts/boxicons.woff2")
+    response = client.get(f"/fonts/boxicons.woff2?v={version}")
+    assert response.status_code == 200
+    assert "max-age=31536000" in response.headers["Cache-Control"]
+    assert "immutable" in response.headers["Cache-Control"]
+
+
+def test_replacing_a_font_moves_the_stylesheet_its_own_version(client, tmp_path):
+    """The reason a stylesheet's hash covers its fonts.
+
+    Re-running the subset script can leave boxicons.css byte-identical while
+    the font behind it differs. If the sheet's own version did not move, every
+    returning visitor would keep a cached copy naming a font that is no longer
+    there -- pinned for a year by the header the stamp exists to make safe.
+    """
+    import os
+    import shutil
+    import app as app_module
+
+    path = os.path.join(app_module.STATIC_DIR, "fonts/boxicons.woff2")
+    backup = tmp_path / "boxicons.woff2"
+    shutil.copy(path, backup)
+
+    before_sheet = app_module.asset_version("boxicons.css")
+    before_font = _font_stamp(client)
+    try:
+        with open(path, "ab") as f:
+            f.write(b"\x00")
+        assert _font_stamp(client) != before_font
+        assert app_module.asset_version("boxicons.css") != before_sheet
+    finally:
+        shutil.copy(backup, path)
+
+
+def test_a_timestamp_alone_does_not_move_a_stamp(client, tmp_path):
+    """A checkout writes every file fresh.
+
+    Hashing mtimes would hand every stylesheet a new version on every deploy,
+    which is the caching scheme undone by the thing meant to protect it.
+    """
+    import os
+    import app as app_module
+
+    path = os.path.join(app_module.STATIC_DIR, "fonts/boxicons.woff2")
+    before = (app_module.asset_version("boxicons.css"), _font_stamp(client))
+    os.utime(path, None)
+    assert (app_module.asset_version("boxicons.css"), _font_stamp(client)) == before
+
+
+def test_an_unknown_stylesheet_is_a_404(client):
+    """The route interpolates into a path, so it is held to the same frozen
+    allowlist the pages are."""
+    assert client.get("/nope.css").status_code == 404

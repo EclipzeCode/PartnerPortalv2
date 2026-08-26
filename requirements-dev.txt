@@ -4,3 +4,9 @@
 -r requirements.txt
 icalendar==7.3.0
 pytest==9.1.1
+
+# Subsetting the icon font (tools/subset_boxicons.py). Not imported by the
+# app and not installed on the host -- this is run by hand when an icon is
+# added to a page, and what it writes is committed.
+fonttools==4.63.0
+brotli==1.2.0

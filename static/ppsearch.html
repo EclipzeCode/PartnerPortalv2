@@ -400,7 +400,13 @@
                 <!-- Outside the scrolling region, so it is always visible. -->
                 <div class="form-actions">
                     <button type="button" id="proposeBtn" class="btn-primary">
-                        <i class='bx bx-handshake'></i> Propose Partnership
+                        <!-- bx-transfer, not bx-handshake: boxicons has no
+                             handshake glyph, so this button rendered a blank
+                             box where its icon should be. Transfer is also
+                             the right one -- it is what the dashboard already
+                             uses for a two-way match, which is what a
+                             proposal is. -->
+                        <i class='bx bx-transfer'></i> Propose Partnership
                     </button>
                     <!-- Label and icon are set by ppsearch.js from whether
                          this organization is already on the shortlist. -->

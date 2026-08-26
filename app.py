@@ -636,27 +636,99 @@ _ASSET_REF_RE = re.compile(
     r'((?:href|src)=")([A-Za-z0-9._-]+\.(?:css|js))(")'
 )
 
+# The same idea one level down: a font referenced from inside a stylesheet.
+#
+# Those references are not in any HTML, so the rule above never saw them --
+# which meant the woff2 files were the one thing here served without a
+# version, and therefore the one thing that could not be kept for a year. They
+# got the same hour a favicon does, on files that never change at all.
+#
+# Anchored on `fonts/` rather than accepting any path, so this can only ever
+# stamp something in the directory it is meant for.
+_CSS_ASSET_REF_RE = re.compile(
+    r'(url\()(fonts/[A-Za-z0-9._-]+)(\))'
+)
+
 
 def asset_version(filename):
-    """A short content hash for a file in static/, or None if it is missing."""
+    """A short content hash for a file in static/, or None if it is missing.
+
+    For a stylesheet, the hash covers the fonts it names as well as its own
+    bytes. That is not tidiness -- it is what makes the year-long cache on a
+    stylesheet safe.
+
+    The stamps chain: a page names `boxicons.css?v=A`, and boxicons.css names
+    `fonts/boxicons.woff2?v=B`. Replacing the font changes B, so the sheet's
+    text changes, so A changes, so the page points somewhere new and the whole
+    chain is refetched. But re-running the subset script can leave the sheet
+    byte-identical while the font differs -- same icons, a newer boxicons --
+    and then A would not move, every returning visitor would keep the cached
+    sheet, and it would go on naming a font that no longer exists. Pinned for
+    a year by the very header the stamp exists to make safe, which is the
+    exact failure serve_page's docstring describes one level up.
+
+    So a stylesheet's version is a hash of its bytes and of every font in it.
+
+    What goes into that hash is each font's own *content* hash, never its
+    mtime. Those are not the same thing on a deploy: a checkout writes every
+    file fresh, so hashing timestamps would give every stylesheet a new
+    version on every release, which is the whole caching scheme undone by the
+    thing meant to protect it. Timestamps are still what the memo below keys
+    on, because there they only decide whether to look again.
+    """
     path = os.path.join(STATIC_DIR, filename)
     try:
         stat = os.stat(path)
     except OSError:
         return None
-    key = (stat.st_mtime_ns, stat.st_size)
+
+    refs = ()
+    if filename.endswith(".css"):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                refs = tuple(sorted({m[1] for m in _CSS_ASSET_REF_RE.findall(f.read())}))
+        except OSError:
+            return None
+
+    # Cheap staleness: the sheet's own stat, plus each font's. A font whose
+    # bytes moved has a new size or a new mtime, which is enough to know the
+    # memo cannot be trusted -- and then the hash below is recomputed from
+    # content, so an mtime that moved without the bytes moving costs one
+    # re-read and produces the same answer.
+    key = (stat.st_mtime_ns, stat.st_size,
+           tuple((ref, _file_key(ref)) for ref in refs))
     with _asset_lock:
         cached = _asset_versions.get(filename)
         if cached and cached[0] == key:
             return cached[1]
+
     try:
         with open(path, "rb") as f:
-            digest = hashlib.sha256(f.read()).hexdigest()[:10]
+            raw = f.read()
     except OSError:
         return None
+
+    if refs:
+        # asset_version, not a stat: content, so that a deploy which only
+        # touched timestamps leaves every stamp exactly where it was. Fonts
+        # are not stylesheets, so this recurses exactly one level.
+        stamp = repr(tuple((ref, asset_version(ref)) for ref in refs))
+        raw = raw + stamp.encode("utf-8")
+
+    digest = hashlib.sha256(raw).hexdigest()[:10]
     with _asset_lock:
         _asset_versions[filename] = (key, digest)
     return digest
+
+
+def _file_key(relative):
+    """(mtime, size) for a file under static/, or None if it is not there."""
+    try:
+        stat = os.stat(os.path.join(STATIC_DIR, relative))
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
 
 
 # The link preview card, 1200x630. One image for the whole site -- see
@@ -679,7 +751,7 @@ def _stamp_asset_ref(filename):
     return f"{filename}?v={version}" if version else filename
 
 
-def _stamp_asset_refs(html):
+def _stamp_asset_refs(html, pattern=_ASSET_REF_RE):
     """Rewrite local asset references to carry their content hash.
 
     Returns the stamped HTML and the (filename, version) pairs that went into
@@ -700,7 +772,7 @@ def _stamp_asset_refs(html):
             return match.group(0)
         return f"{prefix}{filename}?v={version}{suffix}"
 
-    return _ASSET_REF_RE.sub(stamp, html), tuple(sorted(seen.items()))
+    return pattern.sub(stamp, html), tuple(sorted(seen.items()))
 
 
 # filename -> (html key, asset versions, stamped body, etag). Every entry is
@@ -713,7 +785,7 @@ def _page_etag(body):
     return hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
 
 
-def _stamped_page(filename):
+def _stamped_page(filename, pattern=_ASSET_REF_RE):
     """The stamped body and ETag for a page in static/, cached.
 
     Both are pure functions of the file plus every asset it references, and
@@ -749,7 +821,7 @@ def _stamped_page(filename):
 
     with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
         html = f.read()
-    body, assets = _stamp_asset_refs(html)
+    body, assets = _stamp_asset_refs(html, pattern)
     etag = _page_etag(body)
     if key is not None:
         with _page_lock:
@@ -855,6 +927,51 @@ def html_page(page):
 _SITEMAP_PAGES = (
     "index.html", "directory.html", "pphelp.html", "pplogin.html",
 )
+
+
+_STYLESHEETS = frozenset(
+    name for name in os.listdir(STATIC_DIR) if name.endswith(".css")
+)
+
+
+@app.route("/<name>.css")
+def stylesheet(name):
+    """Serve a stylesheet with its font references stamped.
+
+    Registered ahead of Flask's static route for the same reason html_page is
+    (see serve_page): the ETag has to be computed over the *stamped* bytes.
+    Flask answers a conditional request from the file's own mtime and size,
+    so replacing a font while its stylesheet stayed byte-identical would leave
+    every returning visitor holding a sheet that points at the old one --
+    pinned for a year by the very header the stamp exists to make safe.
+
+    Only stylesheets that actually name a font are rewritten, but they all
+    come through here rather than only two of them by name: a rule that
+    applies to whichever file happens to have a url() in it today is a rule
+    the next one silently misses.
+
+    The cost is one dict lookup and a stat per stylesheet request, which is
+    what _stamped_page already memoizes against.
+    """
+    filename = f"{name}.css"
+    # Same frozen allowlist _pages() uses, and for the same reason: this
+    # route interpolates into a path, so it may only ever name a file that
+    # was on disk at import.
+    known = (
+        frozenset(n for n in os.listdir(STATIC_DIR) if n.endswith(".css"))
+        if app.debug else _STYLESHEETS
+    )
+    if filename not in known:
+        return not_found(None)
+
+    body, etag = _stamped_page(filename, _CSS_ASSET_REF_RE)
+    response = app.response_class(body, mimetype="text/css")
+    response.set_etag(etag)
+    # Cache-Control is left to add_cache_headers, which keeps a request
+    # carrying ?v= for a year and revalidates one without. That stays right
+    # here because asset_version folds the fonts into a stylesheet's own
+    # version, so a sheet whose font moved is asked for under a new stamp.
+    return response.make_conditional(request)
 
 
 @app.route("/robots.txt")
