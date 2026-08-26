@@ -3,7 +3,7 @@
     python manage.py create-admin  <email> [--name "Ada Lovelace"]
     python manage.py list-admins
     python manage.py reset-admin-password <email>
-    python manage.py remove-admin <email>
+    python manage.py remove-admin <email> [--force]
 
 There is no admin signup route and there will not be one. That is not an
 omission to be filled in later: an admin is somebody who can act on other
@@ -127,7 +127,7 @@ def reset_admin_password(email):
         db.close()
 
 
-def remove_admin(email):
+def remove_admin(email, force=False):
     email = (email or "").strip().lower()
     db = SessionLocal()
     try:
@@ -135,9 +135,14 @@ def remove_admin(email):
         if admin is None:
             print(f"No admin with address {email}.", file=sys.stderr)
             return 1
-        if db.query(Admin).count() == 1:
-            print("That is the only admin. Create another before removing "
-                  "this one, or there is no way back into the panel.",
+        if db.query(Admin).count() == 1 and not force:
+            # Worth stopping on, and worth being accurate about: this is not
+            # a lockout. Admins are made here rather than in the panel, so
+            # create-admin can always mint another -- which is exactly why
+            # --force exists rather than this being a wall.
+            print("That is the only admin. Nobody will be able to sign in to "
+                  "the panel until you run create-admin again.\n"
+                  "  Re-run with --force if that is what you meant.",
                   file=sys.stderr)
             return 1
 
@@ -168,6 +173,8 @@ def main(argv=None):
 
     remove = sub.add_parser("remove-admin")
     remove.add_argument("email")
+    remove.add_argument("--force", action="store_true",
+                        help="remove even if it is the only admin")
 
     args = parser.parse_args(argv)
     if args.command == "create-admin":
@@ -177,7 +184,7 @@ def main(argv=None):
     if args.command == "reset-admin-password":
         return reset_admin_password(args.email)
     if args.command == "remove-admin":
-        return remove_admin(args.email)
+        return remove_admin(args.email, args.force)
     parser.print_help()
     return 1
 
