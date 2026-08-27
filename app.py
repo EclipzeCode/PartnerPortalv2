@@ -42,7 +42,9 @@ from units import (
     DEFAULT_UNITS, MAX_AMOUNT, MAX_UNIT_DETAIL, UNITS, clean_unit,
     default_unit_for,
 )
-from matching import find_matches, match_overview, score_pair
+from matching import (
+    MATCH_LIMIT, find_matches, match_overview, score_pair,
+)
 from moderation import screen_name
 from models import (
     Admin, AdminAction, ContactMessage, Event, Message, Organization,
@@ -3172,7 +3174,8 @@ def get_matches(org, db):
         }), 409
 
     mutual_only = request.args.get("mutual") == "1"
-    matches = find_matches(db, org, mutual_only=mutual_only)
+    matches, total, mutual_total = find_matches(
+        db, org, mutual_only=mutual_only)
 
     # While the real directory is small a new org can have no real matches at
     # all. Rather than show an empty page, surface the seeded examples --
@@ -3180,7 +3183,8 @@ def get_matches(org, db):
     # look at. They are never mixed into `matches`.
     examples = []
     if not matches:
-        examples = find_matches(db, org, mutual_only=mutual_only, demo_only=True)
+        examples, _, _ = find_matches(
+            db, org, mutual_only=mutual_only, demo_only=True)
 
     # So the star on each card starts in the right state. Sent as one list of
     # ids rather than a flag per match: the client already holds the matches
@@ -3191,8 +3195,16 @@ def get_matches(org, db):
 
     return jsonify({
         "matches": matches,
+        # How many came back, and how many there were. These used to be the
+        # same number by construction, which is exactly how a list could stop
+        # at fifty without anybody being told.
         "count": len(matches),
-        "mutual_count": sum(1 for m in matches if m["match_detail"]["mutual"]),
+        "total": total,
+        "mutual_count": mutual_total,
+        # Said rather than left to be inferred from count < total, so the page
+        # does not have to work out whether it is looking at everything.
+        "truncated": total > len(matches),
+        "limit": MATCH_LIMIT,
         "examples": examples,
         "example_count": len(examples),
         "saved_ids": sorted(saved_ids),
@@ -3529,6 +3541,16 @@ def _record_profile_view(db, target):
 # How many days the dashboard chart covers, and therefore how far back the
 # comparison window reaches: the query below spans twice this.
 VIEW_SERIES_DAYS = 30
+
+# What ?days= may ask for. A fixed set rather than a clamped range, because
+# the number decides how much of profile_views gets scanned -- twice it, in
+# fact, since the comparison window is the same length again. An arbitrary
+# integer would let a caller ask for a decade.
+#
+# Three is also all the page needs. A week is "did sharing that link do
+# anything", a month is the default, and a quarter is the longest span over
+# which a directory this size says anything at all.
+VIEW_SERIES_CHOICES = (7, 30, 90)
 
 
 def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
@@ -4113,6 +4135,7 @@ def _notifications_for(db, org):
     wording, not in the API.
     """
     since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
+    seen_at = org.notifications_seen_at
     rows = db.query(Partnership).filter(
         or_(Partnership.proposer_id == org.id,
             Partnership.recipient_id == org.id)
@@ -4136,6 +4159,12 @@ def _notifications_for(db, org):
             "counterpart": proposal.counterpart_party(org.id).get("name"),
             "proposal_id": proposal.id,
             "actionable": actionable,
+            # Read already, if the list has been marked read since this
+            # happened. Never true of something actionable: a proposal
+            # waiting on an answer has not been dealt with because somebody
+            # looked at a list, and dimming it would say it had.
+            "seen": bool(
+                not actionable and seen_at is not None and at <= seen_at),
             "href": f"ppdashboard.html#{tab}",
         }
         if count is not None:
@@ -4204,6 +4233,39 @@ def list_notifications(org, db):
         # What the nav dot reflects: things actually waiting on this
         # organization, as opposed to things it may simply not have seen yet.
         "actionable": sum(1 for i in items if i["actionable"]),
+        # How many entries are news the reader has not caught up on. Separate
+        # from `actionable` on purpose -- one is work and the other is
+        # history, and the control that clears this must not look like it
+        # cleared the other.
+        "unseen": sum(1 for i in items
+                      if not i["actionable"] and not i["seen"]),
+    })
+
+
+@app.route("/api/notifications/read", methods=["POST"])
+@login_required
+def mark_notifications_read(org, db):
+    """Catch the list up to now.
+
+    Clears the news and leaves the work. Everything informational that has
+    already happened is marked seen; anything still waiting on this
+    organization is untouched and stays in the list, because it is still
+    waiting -- and the nav badge, which counts exactly that, does not move.
+
+    A timestamp rather than a per-item dismissal. Every entry in this list is
+    derived from a partnership row or a message, so there is no row to mark;
+    "everything up to here" is the only thing that can be recorded without
+    inventing a table to record it in, and it is also what somebody clicking
+    a button called "mark all read" actually means.
+    """
+    org.notifications_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    items = _notifications_for(db, org)
+    return jsonify({
+        "message": "Marked read",
+        "notifications": items,
+        "actionable": sum(1 for i in items if i["actionable"]),
+        "unseen": 0,
     })
 
 
@@ -4253,13 +4315,24 @@ def get_dashboard(org, db):
     # /api/me. Included in the not-yet-onboarded branch too: that page still
     # renders the meetings card, and an empty list there should mean "none"
     # rather than "never asked".
+    # Clamped to the fixed set rather than trusted: this number decides how
+    # much of profile_views is scanned. Anything unrecognized falls back to
+    # the default rather than being refused -- a stale bookmark asking for a
+    # window that no longer exists should draw the usual chart, not an error.
+    try:
+        view_days = int(request.args.get("days", VIEW_SERIES_DAYS))
+    except (TypeError, ValueError):
+        view_days = VIEW_SERIES_DAYS
+    if view_days not in VIEW_SERIES_CHOICES:
+        view_days = VIEW_SERIES_DAYS
+
     events = [e.to_dict() for e in _events_for(db, org)]
     # The shortlist's size only -- the dialog behind the card fetches the
     # organizations themselves when it is opened, the same way the matches
     # views do.
     saved_count = len(_saved_ids(db, org))
     views_total, views_recent, views_series, views_prior = (
-        _profile_view_stats(db, org))
+        _profile_view_stats(db, org, days=view_days))
 
     if not org.onboarding_complete:
         return jsonify({
@@ -4275,6 +4348,7 @@ def get_dashboard(org, db):
                 "profile_views_recent": views_recent,
                 "profile_views_series": views_series,
                 "profile_views_prior": views_prior,
+                "profile_views_days": view_days,
                 "category_total": CATEGORY_TOTAL,
                 "focus_total": FOCUS_TOTAL,
             },
@@ -4324,9 +4398,14 @@ def get_dashboard(org, db):
             "profile_views": views_total,
             "profile_views_recent": views_recent,
             "profile_views_series": views_series,
-            # The 30 days before the series, so the panel can say which way the
-            # line is going rather than only how high it is.
+            # The same length of window before the series, so the panel can
+            # say which way the line is going rather than only how high it is.
             "profile_views_prior": views_prior,
+            # Which window this answer is for. Sent rather than assumed: the
+            # client asked, but a stale or unrecognized ?days= falls back, and
+            # a chart labeled with what it requested rather than what it got
+            # would be captioned wrong.
+            "profile_views_days": view_days,
             # The size of the vocabulary, so the dashboard can draw a ratio
             # without carrying its own copy of a number that lives in
             # categories.py.

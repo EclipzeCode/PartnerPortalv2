@@ -327,8 +327,36 @@ def _rank_key(item):
     return (not mutual, -score, (name or "").casefold())
 
 
-def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
+# How many matches are ever built in full.
+#
+# There is a cap because every match past it costs a full row fetched and a
+# reasons list written, and the page renders a shortlist rather than an index.
+# It was fifty and it truncated silently -- an organization with more matches
+# than that had no way of knowing, let alone of reaching the rest.
+#
+# Raised rather than paged, and that is a deliberate departure from what this
+# was scoped as. The matches view filters what it is holding, in the browser,
+# across every field on the card; paging it server-side would mean a search
+# that can only see the page it is on, so typing a name three pages down
+# would find nothing. Trading a silent truncation for a search that lies is
+# not an improvement.
+#
+# So the number is generous enough that reaching it means something has
+# genuinely changed about the size of this directory, the true total comes
+# back beside the page so the truncation can be *said*, and the surface built
+# for browsing everything -- the directory, which pages and searches in SQL --
+# is where the page points when it happens.
+MATCH_LIMIT = 200
+
+
+def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False,
+                 demo_only=False):
     """Rank other organizations as partners for `me`.
+
+    Returns (matches, total, mutual_total). The last two count everything
+    that matched, not what is being returned: a caller that only got `limit`
+    of them still has to be able to say how many there were, which is the
+    whole difference between a list that stops and a list that stops quietly.
 
     Only orgs with at least one category in common in either direction are
     considered -- everything else scores nothing, so pulling it out of the
@@ -344,17 +372,21 @@ def find_matches(session, me, limit=50, mutual_only=False, demo_only=False):
     hydrated, however many overlap.
     """
     ranked = []
+    mutual_total = 0
     for them in _candidates(session, me, demo_only=demo_only):
         score, mutual, parts, *_ = rank_pair(me, them)
         if score <= 0:
             continue
         if mutual_only and not mutual:
             continue
+        if mutual:
+            mutual_total += 1
         ranked.append((mutual, score, them.name, them))
 
     ranked.sort(key=lambda r: _rank_key(r[:3]))
-    return [_entry(me, org)
-            for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
+    entries = [_entry(me, org)
+               for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
+    return entries, len(ranked), mutual_total
 
 
 def match_overview(session, me, top=5):

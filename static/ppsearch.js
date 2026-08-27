@@ -47,6 +47,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showingExamples = false;
     let displayed = [];
     let currentPage = 1;
+    // Set when the server had more matches than it built. Null the
+    // rest of the time, which is the normal case and says nothing.
+    let matchTruncation = null;
     let mutualOnly = false;
     // Applied in the browser rather than as another query parameter: the
     // overlap is already in every match's detail, so this is a filter over
@@ -161,6 +164,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             allMatches = data.matches || [];
             exampleMatches = data.examples || [];
+            // How many there were, as opposed to how many came back. The two
+            // used to be the same number by construction, which is how the
+            // list could stop at fifty without anybody being told.
+            matchTruncation = data.truncated
+                ? { total: data.total, shown: data.count }
+                : null;
             // Rides along with the matches, so the stars are right on the
             // first paint rather than filling in a moment later.
             savedIds = new Set(data.saved_ids || []);
@@ -640,6 +649,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Nothing to expand when a single page already holds everything.
             showAllBtn.hidden = count <= size && !showAll;
         }
+        paintTruncationNote();
+    }
+
+    // Said out loud when the server had more matches than it built.
+    //
+    // The list used to stop at fifty and say nothing, so an organization with
+    // more than that had no way to know there were more, let alone to reach
+    // them. The cap is much higher now and reaching it means the directory
+    // has genuinely outgrown a shortlist -- which is the moment to point at
+    // the surface built for the other job, since Browse pages and searches in
+    // the database rather than in this page's memory.
+    function paintTruncationNote() {
+        let note = document.getElementById('matchTruncation');
+        const relevant = viewMode === 'matches' && matchTruncation
+            && !showingExamples;
+        if (!relevant) {
+            if (note) note.remove();
+            return;
+        }
+        if (!note) {
+            note = document.createElement('p');
+            note.className = 'match-truncation';
+            note.id = 'matchTruncation';
+            partnersGrid.insertAdjacentElement('afterend', note);
+        }
+        note.innerHTML =
+            `Showing your strongest ${matchTruncation.shown} matches of `
+            + `${matchTruncation.total}. `
+            + '<button type="button" class="link-button" id="truncationBrowse">'
+            + 'Browse every organization</button> to search the rest.';
+        const button = document.getElementById('truncationBrowse');
+        if (button) button.addEventListener('click', () => setViewMode('browse'));
     }
 
     // Which page the arrows step from. Browse keeps its own number, because

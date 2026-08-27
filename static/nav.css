@@ -687,3 +687,34 @@
         right: -2rem;
     }
 }
+
+/* --- Notifications: read and unread ------------------------------------- */
+/* The head holds the title and the one control that clears the list. */
+.notify-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.notify-clear {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-family: var(--h-mono, monospace);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--h-give);
+    cursor: pointer;
+}
+
+.notify-clear:hover { text-decoration: underline; }
+
+/* Seen news is dimmed rather than removed: it is still what happened, and a
+   list that deletes itself as you read it cannot be re-read. Only ever
+   applied to non-actionable entries -- something still waiting on you is
+   never dimmed, because dimming it would say it had been dealt with. */
+.notify-list li.is-seen .notify-text,
+.notify-list li.is-seen .notify-when { opacity: 0.55; }
+.notify-list li.is-seen a i { opacity: 0.4; }

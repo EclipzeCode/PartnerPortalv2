@@ -912,3 +912,45 @@
         flex-wrap: wrap;
     }
 }
+
+/* --- Chart range -------------------------------------------------------- */
+/* Three windows over the plot. Sits in the same row as the table toggle,
+   which is why that row exists at all. */
+.plot-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.range-toggle { display: inline-flex; gap: 0; }
+
+.range-toggle button {
+    font-family: var(--h-mono, monospace);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    background: none;
+    border: 1px solid var(--h-rule);
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+}
+
+/* Square and butted together, like the rest of this design: the group reads
+   as one control rather than three buttons that happen to be adjacent. */
+.range-toggle button + button { border-left: 0; }
+
+.range-toggle button:hover { color: var(--h-ink); }
+
+.range-toggle button[aria-pressed="true"] {
+    color: var(--h-on-give);
+    background: var(--h-give);
+    border-color: var(--h-give);
+}
+
+.range-toggle button:focus-visible {
+    outline: 2px solid var(--h-give);
+    outline-offset: 1px;
+}

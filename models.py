@@ -280,6 +280,26 @@ class Organization(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # How far back the notification list has been read.
+    #
+    # The list is derived rather than stored -- every entry in it is already a
+    # fact on a partnership row or a message -- and that is the right shape:
+    # a notifications table would be a second copy of all of it, kept in step
+    # by hand and wrong the first time somebody forgot to write to it. But
+    # derived data has nowhere to record that a person has seen it, which is
+    # why old news sat in the list for the full sixty days.
+    #
+    # One column answers it. Anything that happened before this has been
+    # seen; anything after has not.
+    #
+    # It deliberately does not touch what is *actionable*. A proposal waiting
+    # on an answer does not stop waiting because somebody looked at the list,
+    # so marking everything read clears the news and leaves the work -- which
+    # is also why the nav badge, which counts work, is unaffected by it.
+    notifications_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # --- Moderation --------------------------------------------------------
     # When an admin took this organization out of the directory, if they did.
     #

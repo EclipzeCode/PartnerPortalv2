@@ -136,9 +136,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const up = change > 0;
                 delta.className = `panel-delta${
                     change === 0 ? '' : (up ? ' is-up' : ' is-down')}`;
+                // Named from the answer, not from a constant. The window
+                // is a control now, and a caption that says "30 days" over a
+                // seven-day chart is worse than no caption.
+                const days = stats.profile_views_days || 30;
                 delta.innerHTML = change === 0
-                    ? '<b>No change</b> vs. prior 30 days'
-                    : `<b>${up ? '▲' : '▼'} ${Math.abs(change)}%</b> vs. prior 30 days`;
+                    ? `<b>No change</b> vs. prior ${days} days`
+                    : `<b>${up ? '▲' : '▼'} ${Math.abs(change)}%</b> `
+                      + `vs. prior ${days} days`;
             }
         }
 
@@ -775,6 +780,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Guarded against re-entering: the redraw puts an SVG inside the box it is
     // measuring, and without the size check a render that nudged the box would
     // schedule another one forever.
+    // --- The chart range --------------------------------------------------
+    // Refetches rather than re-slicing. The series is counted per day by the
+    // database over a window twice the length of the one drawn, so a shorter
+    // view is not a subset of a longer one -- the comparison figure beside it
+    // is a different window entirely, and slicing would leave it captioned
+    // against the wrong span.
+    const range = document.getElementById('viewsRange');
+    if (range) {
+        let pending = 0;
+        range.addEventListener('click', async (e) => {
+            const button = e.target.closest('[data-days]');
+            if (!button || button.getAttribute('aria-pressed') === 'true') return;
+
+            const days = button.dataset.days;
+            const mine = ++pending;
+            range.querySelectorAll('[data-days]').forEach((b) => {
+                b.setAttribute('aria-pressed', String(b === button));
+            });
+
+            try {
+                const fresh = await window.api(`/api/dashboard?days=${days}`);
+                // Same guard the directory uses: a slower answer must not
+                // land on top of a faster one somebody asked for after it.
+                if (mine !== pending) return;
+                dashboard = fresh;
+                renderViewsChart();
+            } catch (error) {
+                if (mine !== pending) return;
+                window.toast(error.message || 'Could not load that range.',
+                             'error');
+            }
+        });
+    }
+
     const plotHost = document.getElementById('viewsChart');
     if (plotHost && 'ResizeObserver' in window) {
         let lastW = 0;

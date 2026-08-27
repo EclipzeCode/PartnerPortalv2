@@ -87,7 +87,7 @@ def test_shared_focus_does_not_create_a_match(session, make_org):
     no_trade = make_org(needs=["legal"], offers=["translation"],
                         focus_areas=causes)
 
-    names = [m["name"] for m in find_matches(session, me)]
+    names = [m["name"] for m in find_matches(session, me)[0]]
     assert no_trade.name not in names
 
 
@@ -99,17 +99,17 @@ def test_incomplete_and_demo_profiles_stay_out_of_matches(session, make_org):
     example = make_org(needs=["grant_writing"], offers=["web_development"],
                        is_demo=True)
 
-    names = [m["name"] for m in find_matches(session, me)]
+    names = [m["name"] for m in find_matches(session, me)[0]]
     assert unfinished.name not in names
     assert example.name not in names
     # ...but the examples-only view is exactly how those are surfaced.
-    demo_names = [m["name"] for m in find_matches(session, me, demo_only=True)]
+    demo_names = [m["name"] for m in find_matches(session, me, demo_only=True)[0]]
     assert example.name in demo_names
 
 
 def test_an_org_never_matches_itself(session, make_org):
     me = make_org(needs=["web_development"], offers=["web_development"])
-    assert me.name not in [m["name"] for m in find_matches(session, me)]
+    assert me.name not in [m["name"] for m in find_matches(session, me)[0]]
 
 
 def test_mutual_matches_sort_ahead_of_higher_scoring_one_way(session, make_org):
@@ -121,7 +121,7 @@ def test_mutual_matches_sort_ahead_of_higher_scoring_one_way(session, make_org):
     make_org(name="pytest one way",
              offers=["web_development", "design_branding"], needs=["legal"])
 
-    results = find_matches(session, me)
+    results, _total, _mutual = find_matches(session, me)
     mutual_flags = [m["match_detail"]["mutual"] for m in results]
     # Every mutual match appears before every one-way one.
     assert mutual_flags == sorted(mutual_flags, reverse=True)
@@ -253,7 +253,7 @@ def test_match_overview_agrees_with_find_matches(session, make_org):
     make_org(needs=["marketing_social"], offers=["web_development"])  # one-way
     make_org(needs=["grant_writing"], offers=["design_branding"])     # one-way
 
-    full = find_matches(session, me)
+    full, _total, _mutual = find_matches(session, me)
     total, mutual_count, top = match_overview(session, me, top=5)
 
     assert total == len(full)
@@ -288,3 +288,42 @@ def test_match_overview_is_empty_without_a_profile(session, make_org):
     """No needs and no offers is not a match with everybody."""
     me = make_org(needs=[], offers=[])
     assert match_overview(session, me) == (0, 0, [])
+
+
+# --- The cap ---------------------------------------------------------------
+# find_matches used to stop at fifty and say nothing, so an organization with
+# more matches than that had no way of knowing there were more.
+
+def test_the_totals_count_everything_not_just_what_came_back(session, make_org):
+    """The difference between a list that stops and one that stops quietly."""
+    me = make_org(needs=["web_development"], offers=["mentors"])
+    for i in range(4):
+        make_org(name=f"pytest-cap Match {i}",
+                 offers=["web_development"], needs=["mentors"])
+
+    entries, total, mutual = find_matches(session, me, limit=2)
+    assert len(entries) == 2
+    assert total >= 4
+    assert mutual >= 4
+    assert total > len(entries), "the cap has to be visible in the numbers"
+
+
+def test_the_totals_are_honest_when_nothing_is_capped(session, make_org):
+    me = make_org(needs=["web_development"], offers=["mentors"])
+    make_org(name="pytest-uncapped One",
+             offers=["web_development"], needs=["mentors"])
+    entries, total, _mutual = find_matches(session, me)
+    assert total == len(entries)
+
+
+def test_mutual_total_counts_all_matches_not_the_page(session, make_org):
+    me = make_org(needs=["web_development"], offers=["mentors"])
+    # Two-way.
+    for i in range(3):
+        make_org(name=f"pytest-mut Two {i}",
+                 offers=["web_development"], needs=["mentors"])
+    # One-way: gives what me needs, wants nothing me offers.
+    make_org(name="pytest-mut One", offers=["web_development"], needs=["legal"])
+
+    _entries, _total, mutual = find_matches(session, me, limit=1)
+    assert mutual >= 3, "mutual_total must not be counted from the page"

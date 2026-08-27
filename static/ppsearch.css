@@ -1515,3 +1515,25 @@ body.ink .category-chip.checked {
 .modal-body #proposeForm > * {
     flex-shrink: 0;
 }
+
+/* --- When the match list stops short ------------------------------------ */
+/* Only ever rendered when the server had more matches than it built, which
+   at this directory's size is never. It exists so that the day it is not
+   never, the page says so instead of quietly ending. */
+.match-truncation {
+    margin: 1.25rem 0 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--h-dim, #6B6960);
+    text-align: center;
+}
+
+.link-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--h-give, #1E3A6E);
+    text-decoration: underline;
+    cursor: pointer;
+}

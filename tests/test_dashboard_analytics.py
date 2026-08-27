@@ -82,3 +82,112 @@ def test_an_unfinished_profile_still_gets_the_series(client, login, make_org):
     stats = stats_for(client)
     assert len(stats["profile_views_series"]) == 30
     assert stats["category_total"] == 33
+
+
+# --- The chart range -------------------------------------------------------
+
+def test_the_window_can_be_asked_for(client, login, make_org):
+    login(make_org())
+    for days in (7, 30, 90):
+        stats = client.get(f"/api/dashboard?days={days}").get_json()["stats"]
+        assert stats["profile_views_days"] == days
+        assert len(stats["profile_views_series"]) == days
+
+
+def test_an_unrecognized_window_falls_back_rather_than_failing(
+        client, login, make_org):
+    """A stale bookmark asking for a window that no longer exists should draw
+    the usual chart, not an error. The set is fixed because this number
+    decides how much of profile_views gets scanned -- twice it, in fact."""
+    login(make_org())
+    for asked in ("365", "0", "-30", "nonsense", ""):
+        stats = client.get(f"/api/dashboard?days={asked}").get_json()["stats"]
+        assert stats["profile_views_days"] == 30
+
+
+def test_the_answer_says_which_window_it_is_for(client, login, make_org):
+    """The caption is written from this. A chart labeled with what was asked
+    for rather than what was answered would be captioned wrong."""
+    login(make_org())
+    stats = client.get("/api/dashboard?days=7").get_json()["stats"]
+    assert stats["profile_views_days"] == 7
+    assert len(stats["profile_views_series"]) == 7
+
+
+# --- Clearing the notification list ----------------------------------------
+# The list is derived, so "read" had nowhere to live and old news sat in it
+# for the full sixty days.
+
+def _notifications(client):
+    return client.get("/api/notifications").get_json()
+
+
+def test_marking_read_clears_the_news(client, login, make_org, session):
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    # Something informational: a proposal of mine that was declined.
+    session.add(Partnership(
+        proposer_id=me.id, recipient_id=them.id,
+        status=Partnership.DECLINED,
+        proposer_gives=["mentors"], recipient_gives=["web_development"],
+        proposer_name=me.name, recipient_name=them.name,
+        responded_at=__import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc)))
+    session.commit()
+    login(me)
+
+    before = _notifications(client)
+    assert before["unseen"] >= 1
+    assert any(not n["seen"] for n in before["notifications"])
+
+    marked = client.post("/api/notifications/read").get_json()
+    assert marked["unseen"] == 0
+    assert all(n["seen"] for n in marked["notifications"] if not n["actionable"])
+
+    # And it stays cleared on the next read.
+    assert _notifications(client)["unseen"] == 0
+
+
+def test_marking_read_does_not_clear_the_work(client, login, make_org, session):
+    """A proposal waiting on an answer has not been dealt with because
+    somebody looked at a list, so it is never marked seen and the count of
+    what is actionable does not move."""
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    session.add(Partnership(
+        proposer_id=them.id, recipient_id=me.id,
+        status=Partnership.PENDING,
+        proposer_gives=["web_development"], recipient_gives=["mentors"],
+        proposer_name=them.name, recipient_name=me.name))
+    session.commit()
+    login(me)
+
+    before = _notifications(client)
+    assert before["actionable"] >= 1
+
+    marked = client.post("/api/notifications/read").get_json()
+    assert marked["actionable"] == before["actionable"]
+    actionable = [n for n in marked["notifications"] if n["actionable"]]
+    assert actionable and all(not n["seen"] for n in actionable)
+
+
+def test_the_nav_badge_is_untouched_by_marking_read(client, login, make_org,
+                                                    session):
+    """The badge counts work. Marking the news read has not answered
+    anything, so it must not move."""
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    session.add(Partnership(
+        proposer_id=them.id, recipient_id=me.id,
+        status=Partnership.PENDING,
+        proposer_gives=["web_development"], recipient_gives=["mentors"],
+        proposer_name=them.name, recipient_name=me.name))
+    session.commit()
+    login(me)
+
+    before = client.get("/api/me").get_json()["pending_proposals"]
+    client.post("/api/notifications/read")
+    assert client.get("/api/me").get_json()["pending_proposals"] == before

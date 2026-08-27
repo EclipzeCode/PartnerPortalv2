@@ -92,7 +92,11 @@
             </button>
             <div class="notify-dropdown" id="notifyDropdown" hidden
                  role="region" aria-label="Notifications">
-                <div class="notify-head">Notifications</div>
+                <div class="notify-head">
+                    <span>Notifications</span>
+                    <button type="button" class="notify-clear" id="notifyClear"
+                            hidden>Mark all read</button>
+                </div>
                 <ul class="notify-list" id="notifyList">
                     <li class="notify-empty">Loading...</li>
                 </ul>
@@ -103,7 +107,12 @@
         return wrap;
     }
 
-    function render(list, items) {
+    function render(list, items, unseen) {
+        const clear = document.getElementById('notifyClear');
+        // Only when there is news to clear. Actionable entries are not
+        // cleared by this and the button must not imply they are, so an
+        // inbox holding nothing but work offers nothing to press.
+        if (clear) clear.hidden = !unseen;
         if (!items.length) {
             list.innerHTML =
                 '<li class="notify-empty">Nothing new. Proposals and replies '
@@ -113,8 +122,12 @@
         const esc = window.escapeHtml;
         list.innerHTML = items.map((item) => {
             const { icon, text } = describe(item);
+            const classes = [
+                item.actionable ? 'is-actionable' : '',
+                item.seen ? 'is-seen' : '',
+            ].filter(Boolean).join(' ');
             return `
-                <li class="${item.actionable ? 'is-actionable' : ''}">
+                <li class="${classes}">
                     <a href="${esc(item.href)}">
                         <i class='bx ${esc(icon)}' aria-hidden="true"></i>
                         <span class="notify-text">${esc(text)}</span>
@@ -168,7 +181,7 @@
             fetching = true;
             try {
                 const data = await window.api('/api/notifications');
-                render(list, data.notifications || []);
+                render(list, data.notifications || [], data.unseen || 0);
                 everRendered = true;
                 // The dot and this list are two counts of the same thing,
                 // from two endpoints, and they disagreed: the dot adds
@@ -214,5 +227,22 @@
             setOpen(false);
             toggle.focus();
         });
+
+        document.getElementById('notifyClear')
+            .addEventListener('click', async (e) => {
+                // Inside the panel, so the document listener above would
+                // otherwise read it as a click outside and close the thing
+                // the reader is looking at.
+                e.stopPropagation();
+                try {
+                    const data = await window.api('/api/notifications/read',
+                                                  { method: 'POST' });
+                    render(list, data.notifications || [], 0);
+                    // The dot is deliberately not touched. It counts work,
+                    // and marking the news read has not answered a proposal.
+                } catch {
+                    window.toast('Could not mark those read.', 'error');
+                }
+            });
     };
 })();

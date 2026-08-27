@@ -158,12 +158,26 @@
                          opening a thirty-row table below the chart pushed the
                          whole page around. -->
                     <div class="plot-region" id="viewsRegion">
-                        <button type="button" class="table-toggle"
-                                data-table-toggle="viewsRegion"
-                                aria-expanded="false" aria-controls="viewsTable">
-                            <i class='bx bx-table' aria-hidden="true"></i>
-                            <span>View as table</span>
-                        </button>
+                        <div class="plot-controls">
+                            <!-- Three windows, not a free number: this decides
+                                 how much of profile_views is scanned, and twice
+                                 it, since the comparison window is the same
+                                 length again. The server accepts these three
+                                 and falls back to thirty for anything else. -->
+                            <div class="range-toggle" role="group"
+                                 aria-label="Chart range" id="viewsRange">
+                                <button type="button" data-days="7">7d</button>
+                                <button type="button" data-days="30"
+                                        aria-pressed="true">30d</button>
+                                <button type="button" data-days="90">90d</button>
+                            </div>
+                            <button type="button" class="table-toggle"
+                                    data-table-toggle="viewsRegion"
+                                    aria-expanded="false" aria-controls="viewsTable">
+                                <i class='bx bx-table' aria-hidden="true"></i>
+                                <span>View as table</span>
+                            </button>
+                        </div>
                         <div class="plot-body">
                             <div class="chart" id="viewsChart"></div>
                             <div class="chart-data" id="viewsTable" hidden></div>
