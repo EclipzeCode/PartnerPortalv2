@@ -41,7 +41,7 @@
     try {
         const res = await fetch('/api/account/email/confirm', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
             credentials: 'same-origin',
             body: JSON.stringify({ token }),
         });

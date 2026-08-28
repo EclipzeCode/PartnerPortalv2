@@ -42,10 +42,37 @@ def _normalize(url):
 
 DATABASE_URL = _normalize(DATABASE_URL)
 
+# How many Postgres connections one worker process may hold.
+#
+# Left at SQLAlchemy's defaults, this was pool_size=5 with max_overflow=10 --
+# fifteen connections per process, and render.yaml starts two workers, so a
+# ceiling of thirty against a Neon compute whose own limit is well under that
+# on the smaller plans. Nothing here would ever open thirty: gunicorn's sync
+# workers handle exactly one request at a time, so one worker needs one
+# connection, and the pool's job is to keep that one warm rather than to fan
+# out. The defaults were not sized for this app, they were just never said.
+#
+# Two plus three of overflow, then. The overflow is not for concurrency that
+# does not exist -- it is headroom for the moment a connection is being
+# recycled or pre-ping finds a dead one, so a request borrows a second rather
+# than waiting on the first. Overridable because the right number is a
+# property of the deployment, not of this file: raise it with --threads or a
+# non-sync worker class, both of which make one process genuinely concurrent.
+POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "2"))
+POOL_MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "3"))
+
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
+    pool_size=POOL_SIZE,
+    max_overflow=POOL_MAX_OVERFLOW,
+    # Wait this long for a connection before giving up. The default is 30
+    # seconds, which under a burst means a request sitting silently on a
+    # queue until the client or Render's proxy has long since given up on it.
+    # Ten seconds is past Neon's cold start and short enough that a pool
+    # genuinely exhausted surfaces as an error somebody can act on.
+    pool_timeout=int(os.environ.get("DB_POOL_TIMEOUT", "10")),
     future=True,
 )
 

@@ -53,9 +53,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `<p class="admin-empty">${esc(message)}</p>`;
     }
 
+    // The tick box on a row in a section that can be worked in bulk.
+    //
+    // A label wrapping the input rather than a bare checkbox, so the hit
+    // target is more than 13 pixels of it, and an aria-label because the row
+    // title beside it is not the box's own name.
+    function picker(id, what) {
+        return `
+            <label class="admin-pick">
+              <input type="checkbox" data-pick="${id}"
+                     aria-label="Select ${esc(what)}">
+            </label>`;
+    }
+
     function messageRow(m) {
         return `
             <article class="admin-row">
+              ${picker(m.id, m.name)}
               <div class="admin-row-main">
                 <p class="admin-row-title">
                   ${esc(m.name)}
@@ -92,6 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return `
             <article class="admin-row">
+              ${kind === 'flagged' ? picker(org.id, org.name) : ''}
               <div class="admin-row-main">
                 <p class="admin-row-title">
                   ${esc(org.name)}
@@ -142,26 +157,264 @@ document.addEventListener('DOMContentLoaded', async () => {
               <span class="admin-count-label">${esc(label)}</span>
             </div>`).join('');
 
-        document.getElementById('adminMessages').innerHTML =
-            data.contact_messages.length
-                ? data.contact_messages.map(messageRow).join('')
-                : empty('Nothing waiting.');
-
-        document.getElementById('adminFlagged').innerHTML =
-            data.flagged.length
-                ? data.flagged.map((o) => orgRow(o, 'flagged')).join('')
-                : empty('No names are flagged.');
-
-        document.getElementById('adminHidden').innerHTML =
-            data.hidden.length
-                ? data.hidden.map((o) => orgRow(o, 'hidden')).join('')
-                : empty('Nothing is hidden.');
-
-        document.getElementById('adminActions').innerHTML =
-            data.actions.length
-                ? data.actions.map(actionRow).join('')
-                : empty('Nothing has been done yet.');
+        // The overview carries page one of every section. That is the right
+        // thing to paint on a first load and the wrong thing after an
+        // action: an admin who marked a message handled on page three of the
+        // queue should still be on page three, not silently returned to the
+        // top of a list they were working through.
+        //
+        // So a section painted from here only if that is where it actually
+        // is. Anything the admin has moved -- paged or searched -- re-asks
+        // for the page it is on, which is one extra request per moved
+        // section and usually none at all.
+        const moved = [];
+        SECTIONS.forEach((section) => {
+            const here = state[section.name];
+            if (here.term || here.page > 1) {
+                moved.push(section);
+                return;
+            }
+            const rows = data[section.key] || [];
+            document.getElementById(section.host).innerHTML = rows.length
+                ? rows.map(section.row).join('')
+                : empty(section.blank);
+            paintPaging(section, (data.paging || {})[section.name]);
+            paintSelection(section);
+        });
+        moved.forEach(loadSection);
     }
+
+    // --- Sections: search and paging --------------------------------------
+    // Each of the four lists used to be the newest fifty rows with no way to
+    // reach the fifty-first, which is fine at nine rows and useless at two
+    // hundred. Worse for the contact queue than for the others: it is
+    // ordered oldest-first, so the rows that fell off the end were the ones
+    // that had been waiting longest.
+    //
+    // Described as data rather than wired four times, for the same reason
+    // the server describes them as data: what differs between these is a
+    // name, a container and an empty message.
+
+    const SECTIONS = [
+        {
+            name: 'contact_messages',
+            key: 'contact_messages',
+            host: 'adminMessages',
+            search: 'searchContactMessages',
+            pager: 'pagerContactMessages',
+            count: 'countContactMessages',
+            row: messageRow,
+            noun: 'message',
+            blank: 'Nothing waiting.',
+        },
+        {
+            name: 'flagged',
+            key: 'flagged',
+            host: 'adminFlagged',
+            search: 'searchFlagged',
+            pager: 'pagerFlagged',
+            count: 'countFlagged',
+            row: (o) => orgRow(o, 'flagged'),
+            noun: 'name',
+            blank: 'No names are flagged.',
+        },
+        {
+            name: 'hidden',
+            key: 'hidden',
+            host: 'adminHidden',
+            search: 'searchHidden',
+            pager: 'pagerHidden',
+            count: 'countHidden',
+            row: (o) => orgRow(o, 'hidden'),
+            noun: 'organization',
+            blank: 'Nothing is hidden.',
+        },
+        {
+            name: 'actions',
+            key: 'actions',
+            host: 'adminActions',
+            search: 'searchActions',
+            pager: 'pagerActions',
+            count: 'countActions',
+            row: actionRow,
+            noun: 'action',
+            blank: 'Nothing has been done yet.',
+        },
+    ];
+
+    // Where each section currently is. Kept here rather than read back off
+    // the DOM, so a reload after an action lands on the page the admin was
+    // looking at instead of jumping them back to the top of the queue.
+    const state = {};
+    SECTIONS.forEach((s) => { state[s.name] = { page: 1, term: '' }; });
+
+    function paintPaging(section, paging) {
+        if (!paging) return;
+        state[section.name].page = paging.page;
+
+        const pager = document.getElementById(section.pager);
+        pager.hidden = paging.pages <= 1;
+        pager.querySelector('[data-page="prev"]').disabled = paging.page <= 1;
+        pager.querySelector('[data-page="next"]').disabled =
+            paging.page >= paging.pages;
+        pager.querySelector('.admin-page-indicator').textContent =
+            `${paging.page} / ${paging.pages}`;
+
+        // Said in words beside the box, because a pager alone tells you how
+        // many pages there are and not how many things you are looking at --
+        // and after a search that second number is the answer.
+        const el = document.getElementById(section.count);
+        const n = paging.total;
+        const term = state[section.name].term;
+        if (!term && paging.pages <= 1) {
+            el.textContent = '';
+            return;
+        }
+        el.textContent = `${n} ${section.noun}${n === 1 ? '' : 's'}`
+            + (term ? ` matching "${term}"` : '');
+    }
+
+    async function loadSection(section) {
+        const { page, term } = state[section.name];
+        const host = document.getElementById(section.host);
+        host.setAttribute('aria-busy', 'true');
+
+        const params = new URLSearchParams({ page: String(page) });
+        if (term) params.set('q', term);
+
+        let data;
+        try {
+            data = await call(
+                `/api/admin/section/${section.name}?${params}`);
+        } catch (error) {
+            host.removeAttribute('aria-busy');
+            window.toast(error.message || 'Could not load that.', 'error');
+            return;
+        }
+        host.removeAttribute('aria-busy');
+
+        host.innerHTML = data.rows.length
+            ? data.rows.map(section.row).join('')
+            : empty(term ? 'Nothing matches that search.' : section.blank);
+        paintPaging(section, data);
+        // New rows, so nothing is ticked. Said rather than assumed: the bar
+        // is hidden by the count being zero, and leaving it up over a page
+        // the selection no longer refers to is how a bulk action acts on
+        // something nobody chose.
+        paintSelection(section);
+    }
+
+    // --- Selection --------------------------------------------------------
+    // Only the two sections whose action is reversible and needs no
+    // per-row decision carry tick boxes; see the note above the bulk routes
+    // in app.py.
+    //
+    // The selection is deliberately not remembered across a page change or a
+    // search. It is made from what is on screen, and carrying it to a page
+    // whose rows you have not read would let one click act on rows nobody
+    // looked at, which is the whole thing bulk actions have to not become.
+
+    const BULK = {
+        contact_messages: {
+            bar: 'bulkContactMessages',
+            noun: 'message',
+            run: (ids) => call('/api/admin/contact-messages/handled', {
+                method: 'POST', body: { ids, handled: true },
+            }),
+        },
+        flagged: {
+            bar: 'bulkFlagged',
+            noun: 'name',
+            run: (ids) => call('/api/admin/organizations/flags', {
+                method: 'DELETE', body: { ids },
+            }),
+        },
+    };
+
+    function selectedIds(section) {
+        return Array.from(document
+            .getElementById(section.host)
+            .querySelectorAll('[data-pick]:checked'))
+            .map((box) => Number(box.dataset.pick));
+    }
+
+    function paintSelection(section) {
+        const bulk = BULK[section.name];
+        if (!bulk) return;
+        const bar = document.getElementById(bulk.bar);
+        const n = selectedIds(section).length;
+        bar.hidden = n === 0;
+        bar.querySelector('.admin-bulk-count').textContent =
+            `${n} ${bulk.noun}${n === 1 ? '' : 's'} selected`;
+    }
+
+    SECTIONS.forEach((section) => {
+        const bulk = BULK[section.name];
+        if (!bulk) return;
+        const host = document.getElementById(section.host);
+        const bar = document.getElementById(bulk.bar);
+
+        host.addEventListener('change', (e) => {
+            if (e.target.matches('[data-pick]')) paintSelection(section);
+        });
+
+        bar.addEventListener('click', async (e) => {
+            const button = e.target.closest('[data-bulk]');
+            if (!button) return;
+
+            if (button.dataset.bulk === 'clear-selection') {
+                host.querySelectorAll('[data-pick]:checked')
+                    .forEach((box) => { box.checked = false; });
+                paintSelection(section);
+                return;
+            }
+
+            const ids = selectedIds(section);
+            if (!ids.length) return;
+            button.disabled = true;
+            try {
+                const result = await bulk.run(ids);
+                window.toast(result.message || 'Done.');
+                await load();
+            } catch (error) {
+                window.toast(error.message || 'That did not work.', 'error');
+            } finally {
+                button.disabled = false;
+                // The rows were replaced by the reload, so nothing is ticked
+                // any more and the bar has to be told.
+                paintSelection(section);
+            }
+        });
+    });
+
+    SECTIONS.forEach((section) => {
+        const input = document.getElementById(section.search);
+        const pager = document.getElementById(section.pager);
+
+        // Debounced, so typing a name is one request rather than one per
+        // keystroke. 300ms matches the directory's search box.
+        let timer = null;
+        input.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                state[section.name].term = input.value.trim();
+                // A new search starts at the top. Staying on page four of
+                // the previous result set lands on an empty page for a
+                // reason nothing on screen explains.
+                state[section.name].page = 1;
+                loadSection(section);
+            }, 300);
+        });
+
+        pager.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-page]');
+            if (!button || button.disabled) return;
+            state[section.name].page +=
+                button.dataset.page === 'next' ? 1 : -1;
+            if (state[section.name].page < 1) state[section.name].page = 1;
+            loadSection(section);
+        });
+    });
 
     // --- Loading ----------------------------------------------------------
 

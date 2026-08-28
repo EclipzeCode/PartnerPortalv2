@@ -204,7 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/api/reset-password', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: window.csrfHeaders(
+                        { 'Content-Type': 'application/json' }),
                     credentials: 'same-origin',
                     body: JSON.stringify({ token, password }),
                 });

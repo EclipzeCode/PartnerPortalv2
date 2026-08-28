@@ -100,12 +100,51 @@
 
         <div class="admin-counts" id="adminCounts"></div>
 
+        <!-- Each section carries its own search box and its own pager. They
+             are separate queues answering separate questions, and a page
+             number or a search term that reached across all four would mean
+             looking for a name in the audit log moved the contact queue. -->
         <section class="admin-section">
           <h2><i class='bx bx-envelope' aria-hidden="true"></i> Contact messages</h2>
           <p class="admin-lede">Written down before they are mailed, so these
              survive the mail not going. Marking one handled takes it off the
              queue and keeps the record.</p>
+          <div class="admin-tools">
+            <label class="admin-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <span class="sr-only">Search contact messages</span>
+              <input type="search" id="searchContactMessages"
+                     placeholder="Search name, email or message"
+                     autocomplete="off">
+            </label>
+            <p class="admin-result-count" id="countContactMessages"
+               role="status" aria-live="polite"></p>
+          </div>
+          <!-- Appears once something is ticked. Reversible actions only: see
+               the note above the bulk routes in app.py for why hiding an
+               organization is not offered here. -->
+          <div class="admin-bulk" id="bulkContactMessages" hidden>
+            <p class="admin-bulk-count" role="status" aria-live="polite"></p>
+            <div class="admin-bulk-actions">
+              <button type="button" class="btn-ghost" data-bulk="clear-selection">
+                Clear selection
+              </button>
+              <button type="button" class="btn-primary" data-bulk="handle">
+                <i class='bx bx-check-double' aria-hidden="true"></i>
+                Mark handled
+              </button>
+            </div>
+          </div>
           <div id="adminMessages"></div>
+          <div class="admin-pager" id="pagerContactMessages" hidden>
+            <button type="button" class="btn-ghost" data-page="prev">
+              <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="admin-page-indicator"></span>
+            <button type="button" class="btn-ghost" data-page="next">
+              Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+          </div>
         </section>
 
         <section class="admin-section">
@@ -113,7 +152,39 @@
           <p class="admin-lede">Matched something ambiguous at signup. These
              organizations are live, matchable and public exactly like any
              other &mdash; the flag only says somebody should look.</p>
+          <div class="admin-tools">
+            <label class="admin-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <span class="sr-only">Search flagged names</span>
+              <input type="search" id="searchFlagged"
+                     placeholder="Search name, email or location"
+                     autocomplete="off">
+            </label>
+            <p class="admin-result-count" id="countFlagged"
+               role="status" aria-live="polite"></p>
+          </div>
+          <div class="admin-bulk" id="bulkFlagged" hidden>
+            <p class="admin-bulk-count" role="status" aria-live="polite"></p>
+            <div class="admin-bulk-actions">
+              <button type="button" class="btn-ghost" data-bulk="clear-selection">
+                Clear selection
+              </button>
+              <button type="button" class="btn-primary" data-bulk="clear-flags">
+                <i class='bx bx-check-double' aria-hidden="true"></i>
+                Names are fine
+              </button>
+            </div>
+          </div>
           <div id="adminFlagged"></div>
+          <div class="admin-pager" id="pagerFlagged" hidden>
+            <button type="button" class="btn-ghost" data-page="prev">
+              <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="admin-page-indicator"></span>
+            <button type="button" class="btn-ghost" data-page="next">
+              Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+          </div>
         </section>
 
         <section class="admin-section">
@@ -121,14 +192,54 @@
           <p class="admin-lede">Out of the directory, out of matches and off
              their own public URL. They can still sign in and answer proposals,
              and partnerships they already agreed are untouched.</p>
+          <div class="admin-tools">
+            <label class="admin-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <span class="sr-only">Search hidden organizations</span>
+              <input type="search" id="searchHidden"
+                     placeholder="Search name, email, location or reason"
+                     autocomplete="off">
+            </label>
+            <p class="admin-result-count" id="countHidden"
+               role="status" aria-live="polite"></p>
+          </div>
           <div id="adminHidden"></div>
+          <div class="admin-pager" id="pagerHidden" hidden>
+            <button type="button" class="btn-ghost" data-page="prev">
+              <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="admin-page-indicator"></span>
+            <button type="button" class="btn-ghost" data-page="next">
+              Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+          </div>
         </section>
 
         <section class="admin-section">
           <h2><i class='bx bx-history' aria-hidden="true"></i> Recent actions</h2>
           <p class="admin-lede">Both powers here are reversible, so this is not
              an undo log &mdash; it is the answer to who did that.</p>
+          <div class="admin-tools">
+            <label class="admin-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <span class="sr-only">Search recent actions</span>
+              <input type="search" id="searchActions"
+                     placeholder="Search admin or action"
+                     autocomplete="off">
+            </label>
+            <p class="admin-result-count" id="countActions"
+               role="status" aria-live="polite"></p>
+          </div>
           <div id="adminActions"></div>
+          <div class="admin-pager" id="pagerActions" hidden>
+            <button type="button" class="btn-ghost" data-page="prev">
+              <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="admin-page-indicator"></span>
+            <button type="button" class="btn-ghost" data-page="next">
+              Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+          </div>
         </section>
       </section>
     </main>
@@ -149,6 +260,8 @@
         </div>
       </div>
     </div>
+
+    <script src="csrf.js"></script>
 
     <script src="common.js"></script>
     <script src="admin.js"></script>

@@ -22,6 +22,7 @@ import sys
 import uuid
 
 import pytest
+from flask.testing import FlaskClient
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -130,6 +131,49 @@ def session(connection):
         s.close()
 
 
+class CsrfClient(FlaskClient):
+    """A test client that carries the CSRF token, the way a browser does.
+
+    Every state-changing request needs an X-CSRF-Token matching the session
+    (see require_csrf_token in app.py). The alternative to doing it here was
+    to exempt the test client from the check, which would mean the one
+    mechanism standing between this app and a forged write is the one
+    mechanism nothing exercises.
+
+    So this does what common.js does: read the token out of the cookie the
+    server set, and echo it back in a header. The suite's several hundred
+    POSTs then go through the real path without a line of any test changing.
+
+    Priming with a GET is the same order a browser arrives in -- a page loads
+    before anything is submitted from it -- and it is what mints the token,
+    since an API response deliberately never does.
+    """
+
+    #: Cheap, HTML, and needs no database -- so priming cannot fail for a
+    #: reason that has nothing to do with the test being primed for.
+    PRIME_PATH = "/"
+
+    def open(self, *args, **kwargs):
+        method = str(kwargs.get("method", "GET")).upper()
+        if method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return super().open(*args, **kwargs)
+
+        cookie = self.get_cookie(app_module.CSRF_COOKIE)
+        if cookie is None:
+            super().open(self.PRIME_PATH, method="GET")
+            cookie = self.get_cookie(app_module.CSRF_COOKIE)
+
+        if cookie is not None:
+            headers = dict(kwargs.get("headers") or {})
+            # setdefault, not assignment: a test that sets the header itself
+            # is testing this mechanism, and must be allowed to send a wrong
+            # one on purpose.
+            headers.setdefault(app_module.CSRF_HEADER, cookie.value)
+            kwargs["headers"] = headers
+
+        return super().open(*args, **kwargs)
+
+
 @pytest.fixture
 def client(connection, monkeypatch):
     """A Flask test client whose handlers share the test's transaction.
@@ -140,6 +184,7 @@ def client(connection, monkeypatch):
     """
     monkeypatch.setattr(app_module, "get_db", lambda: _session_for(connection))
     app_module.app.config.update(TESTING=True)
+    monkeypatch.setattr(app_module.app, "test_client_class", CsrfClient)
     with app_module.app.test_client() as test_client:
         yield test_client
 

@@ -779,6 +779,22 @@
     color: var(--h-dim);
 }
 
+/* On every occurrence of a repeating meeting, not only the first: each card
+   shows one date, and this is the only thing on it saying that editing or
+   deleting will take the whole series with it. Sits beside the time and
+   reads as metadata rather than as a second heading. */
+.event-repeat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+    margin-left: 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    color: var(--h-give);
+}
+
 /* Element-agnostic on purpose: the edit and remove controls are buttons, and
    "add to calendar" is an <a download> because it fetches a file rather than
    acting on the page. They have to look identical sitting next to each other. */

@@ -222,7 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     `/api/invites/${encodeURIComponent(token)}/claim`, {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: window.csrfHeaders(
+                            { 'Content-Type': 'application/json' }),
                         body: JSON.stringify({ name, email, password }),
                     });
                 data = await res.json();

@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(`${window.API_BASE}/api/contact`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(payload),
             });
             const result = await res.json();

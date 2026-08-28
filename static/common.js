@@ -13,8 +13,57 @@ window.API_BASE = '';
 // The body is held as text rather than as parsed JSON: two callers sharing one
 // response must not share one mutable object, or whichever of them edits it
 // first silently edits the other's copy.
+// How long any one request may hang before it is given up on.
+//
+// fetch() has no timeout of its own: a connection that opens and then stalls
+// -- a phone moving between networks, a proxy holding the socket, Render
+// asleep behind a request that will never be answered -- leaves the promise
+// pending forever. Every caller here awaits that promise to decide what to
+// draw, so a stalled request is a page that shows its loading skeletons
+// permanently, with no error, no retry, and nothing to click.
+//
+// Generous, because the floor is not the network: Neon scales to zero and a
+// cold start behind a warm-up request has been measured near ten seconds
+// (see the note on the /api/me memo below), and render.yaml gives gunicorn
+// `--timeout 120` for exactly that reason. Twenty seconds is comfortably
+// past the slow-but-working case and well short of the forever this
+// replaces.
+const REQUEST_TIMEOUT_MS = 20000;
+
 async function rawRequest(path, opts) {
-    const res = await fetch(`${window.API_BASE}${path}`, opts);
+    // AbortSignal.timeout() is not in every browser this needs to run in, so
+    // the controller is driven by hand where it is missing.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let res;
+    try {
+        res = await fetch(`${window.API_BASE}${path}`,
+                          { ...opts, signal: controller.signal });
+    } catch (err) {
+        // An abort is this timeout firing, and it reaches the caller as a
+        // DOMException named AbortError -- which reads as "Aborted" or as
+        // nothing at all wherever error.message is shown to a person. Said
+        // in words instead, and marked so a caller that wants to tell a
+        // timeout from a refusal can.
+        if (err && err.name === 'AbortError') {
+            const timeout = new Error(
+                'That took too long to answer. Check your connection and '
+                + 'try again.');
+            timeout.timeout = true;
+            throw timeout;
+        }
+        // Offline, DNS, TLS, connection refused. fetch rejects with
+        // "Failed to fetch", which names the API rather than the problem.
+        const offline = new Error(
+            'Could not reach the server. Check your connection and try '
+            + 'again.');
+        offline.offline = true;
+        throw offline;
+    } finally {
+        clearTimeout(timer);
+    }
+
     let text = '';
     try {
         text = await res.text();
@@ -63,6 +112,22 @@ window.api = async function api(path, options = {}) {
     if (opts.body && !(opts.headers && opts.headers['Content-Type'])) {
         opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
         if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+    }
+
+    // The CSRF token on anything that can change something. Attached here,
+    // in the one place every call in the app already passes through, rather
+    // than at each of the sixty-odd call sites -- a scheme that has to be
+    // remembered per request is one that gets forgotten on the request that
+    // matters. The server refuses an unsafe method without it; see
+    // require_csrf_token in app.py.
+    //
+    // Read per request, not captured once: the cookie is replaced when a
+    // session is created or rotated (signing in does both), and a token
+    // captured at page load would be the previous session's.
+    const unsafe = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(
+        (opts.method || 'GET').toUpperCase());
+    if (unsafe && window.csrfHeaders) {
+        opts.headers = window.csrfHeaders(opts.headers || {});
     }
 
     // `fresh` opts out of the shared request and replaces it, so whoever asks
@@ -600,6 +665,39 @@ window.refreshNavCounts = async function refreshNavCounts() {
         // which is no worse than the page it is sitting on.
     }
 };
+
+// Catch the badge up when the tab comes back.
+//
+// The counts were read once, on load, and never again unless something on
+// the page went and changed them. So the common way to use this site -- leave
+// the dashboard open in a tab, come back to it after lunch -- showed
+// whatever was true when the tab was opened. A proposal that arrived in the
+// meantime was invisible until a reload, which is a long way from what a
+// notification bell appears to promise.
+//
+// Tied to the tab becoming visible rather than to a timer. A background tab
+// polling every thirty seconds spends requests on nobody looking, and the
+// moment somebody *is* looking is exactly the moment the number needs to be
+// right. Focus as well as visibilitychange: switching between two windows
+// that are both on screen never fires the latter.
+//
+// Throttled, because those two overlap -- returning to the tab commonly
+// fires both -- and because flicking between windows should not turn into a
+// request per flick.
+const NAV_REFRESH_IDLE_MS = 30000;
+let navRefreshedAt = Date.now();
+
+function refreshNavCountsIfStale() {
+    if (document.visibilityState === 'hidden') return;
+    if (Date.now() - navRefreshedAt < NAV_REFRESH_IDLE_MS) return;
+    navRefreshedAt = Date.now();
+    // Signed-out pages have no badge to update and refreshNavCounts swallows
+    // the 401 that says so, so this is safe to wire up unconditionally.
+    if (window.refreshNavCounts) window.refreshNavCounts();
+}
+
+document.addEventListener('visibilitychange', refreshNavCountsIfStale);
+window.addEventListener('focus', refreshNavCountsIfStale);
 
 // How many proposals are waiting on this organization, shown on the bell.
 //

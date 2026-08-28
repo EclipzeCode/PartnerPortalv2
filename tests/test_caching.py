@@ -23,6 +23,21 @@ def _refs(html):
                            html))
 
 
+def _bundle(html):
+    """The stylesheet bundle a page links, or None.
+
+    Stylesheets are no longer referenced individually: a run of them is
+    collapsed into one `bundle-<digest>.css`, and the digest is taken over
+    every member's name and content hash. So the thing these tests used to
+    watch -- "does the URL the page asks for change when the file changes" --
+    is now watched here instead of on nav.css itself. The property is the
+    same one and it matters for the same reason; only the URL carrying it
+    has moved.
+    """
+    found = re.findall(r'href="(bundle-[0-9a-f]+\.css)"', html)
+    return found[0] if found else None
+
+
 def test_html_is_always_revalidated(client):
     """The page carries the hashes, so a stale copy points at stale assets."""
     for path in ("/", "/index.html", "/pplogin.html", "/organization.html?id=1"):
@@ -32,20 +47,72 @@ def test_html_is_always_revalidated(client):
 
 
 def test_local_asset_references_are_stamped(client):
-    """Every local css/js in a served page names its version."""
+    """Every local css/js in a served page names its version.
+
+    Scripts still say so with a ?v=; stylesheets say it through the bundle
+    digest, which is the same claim made once for all of them.
+    """
     html = client.get("/ppdashboard.html").get_data(as_text=True)
     refs = _refs(html)
     # The dashboard is the heaviest page and pulls the most files.
-    for expected in ("tokens.css", "ppdashboard.css", "shared.css",
-                     "forms.css", "proposals.css", "nav.css",
-                     "common.js", "ppdashboard.js", "proposals.js"):
+    for expected in ("common.js", "ppdashboard.js", "proposals.js"):
         assert expected in refs, f"{expected} was not stamped"
         assert refs[expected] == app_module.asset_version(expected)
 
-    # Nothing local is left unstamped.
-    unstamped = re.findall(
-        r'(?:href|src)="([A-Za-z0-9._-]+\.(?:css|js))"', html)
+    # Nothing local is left unstamped. The bundle is excluded because its
+    # filename *is* its version -- a ?v= on top would say the same thing
+    # twice -- and it is the only reference allowed to look bare.
+    unstamped = [
+        name for name in
+        re.findall(r'(?:href|src)="([A-Za-z0-9._-]+\.(?:css|js))"', html)
+        if not name.startswith(app_module.BUNDLE_PREFIX)
+    ]
     assert unstamped == [], unstamped
+
+
+def test_stylesheets_are_bundled_into_one_request(client):
+    """The dashboard's stylesheets arrive as one file, in order.
+
+    Order is the part worth pinning. These sheets override each other by
+    document order -- shared.css is written expecting to come after ink.css
+    -- so a bundle that concatenated them in any other order would restyle
+    the site while every individual file stayed correct.
+    """
+    html = client.get("/ppdashboard.html").get_data(as_text=True)
+    name = _bundle(html)
+    assert name, "the dashboard's stylesheets were not bundled"
+
+    response = client.get("/" + name)
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+
+    members = re.findall(r'/\* --- (\S+) --- \*/', body)
+    for expected in ("tokens.css", "ppdashboard.css", "shared.css",
+                     "forms.css", "proposals.css", "nav.css"):
+        assert expected in members, f"{expected} missing from the bundle"
+    assert members.index("ink.css") < members.index("shared.css")
+
+    # Named by its contents, so it can be kept for a year.
+    assert "immutable" in response.headers["Cache-Control"]
+
+
+def test_a_bundle_keeps_font_urls_resolvable(client):
+    """Why the bundle is served from the root and not from a /bundle/ path.
+
+    boxicons.css and fonts.css both carry `url(fonts/...woff2)`, which a
+    browser resolves against the stylesheet's own URL. Served from a
+    subdirectory those become /bundle/fonts/... and every glyph on the site
+    silently disappears.
+    """
+    name = _bundle(client.get("/index.html").get_data(as_text=True))
+    assert name and "/" not in name, name
+    body = client.get("/" + name).get_data(as_text=True)
+    assert "url(fonts/" in body
+
+
+def test_a_bundle_nobody_asks_for_is_not_served(client):
+    """A digest from a stale page names a combination that no longer exists."""
+    assert client.get("/bundle-000000000000dead.css").status_code == 404
 
 
 def test_absolute_urls_are_left_alone(client):
@@ -64,17 +131,21 @@ def test_editing_a_file_changes_what_the_page_asks_for(client, tmp_path):
     import os
     path = os.path.join(app_module.STATIC_DIR, "nav.css")
     original = open(path, "rb").read()
-    before = _refs(client.get("/index.html").get_data(as_text=True))["nav.css"]
+    # nav.css is inside index.html's bundle, so the URL that has to move is
+    # the bundle's. The digest covers every member's content hash precisely
+    # so that editing any one of them is a different URL for all of them.
+    before = _bundle(client.get("/index.html").get_data(as_text=True))
+    assert before
     try:
         open(path, "ab").write(b"\n/* pytest cache probe */\n")
-        after = _refs(client.get("/index.html").get_data(as_text=True))["nav.css"]
+        after = _bundle(client.get("/index.html").get_data(as_text=True))
         assert after != before
     finally:
         open(path, "wb").write(original)
 
     # Content-addressed, not mtime-addressed: putting the bytes back gives
     # the original stamp, so a revert does not strand anyone on a third URL.
-    restored = _refs(client.get("/index.html").get_data(as_text=True))["nav.css"]
+    restored = _bundle(client.get("/index.html").get_data(as_text=True))
     assert restored == before
 
 
@@ -101,12 +172,18 @@ def test_a_changed_stylesheet_reaches_someone_who_already_has_the_page(client):
     # Nothing has changed: revalidating costs a 304 and no body.
     assert client.get("/index.html", headers={"If-None-Match": etag}).status_code == 304
 
+    before = _bundle(first.get_data(as_text=True))
     try:
         open(path, "ab").write(b"\n/* pytest: a real change */\n")
         again = client.get("/index.html", headers={"If-None-Match": etag})
         assert again.status_code == 200, "returning visitor was fobbed off with a 304"
-        assert _refs(again.get_data(as_text=True))["nav.css"] == \
-            app_module.asset_version("nav.css")
+        # ...and the page they now hold points at the new stylesheet. The
+        # bundled sheets are deliberately part of the page's cache key even
+        # though the served markup no longer names them -- without that, this
+        # is exactly the bug above with one more layer of indirection on top.
+        after = _bundle(again.get_data(as_text=True))
+        assert after and after != before
+        assert client.get("/" + after).status_code == 200
     finally:
         open(path, "wb").write(original)
 
@@ -235,7 +312,11 @@ def test_error_pages_are_served_and_stamped(client):
     response = client.get("/definitely-not-a-page.html")
     assert response.status_code == 404
     assert response.headers["Cache-Control"] == "no-cache"
-    assert "nav.css?v=" in response.get_data(as_text=True)
+    html = response.get_data(as_text=True)
+    # Its stylesheets go through the same bundling as any other page, and its
+    # scripts through the same stamping.
+    assert _bundle(html), "the 404 page's stylesheets were not bundled"
+    assert "common.js?v=" in html
 
 
 def test_a_missing_asset_reference_is_left_as_written(client):

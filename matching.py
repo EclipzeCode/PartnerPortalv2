@@ -230,10 +230,10 @@ def _join(labels):
     return ", ".join(labels[:-1]) + f" and {labels[-1]}"
 
 
-def _candidates(session, me, *, demo_only=False):
+def _candidates(session, me, *, demo=False):
     """Every organization that could match `me`, as rows cheap enough to rank.
 
-    Eight columns, not the whole row. Both callers below used to
+    Nine columns, not the whole row. Both callers below used to
     `select(Organization)` -- every description, every note, every URL, every
     token column on every organization that overlaps the caller -- in order to
     compute a number and, in match_overview's case, keep five of them. On the
@@ -249,6 +249,14 @@ def _candidates(session, me, *, demo_only=False):
     find_matches filtered `is_demo.is_(demo_only)` and match_overview
     hardcoded False. Same query now, with the one real difference as an
     argument.
+
+    `demo` is tri-state: False for real organizations, True for the seeded
+    examples, and None for both in one pass. The last exists because the
+    matches page needs real matches and, only when there are none, the
+    examples -- and asking for those separately meant scanning and ranking
+    the whole overlapping directory twice for exactly the accounts that have
+    no matches yet, which is every account on its first visit. is_demo comes
+    back as a column so the caller can tell the two apart afterward.
     """
     from models import Organization
 
@@ -261,15 +269,17 @@ def _candidates(session, me, *, demo_only=False):
         Organization.location,
         Organization.remote_friendly,
         Organization.organization_type,
+        Organization.is_demo,
     ).where(
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
-        Organization.is_demo.is_(demo_only),
         # Hidden by an admin. Matching is discovery like the directory is, so
         # it asks the same question -- an organization taken out of the
         # listings should not reappear as somebody's top match.
         Organization.hidden_at.is_(None),
     )
+    if demo is not None:
+        stmt = stmt.where(Organization.is_demo.is_(demo))
 
     # `&&` is "arrays overlap" and is what the GIN indexes accelerate. An org
     # with no categories at all matches nobody, which is correct.
@@ -289,7 +299,7 @@ def _hydrate(session, rows):
 
     One query for the whole page rather than one per row, and only for the
     ones that survived ranking -- which is the entire point of ranking on
-    eight columns first. `in_` on a primary key, so the database does the
+    nine narrow columns first. `in_` on a primary key, so the database does the
     cheapest thing it knows how to do.
     """
     from models import Organization
@@ -325,6 +335,35 @@ def _entry(me, them):
 def _rank_key(item):
     mutual, score, name = item
     return (not mutual, -score, (name or "").casefold())
+
+
+def _rank(me, candidates, *, mutual_only=False):
+    """Score `candidates` against `me` and put them in order.
+
+    Returns (ranked, mutual_total), where each ranked entry is
+    (mutual, score, name, row) and `mutual_total` counts the two-way matches
+    among everything that scored -- not among what a caller goes on to keep,
+    which is why it is counted here rather than off the truncated list.
+
+    This loop was written out three times, identically except for whether it
+    honored mutual_only. Three copies of "what counts as a match and in what
+    order" is three chances for the dashboard's count to disagree with the
+    list the matches page draws from the same data.
+    """
+    ranked = []
+    mutual_total = 0
+    for them in candidates:
+        score, mutual, *_ = rank_pair(me, them)
+        if score <= 0:
+            continue
+        if mutual_only and not mutual:
+            continue
+        if mutual:
+            mutual_total += 1
+        ranked.append((mutual, score, them.name, them))
+
+    ranked.sort(key=lambda r: _rank_key(r[:3]))
+    return ranked, mutual_total
 
 
 # How many matches are ever built in full.
@@ -367,26 +406,53 @@ def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False,
     those instead, for the clearly-labeled "example matches" view shown when
     the real directory is still small.
 
-    Ranked on eight columns, then the survivors are fetched in full. The cap
+    Ranked on nine narrow columns, then the survivors are fetched in full. The cap
     is what makes that worth doing: at most `limit` organizations are ever
     hydrated, however many overlap.
     """
-    ranked = []
-    mutual_total = 0
-    for them in _candidates(session, me, demo_only=demo_only):
-        score, mutual, parts, *_ = rank_pair(me, them)
-        if score <= 0:
-            continue
-        if mutual_only and not mutual:
-            continue
-        if mutual:
-            mutual_total += 1
-        ranked.append((mutual, score, them.name, them))
-
-    ranked.sort(key=lambda r: _rank_key(r[:3]))
+    ranked, mutual_total = _rank(me, _candidates(session, me, demo=demo_only),
+                                 mutual_only=mutual_only)
     entries = [_entry(me, org)
                for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
     return entries, len(ranked), mutual_total
+
+
+def find_matches_with_examples(session, me, *, mutual_only=False,
+                               limit=MATCH_LIMIT):
+    """Real matches, plus the seeded examples when there are none -- one scan.
+
+    What the matches page actually asks for, and it used to ask by calling
+    find_matches twice: once for real organizations and, if that came back
+    empty, again for the demo ones. Both calls run the same overlap query and
+    rank everything it returns, so the account with nothing to show -- a new
+    signup, which is exactly who the examples are for -- paid for the whole
+    thing twice to be told so.
+
+    One pass over both cohorts, split by is_demo afterward. The examples are
+    only ranked out into entries when the real list is empty, so the common
+    case does not build prose for organizations nobody will see.
+
+    Returns (matches, total, mutual_total, examples), where the first three
+    describe the real matches exactly as find_matches does and `examples` is
+    empty whenever there is anything real to show.
+    """
+    rows = _candidates(session, me, demo=None)
+    real = [r for r in rows if not r.is_demo]
+    demo = [r for r in rows if r.is_demo]
+
+    ranked, mutual_total = _rank(me, real, mutual_only=mutual_only)
+    matches = [_entry(me, org)
+               for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
+
+    examples = []
+    if not matches:
+        demo_ranked, _ = _rank(me, demo, mutual_only=mutual_only)
+        examples = [
+            _entry(me, org)
+            for org in _hydrate(session, [r[3] for r in demo_ranked[:limit]])
+        ]
+
+    return matches, len(ranked), mutual_total, examples
 
 
 def match_overview(session, me, top=5):
@@ -402,17 +468,7 @@ def match_overview(session, me, top=5):
 
     Returns (total, mutual_count, top_matches).
     """
-    ranked = []
-    mutual_count = 0
-    for them in _candidates(session, me):
-        score, mutual, parts, *_ = rank_pair(me, them)
-        if score <= 0:
-            continue
-        if mutual:
-            mutual_count += 1
-        ranked.append((mutual, score, them.name, them))
-
-    ranked.sort(key=lambda r: _rank_key(r[:3]))
+    ranked, mutual_count = _rank(me, _candidates(session, me))
     best = [_entry(me, org)
             for org in _hydrate(session, [r[3] for r in ranked[:top]])]
     return len(ranked), mutual_count, best

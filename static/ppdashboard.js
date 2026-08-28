@@ -352,6 +352,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // PM" is unambiguous when the meeting is in your zone and a guess when it
     // is not, and labeling every meeting with a zone nobody needed is the
     // noise that makes people stop reading the label at all.
+    // "Every week" on a repeating meeting's card.
+    //
+    // On every occurrence, not only the first: each card is one date, and a
+    // reader looking at the third Tuesday has no other way to tell that
+    // editing it will move all of them. The badge is what makes the
+    // series-only behavior visible before somebody discovers it.
+    const REPEAT_WORDS = {
+        weekly: 'Every week',
+        biweekly: 'Every two weeks',
+        monthly: 'Every month',
+    };
+
+    function repeatLabel(ev) {
+        const word = REPEAT_WORDS[ev.repeat];
+        if (!word) return '';
+        return `<span class="event-repeat">`
+            + `<i class='bx bx-history' aria-hidden="true"></i> ${esc(word)}`
+            + `</span>`;
+    }
+
     function zoneSuffix(ev) {
         if (!ev.timezone || ev.all_day) return '';
         if (ev.timezone === localZone()) return '';
@@ -615,6 +635,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const eventMinute = document.getElementById('eventMinute');
     const eventAllDay = document.getElementById('eventAllDay');
     const eventDuration = document.getElementById('eventDuration');
+    const eventRepeat = document.getElementById('eventRepeat');
+    const eventRepeatUntil = document.getElementById('eventRepeatUntil');
+    const eventRepeatUntilGroup =
+        document.getElementById('eventRepeatUntilGroup');
+
+    // "Repeat until" only exists once there is a repeat. Hidden rather than
+    // disabled: a date field asking when something stops, beside a control
+    // saying it does not repeat, is a question with no answer.
+    function syncRepeat() {
+        if (!eventRepeat || !eventRepeatUntilGroup) return;
+        const on = Boolean(eventRepeat.value);
+        eventRepeatUntilGroup.hidden = !on;
+        if (!on) {
+            eventRepeatUntil.value = '';
+            setFieldError(eventRepeatUntil, '');
+        }
+    }
+    if (eventRepeat) eventRepeat.addEventListener('change', syncRepeat);
 
     // Five-minute steps: a list of sixty is unusable, and nothing in this app
     // schedules to the minute. A saved meeting that does -- one typed into the
@@ -735,6 +773,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // and opening the meeting to change its date should not be what
             // decides that for them.
             document.getElementById('eventDuration').value = event.duration ?? '';
+            // The series, not the occurrence that was clicked. `starts_on`
+            // is the date the series begins; the date field above shows it
+            // for the same reason -- editing a repeating meeting edits all
+            // of it, so the form has to be showing the thing being edited.
+            if (eventRepeat) {
+                eventRepeat.value = event.repeat || '';
+                eventRepeatUntil.value = event.repeat_until || '';
+                if (event.repeat && event.starts_on) {
+                    document.getElementById('eventDate').value = event.starts_on;
+                }
+            }
             document.getElementById('eventDescription').value = event.description || '';
             document.getElementById('eventLocation').value = event.location || '';
 
@@ -766,6 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         syncAllDay();
+        syncRepeat();
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, document.getElementById('eventTitle'));
@@ -855,6 +905,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const item = document.createElement('div');
         item.className = 'event-item' + (isPastEvent(event) ? ' is-past' : '');
+
         item.innerHTML = `
             <div class="event-date">
                 <span class="event-day">${date.getDate()}</span>
@@ -864,6 +915,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <h4>${esc(event.title)}</h4>
                 <p>With ${esc(event.partner)}</p>
                 <span class="event-time"><i class='bx bx-time'></i> ${timeLabel}</span>
+                ${repeatLabel(event)}
             </div>
             <a class="btn-event" title="Add to calendar" download
                href="/api/events/${encodeURIComponent(event.id)}.ics">
@@ -1138,6 +1190,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // Only when there is a repeat to bound. The server requires the same
+        // pair and refuses the same mismatch; saying it here saves a round
+        // trip for the mistake this form makes easy.
+        if (eventRepeat && eventRepeat.value) {
+            if (!eventRepeatUntil.value) {
+                fail(eventRepeatUntil, 'Say when the repeat should stop.');
+            } else if (date.value && eventRepeatUntil.value < date.value) {
+                // String comparison is safe on YYYY-MM-DD, which is what both
+                // date inputs produce.
+                fail(eventRepeatUntil,
+                     'The repeat has to stop after the meeting starts.');
+            }
+        }
+
         if (!partner.value) {
             // The dropdown is empty until there is someone to meet with, so
             // say that rather than asking for a choice that cannot be made.
@@ -1183,6 +1249,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // length leaves the field untouched; this one is a full save
                 // of what the form shows, and what it shows is blank.
                 duration: allDay || !hours ? null : parseFloat(hours),
+                // null clears the series, which is how a repeating meeting
+                // becomes a one-off. Both keys are always sent so an edit
+                // that turns the repeat off says so, rather than leaving the
+                // old rule in place by omission.
+                repeat: eventRepeat.value || null,
+                repeat_until: eventRepeat.value
+                    ? (eventRepeatUntil.value || null) : null,
                 partner: select.options[select.selectedIndex].text,
                 description: document.getElementById('eventDescription').value.trim(),
                 location: document.getElementById('eventLocation').value.trim()

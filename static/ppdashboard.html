@@ -455,6 +455,33 @@
                             end.
                         </p>
                     </div>
+                    <!-- Repeating. The end date is required rather than
+                         defaulted, because every default here is a guess at
+                         how long somebody means to keep meeting, and the
+                         wrong guess puts a standing meeting in their
+                         calendar forever. Editing a repeating meeting edits
+                         the whole series -- there are no per-occurrence
+                         exceptions, and the hint says so rather than letting
+                         somebody find out. -->
+                    <div class="form-group">
+                        <label for="eventRepeat">Repeats</label>
+                        <select id="eventRepeat">
+                            <option value="">Does not repeat</option>
+                            <option value="weekly">Every week</option>
+                            <option value="biweekly">Every two weeks</option>
+                            <option value="monthly">Every month</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="eventRepeatUntilGroup" hidden>
+                        <label for="eventRepeatUntil">Repeat until</label>
+                        <input type="date" id="eventRepeatUntil">
+                        <p class="field-hint">
+                            The last date this can land on. Editing or deleting
+                            a repeating meeting applies to every occurrence —
+                            to move a single one, end the series and add the
+                            new date separately.
+                        </p>
+                    </div>
                     <div class="form-group">
                         <label for="eventPartner">With Partner</label>
                         <select id="eventPartner" required>
@@ -655,6 +682,8 @@
             </div>
         </div>
     </div>
+
+    <script src="csrf.js"></script>
 
     <script src="common.js"></script>
     <script src="notifications.js"></script>

@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/forgot-password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
                 credentials: 'same-origin',
                 body: JSON.stringify({ email }),
             });

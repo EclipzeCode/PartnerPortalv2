@@ -43,7 +43,8 @@ from units import (
     default_unit_for,
 )
 from matching import (
-    MATCH_LIMIT, find_matches, match_overview, score_pair,
+    MATCH_LIMIT, find_matches, find_matches_with_examples, match_overview,
+    score_pair,
 )
 from moderation import screen_name
 from models import (
@@ -559,28 +560,31 @@ def clear_rate_limit(bucket, key):
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
 
 
-def screened_name(name, where):
-    """moderation.screen_name(), with somewhere to go and something to read.
+def screened_name(name):
+    """moderation.screen_name(), with somewhere to go.
 
-    Two things happen on the way past. A refusal picks up the contact address
-    when one is configured, because the message it carries otherwise ends in
-    "get in touch" without saying where -- which is the half of this bug that
-    is not about word lists.
+    A refusal picks up the contact address when one is configured, because
+    the message it carries otherwise ends in "get in touch" without saying
+    where -- which is the half of this bug that is not about word lists.
 
-    And a flagged name is written to the log. The flag's whole purpose is
-    that a person eventually looks at the name, and there is nowhere for a
-    person to look yet -- the admin review page is still ahead. A warning is
-    not that page, but it lands in Render's log stream beside everything else
-    worth noticing, which is more than a boolean nothing reads would do.
+    A flagged name used to be written to the log as well, and every caller
+    passed a `where` string naming its site so that line could say which form
+    the name came through. That was written as an interim: the flag's whole
+    purpose is that a person eventually looks at the name, and at the time
+    there was nowhere for a person to look, so a warning in Render's log
+    stream was better than a boolean nothing read.
 
-    Delete the logging half once there is a queue to read instead.
+    There is somewhere now -- name_flagged is queued, counted and cleared on
+    the admin panel (see admin_overview) -- so the log line stopped being a
+    stand-in for a queue and became a second copy of one, printing
+    user-supplied names into the logs of a review step that already lands
+    somewhere a person can act on it. The parameter went with it rather than
+    staying on as an argument three call sites build an f-string for and
+    nothing reads.
     """
     problem, flagged = screen_name(name)
     if problem and CONTACT_EMAIL:
         problem = f"{problem} You can reach us at {CONTACT_EMAIL}."
-    if flagged:
-        app.logger.warning(
-            "Organization name flagged for review (%s): %r", where, name)
     return problem, flagged
 
 
@@ -632,6 +636,14 @@ def _start_session(org):
     session["org_id"] = org.id
     session["epoch"] = org.session_epoch
     session.permanent = True
+    # A new session gets a new CSRF token, and gets it here rather than on
+    # the next page load. Rotating it is the point -- a token minted while
+    # signed out should not stay valid once the session it names is somebody's
+    # account -- but the clear() above drops it, and the response to a sign-in
+    # is JSON, which deliberately never mints one (see send_csrf_cookie). So
+    # without this the freshly signed-in page holds a token the server has
+    # forgotten, and the first thing it tries to do is refused.
+    csrf_token()
 
 
 def _end_other_sessions(org):
@@ -955,12 +967,157 @@ def _stamped_page(filename, pattern=_ASSET_REF_RE):
 
     with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
         html = f.read()
+    # Bundled before stamping, not after: the bundle's own URL already names
+    # the contents of everything in it (see _bundle_digest), so stamping it
+    # again would add a ?v= that says the same thing twice. The stamp pass
+    # then picks up whatever is left -- the scripts, and any stylesheet that
+    # was not part of a run.
+    bundled = ()
+    if pattern is _ASSET_REF_RE:
+        html, bundled = _bundle_stylesheets(html)
     body, assets = _stamp_asset_refs(html, pattern)
+    # The bundled sheets join the cache key even though the served body no
+    # longer names them: they are still inputs to it, through the digest in
+    # the bundle URL.
+    assets = tuple(sorted(dict(assets + bundled).items()))
     etag = _page_etag(body)
     if key is not None:
         with _page_lock:
             _page_cache[filename] = (key, assets, body, etag)
     return body, etag
+
+
+# --- Stylesheet bundling ----------------------------------------------------
+# One request for a page's CSS instead of nine.
+#
+# Every page here links its stylesheets individually -- tokens, ink, the
+# page's own, shared, forms, nav, boxicons, fonts -- and all of them are
+# render-blocking. On a warm cache that is nothing. On a cold one it is nine
+# round trips before the first paint, on a free-tier host, for a visitor who
+# has been sent a link.
+#
+# Done at serve time rather than by a build step, because the build step
+# would have to write a generated file into static/ and then keep it in step
+# with the sources by hand -- and the machinery for "rewrite the page on the
+# way out, keyed on the content of everything it references" already exists
+# here for the version stamps. This is the same idea with the same cache key.
+#
+# The bundle is served from the root, NOT from a /bundle/ prefix, and that is
+# load-bearing: boxicons.css and fonts.css both carry `url(fonts/....woff2)`,
+# which is resolved against the stylesheet's own URL. From /bundle/ those
+# would resolve to /bundle/fonts/ and every glyph on the site would go
+# missing.
+BUNDLE_PREFIX = "bundle-"
+
+# A run of stylesheet links, and whatever whitespace and comments separate
+# them. Anchored on the first and last being links, so it can only ever
+# collapse links -- a comment on the end of the run is left where it is.
+#
+# `media=` is deliberately not accommodated: a sheet that applies only to
+# print or only above a breakpoint cannot be concatenated with one that
+# always applies. No page here has one, and if one is added this stops
+# matching that run rather than quietly merging it.
+#
+# The tag is matched with an optional self-closing slash and the separator
+# allows any run of whitespace and comments, because the pages genuinely
+# contain both: onboarding.html writes one of its links as `<link ... />`,
+# and organization.html separates two of its links with a pair of comments.
+# A stricter pattern silently declined to bundle those pages -- which is the
+# worst failure mode available here, since nothing breaks and the benefit
+# just quietly does not arrive.
+_LINK = r'<link rel="stylesheet" href="[A-Za-z0-9._-]+\.css"\s*/?>'
+_SEPARATOR = r'(?:\s|<!--.*?-->)*'
+_STYLESHEET_RUN_RE = re.compile(
+    _LINK + r'(?:' + _SEPARATOR + _LINK + r')+',
+    re.DOTALL,
+)
+_STYLESHEET_HREF_RE = re.compile(r'href="([A-Za-z0-9._-]+\.css)"')
+
+# digest -> ordered filenames. Rebuilt from the pages on a miss rather than
+# shared between processes: gunicorn runs two workers, and the one that
+# serves the HTML naming a bundle is routinely not the one asked for it.
+# Recomputing is deterministic -- same files on disk, same digest -- so a
+# worker that has never seen a bundle can still resolve it.
+_bundles = {}
+_bundle_lock = threading.Lock()
+
+
+def _bundle_digest(members):
+    """A name for this exact list of files at these exact contents.
+
+    The versions are in the digest, not just the names, so editing any
+    member produces a different URL -- which is what lets the answer be
+    cached for a year like any other stamped asset.
+    """
+    basis = "|".join(f"{name}@{asset_version(name)}" for name in members)
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
+
+
+def _bundle_stylesheets(html):
+    """Collapse each run of stylesheet links into one, returning the new HTML.
+
+    Runs, plural: a page whose links are interrupted by something that is not
+    a link keeps that structure and gets a bundle on either side of it.
+
+    Returns (html, versions) where `versions` is the (filename, version)
+    pairs that went into every bundle on the page. The caller needs those:
+    the bundled sheets no longer appear in the page's markup, so the stamp
+    pass never sees them, and a page cached without them would keep serving
+    an old bundle URL after nav.css was edited -- the very staleness the
+    stamping exists to prevent, moved one level down.
+    """
+    seen = {}
+
+    def collapse(match):
+        members = _STYLESHEET_HREF_RE.findall(match.group(0))
+        # A run of one is already one request.
+        if len(members) < 2:
+            return match.group(0)
+        for name in members:
+            seen[name] = asset_version(name)
+        digest = _bundle_digest(members)
+        with _bundle_lock:
+            _bundles[digest] = tuple(members)
+        return (f'<link rel="stylesheet" '
+                f'href="{BUNDLE_PREFIX}{digest}.css">')
+
+    return _STYLESHEET_RUN_RE.sub(collapse, html), tuple(sorted(seen.items()))
+
+
+def _register_all_bundles():
+    """Work out every bundle every page could ask for.
+
+    For the worker that is handed a bundle request before it has served the
+    page that names one. Reads the pages rather than guessing, so the answer
+    is the same one the other worker computed.
+    """
+    for page in _pages():
+        try:
+            with open(os.path.join(STATIC_DIR, page), "r",
+                      encoding="utf-8") as f:
+                _bundle_stylesheets(f.read())
+        except OSError:
+            continue
+
+
+def _bundle_body(members):
+    """The members, stamped and concatenated, in order.
+
+    Each member goes through _stamped_page exactly as it would if it were
+    requested on its own, so the font references inside it are rewritten the
+    same way and the memo is shared with the unbundled route.
+
+    Order is preserved because these are stylesheets: shared.css overriding
+    ink.css is the whole reason ink.css is linked first, and a bundle that
+    reordered them would restyle the site.
+    """
+    parts = []
+    for name in members:
+        body, _ = _stamped_page(name, _CSS_ASSET_REF_RE)
+        # Named in a comment so the bundle can be read in devtools and the
+        # rule you are looking at can be traced back to a file.
+        parts.append(f"/* --- {name} --- */\n{body}")
+    return "\n".join(parts)
 
 
 def serve_page(filename, status=200, html=None):
@@ -986,6 +1143,13 @@ def serve_page(filename, status=200, html=None):
         # Rendered for this request -- the og: tags on a profile or an
         # agreement summary carry that row's own values, so nothing here is
         # shared between requests and there is nothing to cache.
+        #
+        # Bundled here too. These two pages reach serve_page with their HTML
+        # already in hand rather than through _stamped_page, so the bundling
+        # that happens there never saw them: a profile page -- the one page
+        # here a stranger is most likely to arrive at cold, from a shared
+        # link -- was the only one still asking for five stylesheets.
+        html, _ = _bundle_stylesheets(html)
         body, _ = _stamp_asset_refs(html)
         etag = _page_etag(body)
 
@@ -1087,6 +1251,36 @@ def stylesheet(name):
     The cost is one dict lookup and a stat per stylesheet request, which is
     what _stamped_page already memoizes against.
     """
+    # A bundle, named by the digest of everything in it. Answered from the
+    # registry rather than from disk -- there is no such file -- and the
+    # registry is rebuilt from the pages if this worker has not served the
+    # page that names it. See the bundling block above.
+    if name.startswith(BUNDLE_PREFIX):
+        digest = name[len(BUNDLE_PREFIX):]
+        with _bundle_lock:
+            members = _bundles.get(digest)
+        if members is None:
+            _register_all_bundles()
+            with _bundle_lock:
+                members = _bundles.get(digest)
+        if members is None:
+            # A digest naming a combination that no page asks for any more --
+            # a stale HTML copy from before a stylesheet was edited. 404 is
+            # right: the page it came from has a new ETag and the reload that
+            # follows will ask for the new bundle.
+            return not_found(None)
+
+        body = _bundle_body(members)
+        response = app.response_class(body, mimetype="text/css")
+        response.set_etag(_page_etag(body))
+        # The URL names its own contents, so it can never go stale -- exactly
+        # the condition add_cache_headers wants ?v= for. Said here instead,
+        # since the digest is already doing that job in the path.
+        response.headers["Cache-Control"] = (
+            f"public, max-age={ASSET_CACHE_SECONDS}, immutable"
+        )
+        return response.make_conditional(request)
+
     filename = f"{name}.css"
     # Same frozen allowlist _pages() uses, and for the same reason: this
     # route interpolates into a path, so it may only ever name a file that
@@ -1212,7 +1406,13 @@ def add_cache_headers(response):
 
     # Only a URL that names the version it wants can safely be kept for a
     # year: a request without one may be for a file that has since changed.
-    if request.args.get("v"):
+    #
+    # A stylesheet bundle qualifies without a ?v=, because its filename *is*
+    # the version -- the digest covers every file in it, so a change to any
+    # of them is asked for under a different name. Checked here rather than
+    # left to the route, which sets the header itself and would have it
+    # overwritten by the assignment below.
+    if request.args.get("v") or request.path.startswith("/" + BUNDLE_PREFIX):
         response.headers["Cache-Control"] = (
             f"public, max-age={ASSET_CACHE_SECONDS}, immutable"
         )
@@ -1349,6 +1549,152 @@ def add_security_headers(response):
     if os.environ.get("FLASK_ENV") == "production":
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
+# --- CSRF -------------------------------------------------------------------
+# Every state-changing request must carry a token that a cross-site caller
+# cannot read.
+#
+# SESSION_COOKIE_SAMESITE="Lax" above already stops the classic attack: the
+# session cookie is not sent on a cross-site POST, so the forged request
+# arrives signed out and does nothing. That is genuinely most of the
+# protection, and it is why this app has been fine without a token so far.
+#
+# It is also the only layer, and it is one the app does not control. Lax is
+# a browser default that a browser decides how to honor -- older ones ignore
+# the attribute entirely, and its "top-level navigation" carve-out has moved
+# between versions. More to the point, Lax is same-*site*, not same-origin:
+# anything on a sibling subdomain of the deployed host counts as the same
+# site and gets the cookie. Nothing shares that host today. The token is
+# what makes that a fact about the deployment rather than a load-bearing
+# assumption.
+#
+# Double-submit against the session rather than a bare cookie pair: the
+# authoritative copy lives in the signed session, and the cookie is only how
+# the page gets to read it. A cookie compared against itself proves nothing
+# once anyone can set cookies on the site.
+CSRF_COOKIE = "pp_csrf"
+CSRF_HEADER = "X-CSRF-Token"
+CSRF_SESSION_KEY = "csrf"
+# The methods that can change something. GET/HEAD/OPTIONS are not on it
+# because nothing here changes state on one -- the closest is
+# /api/verify-email, which is a GET carrying its own single-use token, and
+# is reached by following a link out of an email, which a token in a header
+# could never survive.
+CSRF_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+def csrf_token():
+    """This session's token, minted on first ask."""
+    token = session.get(CSRF_SESSION_KEY)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session[CSRF_SESSION_KEY] = token
+    return token
+
+
+@app.before_request
+def require_csrf_token():
+    """Refuse a state-changing request that cannot prove where it came from."""
+    if request.method in CSRF_SAFE_METHODS:
+        return None
+
+    expected = session.get(CSRF_SESSION_KEY, "")
+
+    # No token in the session means no session -- an expired cookie, a client
+    # that never loaded a page, a tab open since before this shipped. Let it
+    # through to the handler.
+    #
+    # That is not the hole it looks like. What CSRF protects is a request the
+    # browser makes *authenticated*, using a cookie it attaches on the
+    # attacker's behalf, and there is no such cookie here: every mutating
+    # route that touches an organization's data is @login_required and will
+    # answer 401 in the next breath. The routes that are not -- register,
+    # contact, the password-reset pair -- act on what the request itself
+    # carries rather than on who is sending it, so forging one gains an
+    # attacker nothing they could not do by opening the page.
+    #
+    # What it buys is that a signed-out request still gets the 401 that says
+    # so, and the client turns that into a trip to the login page. Refusing
+    # it as 403 first would tell somebody whose session quietly expired
+    # overnight to reload the page, which reloads into the same expired
+    # session, which is a loop with no way out of it.
+    #
+    # A session that exists always has a token: one is minted on every HTML
+    # response and again at sign-in, so the case this skips is the case with
+    # nothing to protect.
+    if not expected:
+        return None
+
+    sent = request.headers.get(CSRF_HEADER, "")
+    # compare_digest rather than ==, so a mismatch costs the same time
+    # wherever it falls. Both are compared as bytes because compare_digest
+    # refuses non-ASCII str, and a header is whatever the caller sent.
+    if sent and secrets.compare_digest(
+            sent.encode("utf-8", "ignore"),
+            expected.encode("utf-8", "ignore")):
+        return None
+
+    # 403 rather than 400: this is a refusal, not a malformed request. The
+    # message is written for the person who will see it, which is almost
+    # never an attacker -- it is somebody whose session cookie expired in a
+    # tab left open overnight, and "reload the page" is the fix.
+    return jsonify({
+        "error": "That request could not be verified. Reload the page and "
+                 "try again.",
+        "csrf": True,
+    }), 403
+
+
+@app.after_request
+def send_csrf_cookie(response):
+    """Publish the token where the page's JavaScript can read it.
+
+    Deliberately readable, unlike the session cookie: common.js copies it
+    into a header on every mutating request, and a cross-site page cannot do
+    the same because the same-origin policy will not let it read this cookie
+    or that response.
+
+    Only alongside HTML and API responses. A versioned stylesheet is served
+    `immutable` for a year, and attaching Set-Cookie to it would make it
+    uncacheable by anything shared and would rewrite the token from whatever
+    stale copy a proxy happened to hold.
+
+    SameSite=Lax and Secure follow the session cookie, because the two are
+    halves of one mechanism and a token that outlives its session proves
+    nothing.
+    """
+    if response.mimetype == "text/html":
+        # Minted here, on the way out of the page that will need it. This is
+        # the only place that creates one, because it is the only moment the
+        # app can be sure the token will actually reach a browser -- and
+        # every mutation this app makes is issued by a script on a page it
+        # served. Flask saves the session after the after_request chain, so
+        # writing to it here is in time to be signed into the cookie.
+        token = csrf_token()
+    elif response.mimetype == "application/json":
+        # Never minted on an API response. A caller that has no token is not
+        # given one for free on the request that was about to use it; it is
+        # told to reload, and the page load mints it.
+        token = session.get(CSRF_SESSION_KEY)
+    else:
+        return response
+
+    if not token:
+        return response
+    if request.cookies.get(CSRF_COOKIE) == token:
+        # Already holds it. Re-sending on every request would put a
+        # Set-Cookie on every API response for no change.
+        return response
+
+    response.set_cookie(
+        CSRF_COOKIE, token,
+        max_age=int(app.config["PERMANENT_SESSION_LIFETIME"].total_seconds()),
+        httponly=False,      # the whole point -- see above
+        samesite="Lax",
+        secure=os.environ.get("FLASK_ENV") == "production",
+    )
     return response
 
 
@@ -1763,7 +2109,7 @@ def register():
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are all required."}), 400
-    problem, name_flagged = screened_name(name, "register")
+    problem, name_flagged = screened_name(name)
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
     problem = length_problem("name", name)
@@ -2045,6 +2391,128 @@ def admin_me(admin, db):
 ADMIN_PAGE_SIZE = 50
 
 
+def _admin_summarize(org):
+    """Enough to judge a name by, and no more.
+
+    Not public_dict: this is the one surface that reads other people's rows,
+    so what it sends is chosen rather than inherited from a serializer
+    written for a different question.
+    """
+    return {
+        "id": org.id,
+        "name": org.name,
+        "organization_type": org.organization_type,
+        "location": org.location,
+        "description": org.description,
+        "email": org.email,
+        "created_at": org.created_at.isoformat() if org.created_at else None,
+        "name_flagged": org.name_flagged,
+        "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
+        "hidden_reason": org.hidden_reason,
+        "is_demo": org.is_demo,
+    }
+
+
+# The four lists on the panel, each as (base query, ordering, serializer,
+# searchable columns).
+#
+# Every one of them was a bare `.limit(ADMIN_PAGE_SIZE)` -- the newest fifty
+# and no way to reach the fifty-first. That is fine while there are nine
+# rows and useless the moment there are two hundred: the contact queue is
+# ordered oldest-first, so the messages that fall off the end are the ones
+# that have been waiting longest, which is exactly backwards for a queue.
+#
+# Written as data rather than as four near-identical handlers, because what
+# actually differs between them is a filter, an ordering and which columns a
+# search should look at. Everything else -- paging, clamping, counting, the
+# shape of the answer -- is the same question four times.
+def _admin_sections():
+    return {
+        "contact_messages": {
+            "query": lambda db: db.query(ContactMessage).filter(
+                ContactMessage.handled_at.is_(None)),
+            # Oldest first: this is a queue, and the front of it is the point.
+            "order": (ContactMessage.created_at,),
+            "serialize": lambda row: row.to_dict(),
+            "search": (ContactMessage.name, ContactMessage.email,
+                       ContactMessage.message),
+        },
+        "flagged": {
+            "query": lambda db: db.query(Organization).filter(
+                Organization.name_flagged.is_(True)),
+            "order": (Organization.created_at.desc(),),
+            "serialize": _admin_summarize,
+            "search": (Organization.name, Organization.email,
+                       Organization.location),
+        },
+        "hidden": {
+            "query": lambda db: db.query(Organization).filter(
+                Organization.hidden_at.isnot(None)),
+            "order": (Organization.hidden_at.desc(),),
+            "serialize": _admin_summarize,
+            "search": (Organization.name, Organization.email,
+                       Organization.location, Organization.hidden_reason),
+        },
+        "actions": {
+            "query": lambda db: db.query(AdminAction),
+            "order": (AdminAction.created_at.desc(),),
+            "serialize": lambda row: row.to_dict(),
+            "search": (AdminAction.admin_email, AdminAction.action),
+        },
+    }
+
+
+def _admin_page(db, name, *, page=1, term=""):
+    """One section of the panel: {rows, total, page, pages, per_page}.
+
+    Same windowed count as the directory (see _directory_query) and for the
+    same reason -- the pager and the rows come out of one scan, and the
+    number cannot describe a different snapshot from the rows beside it.
+    """
+    spec = _admin_sections()[name]
+    query = spec["query"](db)
+
+    term = (term or "").strip()
+    if term:
+        query = query.filter(or_(*[_contains(column, term)
+                                   for column in spec["search"]]))
+
+    query = query.order_by(*spec["order"])
+    page = max(1, page)
+
+    paged = query.add_columns(func.count().over().label("total"))
+    found = paged.offset((page - 1) * ADMIN_PAGE_SIZE).limit(
+        ADMIN_PAGE_SIZE).all()
+
+    if found:
+        rows = [row[0] for row in found]
+        total = found[0][1]
+    else:
+        rows = []
+        total = query.count()
+
+    pages = max(1, -(-total // ADMIN_PAGE_SIZE))
+    if page > pages:
+        page = pages
+        rows = query.offset((page - 1) * ADMIN_PAGE_SIZE).limit(
+            ADMIN_PAGE_SIZE).all()
+
+    return {
+        "rows": [spec["serialize"](row) for row in rows],
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": ADMIN_PAGE_SIZE,
+    }
+
+
+def _admin_int(name, default=1):
+    try:
+        return int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 @app.route("/api/admin/overview", methods=["GET"])
 @admin_required
 def admin_overview(admin, db):
@@ -2053,59 +2521,50 @@ def admin_overview(admin, db):
     One call rather than four, because the page has no state worth loading
     incrementally and four round trips to a database a network hop away is
     the thing the dashboard work spent an afternoon undoing.
+
+    Still one call now that the sections page. This answers page one of each,
+    which is what a panel being opened wants; /api/admin/section below
+    answers any other page, and is only ever asked once somebody has actually
+    reached for the pager or the search box.
     """
-    messages = db.query(ContactMessage).filter(
-        ContactMessage.handled_at.is_(None)
-    ).order_by(ContactMessage.created_at).limit(ADMIN_PAGE_SIZE).all()
-
-    flagged = db.query(Organization).filter(
-        Organization.name_flagged.is_(True)
-    ).order_by(Organization.created_at.desc()).limit(ADMIN_PAGE_SIZE).all()
-
-    hidden = db.query(Organization).filter(
-        Organization.hidden_at.isnot(None)
-    ).order_by(Organization.hidden_at.desc()).limit(ADMIN_PAGE_SIZE).all()
-
-    recent = db.query(AdminAction).order_by(
-        AdminAction.created_at.desc()
-    ).limit(ADMIN_PAGE_SIZE).all()
-
-    def summarize(org):
-        """Enough to judge a name by, and no more.
-
-        Not public_dict: this is the one surface that reads other people's
-        rows, so what it sends is chosen rather than inherited from a
-        serializer written for a different question.
-        """
-        return {
-            "id": org.id,
-            "name": org.name,
-            "organization_type": org.organization_type,
-            "location": org.location,
-            "description": org.description,
-            "email": org.email,
-            "created_at": org.created_at.isoformat() if org.created_at else None,
-            "name_flagged": org.name_flagged,
-            "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
-            "hidden_reason": org.hidden_reason,
-            "is_demo": org.is_demo,
-        }
+    sections = {name: _admin_page(db, name) for name in _admin_sections()}
 
     return jsonify({
         "admin": admin.to_dict(),
-        "contact_messages": [m.to_dict() for m in messages],
-        "flagged": [summarize(o) for o in flagged],
-        "hidden": [summarize(o) for o in hidden],
-        "actions": [a.to_dict() for a in recent],
+        # Each section's first page, under the key the page already reads,
+        # so the shape of this response has not changed.
+        "contact_messages": sections["contact_messages"]["rows"],
+        "flagged": sections["flagged"]["rows"],
+        "hidden": sections["hidden"]["rows"],
+        "actions": sections["actions"]["rows"],
+        # ...and the paging that goes with each, beside it rather than mixed
+        # into it.
+        "paging": {name: {k: v for k, v in section.items() if k != "rows"}
+                   for name, section in sections.items()},
         "counts": {
-            "contact_messages": db.query(ContactMessage.id).filter(
-                ContactMessage.handled_at.is_(None)).count(),
-            "flagged": db.query(Organization.id).filter(
-                Organization.name_flagged.is_(True)).count(),
-            "hidden": db.query(Organization.id).filter(
-                Organization.hidden_at.isnot(None)).count(),
+            # Taken from the same scan that produced the rows rather than
+            # re-counted. These were three more queries answering a question
+            # the section queries had already answered.
+            "contact_messages": sections["contact_messages"]["total"],
+            "flagged": sections["flagged"]["total"],
+            "hidden": sections["hidden"]["total"],
         },
     })
+
+
+@app.route("/api/admin/section/<name>", methods=["GET"])
+@admin_required
+def admin_section(admin, db, name):
+    """One section, at a page and a search term.
+
+    Split from the overview because paging is per-section: reaching page
+    three of the contact queue should not re-fetch the audit log, and a
+    search in one box should not clear what the other three are showing.
+    """
+    if name not in _admin_sections():
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(_admin_page(
+        db, name, page=_admin_int("page"), term=request.args.get("q", "")))
 
 
 @app.route("/api/admin/contact-messages/<int:message_id>/handled",
@@ -2156,6 +2615,110 @@ def admin_clear_flag(admin, db, org_id):
                         name=org.name)
     db.commit()
     return jsonify({"message": "Flag cleared", "organization_id": org.id})
+
+
+# --- Working through a queue in one go --------------------------------------
+# Both queues here are worked the same way: read a run of them, decide they
+# are fine, clear them. One at a time that is a click and a round trip per
+# row, which is the difference between a queue somebody keeps on top of and
+# one that grows.
+#
+# Only the two reversible, idempotent actions are offered in bulk. Hiding is
+# deliberately not: it needs a reason, the reason is mailed to the
+# organization it is about, and one reason pasted across a selection would be
+# a form letter sent to people who were each judged individually or not at
+# all. That one stays a considered, single decision with a dialog in front of
+# it.
+#
+# Bounded by the page size, because the selection is made from a page -- a
+# request naming more ids than can be on screen did not come from somebody
+# ticking boxes.
+def _bulk_ids(data):
+    """The ids from a bulk request body, or (None, error response)."""
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return None, (jsonify({"error": "Select something first."}), 400)
+    if len(ids) > ADMIN_PAGE_SIZE:
+        return None, (jsonify({
+            "error": f"Too many at once (limit {ADMIN_PAGE_SIZE})."}), 400)
+    if not all(isinstance(i, int) and not isinstance(i, bool) and valid_id(i)
+               for i in ids):
+        return None, (jsonify({"error": "That selection is not valid."}), 400)
+    # Deduplicated: the same id twice is one row, and would otherwise be
+    # written to the audit log twice for one decision.
+    return sorted(set(ids)), None
+
+
+@app.route("/api/admin/contact-messages/handled", methods=["POST"])
+@admin_required
+def admin_handle_messages(admin, db):
+    """Take a selection off the queue, or put it back.
+
+    Same rules as the single-message route above, applied to a list: nothing
+    is deleted, and the only thing that changes is whether each one is
+    waiting.
+    """
+    data = request.get_json(silent=True) or {}
+    ids, problem = _bulk_ids(data)
+    if problem:
+        return problem
+
+    handled = data.get("handled", True)
+    if not isinstance(handled, bool):
+        return jsonify({"error": "Handled must be true or false."}), 400
+
+    rows = db.query(ContactMessage).filter(ContactMessage.id.in_(ids)).all()
+    now = datetime.now(timezone.utc) if handled else None
+    for row in rows:
+        row.handled_at = now
+        # One audit row per message, not one per click. The log answers "who
+        # did that" about a particular thing, and a single row saying "39
+        # messages" cannot answer it about any of them.
+        record_admin_action(
+            db, admin,
+            "handle_contact_message" if handled else "reopen_contact_message",
+            target_type="contact_message", target_id=row.id, email=row.email)
+    db.commit()
+
+    # What was actually changed, which is not always what was asked for: a
+    # row can be handled by another admin between the page being drawn and
+    # the button being pressed.
+    return jsonify({
+        "message": f"{len(rows)} marked {'handled' if handled else 'waiting'}",
+        "changed": [row.id for row in rows],
+        "requested": len(ids),
+    })
+
+
+@app.route("/api/admin/organizations/flags", methods=["DELETE"])
+@admin_required
+def admin_clear_flags(admin, db):
+    """Clear a selection of name flags: these have been looked at.
+
+    Silent about the ones that were not flagged, unlike the single-id route,
+    which answers 409. Reviewing a page of names and clearing them is one
+    decision, and a selection that includes something another admin cleared a
+    moment ago is not a mistake worth refusing the whole request over.
+    """
+    ids, problem = _bulk_ids(request.get_json(silent=True) or {})
+    if problem:
+        return problem
+
+    rows = db.query(Organization).filter(
+        Organization.id.in_(ids),
+        Organization.name_flagged.is_(True),
+    ).all()
+    for org in rows:
+        org.name_flagged = False
+        record_admin_action(db, admin, "clear_name_flag",
+                            target_type="organization", target_id=org.id,
+                            name=org.name)
+    db.commit()
+    return jsonify({
+        "message": f"{len(rows)} cleared",
+        "changed": [org.id for org in rows],
+        "requested": len(ids),
+    })
 
 
 @app.route("/api/admin/organizations/<int:org_id>/hidden", methods=["POST"])
@@ -3055,7 +3618,7 @@ def save_onboarding(org, db):
     if len(name) < 2:
         problems.append("a full organization name")
     else:
-        problem, name_flagged = screened_name(name, f"onboarding org={org.id}")
+        problem, name_flagged = screened_name(name)
         if problem:
             return jsonify({"error": problem, "field": "organization_name"}), 400
     if not organization_type:
@@ -3174,17 +3737,17 @@ def get_matches(org, db):
         }), 409
 
     mutual_only = request.args.get("mutual") == "1"
-    matches, total, mutual_total = find_matches(
-        db, org, mutual_only=mutual_only)
 
     # While the real directory is small a new org can have no real matches at
     # all. Rather than show an empty page, surface the seeded examples --
     # clearly flagged as examples by the client -- so there is something to
     # look at. They are never mixed into `matches`.
-    examples = []
-    if not matches:
-        examples, _, _ = find_matches(
-            db, org, mutual_only=mutual_only, demo_only=True)
+    #
+    # Both cohorts from one scan: asking for them separately meant ranking
+    # the whole overlapping directory twice for precisely the accounts that
+    # have nothing yet, which is every account on its first visit here.
+    matches, total, mutual_total, examples = find_matches_with_examples(
+        db, org, mutual_only=mutual_only)
 
     # So the star on each card starts in the right state. Sent as one list of
     # ids rather than a flag per match: the client already holds the matches
@@ -3325,10 +3888,6 @@ def _directory_query(db, args, *, exclude_id=None):
         if focus:
             query = query.filter(Organization.focus_areas.overlap(focus))
 
-    # Counted before paging, so the page control can say how many there are
-    # rather than only how many are on screen.
-    total = query.count()
-
     sort = args.get("sort") if args.get("sort") in DIRECTORY_SORTS else "name"
     if sort == "newest":
         query = query.order_by(Organization.created_at.desc(), Organization.id.desc())
@@ -3347,12 +3906,45 @@ def _directory_query(db, args, *, exclude_id=None):
         page = int(args.get("page", 1))
     except (TypeError, ValueError):
         page = 1
+    page = max(1, page)
+
+    # The total rides along with the page rather than being asked for
+    # separately.
+    #
+    # There used to be a `query.count()` above the paging, which meant every
+    # directory request ran the same filters twice -- once to size the pager
+    # and once to fetch twelve rows. On a term short enough to miss the
+    # trigram indexes (see the migration that added them) that is two
+    # sequential scans for one screen.
+    #
+    # count(*) OVER () is evaluated after WHERE and before LIMIT, so it
+    # counts everything that matched while the LIMIT still only returns a
+    # page of it. One scan, and the number is guaranteed to describe the same
+    # snapshot as the rows beside it -- which the two-query version could not
+    # promise, since somebody could join between the count and the fetch.
+    paged = query.add_columns(func.count().over().label("total"))
+    found = paged.offset((page - 1) * per_page).limit(per_page).all()
+
+    if found:
+        rows = [row[0] for row in found]
+        total = found[0][1]
+    else:
+        # No rows means either an empty result or a page past the end, and
+        # the window function cannot say which -- there is no row for it to
+        # ride on. Only then is the count worth a query of its own.
+        rows = []
+        total = query.count()
+
     pages = max(1, -(-total // per_page))   # ceiling division
     # Clamped rather than 404: a page number can go stale simply because
     # somebody else's profile stopped matching the filters between requests.
-    page = max(1, min(page, pages))
+    # Re-fetched when the clamp actually moved, so an out-of-date bookmark
+    # lands on the last page with rows on it instead of on a page control
+    # insisting there are results above an empty grid.
+    if page > pages:
+        page = pages
+        rows = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    rows = query.offset((page - 1) * per_page).limit(per_page).all()
     return rows, {
         "total": total,
         "page": page,
@@ -3484,6 +4076,27 @@ VIEW_DEDUP_WINDOW = timedelta(hours=24)
 PROFILE_VIEW_SALT = (
     os.environ.get("PROFILE_VIEW_SALT", "").strip() or app.secret_key
 )
+
+# ...and the fallback only works if the thing it falls back to is itself
+# stable. With neither PROFILE_VIEW_SALT nor SECRET_KEY set, app.secret_key
+# is the random one generated above, so this lands back on exactly the
+# behavior the comment above describes as the bug: every restart re-salts
+# every viewer, the dedup window silently stops recognizing anyone, and the
+# only visible symptom is a view count that reads high and looks fine.
+#
+# Said out loud rather than fixed, because there is nothing to fix it with --
+# a deterministic salt has to come from somewhere that survives the process,
+# and the two places it could come from are the two environment variables
+# named here. Warned separately from the SECRET_KEY warning above: that one
+# is about sessions, this is about numbers on a dashboard being wrong, and
+# somebody reading the logs to work out why the chart looks odd should not
+# have to infer it from a line about cookies.
+if not os.environ.get("PROFILE_VIEW_SALT") and not os.environ.get("SECRET_KEY"):
+    app.logger.warning(
+        "Neither PROFILE_VIEW_SALT nor SECRET_KEY is set, so profile-view "
+        "de-duplication resets on every restart and view counts will be "
+        "inflated. Set either one to a fixed string."
+    )
 
 
 def _viewer_key(viewer_org):
@@ -3884,7 +4497,7 @@ def create_invite(org, db):
             "error": "Enter the name of the organization you are inviting.",
             "field": "name",
         }), 400
-    problem, name_flagged = screened_name(name, f"invite from org={org.id}")
+    problem, name_flagged = screened_name(name)
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
     problem = length_problem("name", name)
@@ -4027,7 +4640,7 @@ def claim_invite(token):
             }), 400
 
         if name:
-            problem, name_flagged = screened_name(name, "invite claim")
+            problem, name_flagged = screened_name(name)
             problem = problem or length_problem("name", name)
             if problem:
                 return jsonify({"error": problem, "field": "name"}), 400
@@ -4126,20 +4739,98 @@ def _unread_by(org_id):
     )
 
 
-def _notifications_for(db, org):
-    """This org's recent events, newest first.
+def _notification_rows(db, org, since, thread_ids):
+    """The partnerships that could put something in `org`'s list.
 
-    Each entry is {kind, at, counterpart, proposal_id, href, actionable}.
-    The sentence is written by the client, the same way the dashboard's
-    activity feed writes its own -- the wording belongs with the rest of the
-    wording, not in the API.
+    Every entry below is derived from one partnership row, so the query used
+    to be "every partnership this organization has ever been part of" --
+    unbounded, growing with the account's whole history, and with both
+    parties eagerly joined onto each row (see Partnership.proposer). It runs
+    on every page that draws the nav bell, which is all of them.
+
+    What can actually produce an entry is a much smaller set, and it is the
+    same set the loop below tests for one row at a time. Asked in SQL instead:
+
+      * a proposal waiting on this organization to answer, at any age;
+      * an agreement the other side has finished and this one has not, at any
+        age -- both of those are actionable, and actionable deliberately
+        ignores the window;
+      * anything that happened inside the window, whichever timestamp records
+        it;
+      * a thread with an unread message in it, at any age. Those come from
+        their own query, which is why the ids are passed in rather than
+        worked out here: without them a two-year-old declined proposal with
+        an unanswered message would drop out of the set and the message
+        notification with it.
+
+    The age-bounded half is what makes this bounded in practice; the rest is
+    open work, which is finite because it is work.
+    """
+    mine_completed = case(
+        (Partnership.proposer_id == org.id, Partnership.proposer_completed_at),
+        else_=Partnership.recipient_completed_at,
+    )
+    theirs_completed = case(
+        (Partnership.proposer_id == org.id, Partnership.recipient_completed_at),
+        else_=Partnership.proposer_completed_at,
+    )
+
+    reasons = [
+        and_(Partnership.status == Partnership.PENDING,
+             Partnership.recipient_id == org.id),
+        and_(Partnership.status == Partnership.ACCEPTED,
+             theirs_completed.isnot(None),
+             mine_completed.is_(None)),
+        Partnership.created_at >= since,
+        Partnership.responded_at >= since,
+        Partnership.completed_at >= since,
+        Partnership.ended_at >= since,
+    ]
+    if thread_ids:
+        reasons.append(Partnership.id.in_(thread_ids))
+
+    return db.query(Partnership).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id),
+        or_(*reasons),
+    ).all()
+
+
+def _notifications_for(db, org):
+    """This org's recent events, newest first, and what they add up to.
+
+    Returns (items, counts). Each entry is
+    {kind, at, counterpart, proposal_id, href, actionable}. The sentence is
+    written by the client, the same way the dashboard's activity feed writes
+    its own -- the wording belongs with the rest of the wording, not in the
+    API.
+
+    `counts` is returned rather than left for the caller to sum, because it
+    is taken before the list is truncated and the list is the wrong thing to
+    count once it has been. See the slice at the end.
     """
     since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
     seen_at = org.notifications_seen_at
-    rows = db.query(Partnership).filter(
-        or_(Partnership.proposer_id == org.id,
-            Partnership.recipient_id == org.id)
-    ).all()
+
+    # Unread messages, one entry per thread rather than one per message: a
+    # conversation is one thing that happened, and six lines saying the same
+    # name is how a notification list stops being read.
+    #
+    # Asked first because the partnership query needs to know which threads
+    # they belong to -- an unread message keeps its partnership in the set
+    # however old that partnership is.
+    unread = db.query(
+        Message.partnership_id,
+        func.count(Message.id),
+        func.max(Message.created_at),
+    ).join(
+        Partnership, Message.partnership_id == Partnership.id
+    ).filter(
+        _unread_by(org.id)
+    ).group_by(Message.partnership_id).all()
+
+    rows = _notification_rows(
+        db, org, since, [partnership_id for partnership_id, _, _ in unread])
 
     items = []
 
@@ -4199,19 +4890,6 @@ def _notifications_for(db, org):
         if p.status == Partnership.ENDED and p.ended_by_id != org.id:
             add("partnership_ended", p.ended_at, p, tab="closed")
 
-    # Unread messages, one entry per thread rather than one per message: a
-    # conversation is one thing that happened, and six lines saying the same
-    # name is how a notification list stops being read.
-    unread = db.query(
-        Message.partnership_id,
-        func.count(Message.id),
-        func.max(Message.created_at),
-    ).join(
-        Partnership, Message.partnership_id == Partnership.id
-    ).filter(
-        _unread_by(org.id)
-    ).group_by(Message.partnership_id).all()
-
     by_id = {p.id: p for p in rows}
     for partnership_id, count, latest in unread:
         proposal = by_id.get(partnership_id)
@@ -4221,24 +4899,48 @@ def _notifications_for(db, org):
             tab=f"messages-{proposal.id}", count=count)
 
     items.sort(key=lambda item: item["at"], reverse=True)
-    return items[:NOTIFICATION_LIMIT]
+
+    # Counted before the slice below, never after.
+    #
+    # `actionable` is what the nav badge shows, and it was summed from the
+    # already-truncated list -- so an organization with a busy month could be
+    # told nothing was waiting on it while a proposal sat unanswered, purely
+    # because thirty newer things had happened since. The count has to
+    # describe the work, not the page.
+    counts = {
+        "actionable": sum(1 for i in items if i["actionable"]),
+        "unseen": sum(1 for i in items
+                      if not i["actionable"] and not i["seen"]),
+    }
+
+    # The limit is on how long the list is to read, and history is what it is
+    # allowed to spend that length on. Taking the newest thirty of everything
+    # let informational entries evict actionable ones -- which is the same
+    # bug the window in add() was careful to avoid, reintroduced two hundred
+    # lines later by a slice. Work is kept first, whatever its age, and what
+    # room is left goes to the most recent news.
+    keep = [i for i in items if i["actionable"]][:NOTIFICATION_LIMIT]
+    room = NOTIFICATION_LIMIT - len(keep)
+    if room > 0:
+        keep += [i for i in items if not i["actionable"]][:room]
+    keep.sort(key=lambda item: item["at"], reverse=True)
+    return keep, counts
 
 
 @app.route("/api/notifications", methods=["GET"])
 @login_required
 def list_notifications(org, db):
-    items = _notifications_for(db, org)
+    items, counts = _notifications_for(db, org)
     return jsonify({
         "notifications": items,
         # What the nav dot reflects: things actually waiting on this
         # organization, as opposed to things it may simply not have seen yet.
-        "actionable": sum(1 for i in items if i["actionable"]),
-        # How many entries are news the reader has not caught up on. Separate
-        # from `actionable` on purpose -- one is work and the other is
-        # history, and the control that clears this must not look like it
+        #
+        # And how many entries are news the reader has not caught up on.
+        # Separate from `actionable` on purpose -- one is work and the other
+        # is history, and the control that clears this must not look like it
         # cleared the other.
-        "unseen": sum(1 for i in items
-                      if not i["actionable"] and not i["seen"]),
+        **counts,
     })
 
 
@@ -4260,11 +4962,13 @@ def mark_notifications_read(org, db):
     """
     org.notifications_seen_at = datetime.now(timezone.utc)
     db.commit()
-    items = _notifications_for(db, org)
+    items, counts = _notifications_for(db, org)
     return jsonify({
         "message": "Marked read",
         "notifications": items,
-        "actionable": sum(1 for i in items if i["actionable"]),
+        "actionable": counts["actionable"],
+        # Zero by construction -- the timestamp above just moved past
+        # everything informational in the list.
         "unseen": 0,
     })
 
@@ -4326,7 +5030,7 @@ def get_dashboard(org, db):
     if view_days not in VIEW_SERIES_CHOICES:
         view_days = VIEW_SERIES_DAYS
 
-    events = [e.to_dict() for e in _events_for(db, org)]
+    events = _expanded_events(db, org)
     # The shortlist's size only -- the dialog behind the card fetches the
     # organizations themselves when it is opened, the same way the matches
     # views do.
@@ -4476,10 +5180,98 @@ def _event_duration(raw):
     return duration, None
 
 
+# How far ahead a repeating meeting is expanded when the calendar is read.
+#
+# The series itself is bounded by repeat_until, which is required -- so this
+# is not what stops the expansion running away, it is what stops a five-year
+# weekly booking being expanded into 260 dictionaries to draw a card that
+# shows the next three. A year is past any horizon the dashboard displays and
+# short enough that the longest series costs about fifty entries.
+#
+# The .ics export deliberately ignores it: that hands over an RRULE and lets
+# the calendar application expand the series itself, for as long as the
+# series actually runs.
+EVENT_EXPAND_DAYS = 365
+
+# And how far back. A standing meeting that has been running since January is
+# one standing meeting, not thirty cards of history: what the calendar is
+# being asked is when it happens next. A fortnight keeps the most recent one
+# or two visible, which is what makes "did we already have this week's?"
+# answerable, and drops the rest.
+#
+# One-off meetings are not floored -- a meeting last Tuesday still appears,
+# dimmed, exactly as it always has. See Event.occurrences.
+EVENT_RECENT_DAYS = 14
+
+
+def _event_repeat(data, event_date):
+    """The repeat rule from a request body.
+
+    Returns (repeat, repeat_until, problem). Absent, null and "" all mean it
+    happens once, which is what the form sends when the repeat control is
+    left alone.
+
+    The end date is required alongside a rule rather than defaulted, because
+    every default available here is a guess about how long somebody intends
+    to keep meeting -- and the one thing worse than asking is putting a
+    standing meeting in their calendar forever.
+    """
+    rule = (data.get("repeat") or "").strip().lower()
+    if not rule:
+        return None, None, None
+    if rule not in Event.REPEAT_RULES:
+        return None, None, "a repeat of weekly, biweekly or monthly"
+
+    raw = (data.get("repeat_until") or "").strip()
+    if not raw:
+        return None, None, "a date for the repeat to stop on"
+    try:
+        until = datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None, None, "a valid date for the repeat to stop on"
+    if event_date is not None and until < event_date:
+        return None, None, "a repeat that stops after it starts"
+
+    return rule, until, None
+
+
+def _expanded_events(db, org):
+    """This org's meetings as occurrences, soonest first.
+
+    A one-off is itself. A series becomes one entry per date it lands on
+    inside the horizon, each carrying the series' own id -- which is what
+    the edit and delete controls send, and which is correct because editing
+    is series-only.
+
+    Sorted here rather than by the database: the ORDER BY can only order the
+    rows, and the rows are series starts. Once a weekly meeting starting in
+    January has produced an occurrence in June, "soonest first" is a question
+    about the expansion, not about the table.
+    """
+    today = datetime.now(timezone.utc).date()
+    horizon = today + timedelta(days=EVENT_EXPAND_DAYS)
+    floor = today - timedelta(days=EVENT_RECENT_DAYS)
+    out = []
+    for event in _events_for(db, org):
+        dates = event.occurrences(horizon, since=floor)
+        if not dates:
+            # A series whose last occurrence is older than the floor. It has
+            # nothing upcoming, but the row is still there -- and a meeting
+            # that renders as nothing at all is one nobody can open, edit or
+            # delete, which is how a finished standing meeting would become
+            # permanently stuck in somebody's account. Shown as its final
+            # occurrence, dimmed, exactly as a past one-off is.
+            dates = event.occurrences(horizon)[-1:]
+        for on in dates:
+            out.append((on, event.time, event.to_dict(on=on)))
+    out.sort(key=lambda row: (row[0], row[1]))
+    return [payload for _, _, payload in out]
+
+
 @app.route("/api/events", methods=["GET"])
 @login_required
 def list_events(org, db):
-    return jsonify({"events": [e.to_dict() for e in _events_for(db, org)]})
+    return jsonify({"events": _expanded_events(db, org)})
 
 
 @app.route("/api/events", methods=["POST"])
@@ -4530,6 +5322,10 @@ def create_event(org, db):
         if bad:
             problems.append(bad)
 
+    repeat, repeat_until, bad = _event_repeat(data, event_date)
+    if bad:
+        problems.append(bad)
+
     if problems:
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
 
@@ -4555,6 +5351,8 @@ def create_event(org, db):
         duration=duration,
         all_day=all_day,
         timezone=zone,
+        repeat=repeat,
+        repeat_until=repeat_until,
         partner_name=partner,
         description=description or None,
         location=location or None,
@@ -4673,6 +5471,44 @@ def update_event(org, db, event_id):
 
     if "description" in data:
         event.description = (data.get("description") or "").strip() or None
+
+    # The repeat rule, which is the whole series.
+    #
+    # Editing here is series-only by design (see Event.REPEAT_RULES): this
+    # route is reached with the series' own id, whichever occurrence was
+    # clicked, so every edit already applies to all of it. Nothing about an
+    # occurrence is separately addressable and nothing pretends to be.
+    #
+    # Sending repeat: null is how a series becomes a one-off again, and it
+    # clears the end date with it -- the two are constrained to travel
+    # together, so leaving repeat_until behind would be a row the database
+    # refuses on commit for a reason the caller never mentioned.
+    if "repeat" in data or "repeat_until" in data:
+        rule = data.get("repeat") if "repeat" in data else event.repeat
+        if rule in (None, ""):
+            event.repeat = None
+            event.repeat_until = None
+        else:
+            # Validated against the date the row will actually have, not the
+            # one it arrived with: a body that moves the start and shortens
+            # the series has to be judged as a whole.
+            merged = dict(data)
+            merged["repeat"] = rule
+            if "repeat_until" not in data and event.repeat_until:
+                merged["repeat_until"] = event.repeat_until.strftime("%Y-%m-%d")
+            repeat, until, bad = _event_repeat(merged, event.date)
+            if bad:
+                problems.append(bad)
+            else:
+                event.repeat = repeat
+                event.repeat_until = until
+
+    # A start date moved past the end of its own series leaves a row the
+    # check constraint refuses. Caught here so it is a sentence about the
+    # form rather than an IntegrityError from the commit below.
+    if (event.repeat_until is not None and event.date is not None
+            and event.repeat_until < event.date):
+        problems.append("a repeat that stops after the meeting starts")
 
     if problems:
         # Nothing is written: the assignments above are on the session, and
@@ -4884,6 +5720,36 @@ def _event_ics(event, host):
         if event.duration:
             ends = begins + timedelta(minutes=round(event.duration * 60))
             lines.append(f"DTEND{prefix}:{ends.strftime('%Y%m%dT%H%M%S')}")
+
+    # A repeating meeting is exported as a rule, not as its occurrences.
+    #
+    # One VEVENT with an RRULE is what a calendar application expects, and it
+    # means the series keeps repeating in their calendar for as long as it
+    # actually runs -- rather than for as long as EVENT_EXPAND_DAYS happened
+    # to be when the file was downloaded. It also stays one entry they can
+    # move or delete as a series, which matches how it behaves here.
+    #
+    # UNTIL is written as a UTC timestamp rather than a DATE. The spec
+    # requires UNTIL to match DTSTART's value type, and DTSTART is a local
+    # date-time for a timed meeting -- but a floating or zoned UNTIL is the
+    # part of RRULE implementations disagree about most. The end of the last
+    # day in UTC is unambiguous everywhere and cannot cut the final
+    # occurrence short, whichever zone the meeting is in.
+    if event.repeat and event.repeat_until:
+        frequency = {
+            "weekly": "FREQ=WEEKLY",
+            "biweekly": "FREQ=WEEKLY;INTERVAL=2",
+            # BYMONTHDAY, so a series on the 31st skips months without one
+            # instead of drifting to the 1st -- the same rule occurrences()
+            # applies, so the dashboard and the calendar agree.
+            "monthly": f"FREQ=MONTHLY;BYMONTHDAY={event.date.day}",
+        }[event.repeat]
+        if event.all_day:
+            until = event.repeat_until.strftime("%Y%m%d")
+            lines.append(f"RRULE:{frequency};UNTIL={until}")
+        else:
+            until = event.repeat_until.strftime("%Y%m%d")
+            lines.append(f"RRULE:{frequency};UNTIL={until}T235959Z")
 
     lines.append(f"SUMMARY:{_ics_escape(event.title)}")
     # Who it is with is the one thing on the card that has nowhere else to go

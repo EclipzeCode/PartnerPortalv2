@@ -10,7 +10,7 @@ Here an account *is* an organization. Registering creates the row; onboarding
 fills in the matchable parts and flips `onboarding_complete`.
 """
 
-from datetime import date as date_type, datetime, time as time_type
+from datetime import date as date_type, datetime, time as time_type, timedelta
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index,
@@ -1266,6 +1266,34 @@ class Event(Base):
     # meant.
     timezone: Mapped[str | None] = mapped_column(String(64))
 
+    # --- Repeating ---------------------------------------------------------
+    # A standing meeting is one row, not fifty.
+    #
+    # The row stores the *first* occurrence -- date and time above are the
+    # series start -- and the rest are worked out when the calendar is read.
+    # Writing them out as rows would mean choosing how far into the future to
+    # write, rewriting the tail every time the series is edited, and leaving
+    # whatever was already written behind when it is not.
+    #
+    # Editing is series-only, deliberately. There is no per-occurrence
+    # exception here: changing a repeating meeting changes all of it, and
+    # deleting it deletes all of it. Exceptions need somewhere to record "this
+    # one is different", which is a second table and a much larger idea about
+    # what a meeting is; a standing partner check-in is the thing this is for,
+    # and moving one week of it is rare enough to be worth doing by ending the
+    # series and starting another.
+    #
+    # NULL means it happens once, which is what every row written before this
+    # column existed means and what most rows will always mean.
+    REPEAT_RULES = ("weekly", "biweekly", "monthly")
+
+    repeat: Mapped[str | None] = mapped_column(String(16))
+    # The last date the series may land on. Required whenever `repeat` is set
+    # -- see the check constraint below -- because an unbounded series is one
+    # every read has to invent a horizon for, and a horizon invented at read
+    # time is a different answer to the same question depending on who asks.
+    repeat_until: Mapped[date_type | None] = mapped_column(Date)
+
     partner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
@@ -1285,6 +1313,26 @@ class Event(Base):
             "NOT (all_day AND duration IS NOT NULL)",
             name="ck_events_all_day_has_no_duration",
         ),
+        # A repeat rule this code knows how to expand, or none at all. A value
+        # outside the list would read as a one-off in one place and raise in
+        # another, which is the kind of disagreement a constraint exists to
+        # make impossible.
+        CheckConstraint(
+            "repeat IS NULL OR repeat IN ('weekly', 'biweekly', 'monthly')",
+            name="ck_events_repeat_rule",
+        ),
+        # The two halves of a series travel together: a rule with no end is
+        # unbounded, and an end date with no rule describes nothing.
+        CheckConstraint(
+            "(repeat IS NULL) = (repeat_until IS NULL)",
+            name="ck_events_repeat_needs_until",
+        ),
+        # A series that ends before it starts has no occurrences at all, which
+        # is a form somebody filled in wrong rather than a meeting.
+        CheckConstraint(
+            "repeat_until IS NULL OR repeat_until >= date",
+            name="ck_events_repeat_until_after_start",
+        ),
         # Every read is "this org's meetings, soonest first".
         Index("ix_events_organization_date", "organization_id", "date", "time"),
     )
@@ -1292,19 +1340,101 @@ class Event(Base):
     def __repr__(self):
         return f"<Event {self.id} org={self.organization_id} {self.date} {self.title!r}>"
 
-    def to_dict(self):
+    def occurrences(self, until, since=None):
+        """Every date this meeting lands on, earliest first.
+
+        One date for a one-off. For a series, the start and then each repeat
+        up to the earlier of repeat_until and `until` -- the caller's horizon,
+        which is what stops a five-year weekly series from being expanded in
+        full to draw a card showing the next three.
+
+        `since` drops occurrences before a floor, and exists because a weekly
+        meeting that has been running since January is not a hundred cards
+        worth of history -- it is one standing meeting, and what a calendar
+        is being asked is when it happens next. Deliberately not applied to a
+        one-off: a meeting last Tuesday still appears on the dashboard,
+        dimmed, exactly as it always has, and a floor that silently removed
+        it would be this change quietly deleting something.
+
+        Monthly skips a month that has no such day rather than clamping to
+        the last one: the 31st of February is not the 28th, and a meeting
+        that silently moves is worse than one that does not happen. That is
+        also what FREQ=MONTHLY;BYMONTHDAY=31 does in the RRULE this exports
+        as, so a calendar app subscribing to it agrees with the dashboard.
+        """
+        if not self.repeat:
+            return [self.date]
+
+        last = min(self.repeat_until, until) if until else self.repeat_until
+        if last is None or last < self.date:
+            return [self.date] if not until or self.date <= until else []
+
+        def keep(at):
+            return since is None or at >= since
+
+        dates = []
+        if self.repeat in ("weekly", "biweekly"):
+            step = timedelta(days=7 if self.repeat == "weekly" else 14)
+            at = self.date
+            while at <= last:
+                if keep(at):
+                    dates.append(at)
+                at += step
+            return dates
+
+        # Monthly, on the same day number.
+        day = self.date.day
+        year, month = self.date.year, self.date.month
+        while True:
+            try:
+                at = date_type(year, month, day)
+            except ValueError:
+                at = None          # no such day this month -- skip it
+            if at is not None:
+                if at > last:
+                    break
+                if keep(at):
+                    dates.append(at)
+            # Advance regardless, or a skipped February ends the series.
+            month += 1
+            if month > 12:
+                month, year = 1, year + 1
+            # The skip case has no date to compare against `last`, so the
+            # loop needs its own stop: once the first of the month is past
+            # the horizon, nothing later in it can be inside it.
+            if date_type(year, month, 1) > last:
+                break
+        return dates
+
+    def to_dict(self, on=None):
         """The shape ppdashboard.js already renders.
 
         date and time are formatted as the browser's own `YYYY-MM-DD` and
         `HH:MM`, which is what the date/time inputs produce and what the
         rendering code splits on -- isoformat() would append seconds to the
         time and quietly break `time.split(':')`.
+
+        `on` overrides the date, for one occurrence of a repeating meeting.
+        Everything else about an occurrence is the series -- including `id`,
+        which is the series' id and is what the edit and delete controls send.
+        That is not an oversight: editing is series-only (see REPEAT_RULES
+        above), so the only thing those controls could act on is the series.
         """
+        when = on or self.date
         return {
             "id": self.id,
             "title": self.title,
-            "date": self.date.strftime("%Y-%m-%d"),
+            "date": when.strftime("%Y-%m-%d"),
             "time": self.time.strftime("%H:%M"),
+            # What the series is, so the card can say "every week" and the
+            # edit form can open holding the rule it already has.
+            "repeat": self.repeat,
+            "repeat_until": (self.repeat_until.strftime("%Y-%m-%d")
+                             if self.repeat_until else None),
+            # The first occurrence, which is the row's own date. The card
+            # uses it to mark the one that is the start of the series rather
+            # than one of its repeats.
+            "starts_on": self.date.strftime("%Y-%m-%d"),
             # null rather than a stand-in: the dashboard draws a start time
             # with no range after it when nobody said how long, and it can
             # only tell the difference if the absence survives the trip.

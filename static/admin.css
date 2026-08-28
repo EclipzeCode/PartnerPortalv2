@@ -162,6 +162,144 @@
     margin: 0 0 1rem;
 }
 
+/* --- Search and paging -------------------------------------------------- */
+/* One set per section, because each list is its own queue with its own
+   question. Sits between the lede and the rows so the control is above what
+   it controls, and the count sits beside the box rather than under it -- the
+   answer to "how many matched" belongs next to what was typed. */
+
+.admin-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem 1rem;
+    margin-bottom: .75rem;
+}
+
+.admin-search {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex: 1 1 18rem;
+    min-width: 0;
+    padding: .45rem .7rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 6px;
+    background: var(--h-surface);
+}
+
+.admin-search:focus-within {
+    outline: 2px solid var(--h-give);
+    outline-offset: 1px;
+    border-color: var(--h-give);
+}
+
+.admin-search i {
+    font-size: .95rem;
+    color: var(--h-dim);
+    flex: none;
+}
+
+.admin-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: .88rem;
+}
+
+.admin-search input:focus { outline: none; }
+
+/* The browser's own clear button, which lands on a dark background as a
+   black cross on some engines. */
+.admin-search input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.admin-result-count {
+    font-size: .82rem;
+    color: var(--h-dim);
+    margin: 0;
+}
+
+.admin-pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .75rem;
+    padding-top: 1rem;
+    margin-top: .25rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.admin-pager button[disabled] {
+    opacity: .45;
+    cursor: default;
+}
+
+.admin-page-indicator {
+    font-size: .82rem;
+    color: var(--h-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Selection ---------------------------------------------------------- */
+/* The bar appears only once something is ticked, so a queue nobody is
+   working through looks exactly as it did. Sticky, because a selection made
+   at the bottom of fifty rows is acted on by a control that would otherwise
+   be scrolled off the top. */
+
+.admin-bulk {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    padding: .7rem .9rem;
+    margin-bottom: .5rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 6px;
+    background: var(--h-surface);
+}
+
+.admin-bulk-count {
+    font-family: var(--h-mono);
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--h-ink);
+    margin: 0;
+}
+
+.admin-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.admin-pick {
+    display: flex;
+    align-items: flex-start;
+    padding: .1rem .25rem 0 0;
+    flex: none;
+    cursor: pointer;
+}
+
+.admin-pick input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--h-give);
+    cursor: pointer;
+}
+
 /* --- A row -------------------------------------------------------------- */
 
 .admin-row {
