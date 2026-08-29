@@ -340,7 +340,7 @@
                     <label class="sr-only" for="messageBody">Your message</label>
                     <textarea id="messageBody" rows="3" maxlength="4000"
                               placeholder="Write a message..."></textarea>
-                    <p class="field-error" id="messageError" hidden></p>
+                    <p class="field-error" id="messageError" role="alert" hidden></p>
                     <div class="form-actions">
                         <button type="submit" class="btn-primary" id="messageSend">Send</button>
                     </div>
@@ -588,7 +588,7 @@
                 </p>
 
                 <form id="editForm" novalidate>
-                    <p class="field-error" id="editError" hidden></p>
+                    <p class="field-error" id="editError" role="alert" hidden></p>
 
                     <div class="form-group">
                         <label for="editTimeline">Timeline</label>
@@ -646,7 +646,7 @@
                 <form id="inviteForm" novalidate>
                     <div class="form-group">
                         <label for="inviteName">Organization name</label>
-                        <input type="text" id="inviteName" autocomplete="off"
+                        <input type="text" id="inviteName" aria-describedby="inviteName-error" autocomplete="off"
                                placeholder="Riverside Community Trust">
                         <p class="field-error" id="inviteName-error"></p>
                     </div>

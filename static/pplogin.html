@@ -127,7 +127,11 @@
                 <h1>Create Account</h1>
                 <span>Free for nonprofits and small organizations</span>
 
-                <p class="form-banner" id="registerBanner" hidden></p>
+                <!-- role="alert" so a refused signup is spoken rather than only drawn.
+                     This is the reply to something the person just did, and
+                     without it the only feedback is a line of text appearing
+                     somewhere they are not looking. -->
+                <p class="form-banner" id="registerBanner" role="alert" hidden></p>
 
                 <!-- Every input below carries a real label. These forms were
                      labeled by placeholder alone, which names nothing: a
@@ -139,19 +143,19 @@
                      unchanged. -->
                 <div class="field">
                     <label class="sr-only" for="register-name">Organization name</label>
-                    <input type="text" id="register-name" placeholder="Organization name" autocomplete="organization">
+                    <input type="text" id="register-name" aria-describedby="register-name-error" placeholder="Organization name" autocomplete="organization">
                     <p class="field-error" id="register-name-error"></p>
                 </div>
 
                 <div class="field">
                     <label class="sr-only" for="register-email">Email</label>
-                    <input type="email" id="register-email" placeholder="Email" autocomplete="email">
+                    <input type="email" id="register-email" aria-describedby="register-email-error" placeholder="Email" autocomplete="email">
                     <p class="field-error" id="register-email-error"></p>
                 </div>
 
                 <div class="field">
                     <label class="sr-only" for="register-password">Password</label>
-                    <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+                    <input type="password" id="register-password" aria-describedby="register-password-error" placeholder="Password" autocomplete="new-password">
                     <p class="field-error" id="register-password-error"></p>
 
                     <!-- Live strength meter, shown once the field has a value.
@@ -195,17 +199,17 @@
                 <h1>Sign In</h1>
                 <span>Welcome back</span>
 
-                <p class="form-banner" id="loginBanner" hidden></p>
+                <p class="form-banner" id="loginBanner" role="alert" hidden></p>
 
                 <div class="field">
                     <label class="sr-only" for="login-email">Email</label>
-                    <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+                    <input type="email" id="login-email" aria-describedby="login-email-error" placeholder="Email" autocomplete="email">
                     <p class="field-error" id="login-email-error"></p>
                 </div>
 
                 <div class="field">
                     <label class="sr-only" for="login-password">Password</label>
-                    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                    <input type="password" id="login-password" aria-describedby="login-password-error" placeholder="Password" autocomplete="current-password">
                     <p class="field-error" id="login-password-error"></p>
                 </div>
 

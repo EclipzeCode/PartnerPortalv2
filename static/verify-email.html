@@ -67,7 +67,11 @@
 <!-- .ink opts this page into the shared redesign in ink.css. -->
 <body class="ink">
     <main class="verify-page">
-        <div class="verify-card" id="verifyCard">
+        <!-- role="status" because JavaScript replaces this card's contents
+                 with the outcome -- verified, expired, reset. The swap is
+                 the entire feedback this page gives, and unannounced it is
+                 a page that silently becomes a different page. -->
+            <div class="verify-card" id="verifyCard" role="status">
             <div class="verify-spinner" aria-hidden="true"></div>
             <p class="verify-status">Verifying your email...</p>
         </div>

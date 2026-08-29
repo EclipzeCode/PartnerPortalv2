@@ -83,7 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <form class="reset-form" id="resetForm" novalidate>
                 <div class="field">
                     <label for="password">New password</label>
-                    <input type="password" id="password" autocomplete="new-password">
+                    <input type="password" id="password" aria-describedby="password-error"
+                           autocomplete="new-password">
                     <p class="field-error" id="password-error"></p>
 
                     <div class="pw-meter" id="pwMeter" hidden>

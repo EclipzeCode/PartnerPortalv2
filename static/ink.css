@@ -952,3 +952,44 @@ body.ink .footer-bottom {
 .pw-capslock[hidden] {
     display: none;
 }
+
+/* ---------- No JavaScript ---------- */
+/* Injected into every served page just inside <body> -- see _add_noscript in
+   app.py. Every page here renders client-side, so without JavaScript a
+   visitor got a styled, permanently empty page: no error, no spinner,
+   nothing to read and no way to tell that from a site that is simply broken.
+
+   Deliberately loud and at the very top of the document. This is the only
+   thing on the page that is going to work, so it should not have to be
+   found. It costs nothing for everybody else -- a browser running scripts
+   never renders the contents of <noscript> at all. */
+/* Literal colors, not tokens, and that is the point rather than an oversight.
+   --h-danger is lightcoral in the dark theme, which puts white text at about
+   2.2:1 and fails AA -- on the one message a person in this state can read.
+   And the theme itself is chosen in script: with JavaScript off, whatever
+   sets data-theme has not run either, so a banner built out of theme
+   variables is a banner whose colors are decided by code that is not
+   executing. Fixed values are the only ones that can be reasoned about here.
+   #b42318 on white is 6.4:1. */
+/* Pinned to the bottom rather than sitting at the top of the flow, where it
+   was written first and where .header -- position: fixed, z-index: 1000 --
+   covered it completely. Outranking the header instead would have meant a
+   banner painted over the site's only working navigation, which on a page
+   whose markup does render without script (pplogin's form is in the HTML) is
+   a worse trade than it sounds. The bottom edge is empty on every page here,
+   it stays put through any amount of scrolling, and it obscures nothing. */
+.noscript-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    margin: 0;
+    padding: 0.9rem 1.25rem;
+    background: #b42318;
+    color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    text-align: center;
+}

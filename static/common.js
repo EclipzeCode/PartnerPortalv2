@@ -616,6 +616,11 @@ async function updateNavForSession() {
     }
 
     rememberSessionHint(Boolean(me));
+    // Now that the answer is real rather than remembered, let the badge poll
+    // start or stop on it. This is what picks up a first-ever sign-in, where
+    // the hint did not exist when syncNavPolling first ran -- and what stops
+    // the poll immediately on the page somebody lands on after signing out.
+    syncNavPolling();
     delete slot.dataset.hint;
 
     if (!me) {
@@ -696,8 +701,77 @@ function refreshNavCountsIfStale() {
     if (window.refreshNavCounts) window.refreshNavCounts();
 }
 
-document.addEventListener('visibilitychange', refreshNavCountsIfStale);
+// And keep it current while somebody is actually looking at the page.
+//
+// Catching up on return, above, fixes the tab left open over lunch. It does
+// nothing for the case that is just as common and rather worse: somebody
+// sitting *on* the dashboard for twenty minutes, with the bell in front of
+// them, while a proposal arrives and the badge goes on saying what was true
+// when the page loaded. A notification bell that only updates when you leave
+// and come back is not a notification bell.
+//
+// Only while the document is visible, which is the whole reason a bare timer
+// was rejected when this was first written: a background tab polling forever
+// spends requests on nobody looking, on a free-tier host, against a database
+// that scales to zero. The interval is started when the page is visible and
+// cleared the moment it is hidden, so a backgrounded tab costs exactly
+// nothing and returning to it is still what triggers the catch-up.
+//
+// A minute, not the twelve seconds an open message thread uses. That poll is
+// a conversation, where a reply arriving four seconds late is noticeable;
+// this is a badge, where it is not -- and this one runs on every page of the
+// site rather than on one panel somebody deliberately opened.
+//
+// Not SSE, which would be the obvious answer and is the wrong one here.
+// gunicorn runs sync workers (see render.yaml), and a sync worker serves one
+// request at a time: two visitors holding a stream open would occupy both
+// workers and the site would stop answering anybody. That is a change to the
+// worker class, not a change to this file.
+const NAV_POLL_MS = 60000;
+let navPollTimer = null;
+
+function startNavPolling() {
+    if (navPollTimer !== null) return;
+    navPollTimer = setInterval(refreshNavCountsIfStale, NAV_POLL_MS);
+}
+
+function stopNavPolling() {
+    if (navPollTimer === null) return;
+    clearInterval(navPollTimer);
+    navPollTimer = null;
+}
+
+function syncNavPolling() {
+    // Two conditions, and the second is easy to forget: there is nothing to
+    // poll *for* when nobody is signed in. refreshNavCounts swallows the 401
+    // rather than erroring, so without this check a visitor reading the
+    // homepage would spend a request a minute discovering they are still
+    // signed out -- on a free-tier host, against a database that scales to
+    // zero and would be woken by each one.
+    //
+    // hasSessionHint rather than a live check, because this has to answer
+    // synchronously and the honest live answer is a request. It is wrong
+    // only in the harmless direction: stale-true costs one poll that returns
+    // 401 and is then corrected, and stale-false is fixed by the resync
+    // below as soon as /api/me has actually said who this is.
+    if (document.visibilityState === 'hidden' || !hasSessionHint()) {
+        stopNavPolling();
+        return;
+    }
+    startNavPolling();
+}
+
+document.addEventListener('visibilitychange', () => {
+    refreshNavCountsIfStale();
+    syncNavPolling();
+});
 window.addEventListener('focus', refreshNavCountsIfStale);
+// Nothing to poll for once the tab is going away, and leaving an interval
+// armed across a bfcache restore is how a page comes back with two of them.
+window.addEventListener('pagehide', stopNavPolling);
+window.addEventListener('pageshow', syncNavPolling);
+
+syncNavPolling();
 
 // How many proposals are waiting on this organization, shown on the bell.
 //

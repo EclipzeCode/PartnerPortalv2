@@ -64,6 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
             box.className = 'form-message';
             form.prepend(box);
         }
+        // Announced, and with the urgency the message actually has: a
+        // failure is something to act on, a success is not. One element for
+        // both, so the role moves with the message rather than being fixed
+        // at whichever of the two was written first.
+        box.setAttribute('role', kind === 'success' ? 'status' : 'alert');
         box.textContent = text;
         box.classList.toggle('success', kind === 'success');
         box.classList.toggle('hidden', !text);

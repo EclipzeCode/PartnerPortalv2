@@ -285,13 +285,13 @@
                         </p>
                         <div class="form-group">
                             <label for="newEmail">New email address</label>
-                            <input type="email" id="newEmail" maxlength="255"
+                            <input type="email" id="newEmail" aria-describedby="newEmail-error" maxlength="255"
                                    autocomplete="email">
                             <p class="field-error" id="newEmail-error"></p>
                         </div>
                         <div class="form-group">
                             <label for="emailPassword">Your password</label>
-                            <input type="password" id="emailPassword"
+                            <input type="password" id="emailPassword" aria-describedby="emailPassword-error"
                                    autocomplete="current-password">
                             <p class="field-error" id="emailPassword-error"></p>
                         </div>
@@ -347,13 +347,13 @@
                 <form id="passwordForm" class="password-form" novalidate>
                     <div class="form-group">
                         <label for="currentPassword">Current password</label>
-                        <input type="password" id="currentPassword" autocomplete="current-password">
+                        <input type="password" id="currentPassword" aria-describedby="currentPassword-error" autocomplete="current-password">
                         <p class="field-error" id="currentPassword-error"></p>
                     </div>
 
                     <div class="form-group">
                         <label for="newPassword">New password</label>
-                        <input type="password" id="newPassword" autocomplete="new-password">
+                        <input type="password" id="newPassword" aria-describedby="newPassword-error" autocomplete="new-password">
                         <p class="field-error" id="newPassword-error"></p>
 
                         <!-- Live strength meter, shown once the field has a
@@ -378,7 +378,7 @@
 
                     <div class="form-group">
                         <label for="confirmNewPassword">Confirm new password</label>
-                        <input type="password" id="confirmNewPassword" autocomplete="new-password">
+                        <input type="password" id="confirmNewPassword" aria-describedby="confirmNewPassword-error" autocomplete="new-password">
                         <p class="field-error" id="confirmNewPassword-error"></p>
                     </div>
 

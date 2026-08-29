@@ -67,7 +67,11 @@
 <body class="ink">
     <main class="reset-main">
         <div class="reset-page">
-            <div class="reset-card" id="claimCard">
+            <!-- role="status" because JavaScript replaces this card's contents
+                 with the outcome -- verified, expired, reset. The swap is
+                 the entire feedback this page gives, and unannounced it is
+                 a page that silently becomes a different page. -->
+            <div class="reset-card" id="claimCard" role="status">
                 <!-- Populated by claim.js: it has to resolve the token before
                      it knows whose invitation this is, and a form asking
                      somebody to join is worth nothing without that name. -->

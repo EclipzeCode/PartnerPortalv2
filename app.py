@@ -1030,6 +1030,43 @@ def _stamp_asset_refs(html, pattern=_ASSET_REF_RE):
     return pattern.sub(stamp, html), tuple(sorted(seen.items()))
 
 
+# --- Telling somebody with no JavaScript what is wrong ----------------------
+# Every page here renders client-side: the markup on disk is a shell, and the
+# organizations, the matches and the forms' behavior all arrive from
+# JavaScript. With it turned off -- or blocked by an extension, or simply
+# failed to load on a flaky connection -- what a visitor got was a styled,
+# permanently empty page. Not an error, not a spinner. Nothing to read and
+# nothing to do, and no way to tell that from a site that is merely broken.
+#
+# Injected here rather than written into each of the nineteen files, for the
+# same reason the asset stamps are: a rule that has to be remembered on every
+# new page is a rule that will be missing from one. It lands right after the
+# opening <body> so it is the first thing in the document, and it is inside
+# <noscript>, so a browser that runs scripts never renders it at all.
+#
+# A class rather than a style attribute, because the Content-Security-Policy
+# below does not allow inline styles -- see the note in analytics.js. The
+# rule lives in ink.css, which is the one stylesheet every page links.
+_NOSCRIPT = (
+    '<noscript><p class="noscript-banner">'
+    "PartnerPortal needs JavaScript to sign you in and to load organizations. "
+    "Please turn it on and reload this page."
+    "</p></noscript>"
+)
+
+_BODY_TAG_RE = re.compile(r"(<body\b[^>]*>)", re.IGNORECASE)
+
+
+def _add_noscript(html):
+    """Put the no-JavaScript notice just inside <body>.
+
+    Once: `count=1` so a page that somehow contains the string twice does not
+    get two notices. A page with no <body> tag at all is returned unchanged
+    rather than guessed at.
+    """
+    return _BODY_TAG_RE.sub(lambda m: m.group(1) + _NOSCRIPT, html, count=1)
+
+
 # filename -> (html key, asset versions, stamped body, etag). Every entry is
 # one of the ~15 files in static/, so this is bounded by the frontend.
 _page_cache = {}
@@ -1084,6 +1121,7 @@ def _stamped_page(filename, pattern=_ASSET_REF_RE):
     bundled = ()
     if pattern is _ASSET_REF_RE:
         html, bundled = _bundle_stylesheets(html)
+        html = _add_noscript(html)
     body, assets = _stamp_asset_refs(html, pattern)
     # The bundled sheets join the cache key even though the served body no
     # longer names them: they are still inputs to it, through the digest in

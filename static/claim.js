@@ -77,21 +77,24 @@ document.addEventListener('DOMContentLoaded', () => {
             <form class="reset-form" id="claimForm" novalidate>
                 <div class="field">
                     <label for="orgName">Organization name</label>
-                    <input type="text" id="orgName" autocomplete="organization"
+                    <input type="text" id="orgName" aria-describedby="orgName-error"
+                           autocomplete="organization"
                            value="${esc(invite.name)}">
                     <p class="field-error" id="orgName-error"></p>
                 </div>
 
                 <div class="field">
                     <label for="email">Your email address</label>
-                    <input type="email" id="email" autocomplete="email"
+                    <input type="email" id="email" aria-describedby="email-error"
+                           autocomplete="email"
                            placeholder="you@organization.org">
                     <p class="field-error" id="email-error"></p>
                 </div>
 
                 <div class="field">
                     <label for="password">Choose a password</label>
-                    <input type="password" id="password" autocomplete="new-password">
+                    <input type="password" id="password" aria-describedby="password-error"
+                           autocomplete="new-password">
                     <p class="field-error" id="password-error"></p>
 
                     <div class="pw-meter" id="pwMeter" hidden>

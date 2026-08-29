@@ -954,3 +954,35 @@
     outline: 2px solid var(--h-give);
     outline-offset: 1px;
 }
+
+/* ---------- Reduced motion ---------- */
+/* Every other substantial stylesheet here honors this; this one was the
+   exception, and it is the page with the most movement on it -- bars that
+   grow to their value, a donut that rotates on hover, and a data table that
+   drops in when it is opened.
+
+   The distinction being drawn is motion, not feedback. Transitions that only
+   carry color or opacity are left alone: they do not move anything, they are
+   how a hover or a tooltip reads as a response rather than a redraw, and
+   removing them would cost clarity for no gain. What goes is the travel --
+   the width animation on the bars, the transform on the donut and the
+   chevron, and the table's slide. Each of those ends in exactly the state it
+   was animating toward, so the page reads identically once it settles. */
+@media (prefers-reduced-motion: reduce) {
+    .donut-face,
+    .donut-wall {
+        transition: opacity 0.2s ease;
+    }
+
+    .analytics-grid .bar {
+        transition: none;
+    }
+
+    .table-toggle i {
+        transition: none;
+    }
+
+    .views-panel .chart-data {
+        animation: none;
+    }
+}
