@@ -58,6 +58,17 @@ DATABASE_URL = _normalize(DATABASE_URL)
 # than waiting on the first. Overridable because the right number is a
 # property of the deployment, not of this file: raise it with --threads or a
 # non-sync worker class, both of which make one process genuinely concurrent.
+#
+# One correction to the arithmetic above, since it is the kind of thing that
+# goes stale quietly. A request on a rate-limited route now needs *two*
+# connections at once, not one: the handler holds its own session while the
+# limiter deliberately takes a separate one, because an attempt has to be
+# recorded even when the handler's transaction is about to be rolled back
+# (see _limiter_db in app.py). Two plus three still covers that comfortably
+# for a sync worker serving one request at a time -- but anyone adding
+# --threads should size this at roughly two per concurrent request rather
+# than one, or the second half of a login will queue on pool_timeout behind
+# the first half of somebody else's.
 POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "2"))
 POOL_MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "3"))
 

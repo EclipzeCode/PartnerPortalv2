@@ -7,7 +7,6 @@ import re
 import secrets
 import threading
 import time
-from collections import defaultdict, deque
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
 from html import escape
@@ -26,7 +25,7 @@ from flask import (
     Flask, jsonify, request, session
 )
 
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
@@ -49,7 +48,7 @@ from matching import (
 from moderation import screen_name
 from models import (
     Admin, AdminAction, ContactMessage, Event, Message, Organization,
-    Partnership, ProfileView, SavedLead,
+    Partnership, ProfileView, RateLimitAttempt, SavedLead,
 )
 from notifications import (
     notify_profile_hidden,
@@ -59,6 +58,7 @@ from notifications import (
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
     notify_proposal_responded, notify_proposal_updated,
+    start_delivery,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -351,95 +351,200 @@ MAX_EXISTENCE_DISCLOSURES = 2
 EXISTENCE_DISCLOSURE_WINDOW = 3600
 
 # --- Rate limiting --------------------------------------------------------
-# In-process and per-worker: gunicorn runs this app with 2 workers (see
-# render.yaml), so the real ceiling on any of these limits is up to 2x what
-# is configured here, and a restart clears it entirely. That is a real gap
-# for a determined attacker, but it is a large improvement over no limit at
-# all for the actual threat here -- a script hammering /register -- and
-# adding Redis or another store for a nonprofit tool at this scale is not
-# worth the operational cost it would add.
-_rate_buckets = defaultdict(deque)
-
-# Every read and write of _rate_buckets goes through this lock.
+# Counted in Postgres, because the thing being counted happens in more than
+# one process.
 #
-# The sweep below walks the whole dict, and a request handler on another
-# thread inserts into it simply by asking about a key -- which is a
-# `RuntimeError: dictionary changed size during iteration` raised in the
-# middle of somebody's login, surfacing as a 500 that nothing in the traffic
-# would explain. Dormant under gunicorn's sync workers, which is what this
-# deploys on; live on Flask's dev server, which is threaded by default, and
-# live the day `--threads` is added to render.yaml by somebody who has no
-# reason to think it would matter.
+# This lived in a module-level dict, which meant every limit here was really
+# a limit *per worker*. gunicorn runs two of them (see render.yaml), so the
+# effective ceiling was up to twice what each call below configures, and
+# which answer a caller got depended on which worker the proxy happened to
+# pick -- a lockout that holds on one connection and not the next is not a
+# lockout. Worse, the counters died with the process: a restart cleared
+# every budget, and the free plan spins down when idle, so an attacker could
+# refund their own by waiting.
 #
-# A plain Lock, not an RLock: nothing here is reentrant, and the one function
-# called with the lock already held (_sweep_rate_buckets) says so.
-_rate_lock = threading.Lock()
-
-# Nothing removed a key from _rate_buckets once it appeared. Every address
-# that ever hit a limited endpoint, and every address ever typed into
-# /forgot-password -- which is keyed by email, so it is attacker-chosen and
-# unbounded -- left an entry behind for the life of the process. The lists
-# themselves are trimmed on each call, so what accumulated was mostly empty
-# lists under keys nobody would ask about again: a slow leak, and a cheap way
-# for anyone to grow the process by naming new keys.
+# None of that is reachable from inside one process. The only store both
+# workers already share is the database, so that is where the counters go.
+# The cost is a short transaction on the limited endpoints -- all of which
+# already talk to the database, and the slowest of which (login) spends far
+# more than this on bcrypt.
 #
-# Swept on a timer rather than on every call. The sweep walks the whole dict,
-# and doing that per request would make the common case pay for the rare one.
+# Rows are disposable and are deleted as they age out: for the key being
+# asked about, on every call that records one, and across the table on the
+# timer below.
 RATE_SWEEP_INTERVAL = 300
-# The longest window any caller passes. A key whose newest attempt is older
-# than this cannot affect any limit, whichever bucket it belongs to.
+# The longest window any caller passes. A row older than this cannot affect
+# any limit, whichever bucket it belongs to.
 RATE_MAX_WINDOW = 3600
+
+# When this process last swept the whole table. Process-local on purpose:
+# it does not decide whether a limit holds, only how often this worker
+# bothers to tidy up after every worker. Two of them sweeping independently
+# is a redundant DELETE, not a wrong answer.
 _rate_sweep_after = 0.0
+_rate_sweep_lock = threading.Lock()
 
 
-def _sweep_rate_buckets(now):
-    """Drop keys that can no longer affect any limit.
+def _limiter_db():
+    """A session for the limiter alone, on its own connection.
 
-    Caller holds _rate_lock. Not acquired here because the only production
-    caller is rate_limited(), which is already inside it, and a second
-    acquisition on a plain Lock is a deadlock rather than a no-op.
+    Deliberately not get_db(). An attempt has to be recorded whatever the
+    handler goes on to do, and the two cases that matter both end without a
+    commit: a failed login returns 401, and a refused disclosure returns 409.
+    Sharing the request's session would file those attempts inside a
+    transaction that is about to be discarded, leaving a limiter that counts
+    only the requests that succeeded -- precisely inverting what it is for.
+
+    Its own connection, not just its own session, for the same reason: a
+    nested transaction is still the outer one's to roll back.
+    """
+    return SessionLocal()
+
+
+def _advisory_key(*parts):
+    """A stable 64-bit integer for an advisory lock, from `parts`.
+
+    hashlib rather than hash(): Python's is salted per process, so two
+    workers would derive different lock numbers for the same key and neither
+    would exclude the other -- which is the entire job.
+    """
+    digest = hashlib.blake2b(
+        "\x00".join(str(p) for p in parts).encode("utf-8"), digest_size=8
+    ).digest()
+    return int.from_bytes(digest, "big", signed=True)
+
+
+def _try_lock(db, *parts):
+    """Take the advisory lock for `parts` if it is free. True if taken.
+
+    The `try` variant, never the blocking one, and that is a deliberate
+    choice about what these locks are for. Both callers use one to close a
+    small read-then-write race, not to guarantee mutual exclusion -- and
+    pg_advisory_xact_lock waits with no timeout, on a connection borrowed
+    from a pool of five, for a lock keyed by things many callers share. A
+    login bucket is keyed by IP address, and behind a corporate proxy or a
+    university NAT that is a lot of people: one slow transaction and the
+    rest queue on the lock, holding pool connections while they wait, until
+    requests start failing on pool_timeout for reasons nothing in the
+    traffic explains. Trading a rare double-count for that is a bad trade.
+
+    So the answer is allowed to be "no", and each caller decides what to do
+    about it. Held until the transaction ends, so the caller must commit or
+    roll back rather than leaving the session open.
+    """
+    return bool(db.execute(
+        select(func.pg_try_advisory_xact_lock(_advisory_key(*parts)))
+    ).scalar())
+
+
+def _sweep_rate_limits(db):
+    """Delete rows too old to affect any limit, across every bucket.
+
+    On a timer rather than on every call: this is a table-wide DELETE, and
+    doing it per request would make the common case pay for the rare one.
+    The per-key trim in _record_attempt is what keeps a single hot key from
+    growing between sweeps.
     """
     global _rate_sweep_after
-    if now < _rate_sweep_after:
-        return
-    _rate_sweep_after = now + RATE_SWEEP_INTERVAL
-    cutoff = now - RATE_MAX_WINDOW
-    stale = [
-        key for key, attempts in _rate_buckets.items()
-        if not attempts or attempts[-1] < cutoff
-    ]
-    for key in stale:
-        del _rate_buckets[key]
+    now = time.monotonic()
+    with _rate_sweep_lock:
+        if now < _rate_sweep_after:
+            return
+        _rate_sweep_after = now + RATE_SWEEP_INTERVAL
+    db.query(RateLimitAttempt).filter(
+        RateLimitAttempt.attempted_at
+        < func.now() - timedelta(seconds=RATE_MAX_WINDOW)
+    ).delete(synchronize_session=False)
+
+
+def _window_state(db, bucket, key, window_seconds):
+    """(attempts inside the window, oldest of them, the database's now).
+
+    The clock is the database's, not this process's. Two workers comparing
+    their own clocks against timestamps a third machine wrote is a source of
+    disagreement with no upside; func.now() is transaction start time, so
+    every value here is read against one consistent moment.
+    """
+    return db.query(
+        func.count(RateLimitAttempt.id),
+        func.min(RateLimitAttempt.attempted_at),
+        func.now(),
+    ).filter(
+        RateLimitAttempt.bucket == bucket,
+        RateLimitAttempt.key == key,
+        RateLimitAttempt.attempted_at
+        > func.now() - timedelta(seconds=window_seconds),
+    ).one()
+
+
+def _wait_from(oldest, now, window_seconds):
+    """Seconds until `oldest` ages out of the window, at least one.
+
+    Never zero while the limit holds: a caller told to wait no time at all
+    would come straight back and be refused again.
+    """
+    if oldest is None:
+        return 1
+    ages_out = oldest + timedelta(seconds=window_seconds)
+    return max(1, math.ceil((ages_out - now).total_seconds()))
 
 
 def rate_limited(bucket, key, max_attempts, window_seconds):
     """Seconds until `key` may try again in `bucket`, or 0 if it may now.
 
     Records this attempt when it is allowed, and nothing further when it is
-    not. The return moved from a boolean to a number of seconds, which every
-    existing `if rate_limited(...)` reads the same way -- zero is falsy -- but
-    which lets the caller say *how long*, instead of "a while".
+    not. The return is a number of seconds, which every existing
+    `if rate_limited(...)` reads the same way -- zero is falsy -- but which
+    lets the caller say *how long*, instead of "a while".
 
     The wait is until the oldest attempt still inside the window ages out of
-    it, because that is the moment there is room for one more. Never zero
-    while the limit holds: a caller told to wait no time at all would come
-    straight back and be refused again.
+    it, because that is the moment there is room for one more.
 
-    A deque rather than a list: the trim below drops from the front, and
-    list.pop(0) rewrites the whole list to do it. Nothing at these limits is
-    long enough for that to matter, but the right structure costs the same.
+    Counting and recording are one transaction, and it tries to hold the
+    key's advisory lock across them: two requests arriving together would
+    otherwise both read a count one short of the limit and both record,
+    which is how a limit of five lets six through. The lock is best-effort
+    rather than waited on -- see _try_lock for why blocking here would be
+    the worse failure -- so that last attempt is narrowed rather than shut
+    out entirely.
+
+    The attempt is committed on its own, separately from whatever the
+    handler goes on to do. That is deliberate: a failed login records an
+    attempt and then returns 401 without committing anything, and an attempt
+    that vanished with the handler's transaction would be a limiter that
+    only counts successes.
     """
-    now = time.time()
-    with _rate_lock:
-        _sweep_rate_buckets(now)
-        attempts = _rate_buckets[(bucket, key)]
-        cutoff = now - window_seconds
-        while attempts and attempts[0] < cutoff:
-            attempts.popleft()
-        if len(attempts) >= max_attempts:
-            return max(1, math.ceil(attempts[0] + window_seconds - now))
-        attempts.append(now)
+    db = _limiter_db()
+    try:
+        # Best-effort. Failing to get it means another request is counting
+        # the same key at this exact moment, and the worst that follows is
+        # that the two of them both read a count one short of the limit and
+        # both record -- one attempt over, once, under contention. That is a
+        # far smaller hole than the one this whole change closes, and much
+        # smaller than what blocking here would cost. See _try_lock.
+        _try_lock(db, "rate_limit", bucket, key)
+        count, oldest, now = _window_state(db, bucket, key, window_seconds)
+        if count >= max_attempts:
+            # Nothing recorded, so being refused does not extend the wait.
+            # Rolled back rather than committed: there is nothing to keep,
+            # and it is what releases the advisory lock.
+            db.rollback()
+            return _wait_from(oldest, now, window_seconds)
+
+        db.add(RateLimitAttempt(bucket=bucket, key=key))
+        # The rows this key no longer needs, while we are already here and
+        # holding its lock. Indexed on exactly this prefix.
+        db.query(RateLimitAttempt).filter(
+            RateLimitAttempt.bucket == bucket,
+            RateLimitAttempt.key == key,
+            RateLimitAttempt.attempted_at
+            < func.now() - timedelta(seconds=RATE_MAX_WINDOW),
+        ).delete(synchronize_session=False)
+        _sweep_rate_limits(db)
+        db.commit()
         return 0
+    finally:
+        db.close()
 
 
 def rate_limit_reached(bucket, key, max_attempts, window_seconds):
@@ -450,20 +555,17 @@ def rate_limit_reached(bucket, key, max_attempts, window_seconds):
     the thing being checked.
 
     Returns seconds-until-clear like rate_limited, and for the same reason.
-    The oldest attempt inside the window is the one whose expiry makes room,
-    and only the attempts inside it count toward the limit -- so the wait is
-    measured from the oldest of those, not from the oldest on record.
+    No advisory lock, because nothing is written -- there is no read-then-
+    write here to serialize.
     """
-    now = time.time()
-    cutoff = now - window_seconds
-    with _rate_lock:
-        attempts = _rate_buckets.get((bucket, key))
-        if not attempts:
+    db = _limiter_db()
+    try:
+        count, oldest, now = _window_state(db, bucket, key, window_seconds)
+        if count < max_attempts:
             return 0
-        live = [t for t in attempts if t >= cutoff]
-        if len(live) < max_attempts:
-            return 0
-        return max(1, math.ceil(live[0] + window_seconds - now))
+        return _wait_from(oldest, now, window_seconds)
+    finally:
+        db.close()
 
 
 def _human_wait(seconds):
@@ -541,8 +643,15 @@ def clear_rate_limit(bucket, key):
     would let anyone holding one valid account clear the limit that exists to
     slow down guessing at everybody else's.
     """
-    with _rate_lock:
-        _rate_buckets.pop((bucket, key), None)
+    db = _limiter_db()
+    try:
+        db.query(RateLimitAttempt).filter(
+            RateLimitAttempt.bucket == bucket,
+            RateLimitAttempt.key == key,
+        ).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
 
 
 # Where somebody refused by the name filter is told to go.
@@ -1592,6 +1701,26 @@ def csrf_token():
         token = secrets.token_urlsafe(32)
         session[CSRF_SESSION_KEY] = token
     return token
+
+
+@app.before_request
+def start_email_delivery():
+    """Make sure this process is delivering mail, not only accepting it.
+
+    On the first request rather than at import, because importing this module
+    is something alembic, seed.py and the test suite all do without ever
+    wanting a pair of threads polling a table. Render health-checks
+    /api/categories, so "the first request" arrives on its own within
+    seconds of a deploy whether or not anybody is using the site.
+
+    What this is really for is the messages nobody here queued: rows left
+    `sending` by a process that died. start_delivery is cheap and idempotent
+    after the first call -- a flag check on a list -- so paying it per request
+    costs nothing worth measuring.
+    """
+    if not app.config.get("TESTING"):
+        start_delivery()
+    return None
 
 
 @app.before_request
@@ -4133,6 +4262,28 @@ def _record_profile_view(db, target):
             return
 
         key = _viewer_key(viewer)
+
+        # Serialized per (profile, viewer), because what follows is a read
+        # that decides whether to write and both halves have to be one step.
+        # Two requests arriving together -- a double click, a prefetch, a
+        # browser opening the same link twice -- otherwise both look, both
+        # find nothing, and both insert, which counts one visitor twice on
+        # the number the dashboard presents as an audience.
+        #
+        # A lock rather than a unique constraint because the window rolls:
+        # "once per viewer per 24 hours from whenever they last looked" is
+        # not something a constraint can express, and bucketing to the
+        # calendar day so that one could would make a visit at 23:58 and one
+        # at 00:02 two visitors.
+        #
+        # Not getting the lock is the answer, not a reason to wait for it:
+        # this key is one profile and one viewer, so somebody already holding
+        # it *is* this same view being recorded right now. Waiting would only
+        # buy the right to discover that and do nothing.
+        if not _try_lock(db, "profile_view", target.id, key):
+            db.rollback()
+            return
+
         since = datetime.now(timezone.utc) - VIEW_DEDUP_WINDOW
         already = db.query(ProfileView.id).filter(
             ProfileView.organization_id == target.id,
@@ -4142,6 +4293,10 @@ def _record_profile_view(db, target):
         # Reloading a profile, or coming back to it twice in an afternoon, is
         # one organization taking an interest rather than several.
         if already is not None:
+            # Rolled back rather than simply returned: the advisory lock is
+            # held until this transaction ends, and the next viewer of this
+            # profile should not be waiting on it.
+            db.rollback()
             return
 
         db.add(ProfileView(organization_id=target.id, viewer_key=key))

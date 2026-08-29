@@ -6,62 +6,95 @@ returns a number, and a settings endpoint that saves nothing still answers
 200 -- which is exactly why they are worth a test rather than a glance.
 """
 
-import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 import app as app_module
+from models import RateLimitAttempt
 
 
-def test_rate_buckets_do_not_grow_without_bound():
-    """Keys that can no longer affect any limit are dropped.
+def _attempt(bucket, key, age_seconds=0):
+    return RateLimitAttempt(
+        bucket=bucket, key=key,
+        attempted_at=datetime.now(timezone.utc) - timedelta(seconds=age_seconds),
+    )
+
+
+def test_rate_limit_rows_do_not_grow_without_bound(session):
+    """Attempts that can no longer affect any limit are deleted.
 
     /forgot-password is keyed by email address, so the key space is chosen by
     whoever is calling. Nothing removed an entry once it existed.
     """
-    app_module._rate_buckets.clear()
     app_module._rate_sweep_after = 0.0
 
-    now = time.time()
-    # Older than the longest window any caller passes.
-    stale = now - app_module.RATE_MAX_WINDOW - 60
     for i in range(50):
-        app_module._rate_buckets[("forgot_password_email", f"old{i}")] = [stale]
+        # Older than the longest window any caller passes.
+        session.add(_attempt("forgot_password_email", f"old{i}",
+                             app_module.RATE_MAX_WINDOW + 60))
     # Recent enough to still count against a limit.
-    app_module._rate_buckets[("login", "current")] = [now]
+    session.add(_attempt("login", "current"))
+    session.commit()
 
-    app_module._sweep_rate_buckets(now)
+    app_module._sweep_rate_limits(session)
+    session.commit()
 
-    remaining = set(app_module._rate_buckets)
+    remaining = {(row.bucket, row.key)
+                 for row in session.query(RateLimitAttempt).all()}
     assert ("login", "current") in remaining
     assert not [k for k in remaining if k[1].startswith("old")]
 
 
-def test_the_sweep_does_not_run_on_every_call():
-    """It walks the whole dict, so the common case must not pay for it."""
-    app_module._rate_buckets.clear()
+def test_the_sweep_does_not_run_on_every_call(session):
+    """It is a table-wide DELETE, so the common case must not pay for it."""
     app_module._rate_sweep_after = 0.0
-    now = time.time()
 
-    app_module._sweep_rate_buckets(now)
-    app_module._rate_buckets[("login", "stale")] = [now - 99999]
+    # The first call runs and arms the timer.
+    app_module._sweep_rate_limits(session)
+    session.commit()
+    assert app_module._rate_sweep_after > 0
+
+    session.add(_attempt("login", "stale", 99999))
+    session.commit()
+
     # Immediately after a sweep, another one is not due yet.
-    app_module._sweep_rate_buckets(now)
-    assert ("login", "stale") in app_module._rate_buckets
+    app_module._sweep_rate_limits(session)
+    session.commit()
+    assert session.query(RateLimitAttempt).filter_by(key="stale").count() == 1
 
-    app_module._sweep_rate_buckets(now + app_module.RATE_SWEEP_INTERVAL + 1)
-    assert ("login", "stale") not in app_module._rate_buckets
+    # As if RATE_SWEEP_INTERVAL had passed.
+    app_module._rate_sweep_after = 0.0
+    app_module._sweep_rate_limits(session)
+    session.commit()
+    assert session.query(RateLimitAttempt).filter_by(key="stale").count() == 0
 
 
-def test_a_live_limit_survives_a_sweep(client, make_org):
+def test_a_live_limit_survives_a_sweep(client, make_org, session):
     """The sweep must not hand back attempts that should still be blocked."""
     make_org()
     for _ in range(20):
         client.post("/login", json={"email": "nobody@example.com", "password": "x"})
-    app_module._sweep_rate_buckets(time.time())
+    app_module._rate_sweep_after = 0.0
+    app_module._sweep_rate_limits(session)
+    session.commit()
     response = client.post(
         "/login", json={"email": "nobody@example.com", "password": "x"})
     assert response.status_code == 429
+
+
+def test_a_limit_is_shared_rather_than_per_worker(client):
+    """The whole point of moving the counters into the database.
+
+    Two sessions standing in for two gunicorn workers: an attempt recorded
+    through one has to be visible to the other, or the limit is really two
+    limits and the configured number means nothing.
+    """
+    for _ in range(3):
+        assert app_module.rate_limited("probe_shared", "k", 3, 900) == 0
+    # A different session object, the way a second worker would be.
+    assert app_module.rate_limit_reached("probe_shared", "k", 3, 900) > 0
+    assert app_module.rate_limited("probe_shared", "k", 3, 900) > 0
 
 
 def test_settings_refuses_a_body_it_understands_nothing_in(client, make_org, login):
@@ -132,9 +165,6 @@ def test_a_refusal_says_how_long_in_the_body_and_the_header(client):
 def test_the_wait_is_measured_from_the_oldest_attempt_that_still_counts(client):
     """The limit clears when the oldest attempt inside the window ages out,
     which is the moment there is room for one more."""
-    app_module._rate_buckets.clear()
-    app_module._rate_sweep_after = 0.0
-
     assert app_module.rate_limited("probe", "k", 2, 900) == 0
     assert app_module.rate_limited("probe", "k", 2, 900) == 0
     wait = app_module.rate_limited("probe", "k", 2, 900)
@@ -145,7 +175,6 @@ def test_the_wait_is_measured_from_the_oldest_attempt_that_still_counts(client):
 def test_zero_reads_as_allowed(client):
     """The return moved from a boolean to seconds, and every existing
     `if rate_limited(...)` had to keep meaning the same thing."""
-    app_module._rate_buckets.clear()
     assert not app_module.rate_limited("probe2", "k", 5, 900)
     assert not app_module.rate_limit_reached("probe2", "k", 5, 900)
 
@@ -153,7 +182,6 @@ def test_zero_reads_as_allowed(client):
 def test_checking_still_does_not_spend_the_budget(client):
     """rate_limit_reached returns seconds now too, and must still not count
     the asking -- checking would spend the thing being checked."""
-    app_module._rate_buckets.clear()
     for _ in range(20):
         assert app_module.rate_limit_reached("probe3", "k", 2, 900) == 0
     app_module.rate_limited("probe3", "k", 2, 900)

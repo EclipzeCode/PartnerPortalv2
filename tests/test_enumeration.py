@@ -42,7 +42,7 @@ def test_a_taken_address_is_still_answered_plainly(client, make_org):
 
 
 def test_the_answer_does_not_arrive_faster_for_a_taken_address(
-        client, make_org, monkeypatch):
+        client, make_org, monkeypatch, clear_rate_limits):
     """The oracle that survives changing the message.
 
     Returning early on a taken address skipped bcrypt and the insert, which
@@ -62,12 +62,12 @@ def test_the_answer_does_not_arrive_faster_for_a_taken_address(
     # app_module.bcrypt is the same module object it uses.
     existing = make_org()
 
-    app_module._rate_buckets.clear()
+    clear_rate_limits()
     calls["hash"] = 0
     _signup(client, existing.email)
     taken_hashes = calls["hash"]
 
-    app_module._rate_buckets.clear()
+    clear_rate_limits()
     calls["hash"] = 0
     _signup(client, _free())
     free_hashes = calls["hash"]

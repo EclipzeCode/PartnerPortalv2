@@ -22,6 +22,7 @@ import sys
 import uuid
 
 import pytest
+import sqlalchemy as sa
 from flask.testing import FlaskClient
 from sqlalchemy.orm import Session
 
@@ -76,28 +77,60 @@ def outbox(no_outbound_email):
 
 @pytest.fixture(autouse=True)
 def reset_rate_limits():
-    """Clear the in-memory rate limiter between tests.
+    """Keep the rate limiter from leaking across tests.
 
     Every test signs in from the same address, and /login allows twenty
-    attempts per IP per fifteen minutes -- so a full run trips the limit
-    partway through and later tests fail with 429 for reasons that have
-    nothing to do with what they assert. The buckets live in a module-level
-    dict rather than the database, so the transaction rollback does not
-    touch them.
+    attempts per IP per fifteen minutes -- so a full run would trip the limit
+    partway through and later tests would fail with 429 for reasons that have
+    nothing to do with what they assert.
 
-    Clearing here rather than raising the limits keeps the production
-    behavior under test elsewhere, and makes each test independent of how
-    many ran before it.
+    Deleted afterward rather than rolled back, and that is forced by what the
+    limiter is. It keeps its own connection on purpose (see _limiter_db): an
+    attempt has to be recorded even when the handler ends without committing,
+    which is exactly what a failed login and a refused disclosure both do.
+    Nothing rolls those back, because nothing is holding them open -- so the
+    only way to leave nothing behind is to delete it.
+
+    The first attempt at this handed the limiter a second long-lived
+    connection with a transaction held open for the test, to get the rollback
+    isolation everything else here enjoys. That connection then sat idle in
+    that transaction for as long as the test took, because a limit is checked
+    once and the rest of the test does other things -- and Neon terminates a
+    session that is idle in a transaction. It failed twice, in two unrelated
+    files, for reasons neither test had anything to do with. Short
+    transactions that commit and get out of the way are what the limiter does
+    in production, and the suite is steadier for doing the same.
+
+    What is still process-local is the sweep timer, and it has to be reset
+    for the same reason it always did: a test that pushed it into the future
+    would silently disable eviction for everything that ran after it.
     """
-    # The sweep timer goes with the buckets. Left alone, a test that pushed
-    # it into the future would silently disable eviction for everything that
-    # ran after it -- the same cross-test dependence this fixture exists to
-    # remove.
-    app_module._rate_buckets.clear()
     app_module._rate_sweep_after = 0.0
     yield
-    app_module._rate_buckets.clear()
     app_module._rate_sweep_after = 0.0
+    _forget_rate_limits()
+
+
+def _forget_rate_limits():
+    """Drop every recorded attempt, on a connection of its own."""
+    db = db_module.SessionLocal()
+    try:
+        db.execute(sa.text("DELETE FROM rate_limit_attempts"))
+        db.commit()
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def clear_rate_limits():
+    """Forget every attempt recorded so far, mid-test.
+
+    For the tests that make the same limited request twice on purpose and
+    need the second one judged on its own -- signing up with a taken address
+    and then a free one, say, where the point is that the two cost the same
+    and not that the first used up the budget for the second.
+    """
+    return _forget_rate_limits
 
 
 @pytest.fixture

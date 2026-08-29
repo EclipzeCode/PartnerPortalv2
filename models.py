@@ -339,6 +339,14 @@ class Organization(Base):
         # candidates stays a database operation as the directory grows.
         Index("ix_organizations_needs", "needs", postgresql_using="gin"),
         Index("ix_organizations_offers", "offers", postgresql_using="gin"),
+        # focus_areas is filtered with the same `&&` operator as the two
+        # above -- see the directory's ?focus= parameter -- and was the one
+        # array column without an index behind it. Two of the three overlap
+        # filters were indexed and the third was a sequential scan, which is
+        # the kind of asymmetry that stays invisible until the directory is
+        # big enough for it to matter and is then hard to attribute.
+        Index("ix_organizations_focus_areas", "focus_areas",
+              postgresql_using="gin"),
     )
 
     # What an organization can be mailed about, and what each category covers.
@@ -1739,3 +1747,157 @@ class AdminAction(Base):
             "detail": dict(self.detail or {}),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class RateLimitAttempt(Base):
+    """One recorded attempt against one rate-limit bucket.
+
+    The limits used to live in a dict in the web process. gunicorn runs two
+    workers (see render.yaml), so every limit was really up to twice what it
+    said, and which answer you got depended on which worker the proxy picked
+    -- a login lockout that holds on one connection and not the next is not a
+    lockout. A restart cleared them all, and the free plan spins down when
+    idle, so waiting out a spin-down refunded an attacker's whole budget.
+
+    None of that is fixable in process memory, because the thing being
+    counted happens in more than one process. The counter has to live where
+    both workers can see it, and the only such place this app already has is
+    Postgres.
+
+    Rows are disposable. Nothing reads them but the limiter, they carry no
+    history worth keeping, and they are deleted as they age out -- both for
+    the key being asked about, on every call, and across the table on a
+    timer. See _sweep_rate_limits in app.py.
+
+    `key` is whatever the bucket is keyed by: an IP address, an email
+    address, or an organization id as a string. Deliberately untyped here --
+    what a bucket counts is the caller's business, and a column that tried to
+    know would need a migration every time a limit was added.
+    """
+
+    __tablename__ = "rate_limit_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    bucket: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Long enough for an email address, which is the longest thing any
+    # current bucket keys by.
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        # Every read is "this bucket, this key, since this moment", and the
+        # deletes are the same prefix. One index covers all of them.
+        Index("ix_rate_limit_lookup", "bucket", "key", "attempted_at"),
+        # The global sweep asks only about age, across every bucket at once.
+        Index("ix_rate_limit_sweep", "attempted_at"),
+    )
+
+    def __repr__(self):
+        return f"<RateLimitAttempt {self.bucket}:{self.key}>"
+
+
+class EmailOutbox(Base):
+    """A message to be delivered, written down before anything tries to send it.
+
+    Delivery used to be an in-memory queue drained by two threads, with an
+    atexit hook to finish what was in flight. That covers a clean shutdown
+    and nothing else: atexit does not run on SIGKILL, on an out-of-memory
+    kill, or on a container torn down past its grace window, and a full queue
+    dropped the message to a log line. Everything queued at that moment was
+    simply gone, with no record that it had ever existed.
+
+    For a partnership notification that is a missed email. For a verification
+    link or a password reset it is an account somebody cannot get into -- and
+    because sending is deliberately off the request path, they were shown a
+    success either way, so nobody found out. That is the failure this table
+    exists to make impossible.
+
+    The row is now the queue. A worker claims one, sends it, and marks the
+    outcome; a claim that goes stale because the process holding it died is
+    released and taken by somebody else. Which means a message survives the
+    process that accepted it, and either worker can deliver what the other
+    one queued.
+
+    Bodies are stored in full. They are already built by the time this is
+    written, they are small, and a retry that had to reconstruct one would
+    need the world as it was when the message was composed -- which is
+    exactly what is no longer available after a restart.
+    """
+
+    __tablename__ = "email_outbox"
+
+    #: Waiting for a worker, or waiting for `next_attempt_at` to arrive.
+    QUEUED = "queued"
+    #: Claimed by a worker. Released back to QUEUED if the claim goes stale.
+    SENDING = "sending"
+    DELIVERED = "delivered"
+    #: Given up on -- either definitively refused, or out of attempts.
+    FAILED = "failed"
+
+    STATUSES = (QUEUED, SENDING, DELIVERED, FAILED)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    to_addr: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    html: Mapped[str] = mapped_column(Text, nullable=False)
+    body_text: Mapped[str] = mapped_column(Text, nullable=False)
+    reply_to: Mapped[str | None] = mapped_column(String(255))
+
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text(f"'{QUEUED}'")
+    )
+
+    # How many times a worker has picked this up. Bounded by
+    # MAX_DELIVERY_ROUNDS in notifications.py, so a message that cannot be
+    # delivered stops rather than being retried forever.
+    attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+
+    # When this becomes eligible again. Set into the future after a
+    # retryable failure, which is what turns "try three times over ten
+    # seconds" into a backoff that can span a provider outage.
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # When the current claim was taken, so a claim held by a process that has
+    # since died can be recognized as stale and released.
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # The last thing that went wrong, kept on the row rather than only in the
+    # logs: "did that reset email actually go out" is a question somebody
+    # asks about one address, and grepping a log for it is not an answer.
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('queued', 'sending', 'delivered', 'failed')",
+            name="ck_email_outbox_status",
+        ),
+        # What the claim query asks: the oldest queued row whose time has
+        # come. Partial, because delivered rows are the ones that accumulate
+        # and none of them are ever claimed again.
+        Index(
+            "ix_email_outbox_claimable", "next_attempt_at", "id",
+            postgresql_where=text("status = 'queued'"),
+        ),
+        # Releasing stale claims asks the same question of the other status.
+        Index(
+            "ix_email_outbox_claimed", "claimed_at",
+            postgresql_where=text("status = 'sending'"),
+        ),
+    )
+
+    def __repr__(self):
+        return f"<EmailOutbox {self.id} {self.status} to={self.to_addr!r}>"

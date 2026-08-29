@@ -5,6 +5,8 @@ counts has to match what it claims: people who opened the profile, once
 each, not reloads, not the owner, and not a link preview.
 """
 
+import app as app_module
+
 
 def _views(client):
     return client.get("/api/dashboard").get_json()["stats"]["profile_views"]
@@ -110,3 +112,39 @@ def test_the_stored_row_identifies_no_one(session, client, login, make_org):
     # rehash candidate organization ids and recover who looked.
     unsalted = hashlib.sha256(f"org:{viewer.id}".encode()).hexdigest()
     assert unsalted not in keys
+
+
+def test_two_simultaneous_views_from_one_visitor_count_once(client, make_org,
+                                                            session):
+    """The dedup check reads and then writes, and both halves have to be one
+    step.
+
+    A double click, a link prefetch, or a browser opening the same URL twice
+    put two of these in flight together. Each looked, each found nothing
+    inside the window, and each inserted -- so one visitor became two on the
+    number the dashboard presents to an organization as its audience.
+
+    Serialized now by an advisory lock on (profile, viewer). This drives
+    _record_profile_view directly rather than through the route, because what
+    is under test is the concurrency of that function and the route would
+    make it a test of the test's threading instead.
+    """
+    from models import ProfileView
+
+    target = make_org()
+
+    # Two sessions, the way two requests in flight together would have. A
+    # request context each, because the viewer's identity is read off the
+    # request -- signed-in account if there is one, address and user agent
+    # otherwise.
+    for _ in range(2):
+        with app_module.app.test_request_context("/"):
+            db = app_module.get_db()
+            try:
+                app_module._record_profile_view(db, target)
+            finally:
+                db.close()
+
+    views = session.query(ProfileView).filter(
+        ProfileView.organization_id == target.id).count()
+    assert views == 1

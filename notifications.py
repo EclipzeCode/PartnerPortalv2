@@ -13,13 +13,14 @@ Sending is off the request path: an SMTP hiccup or a Resend rate limit must
 not fail the proposal itself. Every send is wrapped, and failures are logged
 and swallowed. The user's action succeeds either way.
 
-It is not fire-and-forget any more, though. This used to start one daemon
-thread per message and hope: a single transient 5xx meant the message was
-gone, and daemon threads are killed at interpreter exit, so anything still
-in flight during a deploy went with them. For a verification link or a
-password reset that is not a dropped notification, it is an account someone
-cannot get into -- and they are shown a success either way, so nobody
-learns that it happened. See the queue below.
+It is not fire-and-forget any more, though. Every message is written to the
+email_outbox table before anything tries to send it, and workers claim rows
+out of that table. Two earlier shapes lost mail: a daemon thread per message,
+killed at interpreter exit, and then an in-memory queue whose atexit drain
+covers a clean shutdown and nothing else. For a verification link or a
+password reset a lost message is not a dropped notification, it is an account
+someone cannot get into -- and they are shown a success either way, so nobody
+learns that it happened. See the delivery section below.
 
 NOTE: this file is intentionally NOT named email.py -- that name shadows the
 stdlib `email` package that other libraries pull in.
@@ -29,47 +30,83 @@ import atexit
 import json
 import logging
 import os
-import queue
 import random
 import time
 import urllib.request
 import urllib.error
+from datetime import timedelta
 from html import escape
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 
 log = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 
-# --- Delivery queue ---------------------------------------------------------
-# A fixed pair of workers reading a bounded queue, rather than a thread per
-# message. Two things follow from that.
+# --- Delivery -------------------------------------------------------------
+# The message is written to a table before anything tries to send it, and a
+# fixed pair of workers claim rows out of that table.
 #
-# Retries become possible at all: a worker owns a message until it is
-# delivered or definitively refused, so it can back off and try again. The
-# old shape had nowhere to put that -- the thread was the message.
+# It was an in-memory queue with an atexit drain. That covers a clean
+# shutdown and nothing else: atexit does not run on SIGKILL, on an
+# out-of-memory kill, or on a container torn down past its grace window, and
+# a full queue dropped the message to a log line. Whatever was queued at that
+# moment was gone, and because sending is deliberately off the request path
+# the person who caused it had already been shown a success. For a proposal
+# notification that is a missed email; for a verification link or a password
+# reset it is an account somebody cannot get into, and no one ever finds out.
 #
-# And a burst costs two threads instead of one per email. The queue is
-# bounded so a provider outage cannot grow the process without limit; a full
-# queue drops the message with a log rather than blocking, because the
-# alternative is stalling the web request that produced it.
+# Three things fall out of the row being the queue rather than a record of
+# it. A message outlives the process that accepted it. Either worker can
+# deliver what the other one queued, so the two gunicorn workers are one
+# sender rather than two. And "did that reset actually go out" becomes a
+# question with an answer, on the row, instead of a grep through logs.
 EMAIL_WORKERS = 2
-EMAIL_QUEUE_MAXSIZE = 500
 
-# Three attempts over roughly ten seconds. Enough to ride out a rate limit or
-# a blip, short enough that a shutdown does not wait long on it.
+# Three attempts over roughly ten seconds, inside one claim. Enough to ride
+# out a rate limit or a blip without putting the row back.
 MAX_SEND_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = (2, 8)
 
-# How long to keep draining at exit before giving up. Render sends SIGTERM
-# and waits before SIGKILL, so this is the window where in-flight mail can
-# still be saved -- which is the half the old daemon threads always lost.
+# How many times a row may be claimed before it is given up on. The in-claim
+# retries above cover a blip; these cover an outage, and they are spaced by
+# RETRY_ROUND_BACKOFF rather than by a sleep somebody is waiting on.
+MAX_DELIVERY_ROUNDS = 5
+RETRY_ROUND_BACKOFF = (30, 120, 600, 1800)
+
+# How long a claim may go unfinished before another worker may take it. This
+# is what recovers a message from a process that died mid-send: the row says
+# `sending`, nothing is sending it, and after this it goes back in the pool.
+#
+# Comfortably longer than the worst case of MAX_SEND_ATTEMPTS with its
+# backoff and the HTTP timeout, so a slow send is never taken away from a
+# worker that is still working on it.
+CLAIM_TIMEOUT_SECONDS = 300
+
+# How often a worker with nothing to do looks again. The nudge below makes
+# this irrelevant to latency for mail this process queued itself; the poll is
+# what picks up another worker's orphans and rows whose backoff has expired.
+POLL_INTERVAL_SECONDS = 15
+
+# How often stale claims are released and delivered rows are tidied away.
+MAINTENANCE_INTERVAL_SECONDS = 60
+
+# Delivered rows are kept this long. Long enough to answer "did it send" about
+# something that happened last week, short enough that the table does not
+# grow forever.
+OUTBOX_RETENTION_DAYS = 7
+
+# How long to keep draining at exit before giving up. Unlike the old queue,
+# nothing is lost when this expires -- the rows are still there and the next
+# process to start will claim them. It just makes a clean deploy finish its
+# own work rather than handing it over.
 SHUTDOWN_GRACE_SECONDS = 10
 
-_queue = queue.Queue(maxsize=EMAIL_QUEUE_MAXSIZE)
 _workers = []
 _workers_lock = Lock()
-_SHUTDOWN = object()
+# Set when a message is queued, so a worker that is idling does not wait out
+# POLL_INTERVAL_SECONDS before noticing.
+_wake = Event()
+_stopping = Event()
 
 
 def _retryable(exc):
@@ -86,19 +123,240 @@ def _retryable(exc):
     return isinstance(exc, (urllib.error.URLError, OSError, TimeoutError))
 
 
-def _worker_loop():
-    while True:
-        item = _queue.get()
+class _Claim:
+    """One message, as a worker holds it: a plain snapshot, not a live row.
+
+    Detached on purpose. Sending takes seconds and can sleep between
+    attempts, and holding a session open across that would pin a connection
+    from a pool sized for two.
+    """
+
+    __slots__ = ("id", "to_addr", "subject", "html", "text", "reply_to",
+                 "attempts")
+
+    def __init__(self, row):
+        (self.id, self.to_addr, self.subject, self.html, self.text,
+         self.reply_to, self.attempts) = row
+
+
+class DatabaseOutbox:
+    """The email_outbox table, as the six operations delivery needs.
+
+    A class rather than six module functions so the tests can substitute
+    something that does not need a database for the parts that are about
+    threading rather than about SQL.
+    """
+
+    def _session(self):
+        # Imported here rather than at module scope: alembic and seed.py
+        # import this module's senders without ever delivering anything, and
+        # neither should pay for a database session factory to do it.
+        from db import SessionLocal
+        return SessionLocal()
+
+    def add(self, to_addr, subject, html, text, reply_to=None):
+        """Write the message down. Returns its id."""
+        from models import EmailOutbox
+
+        db = self._session()
         try:
-            if item is _SHUTDOWN:
-                return
-            _send(*item)          # never raises; logs its own failures
+            row = EmailOutbox(
+                to_addr=to_addr, subject=subject, html=html,
+                body_text=text, reply_to=reply_to,
+                status=EmailOutbox.QUEUED,
+            )
+            db.add(row)
+            db.commit()
+            return row.id
+        finally:
+            db.close()
+
+    def claim(self):
+        """Take the oldest message whose time has come, or None.
+
+        SKIP LOCKED is what makes two workers -- in this process or in the
+        other one -- safe to run against the same table without either
+        waiting on the other or both taking the same row.
+
+        The attempt is counted at claim time, not at outcome. A worker that
+        dies mid-send has still used one, which is what stops a message that
+        reliably kills its sender from being retried forever.
+        """
+        from sqlalchemy import text as sql
+
+        db = self._session()
+        try:
+            row = db.execute(sql("""
+                UPDATE email_outbox
+                   SET status = 'sending',
+                       claimed_at = now(),
+                       attempts = attempts + 1
+                 WHERE id = (
+                       SELECT id FROM email_outbox
+                        WHERE status = 'queued'
+                          AND next_attempt_at <= now()
+                        ORDER BY next_attempt_at, id
+                          FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                 )
+             RETURNING id, to_addr, subject, html, body_text, reply_to,
+                       attempts
+            """)).first()
+            db.commit()
+            return _Claim(row) if row is not None else None
+        finally:
+            db.close()
+
+    def _finish(self, message_id, **values):
+        from models import EmailOutbox
+
+        db = self._session()
+        try:
+            db.query(EmailOutbox).filter(
+                EmailOutbox.id == message_id
+            ).update(values, synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+
+    def delivered(self, message_id):
+        from sqlalchemy import func
+        from models import EmailOutbox
+        self._finish(
+            message_id,
+            status=EmailOutbox.DELIVERED,
+            delivered_at=func.now(),
+            claimed_at=None,
+            last_error=None,
+        )
+
+    def retry_later(self, message_id, error, delay_seconds):
+        """Put it back, eligible again once the backoff has passed.
+
+        The deadline is computed by the database, not here. claim() compares
+        it against the database's now(), and a value written from this
+        process's clock would be off by whatever the two disagree about --
+        which, against a hosted Postgres a network away, is not reliably
+        zero. A backoff measured against one clock and enforced against
+        another is a backoff of roughly the right length.
+        """
+        from sqlalchemy import func
+        from models import EmailOutbox
+        self._finish(
+            message_id,
+            status=EmailOutbox.QUEUED,
+            claimed_at=None,
+            last_error=(error or "")[:2000],
+            next_attempt_at=func.now() + timedelta(seconds=delay_seconds),
+        )
+
+    def give_up(self, message_id, error):
+        """Definitively refused, or out of rounds. The row stays as a record."""
+        from models import EmailOutbox
+        self._finish(
+            message_id,
+            status=EmailOutbox.FAILED,
+            claimed_at=None,
+            last_error=(error or "")[:2000],
+        )
+
+    def maintain(self):
+        """Release stale claims and drop delivered rows that have aged out.
+
+        The first half is the recovery this table exists for: a row that says
+        `sending` with nobody sending it belonged to a process that died, and
+        after CLAIM_TIMEOUT_SECONDS anyone may take it.
+        """
+        from sqlalchemy import func
+        from models import EmailOutbox
+
+        db = self._session()
+        try:
+            released = db.query(EmailOutbox).filter(
+                EmailOutbox.status == EmailOutbox.SENDING,
+                EmailOutbox.claimed_at
+                < func.now() - timedelta(seconds=CLAIM_TIMEOUT_SECONDS),
+            ).update(
+                {"status": EmailOutbox.QUEUED, "claimed_at": None},
+                synchronize_session=False,
+            )
+            db.query(EmailOutbox).filter(
+                EmailOutbox.status == EmailOutbox.DELIVERED,
+                EmailOutbox.delivered_at
+                < func.now() - timedelta(days=OUTBOX_RETENTION_DAYS),
+            ).delete(synchronize_session=False)
+            db.commit()
+            if released:
+                log.warning("email: released %s stale claim(s)", released)
+            return released
+        finally:
+            db.close()
+
+    def outstanding(self):
+        """How many messages are queued or in flight."""
+        from models import EmailOutbox
+
+        db = self._session()
+        try:
+            return db.query(EmailOutbox).filter(
+                EmailOutbox.status.in_(
+                    (EmailOutbox.QUEUED, EmailOutbox.SENDING))
+            ).count()
+        finally:
+            db.close()
+
+
+#: Swappable so the threading behavior can be tested without a database.
+_outbox = DatabaseOutbox()
+
+
+def _deliver(item):
+    """Send one claimed message and record what happened to it."""
+    if _send(item.to_addr, item.subject, item.html, item.text, item.reply_to):
+        _outbox.delivered(item.id)
+        return
+
+    # _send already logged the detail and already exhausted its in-claim
+    # attempts. What is left is whether this message gets another round.
+    if item.attempts >= MAX_DELIVERY_ROUNDS:
+        log.error("email to %s given up after %s round(s)",
+                  item.to_addr, item.attempts)
+        _outbox.give_up(item.id, f"gave up after {item.attempts} rounds")
+        return
+
+    index = min(item.attempts - 1, len(RETRY_ROUND_BACKOFF) - 1)
+    delay = RETRY_ROUND_BACKOFF[max(0, index)]
+    log.warning("email to %s deferred for %ss [round %s/%s]",
+                item.to_addr, delay, item.attempts, MAX_DELIVERY_ROUNDS)
+    _outbox.retry_later(item.id, "delivery failed, will retry", delay)
+
+
+def _worker_loop():
+    """Claim, deliver, repeat; idle on the nudge when there is nothing to do."""
+    next_maintenance = 0.0
+    while not _stopping.is_set():
+        try:
+            if time.monotonic() >= next_maintenance:
+                next_maintenance = time.monotonic() + MAINTENANCE_INTERVAL_SECONDS
+                _outbox.maintain()
+
+            # Keep going while there is work, so a burst is not paced by the
+            # poll interval.
+            while not _stopping.is_set():
+                item = _outbox.claim()
+                if item is None:
+                    break
+                _deliver(item)
         except Exception:
             # A worker that dies stops delivering mail for the life of the
-            # process, and nothing upstream would notice.
+            # process, and nothing upstream would notice. The rows are safe
+            # either way now, but a process with no workers left would sit
+            # beside a table it never reads.
             log.exception("email worker: unexpected error")
-        finally:
-            _queue.task_done()
+            time.sleep(1)
+
+        _wake.wait(POLL_INTERVAL_SECONDS)
+        _wake.clear()
 
 
 def _ensure_workers():
@@ -118,29 +376,69 @@ def _ensure_workers():
         atexit.register(_drain)
 
 
+def start_delivery():
+    """Bring the delivery workers up, whether or not this process has mail.
+
+    _dispatch starts them too, but only for a process that is sending
+    something -- which is not the case that matters. A process that comes up
+    after a crash may have inherited rows another one was holding, and if
+    nothing ever calls _dispatch here, nobody claims them: the messages are
+    durable and permanently unsent, which is the failure this table exists to
+    prevent wearing a different hat.
+
+    So the web app calls this once it is serving, and the workers find the
+    orphans on their first maintenance pass.
+    """
+    _ensure_workers()
+    _wake.set()
+
+
+def _stop_workers(timeout=5):
+    """Stop the pool and wait for it, leaving the module startable again.
+
+    Nothing in production calls this -- the process exiting is what stops the
+    workers, and _drain is what gives them a moment first. It exists because
+    a test that starts workers must not leave two threads polling the outbox
+    for the rest of the session, claiming rows other tests are asserting on.
+    """
+    with _workers_lock:
+        threads = list(_workers)
+        _workers.clear()
+    if not threads:
+        return
+    _stopping.set()
+    _wake.set()
+    for t in threads:
+        t.join(timeout=timeout)
+    _stopping.clear()
+    _wake.clear()
+
+
 def _drain(timeout=SHUTDOWN_GRACE_SECONDS):
-    """Finish what is queued before the process goes away.
+    """Finish what is outstanding before the process goes away.
 
-    Runs from atexit, which is early enough: daemon threads are killed after
-    interpreter shutdown begins, so this is the last point at which a message
-    already accepted can still be sent.
-
-    Queue.join() has no timeout, so this waits on the same condition it uses
-    internally. Waiting forever would turn a stuck provider into a process
-    that will not shut down, which is worse than the mail it is protecting.
+    Best-effort now rather than load-bearing. Nothing is lost when this
+    expires: the rows are still queued, and the next process to start claims
+    them. It exists so a clean deploy finishes its own work instead of
+    leaving it for whoever comes up next, and so tests have a way to say
+    "wait for the workers".
     """
     deadline = time.monotonic() + timeout
-    with _queue.all_tasks_done:
-        while _queue.unfinished_tasks:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                log.warning(
-                    "email: %s message(s) still queued at shutdown",
-                    _queue.unfinished_tasks,
-                )
-                return False
-            _queue.all_tasks_done.wait(remaining)
-    return True
+    while True:
+        try:
+            left = _outbox.outstanding()
+        except Exception:
+            log.exception("email: could not read the outbox at shutdown")
+            return False
+        if not left:
+            return True
+        if time.monotonic() >= deadline:
+            log.warning(
+                "email: %s message(s) still queued at shutdown; the next "
+                "process to start will deliver them", left)
+            return False
+        _wake.set()
+        time.sleep(0.05)
 
 
 def _config():
@@ -283,19 +581,37 @@ def _send(to_addr, subject, html, text, reply_to=None):
 
 
 def _dispatch(to_addr, subject, html, text, reply_to=None):
-    """Hand a message to the delivery workers so the request returns promptly.
+    """Write the message down, then nudge a worker to deliver it.
 
-    Never blocks the caller. If the queue is full -- which means the provider
-    has been failing long enough for 500 messages to pile up -- the message
-    is dropped and said so, rather than holding up the web request that
-    produced it.
+    Never blocks the caller on the provider: the only thing that happens
+    inside the request is one INSERT, and Resend is talked to on a worker.
+
+    The insert is what makes the message real. Once it has committed, this
+    process may die at any point and the message still goes out -- another
+    worker, or the next one to start, will claim it. That is the difference
+    between this and the queue it replaces, where accepting a message and
+    losing it looked identical from here.
+
+    A failure to write is logged and swallowed rather than raised, in keeping
+    with everything else in this module: the user's action has already
+    succeeded, and a proposal that was created should not report failure
+    because the notification about it could not be filed. It is logged at
+    error level because at that point the database is unreachable, which is
+    not a mail problem and will be visible everywhere else too.
     """
-    _ensure_workers()
+    if not to_addr:
+        log.warning("email not queued: no recipient for %r", subject)
+        return None
+
     try:
-        _queue.put_nowait((to_addr, subject, html, text, reply_to))
-    except queue.Full:
-        log.error("email to %s dropped: send queue is full (%s)",
-                  to_addr, EMAIL_QUEUE_MAXSIZE)
+        message_id = _outbox.add(to_addr, subject, html, text, reply_to)
+    except Exception:
+        log.exception("email to %s could not be queued", to_addr)
+        return None
+
+    _ensure_workers()
+    _wake.set()
+    return message_id
 
 
 # --- Templates --------------------------------------------------------------
