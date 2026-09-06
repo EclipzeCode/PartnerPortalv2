@@ -1121,8 +1121,19 @@ def _stamped_page(filename, pattern=_ASSET_REF_RE):
     bundled = ()
     if pattern is _ASSET_REF_RE:
         html, bundled = _bundle_stylesheets(html)
+        html, scripts = _bundle_scripts(html)
+        bundled += scripts
         html = _add_noscript(html)
-    body, assets = _stamp_asset_refs(html, pattern)
+    if pattern is None:
+        # A script. Nothing in a .js file here names a stylesheet or a font,
+        # and the two rewrite patterns would both be guessing at string
+        # literals if they were pointed at one -- _ASSET_REF_RE in particular
+        # matches `src="...js"`, which is a thing JavaScript can perfectly
+        # well contain. So scripts are read, memoized and hashed exactly like
+        # every other member, and rewritten not at all.
+        body, assets = html, ()
+    else:
+        body, assets = _stamp_asset_refs(html, pattern)
     # The bundled sheets join the cache key even though the served body no
     # longer names them: they are still inputs to it, through the digest in
     # the bundle URL.
@@ -1180,6 +1191,39 @@ _STYLESHEET_RUN_RE = re.compile(
 )
 _STYLESHEET_HREF_RE = re.compile(r'href="([A-Za-z0-9._-]+\.css)"')
 
+# The same collapse for scripts, which had none of it. Every page loads
+# between two and six of them -- csrf, common, notifications, then whatever
+# the page itself needs -- and ppdashboard.html asks for six where its CSS
+# now costs one. Bundling the stylesheets and leaving the scripts alone was
+# never a decision about scripts; the machinery just landed on one of them.
+#
+# Order is preserved by concatenation, and here that is not a nicety: common.js
+# defines window.escapeHtml and the page scripts call it at load. Same reason
+# the stylesheet bundle preserves order, one language over.
+#
+# Two things this deliberately will not touch. An inline <script> ends a run
+# rather than being folded into one, because its contents are hashed into the
+# CSP (see _inline_script_hashes) and moving it would invalidate that hash.
+# And `defer` has to be uniform across a run: a deferred script and a plain
+# one do not execute at the same point, so merging them would reorder the
+# page's own code. pplogin.html defers all five of its scripts, everything
+# else defers none, so in practice each page bundles cleanly -- but a page
+# that ever mixes them is left exactly as written rather than quietly
+# resequenced.
+#
+# The cost worth naming: in separate files, a script that throws at the top
+# level stops itself and the rest still run. Concatenated, it takes the rest
+# of the bundle down with it. That is the standard bundling trade and it is
+# accepted here for the same reason it usually is -- a top-level throw in one
+# of these files is a broken page either way.
+_SCRIPT = r'<script(?:\s+defer)?\s+src="[A-Za-z0-9._-]+\.js"\s*></script>'
+_SCRIPT_RUN_RE = re.compile(
+    _SCRIPT + r'(?:' + _SEPARATOR + _SCRIPT + r')+',
+    re.DOTALL,
+)
+_SCRIPT_SRC_RE = re.compile(r'src="([A-Za-z0-9._-]+\.js)"')
+_SCRIPT_DEFER_RE = re.compile(r'<script\s+defer\b')
+
 # digest -> ordered filenames. Rebuilt from the pages on a miss rather than
 # shared between processes: gunicorn runs two workers, and the one that
 # serves the HTML naming a bundle is routinely not the one asked for it.
@@ -1231,6 +1275,38 @@ def _bundle_stylesheets(html):
     return _STYLESHEET_RUN_RE.sub(collapse, html), tuple(sorted(seen.items()))
 
 
+def _bundle_scripts(html):
+    """Collapse each run of script tags into one, returning the new HTML.
+
+    Same shape as _bundle_stylesheets, and the same (html, versions) return
+    for the same reason: the bundled scripts leave the markup, so the stamp
+    pass never sees them and the page's cache key has to carry them anyway.
+
+    A run whose `defer` is not uniform is left alone -- see the note on
+    _SCRIPT_RUN_RE.
+    """
+    seen = {}
+
+    def collapse(match):
+        run = match.group(0)
+        members = _SCRIPT_SRC_RE.findall(run)
+        # A run of one is already one request.
+        if len(members) < 2:
+            return run
+        deferred = len(_SCRIPT_DEFER_RE.findall(run))
+        if deferred not in (0, len(members)):
+            return run
+        for name in members:
+            seen[name] = asset_version(name)
+        digest = _bundle_digest(members)
+        with _bundle_lock:
+            _bundles[digest] = tuple(members)
+        attr = " defer" if deferred else ""
+        return f'<script{attr} src="{BUNDLE_PREFIX}{digest}.js"></script>'
+
+    return _SCRIPT_RUN_RE.sub(collapse, html), tuple(sorted(seen.items()))
+
+
 def _register_all_bundles():
     """Work out every bundle every page could ask for.
 
@@ -1242,7 +1318,9 @@ def _register_all_bundles():
         try:
             with open(os.path.join(STATIC_DIR, page), "r",
                       encoding="utf-8") as f:
-                _bundle_stylesheets(f.read())
+                page = f.read()
+            _bundle_stylesheets(page)
+            _bundle_scripts(page)
         except OSError:
             continue
 
@@ -1258,13 +1336,24 @@ def _bundle_body(members):
     ink.css is the whole reason ink.css is linked first, and a bundle that
     reordered them would restyle the site.
     """
+    # Stylesheets get their font references rewritten; scripts get nothing
+    # rewritten at all (see _stamped_page). A bundle is homogeneous -- the
+    # two run patterns cannot match each other's tags -- so this is decided
+    # once for the whole list rather than per member.
+    is_css = members[0].endswith(".css")
+    pattern = _CSS_ASSET_REF_RE if is_css else None
     parts = []
     for name in members:
-        body, _ = _stamped_page(name, _CSS_ASSET_REF_RE)
+        body, _ = _stamped_page(name, pattern)
         # Named in a comment so the bundle can be read in devtools and the
         # rule you are looking at can be traced back to a file.
         parts.append(f"/* --- {name} --- */\n{body}")
-    return "\n".join(parts)
+    # Scripts are joined on a newline *and a semicolon's worth of safety*: a
+    # file whose last statement has no terminator would otherwise run into
+    # the first line of the next one. None of these files end that way, but
+    # the failure is a syntax error across a seam nobody edited.
+    separator = "\n" if is_css else "\n;\n"
+    return separator.join(parts)
 
 
 def serve_page(filename, status=200, html=None):
@@ -1297,6 +1386,7 @@ def serve_page(filename, status=200, html=None):
         # here a stranger is most likely to arrive at cold, from a shared
         # link -- was the only one still asking for five stylesheets.
         html, _ = _bundle_stylesheets(html)
+        html, _ = _bundle_scripts(html)
         body, _ = _stamp_asset_refs(html)
         etag = _page_etag(body)
 
@@ -1446,6 +1536,65 @@ def stylesheet(name):
     # carrying ?v= for a year and revalidates one without. That stays right
     # here because asset_version folds the fonts into a stylesheet's own
     # version, so a sheet whose font moved is asked for under a new stamp.
+    return response.make_conditional(request)
+
+
+_SCRIPTS = frozenset(
+    name for name in os.listdir(STATIC_DIR) if name.endswith(".js")
+)
+
+
+@app.route("/<name>.js")
+def script(name):
+    """Serve a script, or a bundle of them.
+
+    Registered ahead of Flask's static route for the bundles' sake: there is
+    no bundle-<digest>.js on disk for send_static_file to find. An individual
+    script is answered here too rather than being left to fall through,
+    because a route that claimed only some .js paths would depend on
+    Werkzeug's ordering to decide which -- and the answer for a real file is
+    the same one Flask's route gave, minus the stamping a .js has no
+    references to need.
+    """
+    if name.startswith(BUNDLE_PREFIX):
+        digest = name[len(BUNDLE_PREFIX):]
+        with _bundle_lock:
+            members = _bundles.get(digest)
+        if members is None:
+            _register_all_bundles()
+            with _bundle_lock:
+                members = _bundles.get(digest)
+        # A digest naming a combination no page asks for any more -- see the
+        # stylesheet route, which 404s for the same reason and is corrected
+        # the same way, by the reload that follows the page's new ETag.
+        if members is None:
+            return not_found(None)
+
+        body = _bundle_body(members)
+        response = app.response_class(body, mimetype="text/javascript")
+        response.set_etag(_page_etag(body))
+        # The URL names its own contents, so it can never go stale.
+        response.headers["Cache-Control"] = (
+            f"public, max-age={ASSET_CACHE_SECONDS}, immutable"
+        )
+        return response.make_conditional(request)
+
+    # Same frozen allowlist discipline as _pages() and the stylesheet route:
+    # this interpolates into a path, so it may only name a file that was on
+    # disk at import.
+    filename = f"{name}.js"
+    known = (
+        frozenset(n for n in os.listdir(STATIC_DIR) if n.endswith(".js"))
+        if app.debug else _SCRIPTS
+    )
+    if filename not in known:
+        return not_found(None)
+
+    body, etag = _stamped_page(filename, None)
+    response = app.response_class(body, mimetype="text/javascript")
+    response.set_etag(etag)
+    # Cache-Control left to add_cache_headers, exactly as for a stylesheet:
+    # a request carrying ?v= is kept for a year, one without revalidates.
     return response.make_conditional(request)
 
 
@@ -5455,6 +5604,21 @@ def _expanded_events(db, org):
             # permanently stuck in somebody's account. Shown as its final
             # occurrence, dimmed, exactly as a past one-off is.
             dates = event.occurrences(horizon)[-1:]
+        if not dates:
+            # ...and the same rescue in the other direction, which the line
+            # above cannot make because it asks the same bounded question a
+            # second time. A *repeating* meeting whose start is further out
+            # than the horizon has no occurrence inside it, so both calls
+            # come back empty and the row disappeared entirely -- exactly the
+            # stuck meeting the comment above exists to prevent, reached by
+            # scheduling one more than EVENT_EXPAND_DAYS ahead instead of
+            # long enough ago. (A one-off is unaffected either way: it
+            # short-circuits on `not self.repeat` and always returns itself.)
+            #
+            # Shown on its start date, which is the first time it happens and
+            # the only date that is certainly its own. Sorting puts it last,
+            # which is where a meeting that far out belongs.
+            dates = [event.date]
         for on in dates:
             out.append((on, event.time, event.to_dict(on=on)))
     out.sort(key=lambda row: (row[0], row[1]))
@@ -6333,36 +6497,122 @@ def create_proposal(org, db):
     }), 201
 
 
+# How much of the archive tab to send on a first load. The three live tabs
+# are not paged and do not need to be: pending-in, pending-out and agreed are
+# each bounded by what an organization currently has going on, and an
+# organization with two hundred live partnerships has a problem this endpoint
+# is not the right place to solve.
+#
+# The archive is the one that only grows. Declined, withdrawn, completed and
+# ended rows are never removed, so "everything this org is party to" was a
+# query with no ceiling on the page an active organization opens most --
+# and each row costs two Organization rows with it, because counterpart_dict
+# renders the other side's full public profile and lazy="joined" is what
+# stops that being a second query per row. The join is not the waste here;
+# the absence of a limit above it was.
+ARCHIVE_PAGE_SIZE = 25
+
+# The ceiling "show older" can walk up to in one request. Generous, because
+# pressing it repeatedly should reach the end of a real history rather than
+# stopping at a number that feels arbitrary -- and bounded, because the
+# parameter is client-supplied and each row it admits costs a counterpart
+# profile to serialize.
+MAX_ARCHIVE_PAGE_SIZE = 500
+
+
+def _proposal_counts(db, org):
+    """The five numbers the proposals page labels its tabs with, in one query.
+
+    Grouped in SQL rather than counted in Python over the serialized list,
+    which is what this did: five passes over every partnership the
+    organization had ever been part of, and -- more to the point -- five
+    numbers that could only be produced by loading all of it. Splitting them
+    out is what lets the list above be paged at all, the same split
+    _partnership_counts made for the dashboard and for the same reason.
+
+    Kept separate from _partnership_counts rather than merged with it: the
+    two answer different questions (that one has "awaiting you", this one
+    has the archive statuses) and folding them together would give each
+    caller three numbers it does not use.
+    """
+    incoming = case((Partnership.recipient_id == org.id, True), else_=False)
+    rows = db.query(
+        Partnership.status,
+        incoming.label("incoming"),
+        func.count(Partnership.id),
+    ).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id)
+    ).group_by(Partnership.status, incoming).all()
+
+    tally = {(status, bool(inbound)): n for status, inbound, n in rows}
+
+    def total(*statuses):
+        return sum(n for (status, _), n in tally.items() if status in statuses)
+
+    return {
+        "incoming_pending": tally.get((Partnership.PENDING, True), 0),
+        "outgoing_pending": tally.get((Partnership.PENDING, False), 0),
+        "accepted": total(Partnership.ACCEPTED),
+        "completed": total(Partnership.COMPLETED),
+        "ended": total(Partnership.ENDED),
+        # What the archive tab holds in total, so the client can say how much
+        # of it it is currently showing rather than implying it has all of it.
+        "settled": total(*Partnership.SETTLED),
+    }
+
+
 @app.route("/api/proposals", methods=["GET"])
 @login_required
 def list_proposals(org, db):
-    """Everything this org is party to, in either direction."""
-    rows = db.query(Partnership).filter(
-        or_(Partnership.proposer_id == org.id,
-            Partnership.recipient_id == org.id)
+    """Everything live, and the most recent slice of the archive.
+
+    Two queries rather than one, because the two halves have different
+    shapes: the live statuses are sent in full because they are inherently
+    few, and the settled ones are capped because they are not.
+
+    `archive_limit` raises the cap, which is how the page's "show older"
+    asks for more. Clamped rather than trusted -- this decides how many rows
+    are serialized, and each carries a full counterpart profile.
+    """
+    try:
+        archive_limit = int(request.args.get("archive_limit",
+                                             ARCHIVE_PAGE_SIZE))
+    except (TypeError, ValueError):
+        archive_limit = ARCHIVE_PAGE_SIZE
+    archive_limit = min(max(1, archive_limit), MAX_ARCHIVE_PAGE_SIZE)
+
+    party = or_(Partnership.proposer_id == org.id,
+                Partnership.recipient_id == org.id)
+
+    live = db.query(Partnership).filter(
+        party,
+        Partnership.status.in_((Partnership.PENDING, Partnership.ACCEPTED)),
     ).order_by(Partnership.created_at.desc()).all()
 
+    # One more than asked for, which is how the answer knows whether there is
+    # a next page without also running a COUNT -- the count is already in
+    # _proposal_counts anyway, and this stays right even if the two queries
+    # see different rows.
+    archive = db.query(Partnership).filter(
+        party,
+        Partnership.status.in_(Partnership.SETTLED),
+    ).order_by(Partnership.created_at.desc()).limit(archive_limit + 1).all()
+    archive_has_more = len(archive) > archive_limit
+    archive = archive[:archive_limit]
+
+    # Concatenated rather than re-sorted. Each half is already newest-first,
+    # and the client splits them by status into tabs that draw from disjoint
+    # sets -- so no tab ever sees the seam between them.
+    rows = live + archive
     proposals = [p.to_dict(viewer_id=org.id) for p in rows]
     _annotate_message_counts(db, org, rows, proposals)
+
     return jsonify({
         "proposals": proposals,
-        "counts": {
-            "incoming_pending": sum(
-                1 for p in proposals
-                if p["direction"] == "incoming" and p["status"] == "pending"
-            ),
-            "outgoing_pending": sum(
-                1 for p in proposals
-                if p["direction"] == "outgoing" and p["status"] == "pending"
-            ),
-            "accepted": sum(1 for p in proposals if p["status"] == "accepted"),
-            "completed": sum(
-                1 for p in proposals if p["status"] == Partnership.COMPLETED
-            ),
-            "ended": sum(
-                1 for p in proposals if p["status"] == Partnership.ENDED
-            ),
-        },
+        "counts": _proposal_counts(db, org),
+        "archive_shown": len(archive),
+        "archive_has_more": archive_has_more,
     })
 
 
@@ -6404,9 +6654,43 @@ def _annotate_message_counts(db, org, rows, payloads):
         payload["unread_count"] = unread.get(payload["id"], 0)
 
 
-def _load_party_proposal(db, org, proposal_id):
-    """Fetch a proposal, but only if this org is actually party to it."""
-    proposal = db.get(Partnership, proposal_id)
+def _load_party_proposal(db, org, proposal_id, lock=False):
+    """Fetch a proposal, but only if this org is actually party to it.
+
+    `lock=True` takes the row's write lock first, and every route that goes
+    on to change the proposal passes it. Without it each of them is a
+    read-then-write across two statements -- check the status, then set it --
+    with nothing stopping a second request from reading the same row in
+    between and passing the same check. Two accepts arriving together each
+    saw `pending`, so both minted a share token and both mailed the other
+    side; an accept racing a decline had each side's answer overwrite the
+    other's while both notifications went out. Serializing the pair here is
+    what makes the status guards in those handlers mean anything.
+
+    The lock is a separate SELECT on the primary key rather than a
+    `with_for_update` on the load, because `proposer` and `recipient` are
+    lazy="joined" and Postgres refuses FOR UPDATE on the nullable side of
+    the outer joins that produces. Locking the bare id touches no joins, and
+    the load that follows is the fresh read the lock exists to protect --
+    `populate_existing` so that a copy already in this session's identity
+    map cannot be handed back in place of it.
+
+    Blocking, unlike _try_lock above, and the reasoning there is what allows
+    it: that lock is refused rather than waited on because its key is shared
+    by everyone behind one address, so waiting would queue unrelated callers
+    against each other. A proposal id is shared by exactly two
+    organizations, contention is a double-click, and the wait is one short
+    transaction. There is also nothing sensible to do with a refusal here --
+    "somebody else is answering this right now" is not an outcome either
+    party asked for.
+    """
+    if lock:
+        db.execute(
+            select(Partnership.id)
+            .where(Partnership.id == proposal_id)
+            .with_for_update()
+        ).scalar_one_or_none()
+    proposal = db.get(Partnership, proposal_id, populate_existing=lock)
     if proposal is None:
         return None
     if org.id not in (proposal.proposer_id, proposal.recipient_id):
@@ -6448,7 +6732,7 @@ def update_proposal(org, db, proposal_id):
     Only fields actually present in the body are touched, the same rule
     /api/settings and /api/events follow.
     """
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.proposer_id != org.id:
@@ -6560,7 +6844,7 @@ def update_proposal(org, db, proposal_id):
 @login_required
 def accept_proposal(org, db, proposal_id):
     """Mutual confirmation. This is the step that creates the agreement."""
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.recipient_id != org.id:
@@ -6604,7 +6888,7 @@ def accept_proposal(org, db, proposal_id):
 @app.route("/api/proposals/<int:proposal_id>/decline", methods=["POST"])
 @login_required
 def decline_proposal(org, db, proposal_id):
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.recipient_id != org.id:
@@ -6640,7 +6924,7 @@ def decline_proposal(org, db, proposal_id):
 @app.route("/api/proposals/<int:proposal_id>/withdraw", methods=["POST"])
 @login_required
 def withdraw_proposal(org, db, proposal_id):
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.proposer_id != org.id:
@@ -6675,7 +6959,7 @@ def complete_proposal(org, db, proposal_id):
     committed to. Nobody grades their own homework, and this is the one moment
     the question is actually answerable.
     """
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.status != Partnership.ACCEPTED:
@@ -6683,6 +6967,35 @@ def complete_proposal(org, db, proposal_id):
             "error": f"This partnership is {proposal.status}, so it cannot be "
                      f"marked complete.",
         }), 409
+    # Both sides already marked, and yet the partnership is still open. That
+    # is not a state either of them can produce any more -- the row lock
+    # taken on load serializes the two halves, so the second one to arrive
+    # now sees the first's timestamp and closes the agreement. It is the
+    # state the *unlocked* version left behind: two simultaneous calls each
+    # read the other's timestamp as absent, each wrote its own, and each
+    # computed "both done" from the copy it had read before the other
+    # committed, so neither closed it.
+    #
+    # Repaired on the next visit rather than by a migration, because the
+    # guard below would otherwise refuse both organizations forever -- each
+    # has marked its side, so each gets "you have already marked this", and
+    # an agreement that both parties finished would sit open with no way to
+    # close it and never reach the completed counts.
+    if (proposal.proposer_completed_at is not None
+            and proposal.recipient_completed_at is not None):
+        proposal.status = Partnership.COMPLETED
+        # The later of the two, not now: that is the moment the second side
+        # actually declared it finished, and it is already recorded.
+        proposal.completed_at = max(proposal.proposer_completed_at,
+                                    proposal.recipient_completed_at)
+        db.commit()
+        notify_partnership_completed(proposal, proposal.counterpart(org.id))
+        return jsonify({
+            "message": "Partnership completed",
+            "awaiting_other_side": False,
+            "proposal": proposal.to_dict(viewer_id=org.id),
+        })
+
     if proposal.completed_at_for(org.id) is not None:
         # Idempotent in effect rather than an error: the other side has simply
         # not answered yet, which is a state, not a mistake.
@@ -6756,7 +7069,7 @@ def end_proposal(org, db, proposal_id):
     What it costs is that ending is one side's account. The reason goes to the
     other organization, and never onto the public page -- see public_summary.
     """
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.status != Partnership.ACCEPTED:
@@ -6802,7 +7115,7 @@ def rotate_share_link(org, db, proposal_id):
     intended -- which is not a thing one side should have to get the other's
     permission to stop.
     """
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     if proposal.status not in Partnership.PUBLIC:
@@ -6833,7 +7146,7 @@ def revoke_share_link(org, db, proposal_id):
     for anybody. The agreement itself is untouched -- both organizations
     still see it, and a new link can be issued later.
     """
-    proposal = _load_party_proposal(db, org, proposal_id)
+    proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
     # The same guard rotating uses, and for the same reason: a proposal that
@@ -6873,9 +7186,20 @@ MAX_MESSAGE_BODY = 4000
 MESSAGE_NOTIFY_WINDOW = timedelta(hours=1)
 
 
-def _thread_or_error(db, org, proposal_id):
-    """The proposal, if this org is party to it. Same 404 as everywhere."""
-    proposal = _load_party_proposal(db, org, proposal_id)
+def _thread_or_error(db, org, proposal_id, lock=False):
+    """The proposal, if this org is party to it. Same 404 as everywhere.
+
+    `lock` is passed straight through to _load_party_proposal, and only
+    posting a message asks for it. Reading the thread deliberately does not,
+    which is worth saying because that handler does write: it advances this
+    org's read marker. An open thread is polled every twelve seconds, so
+    locking there would serialize both parties' polling against each other
+    and hold a row lock for the length of every one of them -- to protect a
+    write whose racing case is two of this org's own tabs storing the same
+    marker value on top of each other. There is no interleaving of that
+    which loses anything.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id, lock=lock)
     if proposal is None:
         return None, (jsonify({"error": "Proposal not found."}), 404)
     return proposal, None
@@ -6895,9 +7219,28 @@ def list_messages(org, db, proposal_id):
     if error:
         return error
 
-    rows = db.query(Message).filter(
-        Message.partnership_id == proposal.id
-    ).order_by(Message.created_at, Message.id).all()
+    # `since` turns the poll into a delta. An open thread is refetched every
+    # twelve seconds (THREAD_POLL_MS in proposals.js) and every one of those
+    # requests used to serialize and send the entire conversation back --
+    # three hundred full copies an hour, per open tab, to discover that
+    # nothing had happened. With it, a quiet poll selects zero rows and
+    # returns an empty list.
+    #
+    # Filtered on id rather than on a timestamp: ids are what the read
+    # marker already speaks in (see mark_read_through), they are unique where
+    # created_at is not, and this is the same ordering key the ORDER BY falls
+    # back on. A garbled value is ignored rather than refused -- the honest
+    # answer to "I could not understand where you were" is the whole thread,
+    # which is exactly what the client asked for the first time.
+    try:
+        since = int(request.args["since"]) if "since" in request.args else None
+    except (TypeError, ValueError):
+        since = None
+
+    query = db.query(Message).filter(Message.partnership_id == proposal.id)
+    if since is not None:
+        query = query.filter(Message.id > since)
+    rows = query.order_by(Message.created_at, Message.id).all()
 
     # Only when it would actually move. The marker is a position in the
     # thread, and every use of it (the unread counts on the dashboard and in
@@ -6910,6 +7253,15 @@ def list_messages(org, db, proposal_id):
     #
     # max() rather than the last row, because rows are ordered for display
     # -- by created_at, then id -- and this needs the largest id outright.
+    #
+    # Still correct on a delta fetch, and worth saying why, because it looks
+    # like it should need the whole thread to find the newest message. Any
+    # row with an id above `since` is in this result, so if the thread has
+    # anything newer than the marker it is here and max() finds it. If it
+    # does not, there is nothing to mark and the marker is already where the
+    # fetch that delivered those messages left it. `since` itself is never
+    # used as the marker -- it is client-supplied, and marking a thread read
+    # through a number somebody typed is not a thing this should do.
     newest = max((row.id for row in rows), default=None)
     marker = proposal.last_read_message_id_for(org.id)
     if newest is not None and (marker is None or marker < newest):
@@ -6918,7 +7270,12 @@ def list_messages(org, db, proposal_id):
 
     return jsonify({
         "messages": [m.to_dict(viewer_id=org.id) for m in rows],
+        # What this response carries, which on a full fetch is the whole
+        # thread and on a delta is what has happened since `since`.
         "count": len(rows),
+        # Echoed so the client can tell a delta from a full reply without
+        # having to remember what it asked for.
+        "since": since,
         "open": proposal.messages_open(),
         "counterpart": proposal.counterpart_party(org.id),
     })
@@ -6927,7 +7284,22 @@ def list_messages(org, db, proposal_id):
 @app.route("/api/proposals/<int:proposal_id>/messages", methods=["POST"])
 @login_required
 def create_message(org, db, proposal_id):
-    proposal, error = _thread_or_error(db, org, proposal_id)
+    # Locked, because messages_open() below reads the status that ending or
+    # declining the proposal writes, and the two arriving together let a
+    # message land on a conversation that was closed a moment earlier. That
+    # is a smaller failure than the lifecycle races -- a stray message on an
+    # ended partnership, not a corrupted one -- but it is the same
+    # read-then-write, and leaving one instance of the pattern unlocked is
+    # how it comes back.
+    #
+    # The lock is released by the commit below, which happens before
+    # _maybe_notify_message, so the mail work is not inside it. What it does
+    # span is the rate_limited() call, and that is safe rather than merely
+    # tolerable: the limiter deliberately runs on its own session (see
+    # _limiter_db) and touches only rate_limit_attempts, so there is no
+    # second partnership row anywhere in the wait and no cycle to deadlock
+    # on -- see db.py on why the pool is sized for both at once.
+    proposal, error = _thread_or_error(db, org, proposal_id, lock=True)
     if error:
         return error
 

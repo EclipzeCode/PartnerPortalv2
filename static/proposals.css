@@ -592,3 +592,17 @@
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
+
+/* "Show older" under the archive tab. The archive is the one list here the
+   server pages (see ARCHIVE_PAGE_SIZE in app.py), so this is the control
+   that walks back through it -- centered under the cards rather than
+   attached to one, because it belongs to the list and not to any row. */
+.archive-more {
+    display: block;
+    margin: 1.25rem auto 0;
+}
+
+.archive-more[disabled] {
+    opacity: 0.6;
+    cursor: default;
+}

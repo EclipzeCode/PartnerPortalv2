@@ -606,6 +606,7 @@
    `.notify-dropdown a` and even `.nav-notify .notify-dropdown a` both lose
    to it on the element count, however late they are declared. */
 .nav-notify .notify-dropdown .notify-list a,
+.nav-notify .notify-dropdown .notify-list .notify-plain,
 .nav-notify .notify-dropdown .notify-text,
 .nav-notify .notify-dropdown .notify-head,
 .nav-notify .notify-dropdown .notify-empty {
@@ -623,12 +624,17 @@
 }
 
 .nav-notify .notify-dropdown .notify-list a,
+.nav-notify .notify-dropdown .notify-list .notify-plain,
 .nav-notify .notify-dropdown .notify-text,
 .nav-notify .notify-dropdown .notify-empty {
     font-family: var(--h-sans);
 }
 
-.notify-list a {
+/* A notification whose target was refused is still a notification -- see
+   safeHref in notifications.js. It takes the row's whole layout and type;
+   only :hover below is withheld, because there is nothing to press. */
+.notify-list a,
+.notify-list .notify-plain {
     display: grid;
     grid-template-columns: auto 1fr;
     grid-template-areas: 'icon text' 'icon when';
@@ -643,7 +649,8 @@
     background: var(--h-cell);
 }
 
-.notify-list a i {
+.notify-list a i,
+.notify-list .notify-plain i {
     grid-area: icon;
     align-self: center;
     font-size: 1.05rem;
@@ -671,7 +678,8 @@
     font-weight: 600;
 }
 
-.notify-list li.is-actionable a i {
+.notify-list li.is-actionable a i,
+.notify-list li.is-actionable .notify-plain i {
     color: var(--h-seal);
 }
 

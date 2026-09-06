@@ -406,3 +406,91 @@ def test_a_settled_partnership_does_not_block_a_new_one(client, login, make_org)
     login(a)
     assert client.post("/api/proposals",
                        json={"recipient_id": b.id, **terms}).status_code == 201
+
+
+# --- Paging the archive -----------------------------------------------------
+# The three live tabs are bounded by what an organization currently has going
+# on. The archive is not: declined, withdrawn, completed and ended rows are
+# never removed, so the list that used to be "everything this org is party
+# to" had no ceiling on the page it is most often opened at.
+
+@pytest.fixture
+def archive(client, login, make_org):
+    """One proposer with three withdrawn proposals behind it.
+
+    Withdrawn rather than declined so this stays on one account: the proposer
+    may withdraw its own, where declining would mean logging in as each
+    recipient in turn to set up a fixture about paging.
+    """
+    proposer = make_org(name="pytest archive proposer",
+                        needs=["web_development"], offers=["grant_writing"])
+    login(proposer)
+    for n in range(3):
+        recipient = make_org(name=f"pytest archive recipient {n}",
+                             needs=["grant_writing"],
+                             offers=["web_development"])
+        created = _propose(client, recipient)
+        assert created.status_code == 201
+        pid = created.get_json()["proposal"]["id"]
+        assert client.post(f"/api/proposals/{pid}/withdraw").status_code == 200
+    return proposer
+
+
+def test_the_archive_is_capped_and_says_so(client, archive):
+    """A list that stops has to admit it stopped.
+
+    Everything else here that truncates -- the matches, the directory --
+    reports how much it is not showing. An archive that silently sent the
+    newest page would be the one place a partnership could go missing
+    without a word.
+    """
+    body = client.get("/api/proposals?archive_limit=2").get_json()
+    assert body["archive_shown"] == 2
+    assert body["archive_has_more"] is True
+    # The total is in the counts, so the page can say what it is holding back.
+    assert body["counts"]["settled"] == 3
+
+    everything = client.get("/api/proposals?archive_limit=50").get_json()
+    assert everything["archive_shown"] == 3
+    assert everything["archive_has_more"] is False
+
+
+def test_live_proposals_are_never_capped(client, login, make_org, archive):
+    """Only the archive is paged. A pending proposal must never be withheld.
+
+    The cap exists because settled rows accumulate forever; pending ones are
+    the work in front of somebody, and dropping one off the end of a page is
+    a proposal that never gets answered.
+    """
+    recipient = make_org(name="pytest archive live",
+                         needs=["grant_writing"], offers=["web_development"])
+    assert _propose(client, recipient).status_code == 201
+
+    body = client.get("/api/proposals?archive_limit=1").get_json()
+    statuses = [p["status"] for p in body["proposals"]]
+    assert statuses.count("pending") == 1
+    assert body["archive_shown"] == 1
+    assert body["archive_has_more"] is True
+
+
+def test_the_archive_limit_is_clamped(client, archive):
+    """It decides how many rows are serialized, each with a full profile."""
+    huge = client.get("/api/proposals?archive_limit=999999").get_json()
+    assert huge["archive_shown"] == 3
+
+    # Garbled or absurd values fall back rather than erroring: a stale
+    # bookmark should draw the usual list, not a 400.
+    for bad in ("nonsense", "-5", "0"):
+        assert client.get(
+            f"/api/proposals?archive_limit={bad}").status_code == 200
+
+
+def test_the_counts_do_not_depend_on_the_page(client, archive):
+    """The tab labels come from SQL, not from counting the rows that came back.
+
+    This is what lets the list be paged at all -- five numbers that could
+    only be produced by loading everything are five reasons not to page.
+    """
+    small = client.get("/api/proposals?archive_limit=1").get_json()
+    large = client.get("/api/proposals?archive_limit=50").get_json()
+    assert small["counts"] == large["counts"]

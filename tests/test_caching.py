@@ -38,6 +38,19 @@ def _bundle(html):
     return found[0] if found else None
 
 
+def _js_bundle(html):
+    """The script bundle a page links, or None.
+
+    Scripts are collapsed the same way stylesheets are, and carry their
+    version the same way: in the digest rather than in a ?v=. A page with
+    only one script is left as an individually stamped reference, since a
+    run of one is already one request -- organization.html is the one such
+    page here, and it is what still covers that path.
+    """
+    found = re.findall(r'src="(bundle-[0-9a-f]+\.js)"', html)
+    return found[0] if found else None
+
+
 def test_html_is_always_revalidated(client):
     """The page carries the hashes, so a stale copy points at stale assets."""
     for path in ("/", "/index.html", "/pplogin.html", "/organization.html?id=1"):
@@ -49,15 +62,21 @@ def test_html_is_always_revalidated(client):
 def test_local_asset_references_are_stamped(client):
     """Every local css/js in a served page names its version.
 
-    Scripts still say so with a ?v=; stylesheets say it through the bundle
-    digest, which is the same claim made once for all of them.
+    Both say it through a bundle digest now. Scripts used to carry a ?v= of
+    their own and no longer do -- a run of them collapses into one
+    `bundle-<digest>.js` exactly as the stylesheets do, and the digest is
+    taken over every member's name and content hash, so the claim is the
+    same one made once for all of them instead of once each.
+
+    The individually-stamped path is still real and still covered, just not
+    by this page: it is what a page with a single script gets, and
+    organization.html is that page (see test_a_lone_script_is_stamped_not_bundled).
     """
     html = client.get("/ppdashboard.html").get_data(as_text=True)
-    refs = _refs(html)
-    # The dashboard is the heaviest page and pulls the most files.
-    for expected in ("common.js", "ppdashboard.js", "proposals.js"):
-        assert expected in refs, f"{expected} was not stamped"
-        assert refs[expected] == app_module.asset_version(expected)
+    # The dashboard is the heaviest page and pulls the most files: six
+    # scripts and fourteen stylesheets, now two requests between them.
+    assert _bundle(html), "the dashboard's stylesheets were not bundled"
+    assert _js_bundle(html), "the dashboard's scripts were not bundled"
 
     # Nothing local is left unstamped. The bundle is excluded because its
     # filename *is* its version -- a ?v= on top would say the same thing
@@ -113,6 +132,75 @@ def test_a_bundle_keeps_font_urls_resolvable(client):
 def test_a_bundle_nobody_asks_for_is_not_served(client):
     """A digest from a stale page names a combination that no longer exists."""
     assert client.get("/bundle-000000000000dead.css").status_code == 404
+
+
+def test_scripts_are_bundled_into_one_request(client):
+    """The dashboard's six scripts arrive as one file, in order.
+
+    Order is load-bearing here in a way it is not even for the stylesheets:
+    common.js defines window.escapeHtml and window.api, and every page script
+    calls them while it is still loading. A bundle that concatenated these in
+    any other order would be a ReferenceError on load rather than a styling
+    difference somebody notices later.
+    """
+    html = client.get("/ppdashboard.html").get_data(as_text=True)
+    name = _js_bundle(html)
+    assert name, "the dashboard's scripts were not bundled"
+
+    response = client.get("/" + name)
+    assert response.status_code == 200
+    assert "javascript" in response.headers["Content-Type"]
+    body = response.get_data(as_text=True)
+
+    members = re.findall(r'/\* --- (\S+) --- \*/', body)
+    assert members == ["csrf.js", "common.js", "notifications.js",
+                       "ppdashboard.js", "proposals.js", "invites.js"], members
+
+    # Named by its contents, so it can be kept for a year.
+    assert "immutable" in response.headers["Cache-Control"]
+
+
+def test_a_lone_script_is_stamped_not_bundled(client):
+    """A run of one is already one request.
+
+    organization.html loads a single script, so there is nothing to collapse
+    and it keeps the individual ?v= reference -- which is also the path that
+    proves the stamping still works for scripts that never reach a bundle.
+    """
+    html = client.get("/organization.html?id=1").get_data(as_text=True)
+    assert _js_bundle(html) is None
+    assert _refs(html)["organization.js"] == (
+        app_module.asset_version("organization.js"))
+
+
+def test_a_deferred_run_keeps_its_defer(client):
+    """pplogin.html defers all five of its scripts, and must keep doing so.
+
+    A deferred script and a plain one do not execute at the same point, so
+    dropping the attribute while merging would move this page's code to
+    before its own markup had parsed.
+    """
+    html = client.get("/pplogin.html").get_data(as_text=True)
+    name = _js_bundle(html)
+    assert name, "pplogin's scripts were not bundled"
+    assert re.search(r'<script defer src="' + re.escape(name) + r'">', html), (
+        "the bundle lost the defer its members had")
+
+
+def test_a_script_bundle_nobody_asks_for_is_not_served(client):
+    """Same as the stylesheet case: a stale page naming a dead combination."""
+    assert client.get("/bundle-000000000000dead.js").status_code == 404
+
+
+def test_only_real_scripts_are_served(client):
+    """The .js route interpolates into a path, so it needs the same allowlist.
+
+    Serving whatever name a request invents is how this route would become a
+    way to read files outside static/.
+    """
+    assert client.get("/common.js").status_code == 200
+    assert client.get("/no-such-script.js").status_code == 404
+    assert client.get("/../app.js").status_code == 404
 
 
 def test_absolute_urls_are_left_alone(client):
@@ -313,10 +401,10 @@ def test_error_pages_are_served_and_stamped(client):
     assert response.status_code == 404
     assert response.headers["Cache-Control"] == "no-cache"
     html = response.get_data(as_text=True)
-    # Its stylesheets go through the same bundling as any other page, and its
-    # scripts through the same stamping.
+    # Its stylesheets and its scripts go through the same bundling as any
+    # other page's.
     assert _bundle(html), "the 404 page's stylesheets were not bundled"
-    assert "common.js?v=" in html
+    assert _js_bundle(html), "the 404 page's scripts were not bundled"
 
 
 def test_a_missing_asset_reference_is_left_as_written(client):

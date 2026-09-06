@@ -14,6 +14,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let proposals = [];
     let activeTab = 'incoming';
+    // The archive tab is the only one the server pages, because it is the
+    // only one that grows without bound -- pending and agreed are bounded by
+    // what is actually going on. These two track how much of it we are
+    // holding so the tab can offer the rest rather than quietly stopping.
+    let archiveLimit = 0;
+    let archiveHasMore = false;
     // What the modal will do on confirm: { id, action, verb }
     let pending = null;
 
@@ -32,12 +38,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Data -----------------------------------------------------------
-    async function load() {
+    async function load({ archive } = {}) {
         list.setAttribute('aria-busy', 'true');
         renderSkeletonRows();
         try {
-            const data = await window.api('/api/proposals');
+            const query = archive ? `?archive_limit=${archive}` : '';
+            const data = await window.api(`/api/proposals${query}`);
             proposals = data.proposals || [];
+            archiveLimit = data.archive_shown || 0;
+            archiveHasMore = Boolean(data.archive_has_more);
             document.getElementById('countIncoming').textContent =
                 data.counts.incoming_pending;
             document.getElementById('countOutgoing').textContent =
@@ -274,6 +283,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
             list.appendChild(card);
         });
+
+        // Only under the archive, and only when there is genuinely more. A
+        // list that stops without saying so is the thing this is here to
+        // avoid: everywhere else that truncates -- the matches, the
+        // directory -- says how much it is not showing, and the archive
+        // silently sending the newest twenty-five would have been the one
+        // place a partnership could go missing without a word.
+        if (activeTab === 'closed' && archiveHasMore) {
+            const more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'btn-ghost archive-more';
+            more.textContent = 'Show older';
+            more.addEventListener('click', () => {
+                more.disabled = true;
+                more.textContent = 'Loading...';
+                // Ask for the next page's worth on top of what is already
+                // held. The whole list is refetched rather than appended to,
+                // which keeps one code path for "what does the server say I
+                // have" instead of a second one that merges.
+                load({ archive: archiveLimit + 25 });
+            });
+            list.appendChild(more);
+        }
     }
 
     // --- Messages -------------------------------------------------------
@@ -337,9 +369,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function pollThread() {
         if (openThreadId === null || document.hidden) return;
         const id = openThreadId;
+        // Ask only for what we do not already have. The thread is polled
+        // every twelve seconds and almost every one of those finds nothing,
+        // so sending the last id we hold turns the common case into an empty
+        // reply instead of a fresh copy of the entire conversation.
+        const held = threadMessages[threadMessages.length - 1];
+        const since = held ? `?since=${held.id}` : '';
         let data;
         try {
-            data = await window.api(`/api/proposals/${id}/messages`);
+            data = await window.api(`/api/proposals/${id}/messages${since}`);
         } catch (error) {
             // A blip should not empty the thread or start shouting. If the
             // proposal has genuinely gone, stop asking.
@@ -350,8 +388,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         // that request was in the air.
         if (openThreadId !== id) return;
 
-        const messages = data.messages || [];
+        // A delta is appended; a full reply replaces. Which one this is is
+        // decided by what we asked for, not by what came back -- an empty
+        // `messages` means "nothing new" on a delta and "no messages at all"
+        // on a full fetch, and the two must not be confused.
+        //
+        // Appended by id, never blindly concatenated. Two polls can be in
+        // flight at once -- the interval fires one and coming back to the
+        // tab fires another -- and both would carry the same `since`,
+        // because each read it before either reply landed. Concatenating
+        // would then show the same message twice. Replacing the whole list
+        // used to make this impossible for free; appending has to earn it.
+        const fresh = data.messages || [];
+        const known = new Set(threadMessages.map((m) => m.id));
+        const added = fresh.filter((m) => !known.has(m.id));
+        const messages = since ? threadMessages.concat(added) : fresh;
+
         const signature = signatureFor(messages, data.open);
+        // Nothing new and the thread has not opened or closed. This is the
+        // overwhelmingly common outcome, and it now costs no redraw, no
+        // refresh of the nav counts and -- the expensive one -- no refetch
+        // of the whole proposals list below.
         if (signature === threadSignature) return;
         threadSignature = signature;
         threadMessages = messages;

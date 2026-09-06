@@ -120,19 +120,49 @@
             return;
         }
         const esc = window.escapeHtml;
+        // escapeHtml keeps the value inside the attribute; it does not decide
+        // whether the attribute is safe to follow. Escaping a
+        // "javascript:..." href produces a perfectly well-formed href that
+        // still runs script on click, because none of the five characters it
+        // rewrites appear in one -- so the quoting is not what is protecting
+        // this, and it never was.
+        //
+        // Today every href here is built by the server as
+        // "ppdashboard.html#<tab>" (see app.py), which is why this has been
+        // fine. That is a fact about one f-string, not a property of the
+        // endpoint, and the fix belongs at the sink either way: this is the
+        // one place in the codebase where a URL reaches an href without a
+        // scheme check, organization.js having grown exactly this guard for
+        // exactly this reason.
+        //
+        // Relative paths only, since that is all a notification target ever
+        // is. Anything carrying a scheme -- or a protocol-relative "//host"
+        // that would leave the site without one -- is dropped rather than
+        // rewritten, and the entry renders as plain text.
+        const safeHref = (url) => {
+            const value = String(url || '');
+            return (value && !/^[a-z][a-z0-9+.-]*:/i.test(value)
+                    && !value.startsWith('//')) ? value : null;
+        };
         list.innerHTML = items.map((item) => {
             const { icon, text } = describe(item);
+            const href = safeHref(item.href);
             const classes = [
                 item.actionable ? 'is-actionable' : '',
                 item.seen ? 'is-seen' : '',
             ].filter(Boolean).join(' ');
-            return `
-                <li class="${classes}">
-                    <a href="${esc(item.href)}">
+            // An entry whose target was refused still says what happened;
+            // it just is not a link. Dropping the row instead would hide the
+            // notification, which is the one thing it exists to do.
+            const body = `
                         <i class='bx ${esc(icon)}' aria-hidden="true"></i>
                         <span class="notify-text">${esc(text)}</span>
-                        <span class="notify-when">${esc(ago(item.at))}</span>
-                    </a>
+                        <span class="notify-when">${esc(ago(item.at))}</span>`;
+            return `
+                <li class="${classes}">
+                    ${href
+                        ? `<a href="${esc(href)}">${body}</a>`
+                        : `<span class="notify-plain">${body}</span>`}
                 </li>`;
         }).join('');
     }

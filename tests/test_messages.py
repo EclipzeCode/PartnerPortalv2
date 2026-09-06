@@ -424,3 +424,98 @@ def test_the_open_flag_turns_over_when_the_proposal_settles(client, login, threa
     assert settled["open"] is False
     # Still readable: closing a thread is not the same as hiding it.
     assert settled["count"] == 0
+
+
+# --- Polling a thread without refetching it ---------------------------------
+# An open thread is polled every twelve seconds, and each of those requests
+# used to serialize and return the whole conversation to discover that
+# nothing had happened. `?since=<id>` makes a quiet poll an empty answer.
+
+def test_since_returns_only_what_is_newer(client, login, thread):
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    first = client.post(f"/api/proposals/{pid}/messages",
+                        json={"body": "Which weeks do you need the hall?"})
+    first_id = first.get_json()["sent"]["id"]
+
+    # Nothing newer than the only message there is.
+    quiet = client.get(
+        f"/api/proposals/{pid}/messages?since={first_id}").get_json()
+    assert quiet["messages"] == []
+    assert quiet["count"] == 0
+    assert quiet["since"] == first_id
+    # The thread is still described, so a poll can still notice it closing.
+    assert quiet["open"] is True
+
+    second = client.post(f"/api/proposals/{pid}/messages",
+                         json={"body": "The first two in March."})
+    second_id = second.get_json()["sent"]["id"]
+
+    delta = client.get(
+        f"/api/proposals/{pid}/messages?since={first_id}").get_json()
+    assert [m["id"] for m in delta["messages"]] == [second_id]
+
+
+def test_a_delta_fetch_still_marks_the_thread_read(client, login, thread):
+    """The read marker has to keep moving, or the nav badge never clears.
+
+    This is the part of `since` that looks unsafe and is not: any message
+    newer than the marker is necessarily in the delta, so the largest id in
+    it is the largest in the thread.
+    """
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "First"})
+    client.post("/logout")
+
+    # The recipient reads the thread, then the proposer says more.
+    login(recipient)
+    opened = client.get(f"/api/proposals/{pid}/messages").get_json()
+    seen = opened["messages"][-1]["id"]
+    client.post("/logout")
+
+    login(proposer)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "Second"})
+    client.post("/logout")
+
+    login(recipient)
+    listed = client.get("/api/proposals").get_json()["proposals"]
+    assert [p for p in listed if p["id"] == pid][0]["unread_count"] == 1
+
+    # Polled as a delta, exactly as the page does it.
+    client.get(f"/api/proposals/{pid}/messages?since={seen}")
+    listed = client.get("/api/proposals").get_json()["proposals"]
+    assert [p for p in listed if p["id"] == pid][0]["unread_count"] == 0
+
+
+def test_a_garbled_since_returns_the_whole_thread(client, login, thread):
+    """The honest answer to "I could not understand you" is everything."""
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "Only one"})
+
+    body = client.get(
+        f"/api/proposals/{pid}/messages?since=not-a-number").get_json()
+    assert body["count"] == 1
+    assert body["since"] is None
+
+
+def test_since_cannot_be_used_to_mark_unread_messages_read(client, login, thread):
+    """`since` is client-supplied and is never itself the read marker."""
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "First"})
+    client.post("/logout")
+
+    login(recipient)
+    # A wildly optimistic `since`: nothing is newer than it, so nothing is
+    # returned -- and the unread message must stay unread rather than being
+    # marked read through a number the client made up.
+    body = client.get(f"/api/proposals/{pid}/messages?since=999999").get_json()
+    assert body["messages"] == []
+    listed = client.get("/api/proposals").get_json()["proposals"]
+    assert [p for p in listed if p["id"] == pid][0]["unread_count"] == 1
