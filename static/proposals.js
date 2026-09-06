@@ -580,8 +580,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             messageBody.dispatchEvent(new Event('input'));
             await load();
         } catch (error) {
-            messageError.textContent = error.message;
-            messageError.hidden = false;
+            // 409 here means the proposal settled while this was being
+            // typed -- declined, withdrawn, or ended by the other side. The
+            // thread is closed to new messages now, so saying so beside a
+            // form that still invites another one just gets the same
+            // refusal again. paintThreadOpenState swaps the form for the
+            // closed notice, which is what the poll would have done a few
+            // seconds later anyway; load() runs first because that notice
+            // names the status and reads it from the list.
+            if (error.status === 409) {
+                await load();
+                paintThreadOpenState(false);
+                window.toast(error.message, 'error');
+            } else {
+                messageError.textContent = error.message;
+                messageError.hidden = false;
+            }
         } finally {
             messageSend.disabled = false;
         }
@@ -785,6 +799,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await load();
                 window.toast(`Proposal updated. ${name} has been told.`);
             } catch (error) {
+                // Answered while it was being corrected. There is nothing
+                // left to edit and no field to focus, so this leaves the
+                // dialog rather than reporting a validation problem the
+                // form cannot fix -- the same reasoning as the respond
+                // dialog below.
+                if (error.status === 409) {
+                    closeEdit();
+                    await load();
+                    window.toast(error.message, 'error');
+                    return;
+                }
                 editError.textContent = error.message;
                 editError.hidden = false;
                 const field = error.data && error.data.field;
@@ -847,6 +872,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     : 'Public link removed.');
             } catch (error) {
                 btn.disabled = false;
+                // A 409 means the proposal is no longer one with a public
+                // link -- withdrawn or declined since this list was drawn --
+                // so the card offering the control is itself out of date.
+                if (error.status === 409) await load();
                 window.toast(error.message || 'Could not change that link.',
                     'error');
             }
@@ -1005,8 +1034,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             // The dashboard's activity feed is built from this same history.
             document.dispatchEvent(new CustomEvent('partnerships:changed'));
         } catch (error) {
-            respondTerms.innerHTML =
-                `<p class="form-message">${esc(error.message)}</p>`;
+            // A 409 here is not the user getting something wrong. It is the
+            // proposal having moved while this dialog was open: the other
+            // side accepted or declined a moment ago, or the partner ended
+            // it, or this is a second click on a button that already worked.
+            // The server is right to refuse -- see the status guards on the
+            // lifecycle routes -- but showing the refusal inside a dialog
+            // that still offers to Accept, above a list still showing the
+            // old state, presents somebody else's action as this person's
+            // mistake.
+            //
+            // So the dialog closes, the list is refetched, and the message
+            // is said as a toast. The server's wording already names the
+            // state it found ("This proposal was already accepted"), which
+            // is the one thing this could not work out for itself.
+            if (error.status === 409) {
+                closeModal();
+                await load();
+                window.toast(error.message, 'error');
+                document.dispatchEvent(new CustomEvent('partnerships:changed'));
+            } else {
+                // Everything else -- a validation refusal, a network blip --
+                // is about what was typed here, so it stays here.
+                respondTerms.innerHTML =
+                    `<p class="form-message">${esc(error.message)}</p>`;
+            }
         } finally {
             respondConfirm.disabled = false;
             pending = null;

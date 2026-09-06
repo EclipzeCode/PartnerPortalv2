@@ -4413,6 +4413,24 @@ if not os.environ.get("PROFILE_VIEW_SALT") and not os.environ.get("SECRET_KEY"):
         "de-duplication resets on every restart and view counts will be "
         "inflated. Set either one to a fixed string."
     )
+elif (os.environ.get("FLASK_ENV") == "production"
+        and not os.environ.get("PROFILE_VIEW_SALT")):
+    # The other half of the same problem, and the half that actually shipped.
+    # SECRET_KEY is set in production, so the warning above never fires and
+    # the fallback works -- right up until somebody rotates SECRET_KEY, which
+    # is a thing they are supposed to be able to do after a leak. Every
+    # viewer re-salts, every returning visitor is counted as new, and the
+    # only symptom is that the charts step up overnight and read high.
+    #
+    # render.yaml now declares a generated PROFILE_VIEW_SALT so a fresh
+    # deploy has one, but an environment provisioned before that does not,
+    # and nothing else would ever say so.
+    app.logger.warning(
+        "PROFILE_VIEW_SALT is not set, so profile-view de-duplication is "
+        "salted with SECRET_KEY. That works, but it means rotating "
+        "SECRET_KEY will permanently inflate every view count. Set "
+        "PROFILE_VIEW_SALT to any fixed string to decouple them."
+    )
 
 
 def _viewer_key(viewer_org):

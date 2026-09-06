@@ -39,6 +39,22 @@ services:
       - key: SECRET_KEY
         sync: false
 
+      # Salts the opaque per-viewer key that de-duplicates profile views, so
+      # opening a profile twice in a day counts once.
+      #
+      # Declared here because unset it falls back to SECRET_KEY, and that
+      # quietly ties a number on every organization's dashboard to a
+      # credential that has to be rotatable: rotating SECRET_KEY after a leak
+      # would re-salt every viewer, so everyone who had ever visited would be
+      # counted fresh and every view count would step up overnight. Nothing
+      # about that looks like a bug -- the charts just read high.
+      #
+      # generateValue rather than sync:false: any fixed string works, nobody
+      # has to invent one, and Render keeps the generated value stable across
+      # deploys, which is the entire requirement.
+      - key: PROFILE_VIEW_SALT
+        generateValue: true
+
       # Every link this app mails out is built from APP_BASE_URL. Unset, it
       # falls back to http://127.0.0.1:5001 -- so verification links, password
       # resets and proposal notifications all go out pointing at the
