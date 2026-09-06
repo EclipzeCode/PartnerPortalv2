@@ -237,6 +237,19 @@
                     </button>
                 </div>
 
+                <!-- Says what the list below now holds. The tab counts are
+                     visible, but switching tabs and finishing a load both
+                     replace every card with no announcement at all, so
+                     somebody not watching them has no way to know whether
+                     the tab they just opened has four proposals or none.
+                     The region is separate from the list on purpose:
+                     aria-live on the list itself would read out every card
+                     each time, which is why ppsearch puts its own
+                     announcement on a small indicator rather than the grid.
+                     polite, so it never interrupts. -->
+                <p id="proposalStatus" class="sr-only" role="status"
+                   aria-live="polite" aria-atomic="true"></p>
+
                 <div id="proposalList" class="proposal-list"></div>
             </div>
 
@@ -257,6 +270,8 @@
                             </select>
                         </label>
                     </div>
+                    <p id="activityStatus" class="sr-only" role="status"
+                       aria-live="polite" aria-atomic="true"></p>
                     <div class="activity-list">
                         <!-- Filled from /api/dashboard by ppdashboard.js -->
                     </div>

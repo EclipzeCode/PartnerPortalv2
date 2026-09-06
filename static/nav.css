@@ -726,3 +726,30 @@
 .notify-list li.is-seen .notify-text,
 .notify-list li.is-seen .notify-when { opacity: 0.55; }
 .notify-list li.is-seen a i { opacity: 0.4; }
+
+/* Loading placeholders in the notification panel. Laid out on the same grid
+   the real rows use, so the panel does not resize when the list arrives --
+   see SKELETON_ROWS in notifications.js. The bars themselves are .skeleton
+   from shared.css, which carries the shimmer and its reduced-motion case. */
+.notify-list .notify-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.7rem 0.9rem;
+}
+
+/* Heights set here rather than borrowed from .skeleton-line, which is not a
+   shared rule: directory.css, ppsearch.css, ppdashboard.css and proposals.css
+   each define it for their own context, and nav.css is loaded on pages where
+   none of them are. */
+.notify-skeleton-text {
+    width: 82%;
+    height: 0.8rem;
+    border-radius: 4px;
+}
+
+.notify-skeleton-when {
+    width: 38%;
+    height: 0.6rem;
+    border-radius: 4px;
+}

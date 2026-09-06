@@ -748,7 +748,7 @@
  * vertical.
  * ------------------------------------------------------------------------- */
 
-@media (max-width: 52rem) {
+@media (max-width: 52em) {
     .settings-card {
         grid-template-columns: 1fr;
         row-gap: 1.4rem;
@@ -769,7 +769,7 @@
     }
 }
 
-@media (max-width: 30rem) {
+@media (max-width: 30em) {
     /* Three uppercase labels plus the copy do not both fit. The strip drops
        below and spans the row rather than each segment shrinking until the
        words wrap inside their own cell. */
@@ -793,7 +793,7 @@
     }
 }
 
-@media (max-width: 34rem) {
+@media (max-width: 34em) {
     .settings-links,
     .form-actions {
         flex-direction: column;

@@ -174,3 +174,59 @@ def test_login_and_forgot_password_remain_silent(client, make_org):
     unknown = client.post("/forgot-password", json={"email": _free()})
     assert known.status_code == unknown.status_code == 200
     assert known.get_json() == unknown.get_json()
+
+
+# --- Walking the profile URLs ----------------------------------------------
+# /api/directory is paged and limited, and reasoned that there was no
+# harvesting to do there that walking /api/organizations/<id>/public would not
+# already allow. That was true, and it was an argument about the profile
+# route: a sequential integer, a full public profile to anybody, and nothing
+# counting the requests.
+
+def _profile(client, org_id):
+    return client.get(f"/api/organizations/{org_id}/public")
+
+
+def test_walking_profile_ids_is_rate_limited(client, make_org, monkeypatch):
+    """The whole membership list, one id at a time, is the cheap way in."""
+    monkeypatch.setattr(app_module, "PROFILE_READS_PER_HOUR", 5)
+    org = make_org(name="pytest enumeration target")
+
+    codes = [_profile(client, org.id).status_code for _ in range(7)]
+    assert codes[:5] == [200] * 5, codes
+    assert codes[5:] == [429, 429], codes
+
+
+def test_the_limit_says_how_long_to_wait(client, make_org, monkeypatch):
+    """Same as every other limited route here: a number, not "a while"."""
+    monkeypatch.setattr(app_module, "PROFILE_READS_PER_HOUR", 1)
+    org = make_org(name="pytest enumeration wait")
+
+    assert _profile(client, org.id).status_code == 200
+    refused = _profile(client, org.id)
+    assert refused.status_code == 429
+    assert refused.headers.get("Retry-After")
+
+
+def test_a_signed_in_reader_is_limited_by_account_not_address(
+        client, login, make_org, monkeypatch):
+    """An office behind one NAT is many readers, not one client.
+
+    Limiting a signed-in caller by address would throttle a university or a
+    shared office to a single visitor's budget, to guard against something
+    the account name already identifies. So the bucket is the account, and
+    exhausting it must not be reachable by anonymous requests from the same
+    connection -- the two are counted separately.
+    """
+    monkeypatch.setattr(app_module, "PROFILE_READS_PER_HOUR", 3)
+    target = make_org(name="pytest enumeration shared target")
+    reader = make_org(name="pytest enumeration reader")
+
+    # Anonymous requests from this connection use up the address bucket.
+    for _ in range(3):
+        assert _profile(client, target.id).status_code == 200
+    assert _profile(client, target.id).status_code == 429
+
+    # Signing in moves the caller to its own bucket, which is untouched.
+    login(reader)
+    assert _profile(client, target.id).status_code == 200

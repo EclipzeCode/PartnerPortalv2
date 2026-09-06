@@ -80,6 +80,21 @@
         }
     }
 
+    // Placeholder rows, sized like real notification rows. The panel used to
+    // say "Loading..." here, which is the one loading state on this site that
+    // was a sentence rather than a shape -- directory.js, proposals.js and
+    // ppdashboard.js all draw skeletons, and the odd one out reads as a
+    // different kind of waiting than it is.
+    //
+    // Three, matching the number of rows the panel shows without scrolling.
+    // aria-hidden because they are decoration: what a screen reader gets is
+    // the status region below, once there is something true to say.
+    const SKELETON_ROWS = Array.from({ length: 3 }, () => `
+        <li class="notify-skeleton" aria-hidden="true">
+            <span class="skeleton skeleton-line notify-skeleton-text"></span>
+            <span class="skeleton skeleton-line notify-skeleton-when"></span>
+        </li>`).join('');
+
     function build(slot) {
         const wrap = document.createElement('div');
         wrap.className = 'nav-notify';
@@ -97,9 +112,20 @@
                     <button type="button" class="notify-clear" id="notifyClear"
                             hidden>Mark all read</button>
                 </div>
-                <ul class="notify-list" id="notifyList">
-                    <li class="notify-empty">Loading...</li>
-                </ul>
+                <ul class="notify-list" id="notifyList">${SKELETON_ROWS}</ul>
+                <!-- The list arrives after the panel opens, so opening it
+                     and hearing "Loading..." was the end of the story: the
+                     items replacing that line announce nothing. Said on a
+                     region of its own rather than on the list, which would
+                     read every notification out again on each open -- and
+                     the panel refetches on every open, deliberately.
+
+                     Inside the dropdown, so it is only in the accessibility
+                     tree while the panel is showing. setOpen unhides the
+                     panel before it fetches, so the region is present by the
+                     time this is written to. -->
+                <p id="notifyStatus" class="sr-only" role="status"
+                   aria-live="polite" aria-atomic="true"></p>
             </div>`;
         // Before the account menu, so the bar reads: what happened, then who
         // you are.
@@ -109,6 +135,13 @@
 
     function render(list, items, unseen) {
         const clear = document.getElementById('notifyClear');
+        const status = document.getElementById('notifyStatus');
+        if (status) {
+            status.textContent = items.length === 0
+                ? 'No new notifications.'
+                : `${items.length} notification${
+                    items.length === 1 ? '' : 's'}.`;
+        }
         // Only when there is news to clear. Actionable entries are not
         // cleared by this and the button must not imply they are, so an
         // inbox holding nothing but work offers nothing to press.
@@ -206,7 +239,7 @@
             // blink through a loading state to arrive at what it was
             // already showing.
             if (!everRendered) {
-                list.innerHTML = '<li class="notify-empty">Loading...</li>';
+                list.innerHTML = SKELETON_ROWS;
             }
             fetching = true;
             try {

@@ -4767,6 +4767,17 @@ def get_organization(org, db, org_id):
     return jsonify({"organization": data})
 
 
+# How many public profiles one caller may read in an hour. Higher than the
+# directory's 120, and for a reason rather than by feel: the directory serves
+# a page of organizations per request, so a reader costs it few requests and
+# many rows, where this route is one request per profile opened. The limit
+# that is generous for a person here is a much larger number than the one
+# that is generous for a person there.
+PROFILE_READS_PER_HOUR = int(
+    os.environ.get("PROFILE_READS_PER_HOUR", "300")
+)
+
+
 @app.route("/api/organizations/<int:org_id>/public", methods=["GET"])
 def public_organization(org_id):
     """An organization's public profile. Deliberately unauthenticated.
@@ -4778,9 +4789,44 @@ def public_organization(org_id):
 
     Only completed profiles resolve, matching the signed-in route -- a
     half-filled row says nothing useful and should not have a public URL.
+
+    Rate limited, which it was not. /api/directory reasoned that there was
+    "no harvesting to do here that walking the profile URLs would not already
+    allow" -- true, and an argument about this route rather than about that
+    one. The directory is paged and limited; this took a sequential integer,
+    answered a full public profile to anybody, and counted no requests at
+    all, so the cheap way to take the whole membership list was to ask for
+    ids 1..n and never touch the directory.
+
+    Two buckets, not one. An anonymous caller is limited by address, and a
+    signed-in one by account, because those fail differently: an office or a
+    university behind one NAT is many legitimate readers on one address, and
+    limiting them as a single client would throttle real use to protect
+    against something an account holder can be identified for anyway. The
+    same distinction _viewer_key already draws, one layer up.
+
+    The ceiling is deliberately far above reading and far below enumerating.
+    A person opening profiles from the directory does a few dozen an hour;
+    at this rate a full walk of a membership of any size takes days, and it
+    leaves a rate-limit trail while it does.
     """
     db = get_db()
     try:
+        # Resolved before the limit so the bucket can be the account. One
+        # indexed lookup, and this route was already going to do it inside
+        # _record_profile_view.
+        viewer = current_org(db)
+        if viewer is not None:
+            wait = rate_limited("public_profile_account", str(viewer.id),
+                                max_attempts=PROFILE_READS_PER_HOUR,
+                                window_seconds=3600)
+        else:
+            wait = rate_limited("public_profile", client_ip(),
+                                max_attempts=PROFILE_READS_PER_HOUR,
+                                window_seconds=3600)
+        if wait:
+            return too_many("Too many requests from this connection.", wait)
+
         other = db.get(Organization, org_id)
         if other is None or not other.onboarding_complete or other.hidden_at:
             return jsonify({"error": "Organization not found."}), 404

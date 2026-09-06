@@ -298,3 +298,36 @@
 *::after {
     box-sizing: border-box;
 }
+
+/* --- Breakpoints -----------------------------------------------------------
+ *
+ * The widths this site actually breaks at, written down because they cannot
+ * be tokens. A media query is evaluated before any element exists, so
+ * `@media (max-width: var(--bp-md))` matches nothing at all -- there is no
+ * custom property to resolve against. The values below are therefore a
+ * convention held by hand, and this comment is the only place enforcing it.
+ *
+ *   26.25em  the narrowest phones -- nav and shared only
+ *   30em     small phone
+ *   34em     phone
+ *   36em     large phone
+ *   40em     phone/tablet boundary; the most used of these by far
+ *   48em     tablet -- where the nav collapses
+ *   52em     wide tablet
+ *   62em     small laptop
+ *   68.75em  laptop
+ *   75em     where the widest dashboards stop growing
+ *
+ * All of them in `em`, and that is the one rule here worth stating, because
+ * `rem` looks like it would be more correct and is not: inside a media query
+ * both units resolve against the browser's initial font size, never the root
+ * element's, so `34em` and `34rem` are the same width written two ways. Five
+ * queries were written in rem and read as breakpoints of their own -- a
+ * separate 30, 34, 52 and 62 sitting beside the em ones. They were the same
+ * four widths, and are now spelled the same way.
+ *
+ * Two deliberate exceptions, both in ppsearch.css: the partners grid steps
+ * 3 -> 2 -> 1 columns at 63.99em and 39.99em. Those are that grid's own
+ * cascade rather than sloppy copies of 62em and 40em, and rounding them onto
+ * this scale would move where the columns drop. Left as they are.
+ */

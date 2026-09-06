@@ -168,9 +168,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         return parts.join('');
     }
 
+    // What the list now holds, for anyone not watching it. Switching tabs
+    // and finishing a load both replace every card silently; this is the
+    // only thing that says so. Written to a region outside the list, so a
+    // screen reader hears one sentence rather than every card again.
+    function announce(count) {
+        const status = document.getElementById('proposalStatus');
+        if (!status) return;
+        const label = {
+            incoming: 'awaiting your response',
+            outgoing: 'sent and awaiting a reply',
+            agreed: 'running',
+            closed: 'closed',
+        }[activeTab] || '';
+        status.textContent = count === 0
+            ? `No proposals ${label}.`
+            : `${count} proposal${count === 1 ? '' : 's'} ${label}.`;
+    }
+
     function render() {
         const items = forTab(activeTab);
         list.innerHTML = '';
+        announce(items.length);
 
         if (items.length === 0) {
             const messages = {

@@ -1090,7 +1090,7 @@ body.home .hero-lede.pending .lede-text {
  * page on a laptop, and the slowest to read on a handset.
  * ------------------------------------------------------------------------- */
 
-@media (max-width: 62rem) {
+@media (max-width: 62em) {
     body.home .hero-inner,
     body.home .scroll-content {
         grid-template-columns: 1fr;
@@ -1108,7 +1108,7 @@ body.home .hero-lede.pending .lede-text {
     }
 }
 
-@media (max-width: 34rem) {
+@media (max-width: 34em) {
     /* Two screens of scrolling for one graphic is a long way to ask someone
        to drag a thumb. The build is the same, over less distance. */
     body.home .bridge-track {

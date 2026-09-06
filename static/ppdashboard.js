@@ -420,6 +420,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         list.innerHTML = '';
 
+        // Changing the filter replaces this list silently, which for anyone
+        // driving the select with a keyboard means the control appears to do
+        // nothing at all. Announced on a region of its own rather than on
+        // the list, so what is heard is "four items" and not four items.
+        const status = document.getElementById('activityStatus');
+        if (status) {
+            status.textContent = all.length === 0
+                ? 'No activity to show.'
+                : `${all.length} activity item${all.length === 1 ? '' : 's'}.`;
+        }
+
         if (all.length === 0) {
             const messages = {
                 all: dashboard.needs_onboarding
