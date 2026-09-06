@@ -157,14 +157,34 @@ class Organization(Base):
     # by migration 55c59219492b; the earliest of them hold no token at all and
     # could never have verified.
     #
-    # Unhashed, like Partnership.share_token: single-use, revoked on verify,
-    # and not a credential in the way a password is. Only ever one live token
-    # per org -- a resend overwrites the column, which is what retires the
-    # link in any older email.
+    # Stored as a SHA-256 of the token that was mailed, never the token
+    # itself. What is in this column cannot be used to verify anything; only
+    # the value in the email can, and that value exists nowhere here.
+    #
+    # This used to hold the token as issued, on the reasoning that it is
+    # single-use, revoked on verify, and "not a credential in the way a
+    # password is". That is true of this one and was quietly extended to the
+    # two below it, where it is not: a password reset token sets a password,
+    # and a pending-email token moves the address the account signs in with.
+    # Both are credentials by any definition that matters, and anything that
+    # reads this table -- a backup, a replica, a dump, an injection nobody
+    # noticed -- was getting them in a form that could be used directly.
+    #
+    # Hashed uniformly rather than only where it obviously matters, because
+    # deciding per column which tokens are "really" credentials is a judgment
+    # somebody has to make correctly again every time one is added, and it
+    # was already made wrong once here.
+    #
+    # A plain SHA-256, not bcrypt: these are 32 random bytes from secrets, so
+    # there is no dictionary to run and nothing for a work factor to slow
+    # down. What hashing buys is that the stored value is not the secret.
+    #
+    # Only ever one live token per org -- a resend overwrites the column,
+    # which is what retires the link in any older email.
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    email_verify_token: Mapped[str | None] = mapped_column(
+    email_verify_token_hash: Mapped[str | None] = mapped_column(
         String(64), unique=True
     )
     email_verify_sent_at: Mapped[datetime | None] = mapped_column(
@@ -183,20 +203,28 @@ class Organization(Base):
     #
     # The old address stays live and stays the login until that happens.
     pending_email: Mapped[str | None] = mapped_column(String(255))
-    pending_email_token: Mapped[str | None] = mapped_column(
+    # Hashed, like the two around it. This one is worth naming separately:
+    # opening the link it stands for changes the address the account signs in
+    # with, so a reader of this column used to be one request away from
+    # owning the login.
+    pending_email_token_hash: Mapped[str | None] = mapped_column(
         String(64), unique=True
     )
     pending_email_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
 
-    # Same shape as the pair above -- unhashed, single-use, cleared once spent
+    # Same shape as the pair above -- hashed, single-use, cleared once spent
     # -- but shorter-lived (checked against a 1-hour window in app.py, not 7
     # days): this token alone is enough to set a new password, so it grants
     # more than the verify link does and is worth expiring faster. Set only by
     # /forgot-password, which never reveals whether the address it was asked
     # about actually has an account.
-    password_reset_token: Mapped[str | None] = mapped_column(
+    #
+    # The short window is why this was the least bad of the three to have
+    # been storing in the clear, and an hour of live account-takeover tokens
+    # sitting in a backup is still an hour of them.
+    password_reset_token_hash: Mapped[str | None] = mapped_column(
         String(64), unique=True
     )
     password_reset_sent_at: Mapped[datetime | None] = mapped_column(

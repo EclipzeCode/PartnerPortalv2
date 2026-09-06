@@ -75,6 +75,29 @@ def outbox(no_outbound_email):
     return no_outbound_email
 
 
+@pytest.fixture
+def link_token(outbox):
+    """The token out of the most recent `kind` email, by sender name.
+
+    Tests used to read these off the row -- org.password_reset_token and the
+    like. They cannot any more, because only a hash of the token is stored
+    and the token itself exists nowhere except in the message that was sent.
+    That is the whole change, so the fixture reads it where the recipient
+    does rather than restoring a way around it.
+
+    Every notify_* sender takes the recipient first and the token second (see
+    no_outbound_email, which records the call), so this is args[1].
+    """
+    def _token(kind):
+        for name, args, _ in reversed(outbox):
+            if name == kind:
+                assert len(args) > 1, f"{kind} was called without a token"
+                return args[1]
+        raise AssertionError(
+            f"no {kind} was sent -- outbox holds {[n for n, _, _ in outbox]}")
+    return _token
+
+
 @pytest.fixture(autouse=True)
 def reset_rate_limits():
     """Keep the rate limiter from leaking across tests.

@@ -20,7 +20,7 @@ def _request(client, **overrides):
     return client.post("/api/account/email", json=payload)
 
 
-def test_the_login_does_not_move_until_the_link_is_opened(
+def test_the_login_does_not_move_until_the_link_is_opened(link_token, 
         client, login, make_org, session):
     org = make_org()
     original = org.email
@@ -37,13 +37,13 @@ def test_the_login_does_not_move_until_the_link_is_opened(
         "email": original, "password": PASSWORD}).status_code == 200
 
 
-def test_opening_the_link_moves_it(client, login, make_org, session):
+def test_opening_the_link_moves_it(link_token, client, login, make_org, session):
     org = make_org()
     original = org.email
     login(org)
     _request(client)
     session.refresh(org)
-    token = org.pending_email_token
+    token = link_token('notify_email_change_requested')
     client.post("/logout")
 
     response = client.post("/api/account/email/confirm", json={"token": token})
@@ -53,7 +53,7 @@ def test_opening_the_link_moves_it(client, login, make_org, session):
     session.refresh(org)
     assert org.email == NEW
     assert org.pending_email is None
-    assert org.pending_email_token is None
+    assert org.pending_email_token_hash is None
     # Opening a link sent to the address is what verification asks for, so it
     # arrives verified rather than needing the same proof twice.
     assert org.email_verified is True
@@ -66,7 +66,7 @@ def test_opening_the_link_moves_it(client, login, make_org, session):
         "email": original, "password": PASSWORD}).status_code == 401
 
 
-def test_it_needs_the_current_password(client, login, make_org):
+def test_it_needs_the_current_password(link_token, client, login, make_org):
     """A session cookie on a borrowed browser should not be enough to point
     somebody else's account at an attacker's inbox."""
     login(make_org())
@@ -74,7 +74,7 @@ def test_it_needs_the_current_password(client, login, make_org):
     assert _request(client, password="not-the-password").status_code == 403
 
 
-def test_a_malformed_or_disposable_address_is_refused(client, login, make_org):
+def test_a_malformed_or_disposable_address_is_refused(link_token, client, login, make_org):
     login(make_org())
     for bad in ("not-an-address", "", "someone@mailinator.com"):
         response = _request(client, email=bad)
@@ -82,7 +82,7 @@ def test_a_malformed_or_disposable_address_is_refused(client, login, make_org):
         assert response.get_json()["field"] == "email"
 
 
-def test_an_address_already_in_use_is_refused(client, login, make_org):
+def test_an_address_already_in_use_is_refused(link_token, client, login, make_org):
     other = make_org()
     login(make_org())
     response = _request(client, email=other.email)
@@ -90,41 +90,41 @@ def test_an_address_already_in_use_is_refused(client, login, make_org):
     assert response.get_json()["field"] == "email"
 
 
-def test_moving_to_your_own_address_is_refused(client, login, make_org):
+def test_moving_to_your_own_address_is_refused(link_token, client, login, make_org):
     org = make_org()
     login(org)
     assert _request(client, email=org.email).status_code == 400
 
 
-def test_a_change_can_be_canceled(client, login, make_org, session):
+def test_a_change_can_be_canceled(link_token, client, login, make_org, session):
     org = make_org()
     login(org)
     _request(client)
     assert client.delete("/api/account/email").status_code == 200
     session.refresh(org)
     assert org.pending_email is None
-    assert org.pending_email_token is None
+    assert org.pending_email_token_hash is None
 
 
-def test_a_token_is_single_use(client, login, make_org, session):
+def test_a_token_is_single_use(link_token, client, login, make_org, session):
     org = make_org()
     login(org)
     _request(client)
     session.refresh(org)
-    token = org.pending_email_token
+    token = link_token('notify_email_change_requested')
     assert client.post("/api/account/email/confirm",
                        json={"token": token}).status_code == 200
     assert client.post("/api/account/email/confirm",
                        json={"token": token}).status_code == 404
 
 
-def test_an_unknown_token_is_refused(client):
+def test_an_unknown_token_is_refused(link_token, client):
     assert client.post("/api/account/email/confirm",
                        json={"token": "nonsense"}).status_code == 404
     assert client.post("/api/account/email/confirm", json={}).status_code == 400
 
 
-def test_the_address_being_taken_in_the_meantime_is_handled(
+def test_the_address_being_taken_in_the_meantime_is_handled(link_token, 
         client, login, make_org, session):
     """Request and confirmation are days apart, so the check at request time
     is not enough on its own."""
@@ -132,7 +132,7 @@ def test_the_address_being_taken_in_the_meantime_is_handled(
     login(org)
     _request(client)
     session.refresh(org)
-    token = org.pending_email_token
+    token = link_token('notify_email_change_requested')
     client.post("/logout")
 
     # Somebody else registers it in between.
@@ -148,7 +148,7 @@ def test_the_address_being_taken_in_the_meantime_is_handled(
     assert org.pending_email is None
 
 
-def test_both_addresses_are_told(client, login, make_org, outbox):
+def test_both_addresses_are_told(link_token, client, login, make_org, outbox):
     """The old one especially: changing the login moves where every future
     reset link goes, so this is the only warning that lands somewhere the
     real account holder still reads."""
@@ -159,7 +159,7 @@ def test_both_addresses_are_told(client, login, make_org, outbox):
     assert "notify_email_change_notice" in kinds
 
 
-def test_it_is_rate_limited(client, login, make_org):
+def test_it_is_rate_limited(link_token, client, login, make_org):
     login(make_org())
     for i in range(5):
         _request(client, email=f"pytest-move{i}@example.com")

@@ -401,6 +401,33 @@ def _limiter_db():
     return SessionLocal()
 
 
+def issue_token():
+    """A single-use link token: (what to mail, what to store).
+
+    Two values, deliberately, because they are not the same thing and the
+    whole point of this change is that the second one cannot be used. The
+    caller mails `raw` and writes `digest`; nothing anywhere keeps both.
+
+    SHA-256 rather than bcrypt, which looks like the wrong choice for a
+    credential and is the right one here: this is 32 bytes from secrets, so
+    there is no guessing to slow down, and a lookup has to be able to find
+    the row by hash -- which a per-row salt makes impossible without scanning
+    every candidate. What hashing buys is only that the column is not the
+    secret, and a fast hash buys exactly that.
+    """
+    raw = secrets.token_urlsafe(32)
+    return raw, token_digest(raw)
+
+
+def token_digest(raw):
+    """The stored form of a link token.
+
+    Hex, so it fits the String(64) columns exactly, and stable across
+    processes -- unlike hash(), for the same reason _advisory_key says.
+    """
+    return hashlib.sha256(str(raw or "").encode("utf-8")).hexdigest()
+
+
 def _advisory_key(*parts):
     """A stable 64-bit integer for an advisory lock, from `parts`.
 
@@ -2478,12 +2505,15 @@ def register():
         # It also removes the gap between checking and inserting, where two
         # signups for the same address could both pass the check and the
         # second would come back as a 500.
+        # Minted before the row, because only the digest goes into it and the
+        # raw token has to outlive the constructor to be mailed below.
+        verify_raw, verify_digest = issue_token()
         org = Organization(
             email=email,
             name=name,
             password_hash=password_hash,
             name_flagged=name_flagged,
-            email_verify_token=secrets.token_urlsafe(32),
+            email_verify_token_hash=verify_digest,
             email_verify_sent_at=datetime.now(timezone.utc),
         )
         db.add(org)
@@ -2498,7 +2528,7 @@ def register():
                          window_seconds=EXISTENCE_DISCLOSURE_WINDOW)
             return jsonify({"error": "That email is already registered."}), 409
 
-        notify_email_verification(org, org.email_verify_token)
+        notify_email_verification(org, verify_raw)
 
         # Registering signs you in -- otherwise the next step is a pointless
         # trip back through the login form. Verification is informational
@@ -3164,10 +3194,10 @@ def forgot_password():
         # check protects against from the other direction. Silently doing
         # nothing keeps this indistinguishable from "no such account".
         if org is not None and org.password_hash is not None:
-            org.password_reset_token = secrets.token_urlsafe(32)
+            reset_raw, org.password_reset_token_hash = issue_token()
             org.password_reset_sent_at = datetime.now(timezone.utc)
             db.commit()
-            notify_password_reset(org, org.password_reset_token)
+            notify_password_reset(org, reset_raw)
         return generic
     finally:
         db.close()
@@ -3191,7 +3221,7 @@ def reset_password():
     db = get_db()
     try:
         org = db.query(Organization).filter(
-            Organization.password_reset_token == token
+            Organization.password_reset_token_hash == token_digest(token)
         ).one_or_none()
 
         if org is None:
@@ -3222,7 +3252,7 @@ def reset_password():
         org.password_hash = bcrypt.hashpw(
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
-        org.password_reset_token = None
+        org.password_reset_token_hash = None
         org.password_reset_sent_at = None
         # Every session opened under the old password ends here. This is the
         # path somebody locked out of their own account takes, so it is the
@@ -3290,7 +3320,7 @@ def verify_email():
     db = get_db()
     try:
         org = db.query(Organization).filter(
-            Organization.email_verify_token == token
+            Organization.email_verify_token_hash == token_digest(token)
         ).one_or_none()
 
         if org is None:
@@ -3314,7 +3344,7 @@ def verify_email():
             }), 410
 
         org.email_verified = True
-        org.email_verify_token = None
+        org.email_verify_token_hash = None
         db.commit()
         return jsonify({
             "message": "Email verified",
@@ -3357,11 +3387,11 @@ def resend_verification(org, db):
     # this runs. That is the intended behavior: the newest link is the only
     # live one, and a link someone forwarded or left in an old message cannot
     # be used later.
-    org.email_verify_token = secrets.token_urlsafe(32)
+    verify_raw, org.email_verify_token_hash = issue_token()
     org.email_verify_sent_at = datetime.now(timezone.utc)
     db.commit()
 
-    notify_email_verification(org, org.email_verify_token)
+    notify_email_verification(org, verify_raw)
     return jsonify({
         "message": "Verification email sent",
         "email": org.email,
@@ -3697,11 +3727,11 @@ def change_email(org, db):
             "Too many change requests recently. Check your inbox.", wait)
 
     org.pending_email = new_email
-    org.pending_email_token = secrets.token_urlsafe(32)
+    pending_raw, org.pending_email_token_hash = issue_token()
     org.pending_email_sent_at = datetime.now(timezone.utc)
     db.commit()
 
-    notify_email_change_requested(org, org.pending_email_token)
+    notify_email_change_requested(org, pending_raw)
     # The old address is told as well. This is the one change that moves where
     # every future reset link goes, so if it was not the account holder who
     # started it, this message is the only thing that will reach them.
@@ -3718,7 +3748,7 @@ def change_email(org, db):
 def cancel_email_change(org, db):
     """Drop a pending change. No password: this only ever undoes something."""
     org.pending_email = None
-    org.pending_email_token = None
+    org.pending_email_token_hash = None
     org.pending_email_sent_at = None
     db.commit()
     return jsonify({"message": "Email change canceled"}), 200
@@ -3738,7 +3768,7 @@ def confirm_email_change():
     db = get_db()
     try:
         org = db.query(Organization).filter(
-            Organization.pending_email_token == token
+            Organization.pending_email_token_hash == token_digest(token)
         ).one_or_none()
         if org is None or not org.pending_email:
             return jsonify({
@@ -3762,7 +3792,7 @@ def confirm_email_change():
         ).first()
         if taken is not None:
             org.pending_email = None
-            org.pending_email_token = None
+            org.pending_email_token_hash = None
             org.pending_email_sent_at = None
             db.commit()
             return jsonify({
@@ -3777,9 +3807,9 @@ def confirm_email_change():
         # asks for, so it arrives verified rather than needing a second
         # round trip to prove the same thing.
         org.email_verified = True
-        org.email_verify_token = None
+        org.email_verify_token_hash = None
         org.pending_email = None
-        org.pending_email_token = None
+        org.pending_email_token_hash = None
         org.pending_email_sent_at = None
         try:
             db.commit()
@@ -5070,7 +5100,7 @@ def claim_invite(token):
         # Opening a link nobody else was given is not proof of the address
         # they just typed, so this still starts unverified and gets the same
         # verification mail a signup does.
-        invited.email_verify_token = secrets.token_urlsafe(32)
+        verify_raw, invited.email_verify_token_hash = issue_token()
         invited.email_verify_sent_at = datetime.now(timezone.utc)
 
         try:
@@ -5083,7 +5113,7 @@ def claim_invite(token):
                 "field": "email",
             }), 409
 
-        notify_email_verification(invited, invited.email_verify_token)
+        notify_email_verification(invited, verify_raw)
 
         _start_session(invited)
         return jsonify({
@@ -5436,7 +5466,8 @@ def get_dashboard(org, db):
     if view_days not in VIEW_SERIES_CHOICES:
         view_days = VIEW_SERIES_DAYS
 
-    events = _expanded_events(db, org)
+    events, events_total = _expanded_events(db, org,
+                                            limit=DASHBOARD_EVENT_LIMIT)
     # The shortlist's size only -- the dialog behind the card fetches the
     # organizations themselves when it is opened, the same way the matches
     # views do.
@@ -5464,6 +5495,7 @@ def get_dashboard(org, db):
             },
             "top_matches": [],
             "events": events,
+            "events_total": events_total,
         })
 
     # Counts and the top five, without building the rest. This used to call
@@ -5525,6 +5557,9 @@ def get_dashboard(org, db):
         "top_matches": top_matches,
         "recent_proposals": recent_proposals,
         "events": events,
+        # How many occurrences there are in total, so the card can offer the
+        # rest by name instead of implying it is showing all of them.
+        "events_total": events_total,
     })
 
 
@@ -5609,6 +5644,18 @@ EVENT_EXPAND_DAYS = 365
 # dimmed, exactly as it always has. See Event.occurrences.
 EVENT_RECENT_DAYS = 14
 
+# How many occurrences ride along with the dashboard. The card shows four and
+# folds the rest away behind "view all", so this only has to be comfortably
+# more than four -- and the point of it is the other end: a single weekly
+# meeting expands to fifty-odd occurrences inside EVENT_EXPAND_DAYS, and a
+# handful of standing meetings put several hundred serialized dicts into the
+# payload of the page every signed-in visit lands on.
+#
+# Generous rather than tight, because it costs little and because expanding
+# the card should not have to wait on a request in the common case: an
+# organization with fewer than this many occurrences never fetches again.
+DASHBOARD_EVENT_LIMIT = 25
+
 
 def _event_repeat(data, event_date):
     """The repeat rule from a request body.
@@ -5641,8 +5688,13 @@ def _event_repeat(data, event_date):
     return rule, until, None
 
 
-def _expanded_events(db, org):
-    """This org's meetings as occurrences, soonest first.
+def _expanded_events(db, org, limit=None):
+    """This org's meetings as occurrences, soonest first, and how many there are.
+
+    Returns (payloads, total). `limit` bounds what is serialized, never what
+    is counted -- the dashboard sends a page and still has to be able to say
+    "View all meetings (43)", which is the difference between a list that
+    stops and one that stops quietly.
 
     A one-off is itself. A series becomes one entry per date it lands on
     inside the horizon, each carrying the series' own id -- which is what
@@ -5684,15 +5736,34 @@ def _expanded_events(db, org):
             # which is where a meeting that far out belongs.
             dates = [event.date]
         for on in dates:
-            out.append((on, event.time, event.to_dict(on=on)))
+            # The event, not its payload. Serializing here is what made this
+            # expensive: a weekly meeting is fifty-odd occurrences inside the
+            # horizon, and every one of them was built into a full dict and
+            # shipped to a dashboard card that shows four. Ten standing
+            # meetings put five hundred of them in the payload of the page
+            # every signed-in visit lands on.
+            #
+            # The dates themselves are arithmetic and cost nothing, so they
+            # are all still worked out -- which is what lets `total` below be
+            # the true count rather than the size of the page.
+            out.append((on, event.time, event))
     out.sort(key=lambda row: (row[0], row[1]))
-    return [payload for _, _, payload in out]
+
+    total = len(out)
+    if limit is not None:
+        out = out[:limit]
+    # to_dict only for what is actually being sent.
+    return [event.to_dict(on=on) for on, _, event in out], total
 
 
 @app.route("/api/events", methods=["GET"])
 @login_required
 def list_events(org, db):
-    return jsonify({"events": _expanded_events(db, org)})
+    # Unbounded on purpose: this is what the dashboard's "view all meetings"
+    # asks for once somebody wants the rest, and it is a request they made
+    # rather than a cost on every landing.
+    events, total = _expanded_events(db, org)
+    return jsonify({"events": events, "total": total})
 
 
 @app.route("/api/events", methods=["POST"])

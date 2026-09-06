@@ -135,3 +135,63 @@ def test_existing_meetings_are_not_all_day(client, org):
     """Every meeting saved before the column existed is a timed one."""
     _r, body = create(client, duration=1)
     assert body["event"]["all_day"] is False
+
+
+# --- Paging the expansion ---------------------------------------------------
+# A weekly meeting is fifty-odd occurrences inside EVENT_EXPAND_DAYS, and the
+# dashboard card shows four. Every one of them used to be serialized into the
+# payload of the page every signed-in visit lands on.
+
+def test_the_dashboard_sends_a_page_of_occurrences_and_the_total(
+        client, org, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, "DASHBOARD_EVENT_LIMIT", 5)
+
+    # One standing meeting, which expands to far more than the page.
+    response, _ = create(client, repeat="weekly", date="2026-09-01",
+                            repeat_until="2027-08-01")
+    assert response.status_code == 201
+
+    body = client.get("/api/dashboard").get_json()
+    assert len(body["events"]) == 5
+    # The count is the whole expansion, not the size of the page -- the card
+    # offers "View all meetings (N)" from it.
+    assert body["events_total"] > 5
+
+
+def test_api_events_still_serves_the_whole_expansion(client, org, monkeypatch):
+    """What "view all" asks for, once somebody actually wants the rest."""
+    import app as app_module
+    monkeypatch.setattr(app_module, "DASHBOARD_EVENT_LIMIT", 5)
+
+    create(client, repeat="weekly", date="2026-09-01",
+                            repeat_until="2027-08-01")
+
+    dashboard = client.get("/api/dashboard").get_json()
+    full = client.get("/api/events").get_json()
+
+    assert full["total"] == dashboard["events_total"]
+    assert len(full["events"]) == full["total"]
+    assert len(full["events"]) > len(dashboard["events"])
+
+
+def test_the_page_is_the_soonest_occurrences(client, org, monkeypatch):
+    """A page taken from the wrong end would show next year's meetings."""
+    import app as app_module
+    monkeypatch.setattr(app_module, "DASHBOARD_EVENT_LIMIT", 3)
+
+    create(client, repeat="weekly", date="2026-09-01",
+                            repeat_until="2027-08-01")
+
+    dashboard = client.get("/api/dashboard").get_json()["events"]
+    full = client.get("/api/events").get_json()["events"]
+
+    assert [e["date"] for e in dashboard] == [e["date"] for e in full[:3]]
+
+
+def test_a_single_meeting_needs_no_second_request(client, org):
+    """The common case: fewer occurrences than the page, so nothing is held back."""
+    create(client, date="2026-09-01")
+
+    body = client.get("/api/dashboard").get_json()
+    assert body["events_total"] == len(body["events"]) == 1

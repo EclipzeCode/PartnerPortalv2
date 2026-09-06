@@ -533,6 +533,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // synchronous -- the reads are frequent (the card, the feed, the dialog)
     // and none of them should have to await.
     let events = (dashboard && dashboard.events) || [];
+    // How many occurrences exist, which is not the same as how many arrived.
+    // The dashboard sends a page of them (DASHBOARD_EVENT_LIMIT in app.py):
+    // one weekly meeting expands to fifty-odd inside the horizon and the card
+    // shows four, so shipping every one of them on every load was several
+    // hundred serialized meetings to draw a list of a handful.
+    let eventsTotal = (dashboard && dashboard.events_total) != null
+        ? dashboard.events_total
+        : events.length;
+    // Whether `events` is the whole expansion or only the first page of it.
+    let eventsComplete = events.length >= eventsTotal;
+
+    // Keep the count honest after a write.
+    //
+    // Exact whenever the whole expansion is held, which is the case for any
+    // organization with fewer meetings than the dashboard's page size and
+    // for everyone else once they have expanded the card. Otherwise it can
+    // only be adjusted, because what is held is a page: the occurrences of a
+    // series that fell outside it were never here to be counted or removed.
+    // Never below what is actually loaded, which is the one way an adjusted
+    // number could say something visibly false.
+    function syncEventTotals(delta) {
+        eventsTotal = eventsComplete
+            ? events.length
+            : Math.max(events.length, eventsTotal + (delta || 0));
+    }
 
     // A copy: callers sort the result in place, and doing that to the backing
     // array would quietly reorder everyone else's view of it.
@@ -546,6 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             body: payload,
         });
         events.push(data.event);
+        syncEventTotals(1);
         return data.event;
     }
 
@@ -562,7 +588,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         await window.api(`/api/events/${encodeURIComponent(id)}`, {
             method: 'DELETE',
         });
+        const before = events.length;
         events = events.filter((ev) => String(ev.id) !== String(id));
+        // Every occurrence of the series goes, not one row: `events` is the
+        // expansion, so a weekly meeting is many entries sharing an id.
+        syncEventTotals(-(before - events.length));
     }
 
     // One-time rescue of meetings saved by the localStorage version. Without
@@ -973,10 +1003,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // rather than opening anything. Hidden when there is nothing folded
         // away, so it never offers to show what is already on screen.
         if (eventsViewAll) {
-            eventsViewAll.hidden = ordered.length <= EVENTS_COLLAPSED;
+            // The total, not what is loaded: the control offers everything
+            // there is, and says so honestly even before the rest arrives.
+            eventsViewAll.hidden = eventsTotal <= EVENTS_COLLAPSED;
             eventsViewAll.innerHTML = eventsExpanded
                 ? "Show less <i class='bx bx-chevron-up'></i>"
-                : `View all meetings (${ordered.length}) <i class='bx bx-chevron-right'></i>`;
+                : `View all meetings (${eventsTotal}) <i class='bx bx-chevron-right'></i>`;
         }
 
         // Counts what the card is headed with. This used to be every meeting
@@ -1012,7 +1044,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (eventsViewAll) {
-        eventsViewAll.addEventListener('click', () => {
+        eventsViewAll.addEventListener('click', async () => {
+            // Expanding is the moment the rest is actually wanted. Fetched
+            // once and kept, so this is a cost somebody asked for rather
+            // than one every dashboard load pays for a card showing four.
+            if (!eventsExpanded && !eventsComplete) {
+                const idle = eventsViewAll.innerHTML;
+                eventsViewAll.disabled = true;
+                eventsViewAll.textContent = 'Loading...';
+                try {
+                    const data = await window.api('/api/events');
+                    events = data.events || [];
+                    eventsTotal = data.total != null ? data.total : events.length;
+                    eventsComplete = true;
+                } catch (error) {
+                    // Leave the page that is already held and say why. The
+                    // four on screen are still correct, so this is a failure
+                    // to show more rather than a broken card.
+                    eventsViewAll.disabled = false;
+                    eventsViewAll.innerHTML = idle;
+                    window.toast(error.message
+                        || 'Could not load the rest of your meetings.', 'error');
+                    return;
+                }
+                eventsViewAll.disabled = false;
+            }
             eventsExpanded = !eventsExpanded;
             renderSavedEvents();
         });
