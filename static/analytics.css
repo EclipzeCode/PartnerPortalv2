@@ -733,9 +733,31 @@
     flex-direction: column;
 }
 
+/* A floor, not zero, and this is the whole reason the plot exists on a phone.
+ *
+ * Every box between the panel and the chart is `flex: 1 1 auto; min-height:
+ * 0` -- each one passes height through and none of them establishes any. The
+ * plot is drawn to its measured box (see renderViewsChart), so it has no
+ * intrinsic height of its own either. That works only while something
+ * outside is handing the panel surplus height, and exactly one thing ever
+ * was: the taller panel beside it in the two-column grid.
+ *
+ * Below 75em the grid is one column, so there is no panel beside it. The
+ * chain resolved to nothing, the chart measured 0 x 970, and
+ * renderViewsChart returned at its own `H < 60` guard without drawing --
+ * silently, because a chart that renders nothing looks like a chart with no
+ * data. The panel kept its heading, its figure, its delta and its range
+ * buttons, and had no plot under them at any width below 1200px. Every
+ * phone, every tablet, and a good share of laptops.
+ *
+ * min-height rather than height, so the two-column case is unchanged: the
+ * row still stretches it past this floor and it still fills what it is
+ * given. The comment above about the wrapper passing height through is still
+ * true -- it just needed something to pass.
+ */
 .views-panel .plot-body > .chart {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: 11rem;
 }
 
 .chart-data {
@@ -822,6 +844,31 @@
         padding-left: 0;
         padding-top: 1.25rem;
         border-left: none;
+        border-top: 1px solid var(--h-rule);
+    }
+
+    /* The views table comes out of the overlay and into the flow, the same
+       way the matches table above does.
+     *
+     * The sheet that drops over the plot is the right answer where the
+     * argument for it holds: there is no width to spare beside a thirty-point
+     * plot, and pushing the page around on every open would be worse. Neither
+     * half of that survives a phone. The page is one column that is scrolled
+     * anyway, so content moving down is what everything else on it does -- and
+     * the plot here is 176px tall, so the sheet was a 176px window onto thirty
+     * rows, which is four at a time inside a box that has to be scrolled
+     * separately from the page around it. Scrolling a small box on a touch
+     * screen is the thing to avoid, not a page that gets longer.
+     *
+     * Same breakpoint as the matches panel deliberately, so the page does not
+     * change shape twice on the way down -- the reason .analytics-grid gives
+     * for sharing its own. */
+    .views-panel .plot-region.is-open .chart-data {
+        position: static;
+        background: none;
+        overflow-y: visible;
+        padding: 1.25rem 0 0;
+        margin-top: 1rem;
         border-top: 1px solid var(--h-rule);
     }
 }
