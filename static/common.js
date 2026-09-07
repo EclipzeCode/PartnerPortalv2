@@ -89,13 +89,17 @@ async function rawRequest(path, opts) {
 // noticed on the next navigation.
 let meRequest = null;
 
-// For callers that need the current answer rather than the page's first one.
-// refreshNavCounts() is the case this exists for: it runs after the visitor
-// has just read a thread or answered a proposal, and the whole point is that
-// the badge stops claiming something is waiting.
-window.invalidateMe = function invalidateMe() {
-    meRequest = null;
-};
+// Callers that need the current answer rather than the page's first one pass
+// `fresh: true` to api(), which drops the memo and replaces it in one step --
+// see the note on `shared` below. refreshNavCounts() is the case that exists
+// for: it runs after the visitor has just read a thread or answered a
+// proposal, and the whole point is that the badge stops claiming something is
+// waiting.
+//
+// There used to be a window.invalidateMe() beside this that only did the
+// first half. Nothing ever called it: a caller that clears the memo still has
+// to go and ask, so every real site reached for `fresh` instead. An exported
+// name that reads as load-bearing and is dead is worse than no name at all.
 
 // Single place where session expiry is handled. Every API call goes through
 // this, so a 401 sends the user to the login page instead of leaving a screen

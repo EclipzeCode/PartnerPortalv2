@@ -25,7 +25,7 @@ from flask import (
     Flask, jsonify, request, session
 )
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
@@ -43,7 +43,7 @@ from units import (
 )
 from matching import (
     MATCH_LIMIT, find_matches, find_matches_with_examples, match_overview,
-    score_pair,
+    rank_directory, score_pair,
 )
 from moderation import screen_name
 from models import (
@@ -80,7 +80,40 @@ app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 # it -- every request would appear to come from the same address. x_for=1
 # trusts exactly one proxy hop, matching Render's setup; a value too high
 # would let a client forge its own IP by sending its own X-Forwarded-For.
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+#
+# Only when something is actually in front of this, which is the half that
+# was missing. X-Forwarded-For is a request header like any other: trusting
+# it is safe exactly when a proxy is guaranteed to have overwritten whatever
+# the client sent, and nothing guarantees that when the app is reachable
+# directly. Applied unconditionally, `curl -H 'X-Forwarded-For: 1.2.3.4'`
+# against a directly-reachable origin picks its own rate-limit bucket, and a
+# fresh one for every request -- so every per-IP limit in this file becomes
+# advisory, silently, with no symptom to notice.
+#
+# Keyed off FLASK_ENV like every other deployment-shaped decision here (the
+# secure-cookie flags above, the CSP below). TRUSTED_PROXY_HOPS overrides it
+# in both directions, for a deployment behind a different number of proxies
+# or a staging box that wants the production behavior: set it to 0 to trust
+# the socket, or to the number of hops that will have rewritten the header.
+_default_hops = 1 if os.environ.get("FLASK_ENV") == "production" else 0
+try:
+    PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", _default_hops))
+except (TypeError, ValueError):
+    PROXY_HOPS = _default_hops
+PROXY_HOPS = max(0, PROXY_HOPS)
+
+if PROXY_HOPS:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXY_HOPS)
+elif os.environ.get("FLASK_ENV") == "production":
+    # Production with the trust explicitly turned off. Legitimate -- an origin
+    # that really is reached directly -- but it means remote_addr is the
+    # socket, so if there *is* a proxy in front, every visitor now shares one
+    # rate-limit bucket and the first busy minute locks everybody out.
+    app.logger.warning(
+        "TRUSTED_PROXY_HOPS is 0 in production, so client IPs come from the "
+        "socket rather than X-Forwarded-For. Correct only if nothing proxies "
+        "this app; behind a proxy, every visitor shares one rate-limit bucket."
+    )
 
 # --- Row ids ----------------------------------------------------------------
 # Every id column in models.py is a Postgres `integer`. A number larger than
@@ -397,8 +430,22 @@ def _limiter_db():
 
     Its own connection, not just its own session, for the same reason: a
     nested transaction is still the outer one's to roll back.
+
+    In autocommit, because there is nothing here for a transaction to hold
+    together. Everything the limiter does to record an attempt is one
+    statement (see _RATE_CLAIM), and a statement is atomic on its own -- so
+    the BEGIN/COMMIT pair around it bought nothing and cost a second round
+    trip to another data center on every limited request. The occasional
+    sweep is likewise one self-contained DELETE.
+
+    This is why the refusal path has nothing to undo: when the limit is
+    reached, _RATE_CLAIM's INSERT and DELETE are both guarded by the same
+    `n < max` and neither fires, so being refused writes nothing whether or
+    not anything is rolled back afterward.
     """
-    return SessionLocal()
+    db = SessionLocal()
+    db.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
+    return db
 
 
 def issue_token():
@@ -444,18 +491,24 @@ def _advisory_key(*parts):
 def _try_lock(db, *parts):
     """Take the advisory lock for `parts` if it is free. True if taken.
 
-    The `try` variant, never the blocking one, and that is a deliberate
-    choice about what these locks are for. Both callers use one to close a
-    small read-then-write race, not to guarantee mutual exclusion -- and
-    pg_advisory_xact_lock waits with no timeout, on a connection borrowed
-    from a pool of five, for a lock keyed by things many callers share. A
-    login bucket is keyed by IP address, and behind a corporate proxy or a
-    university NAT that is a lot of people: one slow transaction and the
-    rest queue on the lock, holding pool connections while they wait, until
-    requests start failing on pool_timeout for reasons nothing in the
-    traffic explains. Trading a rare double-count for that is a bad trade.
+    One caller, _record_profile_view, and it checks the answer -- which is
+    the only way a `try` lock excludes anything. The rate limiter used to
+    call this too and discard the result, so every contender took the lock,
+    ignored being refused, and carried on; it now does its read and write in
+    one statement instead (see _RATE_CLAIM).
 
-    So the answer is allowed to be "no", and each caller decides what to do
+    The `try` variant, never the blocking one, and that is a deliberate
+    choice about what this lock is for. It closes a small read-then-write
+    race, and does not try to guarantee mutual exclusion -- whereas
+    pg_advisory_xact_lock waits with no timeout, on a connection borrowed
+    from a small pool, for a lock keyed by things many callers share. A
+    popular profile is viewed by a lot of people at once: one slow
+    transaction and the rest queue on the lock, holding pool connections
+    while they wait, until requests start failing on pool_timeout for
+    reasons nothing in the traffic explains. Trading a rare double-count for
+    that is a bad trade.
+
+    So the answer is allowed to be "no", and the caller decides what to do
     about it. Held until the transaction ends, so the caller must commit or
     roll back rather than leaving the session open.
     """
@@ -504,6 +557,57 @@ def _window_state(db, bucket, key, window_seconds):
     ).one()
 
 
+# Count the window, record the attempt if there is room, and trim what the
+# key no longer needs -- in one statement, so it costs one round trip.
+#
+# This was four: a pg_try_advisory_xact_lock, the SELECT, an INSERT and a
+# DELETE, each its own trip to a database in another data center. On the
+# public directory -- unauthenticated, the busiest page here, and the one a
+# stranger judges the site by -- that was four round trips of limiter in
+# front of the one query that does the work. Measured at ~35ms each against
+# Neon, the limiter cost more than everything it was guarding.
+#
+# The lock is gone rather than folded in, because it was not doing anything.
+# It is `try`, and rate_limited() discarded the result: every contender takes
+# the same non-blocking lock, ignores being refused, and proceeds. Nothing
+# ever waited on it, so nothing was ever excluded. (The other _try_lock
+# caller, in _record_profile_view, does check the result -- that one works.)
+#
+# What replaces it is the same guarantee it actually provided, which is none:
+# two requests arriving together still read one snapshot each and can both
+# record, letting one past the limit under contention. That was already true
+# and is written down here rather than in a comment claiming otherwise.
+#
+# Data-modifying CTEs are always executed to completion whether or not the
+# outer query reads them, which is what lets `trimmed` run without being
+# selected from. All three see the same snapshot, so `n` and `oldest` are the
+# window as it stood before this attempt was added -- exactly what the old
+# SELECT-then-INSERT ordering produced.
+_RATE_CLAIM = text("""
+WITH w AS (
+    SELECT count(*) AS n, min(attempted_at) AS oldest, now() AS at
+      FROM rate_limit_attempts
+     WHERE bucket = :bucket AND key = :key
+       AND attempted_at > now() - make_interval(secs => :window)
+),
+recorded AS (
+    INSERT INTO rate_limit_attempts (bucket, key)
+    SELECT :bucket, :key FROM w WHERE w.n < :max
+    RETURNING id
+),
+trimmed AS (
+    DELETE FROM rate_limit_attempts
+     WHERE bucket = :bucket AND key = :key
+       AND attempted_at < now() - make_interval(secs => :keep)
+       AND EXISTS (SELECT 1 FROM w WHERE w.n < :max)
+    RETURNING id
+)
+SELECT w.n AS n, w.oldest AS oldest, w.at AS at,
+       EXISTS (SELECT 1 FROM recorded) AS recorded
+  FROM w
+""")
+
+
 def _wait_from(oldest, now, window_seconds):
     """Seconds until `oldest` ages out of the window, at least one.
 
@@ -527,13 +631,12 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
     The wait is until the oldest attempt still inside the window ages out of
     it, because that is the moment there is room for one more.
 
-    Counting and recording are one transaction, and it tries to hold the
-    key's advisory lock across them: two requests arriving together would
-    otherwise both read a count one short of the limit and both record,
-    which is how a limit of five lets six through. The lock is best-effort
-    rather than waited on -- see _try_lock for why blocking here would be
-    the worse failure -- so that last attempt is narrowed rather than shut
-    out entirely.
+    Counting, recording and trimming are one statement -- see _RATE_CLAIM,
+    which is also where the concurrency guarantee is written down. It is a
+    weak one: two requests arriving together can both find room and both
+    record, so a limit of five can let six through under contention. That has
+    always been true here; what changed is that it is now stated rather than
+    described as prevented by a lock that never excluded anybody.
 
     The attempt is committed on its own, separately from whatever the
     handler goes on to do. That is deliberate: a failed login records an
@@ -543,30 +646,18 @@ def rate_limited(bucket, key, max_attempts, window_seconds):
     """
     db = _limiter_db()
     try:
-        # Best-effort. Failing to get it means another request is counting
-        # the same key at this exact moment, and the worst that follows is
-        # that the two of them both read a count one short of the limit and
-        # both record -- one attempt over, once, under contention. That is a
-        # far smaller hole than the one this whole change closes, and much
-        # smaller than what blocking here would cost. See _try_lock.
-        _try_lock(db, "rate_limit", bucket, key)
-        count, oldest, now = _window_state(db, bucket, key, window_seconds)
-        if count >= max_attempts:
+        row = db.execute(_RATE_CLAIM, {
+            "bucket": bucket,
+            "key": key,
+            "window": float(window_seconds),
+            "max": int(max_attempts),
+            "keep": float(RATE_MAX_WINDOW),
+        }).one()
+        if not row.recorded:
             # Nothing recorded, so being refused does not extend the wait.
-            # Rolled back rather than committed: there is nothing to keep,
-            # and it is what releases the advisory lock.
             db.rollback()
-            return _wait_from(oldest, now, window_seconds)
+            return _wait_from(row.oldest, row.at, window_seconds)
 
-        db.add(RateLimitAttempt(bucket=bucket, key=key))
-        # The rows this key no longer needs, while we are already here and
-        # holding its lock. Indexed on exactly this prefix.
-        db.query(RateLimitAttempt).filter(
-            RateLimitAttempt.bucket == bucket,
-            RateLimitAttempt.key == key,
-            RateLimitAttempt.attempted_at
-            < func.now() - timedelta(seconds=RATE_MAX_WINDOW),
-        ).delete(synchronize_session=False)
         _sweep_rate_limits(db)
         db.commit()
         return 0
@@ -4133,17 +4224,32 @@ def get_matches(org, db):
 # for it. The search box only ever filtered the fifty already on the page.
 #
 # So this endpoint includes everyone with a finished profile, filters in SQL,
-# and pages in SQL. It does not rank by score: sorting by a number computed in
-# Python cannot be combined with LIMIT/OFFSET without loading the whole table
-# first, and a directory is something you browse rather than something ranked
-# at you. Each row still carries its match score, computed for the current
-# page only, so fit is visible without this pretending to be ranked by it.
+# and pages in SQL. Each row carries its match score, computed for the page
+# being returned.
+#
+# And, on request, it orders by that score. This used to say that it could
+# not -- that ranking on a number computed in Python cannot be combined with
+# LIMIT/OFFSET without loading the whole filtered set first, and that a
+# directory is browsed rather than ranked at you. The first half is true and
+# the second was doing too much work: every card here shows a match score,
+# prominently, and the page offered no way to order by the number it was
+# leading with. A score shown and not sortable is a ranking the reader can
+# see and cannot use.
+#
+# Loading the whole filtered set is what it costs, and it is the same bargain
+# the matches page already makes -- nine narrow columns to rank, full rows for
+# the page that survives. Paid only when somebody asks for that sort; "A-Z"
+# and "Recently joined" still page entirely in SQL.
 DIRECTORY_PAGE_SIZE = 12
 DIRECTORY_MAX_PAGE_SIZE = 48
 
 # name: alphabetical, the order a directory is normally read in.
 # newest: who has joined lately, which is the other reason to browse.
-DIRECTORY_SORTS = ("name", "newest")
+# match: best fit first, which needs a viewer to be a fit *with* -- so it is
+#   only reachable from the signed-in listing. The public directory rejects
+#   it the way it rejects any unrecognized sort, by falling back to name; see
+#   the note in public_directory about why it says nothing about fit.
+DIRECTORY_SORTS = ("name", "newest", "match")
 
 # LIKE treats these as syntax. A search for "50%" or "a_b" would otherwise
 # quietly mean something other than what was typed.
@@ -4157,6 +4263,147 @@ def _contains(column, term):
 def _slug_list(raw):
     """Category slugs from a comma-separated query parameter."""
     return clean_categories([part.strip() for part in (raw or "").split(",")])
+
+
+def _directory_filters(args, exclude_id=None):
+    """What the directory shows, as a list of conditions.
+
+    Split out from the ordering and paging below because there are now two
+    ways to read the same filtered set: ordered in SQL and paged in SQL,
+    which is what every sort but one does, and ordered by fit in Python,
+    which "Best match" has to do because the score is not a column. Both ask
+    the same question about which organizations are eligible, and a second
+    copy of that question is how the directory ends up showing a hidden
+    profile on one sort and not another.
+    """
+    conditions = [
+        Organization.onboarding_complete.is_(True),
+        # Hidden by an admin. One of four places this is asked -- see
+        # Organization.hidden_at -- and they are all discovery: hiding takes a
+        # profile out of the listings and off its own public URL, and does
+        # nothing to the partnerships it is already party to.
+        Organization.hidden_at.is_(None),
+    ]
+    if exclude_id is not None:
+        conditions.append(Organization.id != exclude_id)
+
+    # Seeded examples are excluded by default, exactly as they are from
+    # matches -- they have no owner and nothing to follow up on. Available on
+    # request so the directory can still demonstrate itself while it is small.
+    if args.get("include_examples") != "1":
+        conditions.append(Organization.is_demo.is_(False))
+
+    term = (args.get("q") or "").strip()
+    if term:
+        # Name, location and description: the three things someone types into
+        # a directory search. Not the notes -- those are long free text, and
+        # matching them would return organizations for reasons the reader
+        # cannot see on the card.
+        conditions.append(or_(
+            _contains(Organization.name, term),
+            _contains(Organization.location, term),
+            _contains(Organization.description, term),
+        ))
+
+    # "Who can give me X" and "who is looking for Y" -- the two questions the
+    # category vocabulary exists to answer, asked directly rather than only
+    # through the caller's own profile.
+    offers = _slug_list(args.get("offers"))
+    if offers:
+        conditions.append(Organization.offers.overlap(offers))
+    needs = _slug_list(args.get("needs"))
+    if needs:
+        conditions.append(Organization.needs.overlap(needs))
+
+    org_type = (args.get("type") or "").strip()
+    if org_type:
+        conditions.append(Organization.organization_type == org_type)
+
+    location = (args.get("location") or "").strip()
+    if location:
+        conditions.append(_contains(Organization.location, location))
+
+    if args.get("remote") == "1":
+        conditions.append(Organization.remote_friendly.is_(True))
+
+    if args.get("focus"):
+        focus = clean_focus_areas(
+            [part.strip() for part in args.get("focus").split(",")]
+        )
+        if focus:
+            conditions.append(Organization.focus_areas.overlap(focus))
+
+    return conditions
+
+
+def _directory_sort(args):
+    """The requested sort, or the default for anything unrecognized."""
+    return args.get("sort") if args.get("sort") in DIRECTORY_SORTS else "name"
+
+
+def _directory_paging(args, max_page_size=None):
+    """(per_page, page) from `args`, both clamped."""
+    ceiling = max_page_size or DIRECTORY_MAX_PAGE_SIZE
+    try:
+        per_page = int(args.get("per_page", DIRECTORY_PAGE_SIZE))
+    except (TypeError, ValueError):
+        per_page = DIRECTORY_PAGE_SIZE
+    per_page = max(1, min(per_page, ceiling))
+
+    try:
+        page = int(args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    return per_page, max(1, page)
+
+
+def _directory_by_fit(db, org, args):
+    """The directory ordered by how well each organization fits `org`.
+
+    Returns (rows, meta) in the same shape _directory_query does, so the
+    caller can hand either to the same serializer.
+
+    Ranked before it is paged, which is the whole reason this cannot be the
+    SQL path: a match score is computed from two profiles, so it is not a
+    column and there is nothing for ORDER BY to read. Every organization
+    matching the filters is scored, then one page of the result is fetched in
+    full -- the same rank-narrow-then-hydrate bargain the matches page makes,
+    and what keeps this affordable at directory size.
+
+    The scoring itself is matching.rank_directory's, not a second copy: see
+    the note there about there being one answer to "which of these two is the
+    better partner".
+    """
+    per_page, page = _directory_paging(args)
+
+    rows = db.execute(
+        select(
+            Organization.id,
+            Organization.name,
+            Organization.needs,
+            Organization.offers,
+            Organization.focus_areas,
+            Organization.location,
+            Organization.remote_friendly,
+            Organization.organization_type,
+        ).where(*_directory_filters(args, org.id))
+    ).all()
+
+    total = len(rows)
+    pages = max(1, -(-total // per_page))
+    # Clamped for the same reason the SQL path clamps: a stale page number
+    # should land on the last page with rows on it.
+    page = min(page, pages)
+
+    found, _ = rank_directory(db, org, rows,
+                              offset=(page - 1) * per_page, limit=per_page)
+    return found, {
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+        "sort": "match",
+    }
 
 
 def _directory_query(db, args, *, exclude_id=None):
@@ -4177,64 +4424,19 @@ def _directory_query(db, args, *, exclude_id=None):
     `exclude_id` is the only thing that differs about the query itself. What
     each caller does with the rows is its own business and stays there.
     """
-    query = db.query(Organization).filter(
-        Organization.onboarding_complete.is_(True),
-        # Hidden by an admin. One of four places this is asked -- see
-        # Organization.hidden_at -- and they are all discovery: hiding takes a
-        # profile out of the listings and off its own public URL, and does
-        # nothing to the partnerships it is already party to.
-        Organization.hidden_at.is_(None),
-    )
-    if exclude_id is not None:
-        query = query.filter(Organization.id != exclude_id)
+    query = db.query(Organization).filter(*_directory_filters(args, exclude_id))
 
-    # Seeded examples are excluded by default, exactly as they are from
-    # matches -- they have no owner and nothing to follow up on. Available on
-    # request so the directory can still demonstrate itself while it is small.
-    if args.get("include_examples") != "1":
-        query = query.filter(Organization.is_demo.is_(False))
+    # "match" is not a SQL sort -- there is no score column for ORDER BY to
+    # read -- so it is served by _directory_by_fit instead, and anything
+    # reaching here asking for it has no viewer to be a fit with. That is the
+    # public directory, which is signed out by definition. Reported as the
+    # sort it actually got rather than the one that was asked for: a payload
+    # claiming "match" over rows ordered by name is a page control that
+    # renders the wrong option as selected.
+    sort = _directory_sort(args)
+    if sort == "match":
+        sort = "name"
 
-    term = (args.get("q") or "").strip()
-    if term:
-        # Name, location and description: the three things someone types into
-        # a directory search. Not the notes -- those are long free text, and
-        # matching them would return organizations for reasons the reader
-        # cannot see on the card.
-        query = query.filter(or_(
-            _contains(Organization.name, term),
-            _contains(Organization.location, term),
-            _contains(Organization.description, term),
-        ))
-
-    # "Who can give me X" and "who is looking for Y" -- the two questions the
-    # category vocabulary exists to answer, asked directly rather than only
-    # through the caller's own profile.
-    offers = _slug_list(args.get("offers"))
-    if offers:
-        query = query.filter(Organization.offers.overlap(offers))
-    needs = _slug_list(args.get("needs"))
-    if needs:
-        query = query.filter(Organization.needs.overlap(needs))
-
-    org_type = (args.get("type") or "").strip()
-    if org_type:
-        query = query.filter(Organization.organization_type == org_type)
-
-    location = (args.get("location") or "").strip()
-    if location:
-        query = query.filter(_contains(Organization.location, location))
-
-    if args.get("remote") == "1":
-        query = query.filter(Organization.remote_friendly.is_(True))
-
-    if args.get("focus"):
-        focus = clean_focus_areas(
-            [part.strip() for part in args.get("focus").split(",")]
-        )
-        if focus:
-            query = query.filter(Organization.focus_areas.overlap(focus))
-
-    sort = args.get("sort") if args.get("sort") in DIRECTORY_SORTS else "name"
     if sort == "newest":
         query = query.order_by(Organization.created_at.desc(), Organization.id.desc())
     else:
@@ -4242,17 +4444,7 @@ def _directory_query(db, args, *, exclude_id=None):
         # looks unordered to anyone reading it.
         query = query.order_by(func.lower(Organization.name), Organization.id)
 
-    try:
-        per_page = int(args.get("per_page", DIRECTORY_PAGE_SIZE))
-    except (TypeError, ValueError):
-        per_page = DIRECTORY_PAGE_SIZE
-    per_page = max(1, min(per_page, DIRECTORY_MAX_PAGE_SIZE))
-
-    try:
-        page = int(args.get("page", 1))
-    except (TypeError, ValueError):
-        page = 1
-    page = max(1, page)
+    per_page, page = _directory_paging(args)
 
     # The total rides along with the page rather than being asked for
     # separately.
@@ -4303,7 +4495,13 @@ def _directory_query(db, args, *, exclude_id=None):
 @app.route("/api/organizations", methods=["GET"])
 @login_required
 def list_organizations(org, db):
-    rows, meta = _directory_query(db, request.args, exclude_id=org.id)
+    # Two ways to read the same filtered directory. Ordering by fit has to
+    # rank before it pages, because the score is not a column; everything
+    # else orders and pages in SQL. Both come back in the same shape.
+    if _directory_sort(request.args) == "match":
+        rows, meta = _directory_by_fit(db, org, request.args)
+    else:
+        rows, meta = _directory_query(db, request.args, exclude_id=org.id)
 
     saved_ids = _saved_ids(db, org)
     organizations = []
@@ -4556,8 +4754,28 @@ VIEW_SERIES_DAYS = 30
 VIEW_SERIES_CHOICES = (7, 30, 90)
 
 
+# The daily series and the all-time total, in one round trip.
+#
+# Two scans of the same index, but one trip to a database in another data
+# center -- and on the dashboard, which is where every signed-in visit lands,
+# a round trip is the unit that matters. The total cannot ride on the grouped
+# half because it counts rows outside the window; UNION ALL is what lets the
+# two questions travel together anyway. The all-time row is the one with a
+# NULL day, which is a shape no grouped row can have.
+_VIEW_STATS = text("""
+SELECT date(viewed_at) AS day, count(*) AS n
+  FROM profile_views
+ WHERE organization_id = :org_id AND viewed_at >= :since
+ GROUP BY 1
+UNION ALL
+SELECT NULL AS day, count(*) AS n
+  FROM profile_views
+ WHERE organization_id = :org_id
+""")
+
+
 def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
-    """Every profile-view number the dashboard shows, from two queries.
+    """Every profile-view number the dashboard shows, from one query.
 
     Returns (total, recent, series, prior).
 
@@ -4569,8 +4787,10 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
     Three of them are the same scan. The series needs one count per day over
     `days`; the prior window needs the same over the `days` before that; and
     the recent figure is the series added up. So one grouped query covers the
-    whole 2 x `days` span and the three are read out of it in Python. Only
-    the all-time total needs its own, because no window contains it.
+    whole 2 x `days` span and the three are read out of it in Python. The
+    all-time total is the fourth question -- no window contains it -- and it
+    rides along on the same trip rather than paying for its own; see
+    _VIEW_STATS.
 
     Days are UTC. viewed_at is a timestamptz and the cast resolves in the
     session's timezone, which is UTC here. A visitor's own midnight is not
@@ -4594,14 +4814,12 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
     def midnight(day):
         return datetime.combine(day, time_type(0, 0), tzinfo=timezone.utc)
 
-    rows = db.query(
-        func.date(ProfileView.viewed_at).label("day"),
-        func.count(ProfileView.id),
-    ).filter(
-        ProfileView.organization_id == org.id,
-        ProfileView.viewed_at >= midnight(prior_first),
-    ).group_by("day").all()
-    counts = {str(day): n for day, n in rows}
+    rows = db.execute(_VIEW_STATS, {
+        "org_id": org.id,
+        "since": midnight(prior_first),
+    }).all()
+    counts = {str(day): n for day, n in rows if day is not None}
+    total = next((n for day, n in rows if day is None), 0)
 
     series = [
         {
@@ -4618,10 +4836,6 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
         counts.get(str(prior_first + timedelta(days=i)), 0)
         for i in range(days)
     )
-
-    total = db.query(ProfileView.id).filter(
-        ProfileView.organization_id == org.id
-    ).count()
 
     return total, recent, series, prior
 

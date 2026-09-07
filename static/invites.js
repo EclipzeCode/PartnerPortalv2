@@ -120,7 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const idle = submitBtn.innerHTML;
         submitBtn.disabled = true;
-        submitBtn.innerHTML = "<i class='bx bx-loader-alt'></i> Creating...";
+        // bx-spin as well as the loader glyph. Without it this is a spinner
+        // that does not spin -- a static icon that reads as decoration next
+        // to "Creating...", where the identical control in onboarding.js
+        // turns. (Stopped for anyone who asked for reduced motion; the guard
+        // is in shared.css.)
+        submitBtn.innerHTML =
+            "<i class='bx bx-loader-alt bx-spin'></i> Creating...";
 
         try {
             const data = await window.api('/api/invites', {

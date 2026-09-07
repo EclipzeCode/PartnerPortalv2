@@ -455,6 +455,41 @@ def find_matches_with_examples(session, me, *, mutual_only=False,
     return matches, len(ranked), mutual_total, examples
 
 
+def rank_directory(session, me, rows, *, offset=0, limit=None):
+    """One page of `rows`, ordered by how well each fits `me`.
+
+    Returns (organizations, total). The directory's "Best match" sort, and
+    the reason it lives here rather than in app.py: ordering by fit is
+    _rank_key, and a second definition of "best" written next to the
+    directory would be free to disagree with the matches page about which of
+    two organizations is the better partner. There is one answer to that
+    question in this codebase and this is where it is kept.
+
+    Where this differs from find_matches is what it *keeps*. A match list is
+    organizations you could trade with, so anything scoring zero is not a
+    weak match, it is not a match, and find_matches drops it. The directory
+    is every organization -- that is the whole point of it being a separate
+    surface -- so nothing is dropped here and the ones with no overlap sort
+    to the bottom. They arrive there on their own: score zero can never be
+    mutual, so _rank_key already puts them behind everything that scored.
+
+    `rows` are the narrow rows the caller selected, not full organizations.
+    Only the page that survives paging is fetched in full, which is the same
+    bargain _candidates and _hydrate strike everywhere else in this file --
+    and it is what makes sorting the whole filtered directory by fit
+    affordable enough to offer at all.
+    """
+    def entry(them):
+        score, mutual, *_ = rank_pair(me, them)
+        return mutual, score, them.name, them
+
+    ordered = sorted((entry(them) for them in rows),
+                     key=lambda r: _rank_key(r[:3]))
+    total = len(ordered)
+    page = ordered[offset:] if limit is None else ordered[offset:offset + limit]
+    return _hydrate(session, [r[3] for r in page]), total
+
+
 def match_overview(session, me, top=5):
     """How many matches, how many are two-way, and the best few.
 

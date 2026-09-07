@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const needsSelect = document.getElementById('dirNeeds');
     const sortSelect = document.getElementById('dirSort');
     const remoteBox = document.getElementById('dirRemote');
+    const filterToggle = document.getElementById('dirFilterToggle');
+    const filterCount = document.getElementById('dirFilterCount');
 
     // A form, so Enter submits -- and submitting must not navigate, since
     // every control here re-queries in place.
@@ -62,6 +64,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         const f = currentFilters();
         return Boolean(f.q || f.type || f.offers || f.needs || f.remote)
             || f.sort !== 'name';
+    }
+
+    // How many of the controls *inside* the disclosure are narrowing the
+    // list. Not the search box, which sits outside it and is never hidden,
+    // and not the sort unless it has been moved off the default -- a page is
+    // always sorted somehow, so counting that would mean the badge read "1"
+    // on a directory nobody had filtered.
+    function activeFilterCount() {
+        const f = currentFilters();
+        return [f.type, f.offers, f.needs, f.remote].filter(Boolean).length
+            + (f.sort !== 'name' ? 1 : 0);
+    }
+
+    // The count is the whole reason a collapsed panel is acceptable: folded
+    // away, it is the only thing saying the list is showing a subset. Kept on
+    // the toggle's accessible name too, so it is not a fact only sighted
+    // users get.
+    function paintFilterToggle() {
+        if (!filterToggle) return;
+        const n = activeFilterCount();
+        filterCount.hidden = n === 0;
+        filterCount.textContent = String(n);
+        filterToggle.setAttribute(
+            'aria-label',
+            n === 0 ? 'Filters' : `Filters (${n} applied)`);
     }
 
     function buildParams() {
@@ -254,6 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function reload() {
         state.page = 1;
+        paintFilterToggle();
         syncUrl();
         load();
     }
@@ -282,6 +310,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     clearBtn.addEventListener('click', clearFilters);
 
+    if (filterToggle) {
+        filterToggle.addEventListener('click', () => {
+            // Left open once opened: setting one filter is usually setting
+            // two, and a panel that folded itself away after each change
+            // would make the second one a second trip.
+            const open = controls.classList.toggle('filters-open');
+            filterToggle.setAttribute('aria-expanded', String(open));
+        });
+    }
+
     prevBtn.addEventListener('click', () => {
         if (state.page <= 1) return;
         state.page -= 1;
@@ -297,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // filters live in the address bar.
     window.addEventListener('popstate', () => {
         readUrl();
+        paintFilterToggle();
         state.page = 1;
         load();
     });
@@ -342,6 +381,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // The URL may have named one before the options existed.
         readUrl();
+        // ...and the badge counted them before that, so it read one short for
+        // any link carrying ?type=, ?offers= or ?needs=. Assigning to a
+        // <select> that has no such option yet is silently ignored, which is
+        // the whole reason for the re-read above; the count is drawn from
+        // those same values and has to be taken again after it.
+        paintFilterToggle();
     }
 
     // --- Signed in? -------------------------------------------------------
@@ -365,6 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     readUrl();
+    paintFilterToggle();
     await load();
     fillVocabulary();
     noteSignedIn();

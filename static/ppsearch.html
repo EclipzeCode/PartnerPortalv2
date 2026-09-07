@@ -156,7 +156,11 @@
                 <label class="browse-sort">
                     <span>Sort</span>
                     <select id="browseSort">
-                        <option value="name">Name (A–Z)</option>
+                        <!-- Every card here leads with a match score. Not
+                             being able to order by it was the one sort the
+                             page visibly needed and did not offer. -->
+                        <option value="match">Best match</option>
+                        <option value="name" selected>Name (A–Z)</option>
                         <option value="newest">Recently joined</option>
                     </select>
                 </label>

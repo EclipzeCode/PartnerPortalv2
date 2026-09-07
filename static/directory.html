@@ -131,7 +131,17 @@
                 <input type="search" id="dirSearch" name="q" autocomplete="off"
                        placeholder="Search by name, place or description">
             </div>
-            <div class="dir-filters">
+            <!-- Narrow screens only; see .dir-filter-toggle in directory.css.
+                 The five controls below stack to roughly a screen's worth on
+                 a phone, which pushed the organizations this page exists to
+                 show below the fold. -->
+            <button type="button" class="dir-filter-toggle" id="dirFilterToggle"
+                    aria-expanded="false" aria-controls="dirFilters">
+                <i class='bx bx-filter-alt' aria-hidden="true"></i>
+                <span>Filters</span>
+                <span class="dir-filter-count" id="dirFilterCount" hidden></span>
+            </button>
+            <div class="dir-filters" id="dirFilters">
                 <label class="sr-only" for="dirType">Organization type</label>
                 <select id="dirType" name="type">
                     <option value="">Any type</option>

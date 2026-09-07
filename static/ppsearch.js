@@ -340,6 +340,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (browseSort) {
+        // The control and the state have to start out agreeing. The markup's
+        // selected option is the default, but browseState carries its own,
+        // and a mismatch means the dropdown reads "Best match" over rows the
+        // server sorted by name. Taken from the state, which is the one the
+        // request is actually built from.
+        browseSort.value = browseState.sort;
         browseSort.addEventListener('change', () => {
             browseState.sort = browseSort.value;
             browseState.page = 1;

@@ -12,10 +12,22 @@
  * dashes where they would be.
  */
 
+/* The top padding also has to clear the header, which is `position: fixed`
+ * (see nav.css) and therefore out of flow -- nothing below it is pushed down
+ * by it, so every page owes itself that room by hand.
+ *
+ * The header's height is its own vertical padding, clamp(.75rem, 1.6vw,
+ * 1.5rem) twice over, plus the logo's line box: 53px at 375px wide, 84px at
+ * desktop. This used to start at 2rem, which is 32px -- so on a phone the
+ * eyebrow and the top of the heading were drawn underneath an opaque bar,
+ * and at desktop the clearance was six pixels, which is not a margin, it is
+ * a near miss. The floor now clears the mobile header with room to read, and
+ * the ceiling clears the desktop one.
+ */
 .dir-main {
     max-width: 76rem;
     margin: 0 auto;
-    padding: clamp(2rem, 1rem + 4vw, 4.5rem) clamp(1rem, .5rem + 3vw, 2.5rem) 5rem;
+    padding: clamp(5rem, 2rem + 5vw, 6rem) clamp(1rem, .5rem + 3vw, 2.5rem) 5rem;
 }
 
 /* --- Head --------------------------------------------------------------- */
@@ -345,9 +357,67 @@
 .skeleton-card .skeleton-line.title { height: 1.15rem; width: 65%; }
 .skeleton-card .skeleton-line.short { width: 40%; }
 
+/* --- The filter disclosure ---------------------------------------------- *
+ *
+ * Hidden on anything wide enough to lay the filters out in a row, where they
+ * cost one line and folding them away would only hide them.
+ *
+ * On a phone they stack: four full-width selects, a checkbox and a Clear
+ * button, which is around 450px of controls above the first result. The page
+ * is called "Every organization on PartnerPortal" and you had to scroll past
+ * a form to see one. So they fold, and the count on the toggle is what keeps
+ * that honest -- a collapsed panel that silently filters the list is worse
+ * than the scrolling it saves.
+ *
+ * The search box deliberately stays outside it. It is the one control most
+ * visitors touch, and burying it behind a disclosure would trade one problem
+ * for another.
+ * ------------------------------------------------------------------------- */
+
+.dir-filter-toggle { display: none; }
+
+.dir-filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 .3rem;
+    border-radius: 999px;
+    background: var(--h-give);
+    color: var(--h-surface);
+    font-family: var(--h-mono);
+    font-size: .68rem;
+    line-height: 1;
+}
+
 /* --- Narrow ------------------------------------------------------------- */
 
 @media (max-width: 40em) {
     .dir-filters select { max-width: none; flex: 1 1 100%; }
     .dir-grid { grid-template-columns: 1fr; }
+
+    .dir-filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        align-self: flex-start;
+        padding: .5rem .8rem;
+        font: inherit;
+        font-size: .92rem;
+        color: var(--h-ink);
+        background: var(--h-surface);
+        border: 1px solid var(--h-rule);
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .dir-filter-toggle:focus-visible {
+        outline: 2px solid var(--h-give);
+        outline-offset: 1px;
+        border-color: var(--h-give);
+    }
+
+    .dir-filters { display: none; }
+    .dir-controls.filters-open .dir-filters { display: flex; }
 }
