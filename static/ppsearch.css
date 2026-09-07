@@ -1392,6 +1392,82 @@ body.ink .category-chip.checked {
     }
 }
 
+/* --- Small phones -------------------------------------------------------- *
+ *
+ * Everything here is about the run of chrome between the heading and the
+ * first result card, which at 375px came to 521px of a 812px screen -- two
+ * thirds of the first look at the page spent on controls.
+ *
+ * The three action buttons were the largest part of it, and only just: they
+ * want 337px of a 335px row, so one of them wrapped onto a line of its own
+ * and the block cost 86px instead of 40. Two pixels. The fix is deliberately
+ * more than two pixels' worth, because the row has to keep fitting when the
+ * labels grow -- "Filters" becomes "Filters (2)" once anything is filtered,
+ * and Saved carries a count badge. Both together are about 45px more than
+ * the measurement above, so the padding, the gap and one word of the longest
+ * label all come off.
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 28em) {
+    .action-buttons {
+        gap: 0.4rem;
+    }
+
+    .btn-action {
+        padding: 0.65rem 0.7rem;
+    }
+
+    /* See the note in ppsearch.html: this is the "all" in "Browse all". */
+    .btn-action-more {
+        display: none;
+    }
+
+    /* ...and the "— not only your matches" in the browse note, which is what
+       takes it to a second line. */
+    .browse-note-more {
+        display: none;
+    }
+
+    /* The rule under the search tools is a separator, and 1.5rem either side
+       of it is a desktop separator. Tightened rather than removed: the line
+       is doing real work, marking where the controls stop. */
+    .search-tools {
+        padding-bottom: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .browse-bar {
+        gap: 0.6rem;
+        padding-bottom: 0.9rem;
+        margin-bottom: 0.9rem;
+    }
+}
+
+/* 360px is a Galaxy-sized screen and one of the most common widths there is,
+   and the row above still did not fit in it: 328px of buttons in a 320px
+   row. The measurements are close enough that this needs its own step rather
+   than a wider guess. */
+@media (max-width: 23em) {
+    .action-buttons {
+        gap: 0.3rem;
+    }
+
+    .btn-action {
+        padding: 0.65rem 0.55rem;
+        gap: 0.3rem;
+    }
+}
+
+/* The smallest phones still in use. Nothing left to take off the spacing, so
+   the icons go instead -- they are decoration next to labels that already
+   say what each button does, and losing them is a smaller cost than one
+   button dropping onto a line of its own. */
+@media (max-width: 20.5em) {
+    .action-buttons .btn-action i {
+        display: none;
+    }
+}
+
 @media (max-width: 40em) {
     .detail-exchange,
     .modal-body .propose-grid {

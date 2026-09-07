@@ -135,8 +135,14 @@
                          aria-pressed rather than three pages: it is the same
                          grid, search box and pagination showing a different
                          list. -->
+                    <!-- "all" drops away on a small phone, where the three
+                         buttons are two pixels wider than the row they sit
+                         in and one of them wraps onto a line of its own.
+                         Marked up rather than duplicated, so there is one
+                         copy of the label and the short form is the long one
+                         with a word hidden. -->
                     <button id="browseToggle" class="btn-action" type="button" aria-pressed="false">
-                        <i class='bx bx-grid-alt'></i> Browse all
+                        <i class='bx bx-grid-alt'></i> Browse<span class="btn-action-more"> all</span>
                     </button>
                     <button id="savedToggle" class="btn-action" type="button" aria-pressed="false">
                         <i class='bx bx-bookmark'></i> Saved <span id="savedCount" class="saved-count" hidden></span>
@@ -150,8 +156,14 @@
             <!-- Browse only. Matches are ordered by fit and the shortlist by
                  when you saved each one; neither is something to re-sort. -->
             <div class="browse-bar hidden" id="browseBar">
+                <!-- The trailing clause is dropped on a small phone, where
+                     the sentence runs to two lines directly above the
+                     results. What is left still says what Browse is, and the
+                     pressed "Browse all" button beside it is already saying
+                     the rest. -->
                 <p class="browse-note">
-                    Everyone with a finished profile — not only your matches.
+                    Everyone with a finished profile<span
+                        class="browse-note-more"> — not only your matches</span>.
                 </p>
                 <label class="browse-sort">
                     <span>Sort</span>
