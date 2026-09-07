@@ -397,6 +397,27 @@
     .dir-filters select { max-width: none; flex: 1 1 100%; }
     .dir-grid { grid-template-columns: 1fr; }
 
+    /* The run of chrome above the first card, tightened.
+     *
+     * Folding the filters away moved the card from ~1340px to 531px on a
+     * 375px screen, which was the whole problem; what is left is spacing
+     * sized for a desktop page. Three separators at 1.25-2rem each, between
+     * a heading, a search box and a count line that together say very little,
+     * add up to about a third of what is still above the results.
+     *
+     * The rule under the controls keeps padding on both sides -- it is doing
+     * real work, marking where the controls stop and the directory starts --
+     * it is just narrower than a desktop separator needs to be.
+     */
+    .dir-head { margin-bottom: 1.25rem; }
+
+    .dir-controls {
+        padding-bottom: .85rem;
+        margin-bottom: .85rem;
+    }
+
+    .dir-count { margin-bottom: .75rem; }
+
     .dir-filter-toggle {
         display: inline-flex;
         align-items: center;
@@ -420,4 +441,26 @@
 
     .dir-filters { display: none; }
     .dir-controls.filters-open .dir-filters { display: flex; }
+}
+
+/* Small phones, where the lede runs to four lines directly under a heading
+   that is already two.
+ *
+ * The type scale rather than the words: the second sentence is the pitch --
+ * what an account gets you, with the two links that act on it -- and it is
+ * the most useful thing on this page to a stranger who has not signed up.
+ * Trimming a directory's own sales copy to save a line would be saving the
+ * wrong line. 1.05rem is a desktop lede; 0.95rem is a phone one, and the
+ * sentence is unchanged.
+ *
+ * Deliberately not 0.92rem, which is where it reflows from four lines to
+ * three. That is a 42px saving resting on where one particular sentence
+ * happens to break at one particular width -- a word added to the copy takes
+ * it straight back to four, and the type would have been shrunk for nothing.
+ */
+@media (max-width: 30em) {
+    .dir-lede {
+        font-size: .95rem;
+        line-height: 1.5;
+    }
 }
