@@ -565,6 +565,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         return events.slice();
     }
 
+    // One occurrence, by the series it belongs to and which occurrence it is.
+    //
+    // The id alone is not enough and has not been since a repeating meeting
+    // became many entries sharing one: matching on it returned whichever
+    // occurrence happened to be first in the list, so clicking edit on the
+    // fourth week opened the first. That was harmless while every occurrence
+    // was identical and stops being harmless the moment one of them can be
+    // moved.
+    function findOccurrence(id, occursOn) {
+        const list = loadEvents();
+        return list.find((ev) => String(ev.id) === String(id)
+                          && String(ev.occurs_on) === String(occursOn))
+            || list.find((ev) => String(ev.id) === String(id));
+    }
+
+    // Re-read the expansion from the server.
+    //
+    // A repeating meeting is one row and many entries here, so an edit to it
+    // cannot be applied by swapping one of them: moving a series moves every
+    // occurrence, and moving a single occurrence changes exactly one -- and
+    // the client cannot work out either without redoing the expansion. The
+    // server already does that; asking it again is one request and is always
+    // right, where re-deriving it here would be a second implementation of
+    // Event.occurrences in JavaScript.
+    async function reloadEvents() {
+        const data = await window.api('/api/events');
+        events = data.events || [];
+        eventsTotal = data.total != null ? data.total : events.length;
+        eventsComplete = true;
+        return events;
+    }
+
     async function addEvent(payload) {
         const data = await window.api('/api/events', {
             method: 'POST',
@@ -575,19 +607,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         return data.event;
     }
 
-    async function patchEvent(id, payload) {
+    async function patchEvent(id, payload, { repeating = false } = {}) {
         const data = await window.api(`/api/events/${encodeURIComponent(id)}`, {
             method: 'PATCH',
             body: payload,
         });
+        if (repeating) {
+            // The expansion changed shape, so it is re-read rather than
+            // patched in place. This used to map every entry with a matching
+            // id onto the single dict that came back, which for a series
+            // meant eight occurrences all becoming the same one -- a weekly
+            // meeting collapsing to eight copies of its first week until the
+            // page was reloaded.
+            await reloadEvents();
+            return data.event;
+        }
         events = events.map((ev) => (String(ev.id) === String(id) ? data.event : ev));
         return data.event;
     }
 
-    async function removeEvent(id) {
-        await window.api(`/api/events/${encodeURIComponent(id)}`, {
-            method: 'DELETE',
-        });
+    async function removeEvent(id, occursOn = null) {
+        const query = occursOn
+            ? `?scope=occurrence&occurrence=${encodeURIComponent(occursOn)}`
+            : '';
+        await window.api(
+            `/api/events/${encodeURIComponent(id)}${query}`, { method: 'DELETE' });
+
+        if (occursOn) {
+            // One week skipped; the series is still there. Re-read for the
+            // same reason patchEvent does -- and the total comes back with
+            // it, so there is nothing to adjust by hand.
+            await reloadEvents();
+            return;
+        }
         const before = events.length;
         events = events.filter((ev) => String(ev.id) !== String(id));
         // Every occurrence of the series goes, not one row: `events` is the
@@ -789,6 +841,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     // losing the description on the way, since there was nothing left to
     // copy it from.
     let editingEventId = null;
+    // Which occurrence the form was opened on, and the whole payload for it.
+    // The scope control redraws the fields from one or the other, so both
+    // have to survive the dialog being open.
+    let editingOccurrence = null;
+    let editingEvent = null;
+
+    const eventScope = document.getElementById('eventScope');
+    const eventScopeNote = document.getElementById('eventScopeNote');
+
+    function chosenScope() {
+        if (!eventScope || eventScope.hidden) return 'series';
+        const picked = eventScope.querySelector('input[name="eventScope"]:checked');
+        return picked ? picked.value : 'occurrence';
+    }
+
+    // Redraw the schedule fields for whichever scope is selected.
+    //
+    // They differ once an occurrence has been moved: the occurrence carries
+    // where it now is, and `series` carries what the meeting says. Showing
+    // one while the other is selected is how somebody applies a single
+    // week's time to the whole series without meaning to.
+    function syncScope() {
+        if (!editingEvent || !eventScope || eventScope.hidden) return;
+        const occurrence = chosenScope() === 'occurrence';
+        const from = occurrence ? editingEvent : (editingEvent.series || editingEvent);
+
+        document.getElementById('eventDate').value = from.date || '';
+        if (eventAllDay) eventAllDay.checked = Boolean(from.all_day);
+        setTimeControls(from.all_day ? '' : (from.time || ''));
+        document.getElementById('eventDuration').value = from.duration ?? '';
+
+        // Everything that belongs to the meeting rather than to one
+        // occurrence of it. The server refuses those with scope=occurrence
+        // (see _update_one_occurrence), so offering them here would be
+        // offering an edit that cannot be saved.
+        [document.getElementById('eventTitle'),
+         document.getElementById('eventPartner'),
+         document.getElementById('eventLocation'),
+         document.getElementById('eventDescription'),
+         eventRepeat, eventRepeatUntil].forEach((el) => {
+            if (!el) return;
+            el.disabled = occurrence;
+        });
+
+        if (eventScopeNote) {
+            eventScopeNote.textContent = occurrence
+                ? 'Only the date, time and length change. Everything else '
+                  + 'stays as the series has it.'
+                : 'This moves every meeting in the series.';
+        }
+        syncAllDay();
+        syncRepeat();
+    }
+
+    if (eventScope) {
+        eventScope.addEventListener('change', syncScope);
+    }
 
     function openModal(event) {
         if (!modal) return;
@@ -796,6 +905,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (eventForm) clearEventErrors();
 
         editingEventId = event ? event.id : null;
+        editingEvent = event || null;
+        editingOccurrence = event ? (event.occurs_on || event.date) : null;
+
+        // Only an existing repeating meeting has two things an edit could
+        // mean. Creating one, or editing a one-off, has exactly one -- so the
+        // control is not shown and chosenScope() answers "series", which is
+        // what those requests have always sent.
+        if (eventScope) {
+            eventScope.hidden = !(event && event.repeat);
+            const first = eventScope.querySelector(
+                'input[name="eventScope"][value="occurrence"]');
+            if (first) first.checked = true;
+        }
+
         const title = document.getElementById('eventModalTitle');
         if (title) title.textContent = event ? 'Edit meeting' : 'Add New Event';
         if (eventSubmitBtn) {
@@ -821,9 +944,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (eventRepeat) {
                 eventRepeat.value = event.repeat || '';
                 eventRepeatUntil.value = event.repeat_until || '';
-                if (event.repeat && event.starts_on) {
-                    document.getElementById('eventDate').value = event.starts_on;
-                }
             }
             document.getElementById('eventDescription').value = event.description || '';
             document.getElementById('eventLocation').value = event.location || '';
@@ -857,6 +977,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         syncAllDay();
         syncRepeat();
+        // Last, because it decides which of the occurrence's or the series'
+        // values the schedule fields are showing -- and for a repeating
+        // meeting that overrides what was filled in above.
+        syncScope();
+        if (!event || !event.repeat) {
+            // Nothing is scoped away when there is no choice to make, so a
+            // one-off never opens with disabled fields left by the last
+            // repeating meeting that was edited in this dialog.
+            [document.getElementById('eventTitle'),
+             document.getElementById('eventPartner'),
+             document.getElementById('eventLocation'),
+             document.getElementById('eventDescription'),
+             eventRepeat, eventRepeatUntil].forEach((el) => {
+                if (el) el.disabled = false;
+            });
+        }
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, document.getElementById('eventTitle'));
@@ -962,10 +1098,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                href="/api/events/${encodeURIComponent(event.id)}.ics">
                 <i class='bx bx-calendar-plus'></i>
             </a>
-            <button class="btn-event" title="Edit meeting" data-edit-event-id="${event.id}">
+            <button class="btn-event" title="Edit meeting" data-edit-event-id="${event.id}"
+                    data-occurs-on="${esc(event.occurs_on || event.date)}">
                 <i class='bx bx-pencil'></i>
             </button>
-            <button class="btn-event" title="Remove event" data-event-id="${event.id}">
+            <button class="btn-event" title="Remove event" data-event-id="${event.id}"
+                    data-occurs-on="${esc(event.occurs_on || event.date)}">
                 <i class='bx bx-trash'></i>
             </button>
         `;
@@ -1027,16 +1165,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         eventsList.addEventListener('click', (e) => {
             const edit = e.target.closest('.btn-event[data-edit-event-id]');
             if (edit) {
-                const found = loadEvents().find(
-                    (ev) => String(ev.id) === String(edit.dataset.editEventId));
+                const found = findOccurrence(edit.dataset.editEventId,
+                                             edit.dataset.occursOn);
                 if (found) openModal(found);
                 return;
             }
 
             const btn = e.target.closest('.btn-event[data-event-id]');
             if (btn) {
-                const found = loadEvents().find(
-                    (ev) => String(ev.id) === String(btn.dataset.eventId));
+                const found = findOccurrence(btn.dataset.eventId,
+                                             btn.dataset.occursOn);
                 if (found) openDeleteConfirm(found);
                 return;
             }
@@ -1085,10 +1223,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     const confirmDeleteModal = document.getElementById('confirmEventDeleteModal');
     const confirmDeleteBtn = document.getElementById('confirmEventDeleteBtn');
     let pendingDeleteId = null;
+    // Which occurrence the trash button was clicked on, for a delete that
+    // may turn out to mean only that one.
+    let pendingDeleteOccurrence = null;
+
+    const deleteScope = document.getElementById('deleteScope');
+    const deleteWarning = document.getElementById('confirmEventDeleteWarning');
+
+    function chosenDeleteScope() {
+        if (!deleteScope || deleteScope.hidden) return 'series';
+        const picked = deleteScope.querySelector(
+            'input[name="deleteScope"]:checked');
+        return picked ? picked.value : 'occurrence';
+    }
+
+    // What is actually about to happen, in the warning. Skipping one week of
+    // a standing meeting and ending the standing meeting are different acts
+    // with the same button, so the sentence above it has to say which.
+    function syncDeleteScope() {
+        if (!deleteWarning) return;
+        if (!deleteScope || deleteScope.hidden) {
+            deleteWarning.textContent =
+                'This removes the meeting for good. Your partner is not told.';
+            return;
+        }
+        deleteWarning.textContent = chosenDeleteScope() === 'occurrence'
+            ? 'This skips one meeting. The rest of the series carries on.'
+            : 'This removes every meeting in the series, for good. Your '
+              + 'partner is not told.';
+    }
+
+    if (deleteScope) deleteScope.addEventListener('change', syncDeleteScope);
 
     function openDeleteConfirm(event) {
         if (!confirmDeleteModal) return;
         pendingDeleteId = event.id;
+        pendingDeleteOccurrence = event.occurs_on || event.date;
+
+        if (deleteScope) {
+            deleteScope.hidden = !event.repeat;
+            const first = deleteScope.querySelector(
+                'input[name="deleteScope"][value="occurrence"]');
+            if (first) first.checked = true;
+        }
+        syncDeleteScope();
 
         // Named, not "this meeting": the whole reason to ask is that someone
         // may have clicked the wrong row, and only the title tells them.
@@ -1111,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function closeDeleteConfirm() {
         if (!confirmDeleteModal) return;
         pendingDeleteId = null;
+        pendingDeleteOccurrence = null;
         confirmDeleteModal.classList.remove('active');
         // Not unconditionally 'auto': this dialog can be opened from inside
         // the stat dialog, which is still up and still wants the page behind
@@ -1143,9 +1322,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (id === null) return;
             // Disabled while the request is in flight, so a second click
             // cannot send a delete for something already gone.
+            const occursOn = chosenDeleteScope() === 'occurrence'
+                ? pendingDeleteOccurrence : null;
             confirmDeleteBtn.disabled = true;
             try {
-                await removeEvent(id);
+                await removeEvent(id, occursOn);
                 // If the stat dialog is sitting on the detail for this very
                 // meeting, that view no longer has anything to show, so it
                 // steps back to the list rather than rendering a blank.
@@ -1336,10 +1517,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             try {
                 if (editingEventId !== null) {
+                    const scope = chosenScope();
                     // No timezone: the zone belongs to the meeting, not to
                     // wherever its owner happens to be editing it from. An
                     // edit made in another country must not re-file it.
-                    await patchEvent(editingEventId, payload);
+                    const body = scope === 'occurrence'
+                        // Only the four fields an exception can carry. The
+                        // server refuses the rest outright with this scope,
+                        // and it is right to -- the form sends every field on
+                        // every save, so passing them through would turn "move
+                        // this week" into a 400 for mentioning a title it was
+                        // never going to change.
+                        ? {
+                            scope,
+                            occurrence: editingOccurrence,
+                            date: payload.date,
+                            time: payload.time,
+                            all_day: payload.all_day,
+                            duration: payload.duration,
+                        }
+                        : payload;
+                    await patchEvent(editingEventId, body, {
+                        repeating: Boolean(editingEvent && editingEvent.repeat)
+                                   || Boolean(payload.repeat),
+                    });
                 } else {
                     await addEvent({ ...payload, timezone: localZone() });
                 }

@@ -407,6 +407,27 @@
                      only ever shows the first problem. ppdashboard.js validates
                      on submit and writes into the .field-error slots below. -->
                 <form id="eventForm" novalidate>
+                    <!-- Only for a repeating meeting being edited, and only
+                         then: there is nothing to choose between for a
+                         one-off or for a meeting being created.
+
+                         "This meeting" leads and is the default, because it
+                         is the reversible one -- moving one week back is a
+                         second edit, while re-typing a series somebody
+                         flattened by accident is not. -->
+                    <fieldset class="event-scope" id="eventScope" hidden>
+                        <legend>Apply changes to</legend>
+                        <label>
+                            <input type="radio" name="eventScope"
+                                   value="occurrence" checked>
+                            <span>This meeting only</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="eventScope" value="series">
+                            <span>Every meeting in the series</span>
+                        </label>
+                        <p class="event-scope-note" id="eventScopeNote"></p>
+                    </fieldset>
                     <div class="form-group">
                         <label for="eventTitle">Event Title</label>
                         <input type="text" id="eventTitle" required>
@@ -541,9 +562,26 @@
                     <strong id="confirmEventDeleteName"></strong>
                     <span id="confirmEventDeleteWhen"></span>
                 </p>
+                <!-- Shown only for a repeating meeting. Skipping one week is
+                     not the same act as ending a standing meeting, and a
+                     single "Remove meeting" button could only ever have meant
+                     one of them. -->
+                <fieldset class="event-scope" id="deleteScope" hidden>
+                    <legend>Remove</legend>
+                    <label>
+                        <input type="radio" name="deleteScope"
+                               value="occurrence" checked>
+                        <span>Just this meeting</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="deleteScope" value="series">
+                        <span>Every meeting in the series</span>
+                    </label>
+                </fieldset>
                 <p class="modal-warning">
                     <i class='bx bx-error'></i>
-                    This removes the meeting for good. Your partner is not told.
+                    <span id="confirmEventDeleteWarning">This removes the
+                    meeting for good. Your partner is not told.</span>
                 </p>
                 <div class="form-actions">
                     <button type="button" class="btn-ghost" data-cancel-event-delete>Cancel</button>

@@ -1182,6 +1182,32 @@
     cursor: not-allowed;
 }
 
+/* ...and the same treatment for the fields the scope choice takes away.
+ *
+ * Editing one occurrence can only change when it happens, so the title,
+ * partner, location, description and the repeat rule are disabled while
+ * "This meeting only" is selected -- the server refuses them outright with
+ * that scope, so leaving them editable would be offering an edit that cannot
+ * be saved.
+ *
+ * Dimmed for the same reason the all-day fields above are: a disabled input
+ * that renders identically to a live one reads as a bug, and somebody typing
+ * into it and watching nothing happen is worse than being shown it is not in
+ * play. Reuses the same opacity so the two states look like one idea rather
+ * than two.
+ */
+#eventForm .form-group:has(input:disabled),
+#eventForm .form-group:has(select:disabled),
+#eventForm .form-group:has(textarea:disabled) {
+    opacity: 0.45;
+}
+
+#eventForm input:disabled,
+#eventForm select:disabled,
+#eventForm textarea:disabled {
+    cursor: not-allowed;
+}
+
 /* ------------------------------------------------------------------------- *
  * Loading skeletons
  *

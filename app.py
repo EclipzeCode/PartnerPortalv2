@@ -47,8 +47,8 @@ from matching import (
 )
 from moderation import screen_name
 from models import (
-    Admin, AdminAction, ContactMessage, Event, Message, Organization,
-    Partnership, ProfileView, RateLimitAttempt, SavedLead,
+    Admin, AdminAction, ContactMessage, Event, EventException, Message,
+    Organization, Partnership, ProfileView, RateLimitAttempt, SavedLead,
 )
 from notifications import (
     notify_profile_hidden,
@@ -5948,7 +5948,7 @@ def _expanded_events(db, org, limit=None):
             # Shown on its start date, which is the first time it happens and
             # the only date that is certainly its own. Sorting puts it last,
             # which is where a meeting that far out belongs.
-            dates = [event.date]
+            dates = [event.occurrence_on(event.date)]
         for on in dates:
             # The event, not its payload. Serializing here is what made this
             # expensive: a weekly meeting is fifty-odd occurrences inside the
@@ -5960,14 +5960,14 @@ def _expanded_events(db, org, limit=None):
             # The dates themselves are arithmetic and cost nothing, so they
             # are all still worked out -- which is what lets `total` below be
             # the true count rather than the size of the page.
-            out.append((on, event.time, event))
+            out.append((on.date, on.time, on, event))
     out.sort(key=lambda row: (row[0], row[1]))
 
     total = len(out)
     if limit is not None:
         out = out[:limit]
     # to_dict only for what is actually being sent.
-    return [event.to_dict(on=on) for on, _, event in out], total
+    return [event.to_dict(on=on) for _d, _t, on, event in out], total
 
 
 @app.route("/api/events", methods=["GET"])
@@ -6068,6 +6068,140 @@ def create_event(org, db):
     return jsonify({"message": "Meeting saved", "event": event.to_dict()}), 201
 
 
+# Which of a repeating meeting an edit or a delete is about.
+#
+# "series" is the default, and stays the default: it is what every client
+# sent before occurrences were separately addressable, and what a one-off
+# means whatever it asks for.
+EVENT_SCOPES = ("series", "occurrence")
+
+
+def _event_scope(data, event):
+    """(scope, occurs_on, problem) for a request that may mean one occurrence.
+
+    `occurrence` in the body is the date the *series* lands on -- not where
+    the occurrence has been moved to. That is what makes editing the same
+    week twice address the same row rather than writing a second exception
+    for a week that only happens once; see EventException.occurs_on.
+
+    A one-off is always its whole self. Asking for scope=occurrence on one is
+    not refused, because there is nothing incoherent about it -- the single
+    occurrence and the series are the same thing -- and refusing would make a
+    client branch on a distinction that does not matter to it.
+    """
+    scope = (data.get("scope") or "series").strip().lower()
+    if scope not in EVENT_SCOPES:
+        return None, None, "a scope of series or occurrence"
+    if scope == "series" or not event.repeat:
+        return "series", None, None
+
+    raw = (data.get("occurrence") or "").strip()
+    if not raw:
+        return None, None, "which occurrence this is about"
+    try:
+        occurs_on = datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None, None, "a valid date for which occurrence this is about"
+    # Checked against the series rather than trusted. A date this meeting
+    # never happens on would be an exception nothing could ever render --
+    # invisible in the calendar, and permanently in the way of the occurrence
+    # that does happen if the series later moves onto that date.
+    if not event.lands_on(occurs_on):
+        return None, None, "a date this meeting actually repeats on"
+    return "occurrence", occurs_on, None
+
+
+def _update_one_occurrence(db, event, occurs_on, data):
+    """Move a single occurrence of a repeating meeting.
+
+    Writes or updates the EventException for `occurs_on`. Only the four
+    scheduling fields are honored, because those are the only ones an
+    exception carries -- see the model for why a per-occurrence title is
+    deliberately not a thing.
+
+    Everything unstated is taken from the occurrence as it currently stands,
+    not from the series. That is what lets a second edit move a meeting
+    already moved once without it springing back to the series' time because
+    the body only mentioned the date.
+    """
+    current = event.occurrence_on(occurs_on)
+    problems = []
+
+    when = current.date
+    if "date" in data:
+        try:
+            when = datetime.strptime(data.get("date") or "", "%Y-%m-%d").date()
+        except ValueError:
+            problems.append("a valid date")
+
+    at = current.time
+    if "time" in data:
+        try:
+            at = datetime.strptime(data.get("time") or "", "%H:%M").time()
+        except ValueError:
+            problems.append("a valid start time")
+
+    duration = current.duration
+    if "duration" in data:
+        duration, bad = _event_duration(data.get("duration"))
+        if bad:
+            problems.append(bad)
+
+    all_day = current.all_day
+    if "all_day" in data:
+        all_day = bool(data.get("all_day"))
+        # The same rule the series follows: coming off all-day, a start time
+        # has to arrive with it, or the stored midnight silently becomes a
+        # real 12:00 AM start.
+        if current.all_day and not all_day and "time" not in data:
+            problems.append("a start time for a meeting that is no longer "
+                            "all day")
+
+    # ...and the same normalization, applied after the fields rather than
+    # inside the all_day branch, so the two arriving in separate requests
+    # still leaves the occurrence consistent.
+    if all_day:
+        at = time_type(0, 0)
+        duration = None
+
+    # Fields that belong to the meeting rather than to one occurrence of it.
+    # Refused rather than ignored: a client that sent a new title with
+    # scope=occurrence meant something, and silently saving the date while
+    # dropping the title is the kind of partial success nobody notices until
+    # the title is wrong.
+    for field in ("title", "partner", "location", "description", "timezone",
+                  "repeat", "repeat_until"):
+        if field in data:
+            return jsonify({
+                "error": "Only the date, time and length of a single meeting "
+                         "can be changed on its own. Edit the series to "
+                         "change anything else.",
+            }), 400
+
+    if problems:
+        db.rollback()
+        return jsonify({
+            "error": "Please provide " + ", ".join(problems) + ".",
+        }), 400
+
+    exception = event.exception_on(occurs_on)
+    if exception is None:
+        exception = EventException(event_id=event.id, occurs_on=occurs_on)
+        db.add(exception)
+        event.exceptions.append(exception)
+    exception.cancelled = False
+    exception.date = when
+    exception.time = at
+    exception.duration = duration
+    exception.all_day = all_day
+
+    db.commit()
+    return jsonify({
+        "message": "Meeting updated",
+        "event": event.to_dict(on=event.occurrence_on(occurs_on)),
+    })
+
+
 @app.route("/api/events/<int:event_id>", methods=["PATCH"])
 @login_required
 def update_event(org, db, event_id):
@@ -6093,6 +6227,13 @@ def update_event(org, db, event_id):
         return jsonify({"error": "Meeting not found."}), 404
 
     data = request.get_json(silent=True) or {}
+
+    scope, occurs_on, bad_scope = _event_scope(data, event)
+    if bad_scope:
+        return jsonify({"error": "Please provide " + bad_scope + "."}), 400
+    if scope == "occurrence":
+        return _update_one_occurrence(db, event, occurs_on, data)
+
     problems = []
 
     if "title" in data:
@@ -6373,6 +6514,82 @@ def _vtimezone(zone_name, year):
     return lines
 
 
+def _ics_body(event):
+    """The descriptive half of a VEVENT: what the meeting is, not when.
+
+    Shared by the series and by each moved occurrence, because an exception
+    only ever changes the schedule -- so an override that wrote its own
+    summary could only ever get it wrong.
+    """
+    # Who it is with is the one thing on the card that has nowhere else to go
+    # in a calendar entry, so it leads the description.
+    detail = f"With {event.partner_name}"
+    if event.description:
+        detail += "\n\n" + event.description
+    lines = [
+        f"SUMMARY:{_ics_escape(event.title)}",
+        f"DESCRIPTION:{_ics_escape(detail)}",
+    ]
+    if event.location:
+        lines.append(f"LOCATION:{_ics_escape(event.location)}")
+    return lines
+
+
+def _ics_schedule(when, at, duration, all_day, zone):
+    """DTSTART, and DTEND when there is a length to state.
+
+    The three shapes _event_ics documents, written once: an all-day pair of
+    DATEs with an exclusive end, a timed start with an end, and a timed start
+    with none because nobody said how long.
+    """
+    if all_day:
+        return [
+            f"DTSTART;VALUE=DATE:{when.strftime('%Y%m%d')}",
+            "DTEND;VALUE=DATE:" + (when + timedelta(days=1)).strftime("%Y%m%d"),
+        ]
+    begins = datetime.combine(when, at)
+    prefix = f";TZID={zone}" if zone else ""
+    lines = [f"DTSTART{prefix}:{begins.strftime('%Y%m%dT%H%M%S')}"]
+    if duration:
+        ends = begins + timedelta(minutes=round(duration * 60))
+        lines.append(f"DTEND{prefix}:{ends.strftime('%Y%m%dT%H%M%S')}")
+    return lines
+
+
+def _ics_override(event, exception, stamp, host, zone):
+    """One moved occurrence, as a VEVENT that replaces a single instance.
+
+    RECURRENCE-ID names the instance by the date the rule produced, which is
+    exactly what EventException.occurs_on stores -- the two ideas are the same
+    one, which is why the model was shaped this way.
+
+    Its own zone handling: an occurrence moved out of an all-day series into a
+    timed one, or the other way, changes the value type of both RECURRENCE-ID
+    and DTSTART. RECURRENCE-ID has to match the *series'* DTSTART, since that
+    is the instance it is naming, while DTSTART below describes where the
+    occurrence now is.
+    """
+    lines = ["BEGIN:VEVENT", f"UID:event-{event.id}@{host}",
+             f"DTSTAMP:{stamp}"]
+
+    if event.all_day:
+        lines.append("RECURRENCE-ID;VALUE=DATE:"
+                     + exception.occurs_on.strftime("%Y%m%d"))
+    else:
+        prefix = f";TZID={zone}" if zone else ""
+        original = datetime.combine(exception.occurs_on, event.time)
+        lines.append(f"RECURRENCE-ID{prefix}:"
+                     + original.strftime("%Y%m%dT%H%M%S"))
+
+    # The occurrence's own zone is the series' -- an exception moves when a
+    # meeting happens, never which clock it is read against.
+    lines += _ics_schedule(exception.date, exception.time, exception.duration,
+                           exception.all_day, None if exception.all_day else zone)
+    lines += _ics_body(event)
+    lines.append("END:VEVENT")
+    return lines
+
+
 def _event_ics(event, host):
     """One meeting as an iCalendar document.
 
@@ -6413,19 +6630,8 @@ def _event_ics(event, host):
     lines.append(f"UID:event-{event.id}@{host}")
     lines.append(f"DTSTAMP:{stamp}")
 
-    if event.all_day:
-        lines.append(f"DTSTART;VALUE=DATE:{event.date.strftime('%Y%m%d')}")
-        lines.append(
-            "DTEND;VALUE=DATE:"
-            + (event.date + timedelta(days=1)).strftime("%Y%m%d")
-        )
-    else:
-        begins = datetime.combine(event.date, event.time)
-        prefix = f";TZID={zone}" if zone else ""
-        lines.append(f"DTSTART{prefix}:{begins.strftime('%Y%m%dT%H%M%S')}")
-        if event.duration:
-            ends = begins + timedelta(minutes=round(event.duration * 60))
-            lines.append(f"DTEND{prefix}:{ends.strftime('%Y%m%dT%H%M%S')}")
+    lines += _ics_schedule(event.date, event.time, event.duration,
+                           event.all_day, zone)
 
     # A repeating meeting is exported as a rule, not as its occurrences.
     #
@@ -6457,16 +6663,43 @@ def _event_ics(event, host):
             until = event.repeat_until.strftime("%Y%m%d")
             lines.append(f"RRULE:{frequency};UNTIL={until}T235959Z")
 
-    lines.append(f"SUMMARY:{_ics_escape(event.title)}")
-    # Who it is with is the one thing on the card that has nowhere else to go
-    # in a calendar entry, so it leads the description.
-    detail = f"With {event.partner_name}"
-    if event.description:
-        detail += "\n\n" + event.description
-    lines.append(f"DESCRIPTION:{_ics_escape(detail)}")
-    if event.location:
-        lines.append(f"LOCATION:{_ics_escape(event.location)}")
-    lines += ["END:VEVENT", "END:VCALENDAR"]
+    # Cancelled occurrences, as dates the rule does not produce after all.
+    #
+    # EXDATE has to match DTSTART's value type and zone, or readers disagree
+    # about which instance it names -- so an all-day series excludes DATEs and
+    # a timed one excludes date-times carrying the same TZID, at the series'
+    # own start time rather than at midnight.
+    dropped = sorted(e.occurs_on for e in event.exceptions
+                     if e.cancelled and event.lands_on(e.occurs_on))
+    if dropped:
+        if event.all_day:
+            lines.append(
+                "EXDATE;VALUE=DATE:"
+                + ",".join(d.strftime("%Y%m%d") for d in dropped))
+        else:
+            prefix = f";TZID={zone}" if zone else ""
+            lines.append(
+                f"EXDATE{prefix}:" + ",".join(
+                    datetime.combine(d, event.time).strftime("%Y%m%dT%H%M%S")
+                    for d in dropped))
+
+    lines += _ics_body(event)
+    lines.append("END:VEVENT")
+
+    # ...and moved occurrences, each as its own VEVENT carrying RECURRENCE-ID.
+    #
+    # This is iCalendar's way of saying "that instance, but different": same
+    # UID as the series, RECURRENCE-ID naming the date the rule produced, and
+    # DTSTART saying where it actually is. A reader that understands it moves
+    # the one instance; one that does not still has the series right, which is
+    # the better failure of the two available.
+    for exception in sorted((e for e in event.exceptions if not e.cancelled),
+                            key=lambda e: e.occurs_on):
+        if not event.lands_on(exception.occurs_on):
+            continue
+        lines += _ics_override(event, exception, stamp, host, zone)
+
+    lines.append("END:VCALENDAR")
 
     # CRLF throughout, which the spec requires and some readers enforce.
     return "\r\n".join(_ics_fold(line) for line in lines) + "\r\n"
@@ -6515,6 +6748,35 @@ def delete_event(org, db, event_id):
     ).one_or_none()
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
+
+    # A DELETE carries no body in most clients, so the scope rides in the
+    # query string here rather than in JSON -- unlike the PATCH above, which
+    # already has a body to put it in.
+    scope, occurs_on, bad_scope = _event_scope(request.args, event)
+    if bad_scope:
+        return jsonify({"error": "Please provide " + bad_scope + "."}), 400
+
+    if scope == "occurrence":
+        # Cancelled, not deleted. The occurrence stops happening and the
+        # series carries on around it, which is what makes this different
+        # from shortening the series -- a skipped week in the middle is not
+        # an end date.
+        exception = event.exception_on(occurs_on)
+        if exception is None:
+            exception = EventException(event_id=event.id, occurs_on=occurs_on)
+            db.add(exception)
+            event.exceptions.append(exception)
+        # Cleared as well as flagged: the constraint requires a cancellation
+        # to carry no schedule, so cancelling an occurrence that had already
+        # been moved has to drop where it was moved to.
+        exception.cancelled = True
+        exception.date = None
+        exception.time = None
+        exception.duration = None
+        exception.all_day = None
+        db.commit()
+        return jsonify({"message": "Meeting removed", "cancelled_on":
+                        occurs_on.strftime("%Y-%m-%d")})
 
     db.delete(event)
     db.commit()

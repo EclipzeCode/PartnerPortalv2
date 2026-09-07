@@ -11,6 +11,7 @@ fills in the matchable parts and flips `onboarding_complete`.
 """
 
 from datetime import date as date_type, datetime, time as time_type, timedelta
+from typing import NamedTuple
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Index,
@@ -1234,6 +1235,28 @@ class Message(Base):
         }
 
 
+class Occurrence(NamedTuple):
+    """One time a meeting actually happens.
+
+    A repeating meeting is one row and many of these. They are computed, not
+    stored -- except where an EventException has moved one, which is exactly
+    what `moved` records.
+
+    `occurs_on` is the date the series lands on and is the occurrence's
+    identity; `date` is where it actually is. They differ only for a moved
+    occurrence, and keeping both is what lets "just this one" survive being
+    moved twice: the second edit still addresses the occurrence by the date
+    the series would have given it, not by wherever the first edit put it.
+    """
+
+    occurs_on: date_type
+    date: date_type
+    time: time_type
+    duration: float | None
+    all_day: bool
+    moved: bool
+
+
 class Event(Base):
     """A meeting an organization has scheduled with a partner.
 
@@ -1338,6 +1361,18 @@ class Event(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    # Eagerly loaded, because every read of a meeting expands it and every
+    # expansion consults these. Lazy would be one query per meeting on the
+    # dashboard -- the N+1 this whole file is otherwise careful to avoid.
+    # There are a handful per series at most; see EventException.
+    exceptions = relationship(
+        "EventException",
+        back_populates="event",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         # NULL passes: a CHECK only fails on FALSE, and "no length given" is
         # exactly what NULL is here.
@@ -1376,8 +1411,103 @@ class Event(Base):
     def __repr__(self):
         return f"<Event {self.id} org={self.organization_id} {self.date} {self.title!r}>"
 
+    def lands_on(self, when):
+        """Does this series produce an occurrence on `when`, exceptions aside?
+
+        Answered arithmetically rather than by expanding, because the callers
+        that need it -- moving one occurrence, cancelling one -- are asking
+        about a single date and have no reason to build the whole series to
+        find out. It is also what stops an exception being written for a date
+        the meeting never happens on, which would be a row nothing could ever
+        render.
+        """
+        if when is None:
+            return False
+        if not self.repeat:
+            return when == self.date
+        if when < self.date or (self.repeat_until and when > self.repeat_until):
+            return False
+        if self.repeat in ("weekly", "biweekly"):
+            step = 7 if self.repeat == "weekly" else 14
+            return (when - self.date).days % step == 0
+        # Monthly is the same day number in every month that has one, so any
+        # date carrying that day number and inside the series is one of them.
+        return when.day == self.date.day
+
+    def occurrence_on(self, when):
+        """One occurrence of this series, with any exception applied.
+
+        `when` is the date the series lands on -- the occurrence's identity,
+        which does not change when it is moved. Everything the returned
+        Occurrence carries is the series' own unless an EventException says
+        otherwise for that date.
+        """
+        exception = self.exception_on(when)
+        if exception is None or exception.cancelled:
+            return Occurrence(when, when, self.time, self.duration,
+                              self.all_day, False)
+        return Occurrence(when, exception.date, exception.time,
+                          exception.duration, exception.all_day, True)
+
+    def exception_on(self, when):
+        """The EventException for `when`, or None.
+
+        Reads the loaded collection rather than querying, so expanding a
+        series costs one query for its exceptions however many occurrences it
+        has. There are only ever a handful per meeting.
+        """
+        for exception in self.exceptions:
+            if exception.occurs_on == when:
+                return exception
+        return None
+
     def occurrences(self, until, since=None):
-        """Every date this meeting lands on, earliest first.
+        """Every occurrence of this meeting, earliest first.
+
+        Occurrence objects rather than bare dates, because a single week of a
+        series can now be moved or cancelled on its own and the caller has to
+        be told which date it *is* as well as which date it *was*. See
+        EventException.
+
+        The window is applied to the date an occurrence actually falls on,
+        not to the one the series would have put it on. That is the only
+        reading that makes sense to somebody looking at a calendar -- a
+        meeting moved out of this fortnight is not in this fortnight, and one
+        moved into it is -- and it is why the exceptions are consulted before
+        the filtering rather than after.
+        """
+        base = self._base_dates(until, since)
+
+        moved_in = []
+        for exception in self.exceptions:
+            if exception.cancelled or exception.occurs_on in base:
+                continue
+            # An occurrence whose original date is outside the window but
+            # which has been moved into it. _base_dates never generated it,
+            # so nothing above would have found it -- and a meeting that
+            # vanishes because it was moved two weeks earlier is the worst
+            # version of this feature.
+            if not self.lands_on(exception.occurs_on):
+                continue      # a stale exception for a date the series lost
+            moved_in.append(exception.occurs_on)
+
+        found = []
+        for when in list(base) + moved_in:
+            occurrence = self.occurrence_on(when)
+            exception = self.exception_on(when)
+            if exception is not None and exception.cancelled:
+                continue
+            if since is not None and occurrence.date < since:
+                continue
+            if until is not None and occurrence.date > until:
+                continue
+            found.append(occurrence)
+
+        found.sort(key=lambda o: (o.date, o.time))
+        return found
+
+    def _base_dates(self, until, since=None):
+        """Every date this meeting lands on before exceptions, earliest first.
 
         One date for a one-off. For a series, the start and then each repeat
         up to the earlier of repeat_until and `until` -- the caller's horizon,
@@ -1450,18 +1580,35 @@ class Event(Base):
         rendering code splits on -- isoformat() would append seconds to the
         time and quietly break `time.split(':')`.
 
-        `on` overrides the date, for one occurrence of a repeating meeting.
-        Everything else about an occurrence is the series -- including `id`,
-        which is the series' id and is what the edit and delete controls send.
-        That is not an oversight: editing is series-only (see REPEAT_RULES
-        above), so the only thing those controls could act on is the series.
+        `on` is one occurrence of a repeating meeting, as produced by
+        occurrences(). It carries its own date, time, duration and all-day
+        flag, because any of those can have been moved for that occurrence
+        alone -- see EventException. A bare date is still accepted, and means
+        an occurrence that follows the series in every respect.
+
+        `id` is the series' id whichever occurrence this is. `occurs_on` is
+        what identifies the occurrence within it: the date the series would
+        have landed on, which is stable under moving (an occurrence moved
+        from the 3rd to the 5th is still the 3rd's), and is what the edit and
+        delete controls send back when they mean "just this one".
         """
-        when = on or self.date
+        if on is None:
+            on = self.occurrence_on(self.date)
+        elif isinstance(on, date_type):
+            on = self.occurrence_on(on)
+
         return {
             "id": self.id,
             "title": self.title,
-            "date": when.strftime("%Y-%m-%d"),
-            "time": self.time.strftime("%H:%M"),
+            "date": on.date.strftime("%Y-%m-%d"),
+            "time": on.time.strftime("%H:%M"),
+            # Which occurrence of the series this is, by its original date.
+            # Equal to `date` unless this one has been moved.
+            "occurs_on": on.occurs_on.strftime("%Y-%m-%d"),
+            # Whether this occurrence has been changed on its own. The card
+            # says so, because a meeting sitting on a date its own series does
+            # not land on otherwise looks like a bug in the calendar.
+            "moved": on.moved,
             # What the series is, so the card can say "every week" and the
             # edit form can open holding the rule it already has.
             "repeat": self.repeat,
@@ -1471,11 +1618,28 @@ class Event(Base):
             # uses it to mark the one that is the start of the series rather
             # than one of its repeats.
             "starts_on": self.date.strftime("%Y-%m-%d"),
+            # What the series itself says, as opposed to this occurrence.
+            #
+            # They differ only when this occurrence has been moved, and the
+            # edit form is what needs the difference: switching from "this
+            # meeting" to "the whole series" has to redraw the fields as the
+            # series has them, and for a moved occurrence the values above
+            # are not those. Without this the form would offer to apply one
+            # occurrence's time to every other one.
+            "series": {
+                "date": self.date.strftime("%Y-%m-%d"),
+                "time": self.time.strftime("%H:%M"),
+                "duration": self.duration,
+                "all_day": self.all_day,
+            },
+            # From the occurrence rather than the row, because one week of a
+            # series can be moved in length as well as in time.
+            #
             # null rather than a stand-in: the dashboard draws a start time
             # with no range after it when nobody said how long, and it can
             # only tell the difference if the absence survives the trip.
-            "duration": self.duration,
-            "all_day": self.all_day,
+            "duration": on.duration,
+            "all_day": on.all_day,
             # null for a meeting saved before zones were recorded. The
             # dashboard reads that as "the viewer's own zone", which is the
             # assumption those rows were written under.
@@ -1484,6 +1648,109 @@ class Event(Base):
             "description": self.description or "",
             "location": self.location or "",
         }
+
+
+class EventException(Base):
+    """One occurrence of a repeating meeting that does not follow the series.
+
+    Editing used to be series-only, and the Event docstring argued for it:
+    exceptions need somewhere to record "this one is different", which is a
+    second table and a larger idea of what a meeting is. That reasoning was
+    right about the cost and wrong about the need. "Move just this week's
+    check-in" is the most common edit anybody makes to a standing meeting,
+    and the answer -- end the series and start another -- loses the history
+    and leaves two rows describing one meeting.
+
+    Two kinds of exception, and deliberately only two:
+
+    * Cancelled. This week does not happen. The occurrence disappears from
+      the calendar and the series carries on around it.
+    * Moved. This week happens at a different date, time or length.
+
+    What is *not* here is a different title, partner, location or description
+    for one occurrence. Those are what the meeting is rather than when it is,
+    and a series whose every occurrence can say something different is not a
+    series any more -- it is a lot of meetings that share an id. Somebody who
+    needs that still has the honest version: end the series and make a
+    separate meeting.
+
+    That split is also what keeps this table cheap. It carries the four
+    scheduling fields and nothing else, so there is no second copy of the
+    event schema to keep in step, and no per-column question about whether
+    NULL means "inherit" or "cleared" -- a non-cancelled exception states all
+    of them outright.
+
+    This is iCalendar's own model, which matters because these are exported:
+    a cancellation is an EXDATE, and a move is a VEVENT carrying
+    RECURRENCE-ID. A calendar application subscribing to the file therefore
+    agrees with the dashboard about which weeks are where.
+    """
+
+    __tablename__ = "event_exceptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Which occurrence this is about: the date the *series* lands on, not
+    # wherever it has been moved to. That is what makes it stable -- moving
+    # the same occurrence a second time addresses it by the same date as the
+    # first, so it edits the existing row instead of writing a second one for
+    # a week that only happens once.
+    occurs_on: Mapped[date_type] = mapped_column(Date, nullable=False)
+
+    cancelled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+
+    # Where the occurrence actually is. All NULL when cancelled -- there is
+    # nowhere for a meeting that is not happening to be -- and all stated
+    # otherwise, including when they match the series, so that reading an
+    # exception never means going back to the row to fill in blanks.
+    date: Mapped[date_type | None] = mapped_column(Date)
+    time: Mapped[time_type | None] = mapped_column(Time)
+    duration: Mapped[float | None] = mapped_column(Float)
+    all_day: Mapped[bool | None] = mapped_column(Boolean)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    event = relationship("Event", back_populates="exceptions")
+
+    __table_args__ = (
+        # One exception per occurrence. Two rows for the same week is a
+        # meeting in two places, and which one wins would be whichever the
+        # expansion happened to read first.
+        UniqueConstraint("event_id", "occurs_on",
+                         name="uq_event_exceptions_occurrence"),
+        # The two shapes, spelled out so a half-filled row cannot be written.
+        # A cancellation carries no schedule; a move carries all of it.
+        CheckConstraint(
+            "(cancelled AND date IS NULL AND time IS NULL"
+            " AND duration IS NULL AND all_day IS NULL)"
+            " OR (NOT cancelled AND date IS NOT NULL AND time IS NOT NULL"
+            " AND all_day IS NOT NULL)",
+            name="ck_event_exceptions_shape",
+        ),
+        # The same two rules the events table applies to its own schedule, so
+        # an occurrence cannot be given a shape its series could not have.
+        CheckConstraint("duration IS NULL OR duration > 0",
+                        name="ck_event_exceptions_duration_positive"),
+        CheckConstraint(
+            "NOT (all_day AND duration IS NOT NULL)",
+            name="ck_event_exceptions_all_day_has_no_duration",
+        ),
+        # Every read is "the exceptions for this meeting", loaded in one go
+        # with the meeting itself.
+        Index("ix_event_exceptions_event", "event_id", "occurs_on"),
+    )
+
+    def __repr__(self):
+        what = "cancelled" if self.cancelled else f"moved to {self.date}"
+        return f"<EventException event={self.event_id} {self.occurs_on} {what}>"
 
 
 class SavedLead(Base):

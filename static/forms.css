@@ -456,6 +456,57 @@ button.btn-action {
     word-break: break-word;
 }
 
+/* --- Scope choice -------------------------------------------------------- *
+ *
+ * "This meeting" or "the whole series", on the two dialogs that act on a
+ * repeating meeting. Deliberately radio buttons rather than a select: there
+ * are two options, both need to be read before choosing, and the difference
+ * between them is the difference between skipping a week and ending a
+ * standing meeting. A closed control showing one of them is how the wrong
+ * one gets picked.
+ * ------------------------------------------------------------------------- */
+.event-scope {
+    border: 1px solid var(--ctl-border, var(--h-rule));
+    border-radius: 8px;
+    padding: 0.75rem 1rem 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.event-scope legend {
+    padding: 0 0.4rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--h-ink-soft);
+}
+
+.event-scope label {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    font-size: 0.92rem;
+    color: var(--h-ink);
+    cursor: pointer;
+}
+
+.event-scope input[type="radio"] {
+    /* The row is the target, not the eight-pixel circle in it. */
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.event-scope-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--h-ink-soft);
+}
+
+.event-scope-note:empty {
+    display: none;
+}
+
 .modal-warning {
     display: flex;
     align-items: flex-start;
