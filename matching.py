@@ -16,7 +16,7 @@ Candidate selection happens in SQL (see find_matches) using the GIN-indexed
 to explain the result to the user.
 """
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, literal, or_, select
 
 from categories import focus_labels_for, labels_for
 
@@ -230,6 +230,131 @@ def _join(labels):
     return ", ".join(labels[:-1]) + f" and {labels[-1]}"
 
 
+def _directions(me):
+    """The two overlap tests, as SQL, or None if nothing can match `me`.
+
+    `they_give` is "this organization offers something I need" and `i_give`
+    is "it needs something I offer" -- the same two questions rank_pair asks
+    in Python, expressed as the `&&` the GIN indexes accelerate. An empty
+    list on my side makes its direction impossible rather than universal:
+    overlapping with nothing is nothing, which is why each is only built when
+    there is something to compare against.
+
+    Returned as the pair rather than pre-combined, because the callers want
+    them combined differently -- with OR for "is this a match at all" and
+    with AND for "is it a two-way one" -- and those two have to be built from
+    the same expressions or the count of mutual matches can disagree with the
+    list they are counted from.
+    """
+    from models import Organization
+
+    they_give = Organization.offers.overlap(me.needs) if me.needs else None
+    i_give = Organization.needs.overlap(me.offers) if me.offers else None
+    if they_give is None and i_give is None:
+        return None
+    return they_give, i_give
+
+
+def _present(*conditions):
+    """The conditions that exist, for a caller that may have been given None."""
+    return [c for c in conditions if c is not None]
+
+
+def match_counts(session, me, *, demo=False):
+    """(total, mutual) -- how many matches there are, without building any.
+
+    Two numbers the dashboard leads with, and it used to get them by pulling
+    every organization overlapping `me` across the network and scoring each
+    one in Python. Both are countable in SQL, and this is the whole reason:
+
+      * A candidate is selected on exactly the condition that makes its score
+        non-zero. rank_pair returns 0 when they_give and i_give are both
+        empty, and the WHERE below is `they_give OR i_give` -- so every row
+        the query returns scores above zero and every row it excludes scores
+        zero. `total` is therefore the count of that query, not something
+        that has to be worked out per row.
+
+      * `mutual` is the same two expressions under AND rather than OR, which
+        is rank_pair's definition of a two-way match with nothing else in it.
+
+    The bonuses -- location, organization type, shared focus -- do not appear
+    here and must not. They change what a match is *worth*, never whether it
+    is one; rank_pair returns early on the two overlaps before any of them is
+    considered. That is what keeps these counts honest without a second copy
+    of the weights living in SQL.
+
+    One query, not two: count(*) and a FILTERed count read the same scan.
+    """
+    directions = _directions(me)
+    if directions is None:
+        return 0, 0
+    they_give, i_give = directions
+
+    from models import Organization
+
+    both_ways = they_give is not None and i_give is not None
+    stmt = select(
+        func.count(),
+        # count(*) FILTER (WHERE ...) rather than a second query: the two
+        # numbers are read off one scan.
+        func.count().filter(and_(they_give, i_give)) if both_ways
+        # One of my own lists is empty, so that direction cannot happen for
+        # anybody and nothing is mutual. A literal rather than a filter that
+        # can never match, so the database is not asked to evaluate a
+        # contradiction once per row.
+        else literal(0),
+    ).where(
+        Organization.id != me.id,
+        Organization.onboarding_complete.is_(True),
+        Organization.hidden_at.is_(None),
+        or_(*_present(they_give, i_give)),
+    )
+    if demo is not None:
+        stmt = stmt.where(Organization.is_demo.is_(demo))
+
+    total, mutual = session.execute(stmt).one()
+    return total, mutual
+
+
+def _mutual_candidates(session, me, *, demo=False):
+    """Only the two-way matches, as rows cheap enough to rank.
+
+    The narrow half of _candidates. Ranking is mutual-first before it is
+    score-first (see _rank_key), so when there are enough of these to fill a
+    shortlist, nothing one-directional can reach it however well it scores --
+    which means the far larger one-way set never has to leave the database.
+    """
+    directions = _directions(me)
+    if directions is None:
+        return []
+    they_give, i_give = directions
+    if they_give is None or i_give is None:
+        return []      # a direction that cannot happen makes mutual impossible
+
+    from models import Organization
+
+    stmt = select(
+        Organization.id,
+        Organization.name,
+        Organization.needs,
+        Organization.offers,
+        Organization.focus_areas,
+        Organization.location,
+        Organization.remote_friendly,
+        Organization.organization_type,
+        Organization.is_demo,
+    ).where(
+        Organization.id != me.id,
+        Organization.onboarding_complete.is_(True),
+        Organization.hidden_at.is_(None),
+        they_give,
+        i_give,
+    )
+    if demo is not None:
+        stmt = stmt.where(Organization.is_demo.is_(demo))
+    return session.execute(stmt).all()
+
+
 def _candidates(session, me, *, demo=False):
     """Every organization that could match `me`, as rows cheap enough to rank.
 
@@ -281,17 +406,11 @@ def _candidates(session, me, *, demo=False):
     if demo is not None:
         stmt = stmt.where(Organization.is_demo.is_(demo))
 
-    # `&&` is "arrays overlap" and is what the GIN indexes accelerate. An org
-    # with no categories at all matches nobody, which is correct.
-    conditions = []
-    if me.needs:
-        conditions.append(Organization.offers.overlap(me.needs))
-    if me.offers:
-        conditions.append(Organization.needs.overlap(me.offers))
-    if not conditions:
+    directions = _directions(me)
+    if directions is None:
         return []
-
-    return session.execute(stmt.where(or_(*conditions))).all()
+    they_give, i_give = directions
+    return session.execute(stmt.where(or_(*_present(they_give, i_give)))).all()
 
 
 def _hydrate(session, rows):
@@ -497,13 +616,47 @@ def match_overview(session, me, top=5):
     answers a different question -- "give me every match, fully rendered" --
     and then threw almost all of it away.
 
-    Same candidates and same scoring; the difference is that only `top`
-    organizations are fetched in full and given their prose. Everything else
-    is the arithmetic in rank_pair, which is what the two paths share.
+    Same scoring as everywhere else; the difference is how little of the
+    directory has to cross the network to answer it.
 
     Returns (total, mutual_count, top_matches).
+
+    Three steps, and the middle one is the point:
+
+    1. The two counts come from match_counts, in SQL. They used to be the
+       length of a ranked list, which meant ranking everything that overlaps
+       `me` to produce two integers.
+
+    2. The shortlist is taken from the *mutual* candidates alone whenever
+       there are at least `top` of them. That is not a heuristic: _rank_key
+       orders on `not mutual` before it orders on score, so every two-way
+       match outranks every one-directional one however lopsided the scores
+       are, and a shortlist that can be filled from the mutual set is already
+       final. On any account with five two-way matches -- which is what an
+       established profile in a working directory looks like -- the
+       one-directional set is never fetched at all, and that is the set that
+       grows with the size of the directory.
+
+    3. Only when there are fewer than `top` mutual matches does the full
+       overlap scan happen, and then it is the old path exactly.
+
+    The fallback is deliberately not cleverer than that. Picking the best
+    one-directional matches without looking at them would mean ordering on
+    score in SQL, and score is rank_pair's arithmetic -- weights, bonuses,
+    the cap -- which this file exists to keep in one place. A second copy in
+    SQL would be free to disagree with the first about what a match is worth,
+    which is a worse failure than a scan. The honest bound on that case is a
+    materialized score, which is a different change.
     """
-    ranked, mutual_count = _rank(me, _candidates(session, me))
+    total, mutual_count = match_counts(session, me)
+    if not total:
+        return 0, 0, []
+
+    if mutual_count >= top:
+        ranked, _ = _rank(me, _mutual_candidates(session, me))
+    else:
+        ranked, _ = _rank(me, _candidates(session, me))
+
     best = [_entry(me, org)
             for org in _hydrate(session, [r[3] for r in ranked[:top]])]
-    return len(ranked), mutual_count, best
+    return total, mutual_count, best
