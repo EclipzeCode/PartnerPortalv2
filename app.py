@@ -4523,6 +4523,53 @@ def list_organizations(org, db):
     })
 
 
+# How many directory pages one address may read in an hour.
+#
+# Was 120, chosen on the reasoning that a directory request serves a whole
+# page of organizations so a reader spends few of them. That is true of the
+# requests and false of the readers, because this is the one route here with
+# nothing but an address to go on.
+#
+# Every other limited route can tell a person from a building. The profile
+# route below keys anonymous callers by address and signed-in ones by
+# account, precisely because "an office or a university behind one NAT is
+# many legitimate readers on one address". This route is unauthenticated by
+# design -- that is the whole point of it -- so there is no second bucket to
+# fall back to, and the address is not one visitor. It is a library, a
+# school, an office, or a mobile carrier putting thousands of subscribers
+# behind one IPv4 address.
+#
+# What a real session costs, which is what the old number was not measured
+# against: one request for the page, one per filter change, one per page
+# turned, and one per pause in typing -- the search box debounces at 300ms
+# rather than sending a request per keystroke. Somebody looking properly
+# spends fifteen to thirty. At 120 an hour that is four sessions before a
+# shared address is refused, and the refusal lands on whoever happens to
+# arrive fifth.
+#
+# 600 is twenty sessions, which is a small office reading at once or one
+# person browsing far harder than anybody does. It is still far below
+# enumeration: the page size is capped at 24 just above, the payload is
+# public_profile() -- already published at each organization's own URL -- and
+# every request leaves a rate-limit row behind it.
+#
+# The cost of being wrong is asymmetric and points the same way. Too high
+# spends database time on a route that is two indexed queries; too low means
+# a stranger on a shared connection is told to come back later by the page
+# built to show them what this is.
+#
+# Env-tunable like PROFILE_READS_PER_HOUR below, so a deployment that sees
+# real abuse can pull it down without a deploy.
+#
+# What this does not fix: carrier-grade NAT, where thousands share an
+# address. No per-address number is right for that, and there is nothing else
+# to key on when the caller has deliberately not been asked to identify
+# itself. Said plainly rather than papered over with a bigger number.
+DIRECTORY_READS_PER_HOUR = int(
+    os.environ.get("DIRECTORY_READS_PER_HOUR", "600")
+)
+
+
 # The public directory's own ceiling, lower than the signed-in one.
 #
 # Not because the payload is sensitive -- public_profile() is what an
@@ -4565,7 +4612,8 @@ def public_directory():
     them, which it does.
     """
     wait = rate_limited("public_directory", client_ip(),
-                        max_attempts=120, window_seconds=3600)
+                        max_attempts=DIRECTORY_READS_PER_HOUR,
+                        window_seconds=3600)
     if wait:
         return too_many("Too many requests from this connection.", wait)
 
@@ -5011,12 +5059,20 @@ def get_organization(org, db, org_id):
     return jsonify({"organization": data})
 
 
-# How many public profiles one caller may read in an hour. Higher than the
-# directory's 120, and for a reason rather than by feel: the directory serves
-# a page of organizations per request, so a reader costs it few requests and
-# many rows, where this route is one request per profile opened. The limit
-# that is generous for a person here is a much larger number than the one
-# that is generous for a person there.
+# How many public profiles one caller may read in an hour.
+#
+# Lower than the directory's, and for a reason rather than by feel: a
+# directory request serves a page of organizations, so a reader spends few of
+# them and this route spends one per profile opened. The comparison used to
+# run the other way -- this was the higher of the two, against a directory
+# limit of 120 -- and the number that changed was that one, because it was
+# set against the cost of a request rather than against the number of people
+# who can share an address. See DIRECTORY_READS_PER_HOUR.
+#
+# This one needs no such raise: it is already two buckets, keyed by account
+# for a signed-in caller and by address only for an anonymous one, so a
+# building full of readers is not counted as a single client the way it was
+# there.
 PROFILE_READS_PER_HOUR = int(
     os.environ.get("PROFILE_READS_PER_HOUR", "300")
 )

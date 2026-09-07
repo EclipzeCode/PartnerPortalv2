@@ -286,3 +286,73 @@ def test_examples_show_by_default_and_can_be_turned_off(client, make_org):
     hidden = client.get(
         "/api/directory?q=pytest-dirdemo&include_examples=0").get_json()
     assert hidden["organizations"] == []
+
+
+# --- The rate limit -------------------------------------------------------
+# This route answers without a session, so an address is all it has to go on
+# -- and an address is a library, a school or a carrier's NAT as often as it
+# is a person. The limit was 120 an hour, set against what a request costs
+# rather than against how many people can share one connection; see
+# DIRECTORY_READS_PER_HOUR for the arithmetic behind the number that
+# replaced it.
+#
+# None of this was covered before. The tests below pin the two halves that
+# matter: that the limit is still enforced, and that it is the constant doing
+# the enforcing rather than a number frozen into the route.
+
+def test_the_directory_is_still_rate_limited(client, make_org, monkeypatch):
+    """Raising a limit must not turn into removing it."""
+    import app as app_module
+    monkeypatch.setattr(app_module, "DIRECTORY_READS_PER_HOUR", 4)
+    make_org(name="pytest-dirlimit Org")
+
+    codes = [client.get("/api/directory?q=pytest-dirlimit").status_code
+             for _ in range(6)]
+    assert codes[:4] == [200] * 4, codes
+    assert codes[4:] == [429, 429], codes
+
+
+def test_the_limit_is_read_from_the_constant(client, make_org, monkeypatch):
+    """Not frozen into the route, so the env override actually overrides.
+
+    The value is read per request rather than captured at import, which is
+    what makes DIRECTORY_READS_PER_HOUR tunable without a code change -- and
+    what lets the test above set it to something a test can reach.
+    """
+    import app as app_module
+    make_org(name="pytest-dirtune Org")
+
+    monkeypatch.setattr(app_module, "DIRECTORY_READS_PER_HOUR", 1)
+    assert client.get("/api/directory?q=pytest-dirtune").status_code == 200
+    assert client.get("/api/directory?q=pytest-dirtune").status_code == 429
+
+    # Raised mid-flight: the request that was refused a moment ago is allowed
+    # now, on the same address, without anything being cleared.
+    monkeypatch.setattr(app_module, "DIRECTORY_READS_PER_HOUR", 50)
+    assert client.get("/api/directory?q=pytest-dirtune").status_code == 200
+
+
+def test_being_refused_says_how_long_to_wait(client, make_org, monkeypatch):
+    """A shared address will hit this, so the answer has to be actionable."""
+    import app as app_module
+    monkeypatch.setattr(app_module, "DIRECTORY_READS_PER_HOUR", 1)
+    make_org(name="pytest-dirwait Org")
+
+    client.get("/api/directory?q=pytest-dirwait")
+    refused = client.get("/api/directory?q=pytest-dirwait")
+    assert refused.status_code == 429
+    assert refused.headers["Retry-After"].isdigit()
+    body = refused.get_json()
+    assert body["retry_after"] > 0
+    assert "Try again" in body["error"]
+
+
+def test_the_default_is_the_raised_one(client):
+    """Guards the number itself, which is the whole point of the change.
+
+    Written as a floor rather than an equality: this is here to catch the
+    limit being quietly dropped back to something a shared connection
+    exhausts in four sessions, not to make tuning it upward a test failure.
+    """
+    import app as app_module
+    assert app_module.DIRECTORY_READS_PER_HOUR >= 600
