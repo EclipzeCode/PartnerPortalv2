@@ -9,7 +9,9 @@ stale-connection error.
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+import time
+
+from sqlalchemy import create_engine, event, exc
 from sqlalchemy.orm import sessionmaker
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
@@ -72,9 +74,23 @@ DATABASE_URL = _normalize(DATABASE_URL)
 POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "2"))
 POOL_MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "3"))
 
+# How long a pooled connection may sit unused before it is pinged on the way
+# out. pool_pre_ping=True pings on *every* checkout, and a ping is a full
+# round trip to a database in another data center -- the same 40-50ms every
+# real query costs -- paid before the request's first real query, and paid
+# twice on a rate-limited route, which checks out two connections. On a busy
+# minute nearly all of those pings answer a question whose answer is already
+# known: a connection that ran a query two seconds ago has not been dropped
+# since. Neon closes idle connections on a timescale of minutes, so a
+# connection idle for less than this is pinged only by being used, and one
+# idle for longer is pinged exactly as before -- the listener below is
+# pool_pre_ping's own logic with a clock in front of it. The recycle at five
+# minutes still retires connections before Neon does.
+PING_IDLE_SECONDS = float(os.environ.get("DB_PING_IDLE_SECONDS", "20"))
+
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
+    pool_pre_ping=False,    # replaced by the idle-aware ping below
     pool_recycle=300,
     pool_size=POOL_SIZE,
     max_overflow=POOL_MAX_OVERFLOW,
@@ -86,6 +102,34 @@ engine = create_engine(
     pool_timeout=int(os.environ.get("DB_POOL_TIMEOUT", "10")),
     future=True,
 )
+
+@event.listens_for(engine, "checkin")
+def _note_idle_since(dbapi_connection, connection_record):
+    connection_record.info["idle_since"] = time.monotonic()
+
+
+@event.listens_for(engine, "checkout")
+def _ping_if_idle(dbapi_connection, connection_record, connection_proxy):
+    """pool_pre_ping, but only for a connection that has been idle a while.
+
+    Raising DisconnectionError is the contract: the pool discards this
+    connection and retries the checkout with another, up to three times,
+    which is exactly what pool_pre_ping does when its ping fails.
+    """
+    idle_since = connection_record.info.get("idle_since")
+    if idle_since is not None and time.monotonic() - idle_since < PING_IDLE_SECONDS:
+        return
+    # The dialect's own ping, not a bare cursor.execute("SELECT 1"): psycopg
+    # opens a transaction on any statement, and a connection handed over
+    # INTRANS cannot then be switched to autocommit -- which is what the
+    # rate limiter does to its connection first thing (see _limiter_db in
+    # app.py). do_ping flips autocommit on around the statement and back,
+    # so the connection comes out exactly as it went in.
+    try:
+        engine.dialect.do_ping(dbapi_connection)
+    except Exception as error:
+        raise exc.DisconnectionError() from error
+
 
 # expire_on_commit=False so objects stay readable after the session commits,
 # which is what request handlers want when serializing a response.

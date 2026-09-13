@@ -818,12 +818,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             try {
+                // Just the view figures, not the whole dashboard: this
+                // control redraws one chart, and re-fetching matches,
+                // partnerships and meetings to do it was a dozen statements
+                // for one.
                 const fresh = await window.api(
-                    `/api/dashboard${viewsQuery(days)}`);
+                    `/api/dashboard/views${viewsQuery(days)}`);
                 // Same guard the directory uses: a slower answer must not
                 // land on top of a faster one somebody asked for after it.
                 if (mine !== pending) return;
-                dashboard = fresh;
+                dashboard = {
+                    ...dashboard,
+                    stats: { ...(dashboard && dashboard.stats), ...fresh.stats },
+                };
                 renderViewsChart();
             } catch (error) {
                 if (mine !== pending) return;

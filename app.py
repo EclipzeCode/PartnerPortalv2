@@ -27,6 +27,7 @@ from flask import (
 
 from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
@@ -3552,19 +3553,39 @@ def get_me(org, db):
     # property of the org, so it sits beside the organization rather than in
     # private_dict.
     #
-    # pending_proposals is what the nav badge (common.js) reads. Every page
-    # already calls /api/me to resolve the signed-in state, so folding the
-    # count in here costs one indexed COUNT query, rather than a second
-    # request to /api/proposals' much heavier full-list payload on every
-    # page load just to find out whether anything is waiting.
-    pending_proposals = db.query(Partnership).filter(
-        Partnership.recipient_id == org.id,
-        Partnership.status == Partnership.PENDING,
-    ).count()
-    # Same reasoning as pending_proposals above: every page calls this, so
-    # one indexed query here beats a second request per page just to find out
-    # whether anything is waiting.
-    unread_messages, unread_threads = _unread_message_count(db, org)
+    # pending_proposals and the unread counts are what the nav badge
+    # (common.js) reads. Every page already calls /api/me to resolve the
+    # signed-in state, so folding them in here costs one indexed query,
+    # rather than a second request to /api/proposals' much heavier full-list
+    # payload on every page load just to find out whether anything is
+    # waiting. One query, not two: this is the most-called route there is
+    # (every page, and again every minute the nav polls), and the pending
+    # count and the two unread counts are independent scalars that ride in
+    # one SELECT as three subqueries.
+    #
+    # Two unread numbers because two callers ask different questions. "You
+    # have unread messages" is a count of messages. The nav badge is a count
+    # of *things waiting on you*, and the notification list under it
+    # deliberately collapses a conversation into one entry -- so the badge
+    # counts threads, or it says 6 over a panel that lists 1.
+    pending_q = (
+        select(func.count(Partnership.id))
+        .where(Partnership.recipient_id == org.id,
+               Partnership.status == Partnership.PENDING)
+    ).scalar_subquery()
+    unread_base = (
+        select(Message.id, Message.partnership_id)
+        .join(Partnership, Message.partnership_id == Partnership.id)
+        .where(_unread_by(org.id))
+    ).subquery()
+    pending_proposals, unread_messages, unread_threads = db.execute(
+        select(
+            pending_q,
+            select(func.count(unread_base.c.id)).scalar_subquery(),
+            select(func.count(func.distinct(unread_base.c.partnership_id)))
+            .scalar_subquery(),
+        )
+    ).one()
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
@@ -3572,7 +3593,7 @@ def get_me(org, db):
         "unread_messages": unread_messages,
         # What the nav badge adds to pending_proposals. One per conversation,
         # matching how the notification list counts the same thing -- see
-        # _unread_message_count. unread_messages stays beside it because it
+        # the note above. unread_messages stays beside it because it
         # is a different and equally true number, and the two are told apart
         # by name rather than by whichever caller happened to read it.
         "unread_threads": unread_threads,
@@ -5784,40 +5805,97 @@ def mark_notifications_read(org, db):
 
 
 # --- Dashboard --------------------------------------------------------------
-def _partnership_counts(db, org):
-    """The four partnership numbers on the dashboard, from one query.
+def _dashboard_counts(db, org):
+    """The four partnership numbers on the dashboard, and the saved count.
 
-    Grouped by status and by which side of each row this organization is on,
-    which is the only thing that separates "waiting on you" from "waiting on
-    them" -- both are pending, and the direction is whether org.id sits in
-    proposer_id or recipient_id.
+    One row of FILTERed counts over this organization's partnerships. What
+    separates "waiting on you" from "waiting on them" is which side of a
+    pending row org.id sits on, and each is its own filter rather than a
+    GROUP BY read back into a dict.
 
     Counted rather than derived from a list. The four used to be four passes
     over every partnership this organization had ever been part of, which is
     why that list was loaded in full: not because anything rendered it, but
-    because the counts needed it. Nothing is serialized here, both parties
-    stay unloaded, and the answer is one row per status per direction --
-    at most twelve rows, whatever the history behind them.
-    """
-    incoming = case((Partnership.recipient_id == org.id, True), else_=False)
-    rows = db.query(
-        Partnership.status,
-        incoming.label("incoming"),
-        func.count(Partnership.id),
-    ).filter(
-        or_(Partnership.proposer_id == org.id,
-            Partnership.recipient_id == org.id)
-    ).group_by(Partnership.status, incoming).all()
+    because the counts needed it. Nothing is serialized here and both
+    parties stay unloaded.
 
-    tally = {(status, bool(inbound)): n for status, inbound, n in rows}
+    The saved-lead count rides along as a scalar subquery. It has nothing to
+    do with partnerships; it is here because the dashboard needs both, and
+    a fifth column on a trip already being made costs nothing where a
+    second trip to another data center costs the same as every real query.
+    """
+    def counting(*conditions):
+        return func.count(Partnership.id).filter(and_(*conditions))
+
+    row = db.execute(
+        select(
+            counting(Partnership.status == Partnership.PENDING,
+                     Partnership.recipient_id == org.id),
+            counting(Partnership.status == Partnership.PENDING,
+                     Partnership.proposer_id == org.id),
+            counting(Partnership.status == Partnership.ACCEPTED),
+            counting(Partnership.status == Partnership.COMPLETED),
+            select(func.count(SavedLead.id))
+            .where(SavedLead.organization_id == org.id).scalar_subquery(),
+        ).where(
+            or_(Partnership.proposer_id == org.id,
+                Partnership.recipient_id == org.id)
+        )
+    ).one()
+    awaiting_you, sent_pending, agreed, completed, saved = row
     return {
-        "awaiting_you": tally.get((Partnership.PENDING, True), 0),
-        "sent_pending": tally.get((Partnership.PENDING, False), 0),
-        "agreed": sum(n for (status, _), n in tally.items()
-                      if status == Partnership.ACCEPTED),
-        "completed": sum(n for (status, _), n in tally.items()
-                         if status == Partnership.COMPLETED),
+        "awaiting_you": awaiting_you,
+        "sent_pending": sent_pending,
+        "agreed": agreed,
+        "completed": completed,
+        "saved": saved,
     }
+
+
+def _view_range_args():
+    """(days, zone) from the query string, each defaulted when not usable.
+
+    Clamped to the fixed set rather than trusted: `days` decides how much of
+    profile_views is scanned. Anything unrecognized falls back to the
+    default rather than being refused -- a stale bookmark asking for a window
+    that no longer exists should draw the usual chart, not an error.
+
+    `tz` is the owner's timezone, for where one day of the views chart ends
+    and the next begins: an IANA name the browser knows its own copy of.
+    Anything else, or nothing, is UTC -- the boundary every row had before
+    the parameter existed.
+    """
+    try:
+        view_days = int(request.args.get("days", VIEW_SERIES_DAYS))
+    except (TypeError, ValueError):
+        view_days = VIEW_SERIES_DAYS
+    if view_days not in VIEW_SERIES_CHOICES:
+        view_days = VIEW_SERIES_DAYS
+    view_zone = _known_zone(request.args.get("tz")) or "UTC"
+    return view_days, view_zone
+
+
+@app.route("/api/dashboard/views", methods=["GET"])
+@login_required
+def get_dashboard_views(org, db):
+    """The profile-view figures alone, for a different window.
+
+    The analytics page's 7 / 30 / 90 control used to re-request the whole
+    dashboard -- matches, partnerships, meetings, message counts, a dozen
+    statements -- to redraw one chart from one of them. This is that one
+    statement, under the same keys the dashboard's `stats` carries so the
+    page can merge it in place.
+    """
+    days, zone = _view_range_args()
+    total, recent, series, prior = _profile_view_stats(db, org, days=days,
+                                                       zone=zone)
+    return jsonify({"stats": {
+        "profile_views": total,
+        "profile_views_recent": recent,
+        "profile_views_series": series,
+        "profile_views_prior": prior,
+        "profile_views_days": days,
+    }})
 
 
 @app.route("/api/dashboard", methods=["GET"])
@@ -5829,28 +5907,15 @@ def get_dashboard(org, db):
     # /api/me. Included in the not-yet-onboarded branch too: that page still
     # renders the meetings card, and an empty list there should mean "none"
     # rather than "never asked".
-    # Clamped to the fixed set rather than trusted: this number decides how
-    # much of profile_views is scanned. Anything unrecognized falls back to
-    # the default rather than being refused -- a stale bookmark asking for a
-    # window that no longer exists should draw the usual chart, not an error.
-    try:
-        view_days = int(request.args.get("days", VIEW_SERIES_DAYS))
-    except (TypeError, ValueError):
-        view_days = VIEW_SERIES_DAYS
-    if view_days not in VIEW_SERIES_CHOICES:
-        view_days = VIEW_SERIES_DAYS
-    # The owner's timezone, for where one day of the views chart ends and
-    # the next begins. An IANA name the browser knows its own copy of;
-    # anything else, or nothing, is UTC -- the boundary every row had before
-    # the parameter existed.
-    view_zone = _known_zone(request.args.get("tz")) or "UTC"
+    view_days, view_zone = _view_range_args()
 
     events, events_total = _expanded_events(db, org,
                                             limit=DASHBOARD_EVENT_LIMIT)
     # The shortlist's size only -- the dialog behind the card fetches the
     # organizations themselves when it is opened, the same way the matches
     # views do.
-    saved_count = len(_saved_ids(db, org))
+    counts = _dashboard_counts(db, org)
+    saved_count = counts["saved"]
     views_total, views_recent, views_series, views_prior = (
         _profile_view_stats(db, org, days=view_days, zone=view_zone))
 
@@ -5883,7 +5948,6 @@ def get_dashboard(org, db):
     # five cards, on the page every signed-in visit lands on.
     total_matches, mutual_matches, top_matches = match_overview(db, org, top=5)
 
-    counts = _partnership_counts(db, org)
 
     # Five, in SQL. This used to load every partnership this organization has
     # ever been part of -- with lazy="joined" pulling both parties in with
@@ -5892,10 +5956,24 @@ def get_dashboard(org, db):
     # neither has to be the shape the other needs: the counts are one grouped
     # query over rows nobody serializes, and the cards are the five that are
     # actually rendered.
-    rows = db.query(Partnership).filter(
-        or_(Partnership.proposer_id == org.id,
-            Partnership.recipient_id == org.id)
-    ).order_by(Partnership.created_at.desc()).limit(5).all()
+    #
+    # The same statement also brings every accepted partnership, for the
+    # partner picker below: a five-row LIMIT cannot be combined with a
+    # status filter in one WHERE, but a subquery naming the five ids can be
+    # OR'd with it, and one trip that returns both lists beats two that
+    # return one each. Sorted and cut in Python, where both are small.
+    party = or_(Partnership.proposer_id == org.id,
+                Partnership.recipient_id == org.id)
+    newest_ids = (
+        select(Partnership.id).where(party)
+        .order_by(Partnership.created_at.desc()).limit(5)
+    ).scalar_subquery()
+    fetched = db.query(Partnership).filter(
+        party,
+        or_(Partnership.id.in_(newest_ids),
+            Partnership.status == Partnership.ACCEPTED),
+    ).order_by(Partnership.created_at.desc()).all()
+    rows = fetched[:5]
     recent_proposals = [p.to_dict(viewer_id=org.id) for p in rows]
     _annotate_message_counts(db, org, rows, recent_proposals)
 
@@ -5905,11 +5983,7 @@ def get_dashboard(org, db):
     # partnership older than the last five proposals -- exactly the one a
     # standing meeting is most likely about -- could not be chosen. Ids and
     # names only; the counterpart's row is already joined in.
-    live = db.query(Partnership).filter(
-        or_(Partnership.proposer_id == org.id,
-            Partnership.recipient_id == org.id),
-        Partnership.status == Partnership.ACCEPTED,
-    ).all()
+    live = [p for p in fetched if p.status == Partnership.ACCEPTED]
     partners = sorted(
         {(p.counterpart(org.id).id, p.counterpart(org.id).name)
          for p in live if p.counterpart(org.id) is not None},
@@ -5967,8 +6041,18 @@ def get_dashboard(org, db):
 # account. Everything else on the dashboard is server-backed, so this was the
 # one place the page lost work someone had done.
 def _events_for(db, org):
-    """This org's meetings, soonest first. Covered by ix_events_organization_date."""
-    return db.query(Event).filter(
+    """This org's meetings, soonest first. Covered by ix_events_organization_date.
+
+    The exceptions come along in the same statement. The relationship is
+    selectin-loaded, which is right for a single event and one round trip
+    too many for a list that is always about to read every event's
+    exceptions -- which is what expanding them does. An organization has a
+    handful of meetings with a handful of exceptions each, so the joined
+    row fan-out is small and the saved trip is not.
+    """
+    return db.query(Event).options(
+        joinedload(Event.exceptions)
+    ).filter(
         Event.organization_id == org.id
     ).order_by(Event.date, Event.time).all()
 
@@ -7365,9 +7449,9 @@ def _proposal_counts(db, org):
     organization had ever been part of, and -- more to the point -- five
     numbers that could only be produced by loading all of it. Splitting them
     out is what lets the list above be paged at all, the same split
-    _partnership_counts made for the dashboard and for the same reason.
+    _dashboard_counts made for the dashboard and for the same reason.
 
-    Kept separate from _partnership_counts rather than merged with it: the
+    Kept separate from _dashboard_counts rather than merged with it: the
     two answer different questions (that one has "awaiting you", this one
     has the archive statuses) and folding them together would give each
     caller three numbers it does not use.
@@ -7456,39 +7540,41 @@ def list_proposals(org, db):
 def _annotate_message_counts(db, org, rows, payloads):
     """Add message and unread counts to a list of serialized proposals.
 
-    Two grouped queries for the whole list, whatever its length. This runs on
+    One grouped query for the whole list, whatever its length. This runs on
     every load of the proposals page and of the dashboard, and counting per
     row is what turns a page of a dozen proposals into twenty-five round
-    trips to a database that is a network hop away.
+    trips to a database that is a network hop away. It was two queries --
+    one for totals, one for unread -- over the same rows; the unread count
+    is now a FILTER on the same GROUP BY, which is one round trip fewer on
+    the two most-loaded pages for the same answer.
 
     Unread is per viewer and the marker to compare against depends on which
     side of each proposal this org is on, which is why it joins partnerships
-    and asks both cases in one WHERE rather than looping. It is the same
+    and asks both cases in one condition rather than looping. It is the same
     condition _unread_message_count uses, grouped instead of totaled.
     """
     ids = [row.id for row in rows]
     if not ids:
         return
 
-    totals = dict(
-        db.query(Message.partnership_id, func.count(Message.id))
-        .filter(Message.partnership_id.in_(ids))
-        .group_by(Message.partnership_id).all()
-    )
-
-    unread = dict(
-        db.query(Message.partnership_id, func.count(Message.id))
-        .join(Partnership, Message.partnership_id == Partnership.id)
-        .filter(
-            Message.partnership_id.in_(ids),
-            _unread_by(org.id),
+    counts = {
+        partnership_id: (total, unread)
+        for partnership_id, total, unread in (
+            db.query(
+                Message.partnership_id,
+                func.count(Message.id),
+                func.count(Message.id).filter(_unread_by(org.id)),
+            )
+            .join(Partnership, Message.partnership_id == Partnership.id)
+            .filter(Message.partnership_id.in_(ids))
+            .group_by(Message.partnership_id).all()
         )
-        .group_by(Message.partnership_id).all()
-    )
+    }
 
     for payload in payloads:
-        payload["message_count"] = totals.get(payload["id"], 0)
-        payload["unread_count"] = unread.get(payload["id"], 0)
+        total, unread = counts.get(payload["id"], (0, 0))
+        payload["message_count"] = total
+        payload["unread_count"] = unread
 
 
 def _load_party_proposal(db, org, proposal_id, lock=False):
@@ -8227,32 +8313,6 @@ def _maybe_notify_message(db, proposal, sender, message):
         return
 
     notify_message_received(proposal, sender, message)
-
-
-def _unread_message_count(db, org):
-    """(messages, threads) waiting on `org`, across everything it is party to.
-
-    Both, from one query rather than a thread at a time: this rides along
-    with /api/me, which every page calls, so it has to stay cheap.
-
-    Two numbers because the two callers are asking different questions and
-    were being given the same answer. "You have unread messages" is a count
-    of messages. The nav badge is a count of *things waiting on you*, and the
-    notification list underneath it deliberately collapses a conversation
-    into one entry -- "a conversation is one thing that happened, and six
-    lines saying the same name is how a notification list stops being read".
-    So the badge said 6 and the panel it opened listed 1, and neither was
-    wrong about what it was counting.
-    """
-    row = db.query(
-        func.count(Message.id),
-        func.count(func.distinct(Message.partnership_id)),
-    ).join(
-        Partnership, Message.partnership_id == Partnership.id
-    ).filter(
-        _unread_by(org.id)
-    ).one()
-    return row[0] or 0, row[1] or 0
 
 
 @app.route("/api/partnerships/<token>", methods=["GET"])

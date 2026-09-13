@@ -29,9 +29,17 @@
         return;
     }
 
+    // Both requests at once. The second only matters when the first
+    // succeeds, but waiting to find out cost a full round trip on every
+    // profile view -- and this is the page most people reach from a link,
+    // with nothing cached.
+    const publicRequest = fetch(`/api/organizations/${encodeURIComponent(id)}/public`);
+    const viewerRequest = fetch(`/api/organizations/${encodeURIComponent(id)}`)
+        .catch(() => null);
+
     let org;
     try {
-        const res = await fetch(`/api/organizations/${encodeURIComponent(id)}/public`);
+        const res = await publicRequest;
         if (!res.ok) throw new Error('not found');
         org = (await res.json()).organization;
     } catch {
@@ -49,8 +57,8 @@
     // click it and land on the sign-in wall instead of the public directory.
     let viewer = null;
     try {
-        const res = await fetch(`/api/organizations/${encodeURIComponent(id)}`);
-        if (res.ok) viewer = (await res.json()).organization;
+        const res = await viewerRequest;
+        if (res && res.ok) viewer = (await res.json()).organization;
     } catch {
         // Offline or blocked; the public payload is enough to render.
     }

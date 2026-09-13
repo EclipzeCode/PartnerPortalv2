@@ -1477,10 +1477,11 @@ class Event(Base):
         the filtering rather than after.
         """
         base = self._base_dates(until, since)
+        base_dates = set(base)      # the membership test below runs per exception
 
         moved_in = []
         for exception in self.exceptions:
-            if exception.cancelled or exception.occurs_on in base:
+            if exception.cancelled or exception.occurs_on in base_dates:
                 continue
             # An occurrence whose original date is outside the window but
             # which has been moved into it. _base_dates never generated it,
