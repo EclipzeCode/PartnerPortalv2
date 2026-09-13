@@ -348,9 +348,23 @@
     background: var(--h-paper);
 }
 
-.partner-card:focus-visible {
+/* The card's keyboard target is the name, a real <button> inside the <h3>
+   (see render() in ppsearch.js). It dresses as the heading text; the <h3>
+   above it still does the two-line clamp. */
+.partner-card .card-open {
+    all: unset;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+}
+
+.partner-card .card-open:focus-visible {
     outline: 2px solid var(--h-give);
-    outline-offset: -2px;
+    outline-offset: 3px;
 }
 
 /* A two-way match is the thing this product is for, so it is marked on the

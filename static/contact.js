@@ -23,13 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function open() {
         setMessage('');
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(modal);
     }
 
     function close() {
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
     }
 
@@ -95,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const res = await fetch(`${window.API_BASE}/api/contact`, {
+            const res = await window.timedFetch(`${window.API_BASE}/api/contact`, {
                 method: 'POST',
                 headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(payload),

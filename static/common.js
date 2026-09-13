@@ -182,6 +182,20 @@ window.api = async function api(path, options = {}) {
         return new Promise(() => {});
     }
 
+    // A stale CSRF token is the one refusal that fixes itself. The server
+    // answers a mismatch with 403 {csrf: true} -- and, because that answer
+    // is JSON and the cookie differs from the session's token, it also
+    // re-sets the cookie in the same response (see send_csrf_cookie). So by
+    // the time this reads the 403, the browser already holds the right
+    // token, and the request only has to be made again with it. Once: a
+    // second refusal means something else is wrong, and it is reported.
+    // This is what a tab left open across a sign-in on another tab used to
+    // hit -- the token had rotated underneath it, and the first thing it
+    // tried said "reload the page" for something a retry settles.
+    if (result.status === 403 && data && data.csrf && unsafe && !opts.csrfRetried) {
+        return api(path, { ...options, csrfRetried: true });
+    }
+
     if (!result.ok) {
         const error = new Error((data && data.error) || `Request failed (${result.status})`);
         error.status = result.status;
@@ -377,8 +391,31 @@ function focusInto(modal, preferred) {
 
 // Call right after the dialog is shown. `preferred` is the control focus
 // should land on when it is not simply the first one in the markup.
+// The page behind a dialog does not scroll. Owned here, beside the stack of
+// open dialogs, rather than by each page's openModal/closeModal pair: every
+// one of those wrote 'hidden' on open and 'auto' on close, which meant a
+// dialog opened from inside another -- the delete confirmation over the
+// dashboard's stat dialog, say -- unlocked the page when it closed and left
+// the outer dialog scrolling behind itself. The lock is taken by the first
+// dialog to open and released by the last to close, and what it restores
+// is whatever the page had, not 'auto'.
+let scrollLockBefore = null;
+
+function lockScroll() {
+    if (scrollLockBefore !== null) return;
+    scrollLockBefore = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+}
+
+function unlockScroll() {
+    if (scrollLockBefore === null) return;
+    document.body.style.overflow = scrollLockBefore;
+    scrollLockBefore = null;
+}
+
 window.dialogOpened = function dialogOpened(modal, preferred) {
     if (!modal || openDialogs.has(modal)) return;
+    lockScroll();
 
     const onKeydown = (e) => {
         if (e.key !== 'Tab') return;
@@ -422,6 +459,7 @@ window.dialogClosed = function dialogClosed(modal) {
     if (!state) return;
     document.removeEventListener('keydown', state.onKeydown, true);
     openDialogs.delete(modal);
+    if (openDialogs.size === 0) unlockScroll();
     // document.contains: the opener is routinely gone by the time a dialog
     // closes -- confirming a proposal or removing a meeting re-renders the
     // list its button was in.
@@ -843,7 +881,18 @@ function wireAccountMenu() {
 
     if (signOut) {
         signOut.addEventListener('click', async () => {
-            await window.api('/logout', { method: 'POST', allowUnauthenticated: true });
+            signOut.disabled = true;
+            try {
+                await window.api('/logout', { method: 'POST', allowUnauthenticated: true });
+            } catch (error) {
+                // Offline, a timeout, a 5xx: the session cookie is still
+                // set, so leaving would be lying about it. Say so and let
+                // them try again -- the button used to await forever here,
+                // with the menu open and nothing to click.
+                signOut.disabled = false;
+                window.toast(error.message || 'Could not sign out. Try again.', 'error');
+                return;
+            }
             // Cleared here as well as on the next /api/me, so the page landed
             // on after signing out does not briefly draw an avatar for an
             // account that just signed out of it.

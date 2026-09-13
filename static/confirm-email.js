@@ -39,7 +39,7 @@
     let result;
     let ok = true;
     try {
-        const res = await fetch('/api/account/email/confirm', {
+        const res = await window.timedFetch('/api/account/email/confirm', {
             method: 'POST',
             headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
             credentials: 'same-origin',

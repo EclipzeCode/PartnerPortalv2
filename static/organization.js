@@ -33,8 +33,8 @@
     // succeeds, but waiting to find out cost a full round trip on every
     // profile view -- and this is the page most people reach from a link,
     // with nothing cached.
-    const publicRequest = fetch(`/api/organizations/${encodeURIComponent(id)}/public`);
-    const viewerRequest = fetch(`/api/organizations/${encodeURIComponent(id)}`)
+    const publicRequest = window.timedFetch(`/api/organizations/${encodeURIComponent(id)}/public`);
+    const viewerRequest = window.timedFetch(`/api/organizations/${encodeURIComponent(id)}`)
         .catch(() => null);
 
     let org;
@@ -268,7 +268,7 @@
             const wantSaved = saveBtn.getAttribute('aria-pressed') !== 'true';
             saveBtn.disabled = true;
             try {
-                const res = await fetch(
+                const res = await window.timedFetch(
                     wantSaved ? '/api/saved'
                               : `/api/saved/${encodeURIComponent(org.id)}`,
                     {

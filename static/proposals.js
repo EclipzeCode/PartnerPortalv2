@@ -539,7 +539,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         messageBody.value = '';
 
         messageModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(messageModal, messageBody);
 
         let data;
@@ -576,7 +575,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         threadMessages = [];
         threadSignature = '';
         messageModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(messageModal);
     }
 
@@ -884,14 +882,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderEditAmounts();
 
         editModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(editModal, editStartsOn);
     }
 
     function closeEdit() {
         editing = null;
         editModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(editModal);
     }
 
@@ -1244,7 +1240,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // open, returned to the Accept/Decline/Withdraw button on close.
     function openModal() {
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         // The note, not the confirm button: this dialog is a decision, and
         // landing on the control that commits it invites a stray Enter.
         window.dialogOpened(modal, respondMessage);
@@ -1252,7 +1247,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function closeModal() {
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
     }
 
@@ -1266,14 +1260,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- Tabs -----------------------------------------------------------
+    function paintTabs() {
+        tabs.forEach((t) => {
+            const on = t.dataset.tab === activeTab;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', String(on));
+            // Roving tabindex: Tab lands on the selected tab, the arrows
+            // move within the set.
+            t.tabIndex = on ? 0 : -1;
+        });
+        const selected = tabs.find((t) => t.dataset.tab === activeTab);
+        if (selected && selected.id) list.setAttribute('aria-labelledby', selected.id);
+    }
+
     function activateTab(tab) {
         activeTab = tab;
-        tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+        paintTabs();
         render();
     }
 
-    tabs.forEach((t) => {
+    tabs.forEach((t, i) => {
         t.addEventListener('click', () => activateTab(t.dataset.tab));
+        t.addEventListener('keydown', (e) => {
+            const step = { ArrowRight: 1, ArrowLeft: -1, Home: -i, End: tabs.length - 1 - i }[e.key];
+            if (step === undefined) return;
+            e.preventDefault();
+            const next = tabs[(i + step + tabs.length) % tabs.length];
+            next.focus();
+            activateTab(next.dataset.tab);
+        });
     });
 
     // Deep link into a tab, e.g. ppdashboard.html#agreed, or straight into
@@ -1308,7 +1323,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hash = location.hash.replace('#', '');
     if (TAB_NAMES.includes(hash)) {
         activeTab = hash;
-        tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === hash));
+        paintTabs();
     }
     const threadMatch = /^messages-(\d+)$/.exec(hash);
 

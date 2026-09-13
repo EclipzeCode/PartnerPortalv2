@@ -44,8 +44,9 @@ def _js_bundle(html):
     Scripts are collapsed the same way stylesheets are, and carry their
     version the same way: in the digest rather than in a ?v=. A page with
     only one script is left as an individually stamped reference, since a
-    run of one is already one request -- organization.html is the one such
-    page here, and it is what still covers that path.
+    run of one is already one request -- see
+    test_a_lone_script_is_stamped_not_bundled, which covers that path on a
+    fragment now that no page here has a lone script.
     """
     found = re.findall(r'src="(bundle-[0-9a-f]+\.js)"', html)
     return found[0] if found else None
@@ -160,17 +161,23 @@ def test_scripts_are_bundled_into_one_request(client):
     assert "immutable" in response.headers["Cache-Control"]
 
 
-def test_a_lone_script_is_stamped_not_bundled(client):
+def test_a_lone_script_is_stamped_not_bundled():
     """A run of one is already one request.
 
-    organization.html loads a single script, so there is nothing to collapse
-    and it keeps the individual ?v= reference -- which is also the path that
-    proves the stamping still works for scripts that never reach a bundle.
+    No page ships a single script any more -- every standalone page loads
+    csrf.js beside its own -- so the run-of-one path is exercised on a
+    fragment of markup rather than on a page. The property is the bundler's,
+    not any page's: one script is left alone and then stamped individually,
+    which is also what proves stamping works for scripts that never reach a
+    bundle.
     """
-    html = client.get("/organization.html?id=1").get_data(as_text=True)
-    assert _js_bundle(html) is None
-    assert _refs(html)["organization.js"] == (
-        app_module.asset_version("organization.js"))
+    fragment = '<script src="partnership.js"></script>'
+    bundled, _ = app_module._bundle_scripts(fragment)
+    assert bundled == fragment
+    stamped, _ = app_module._stamp_asset_refs(bundled)
+    assert _js_bundle(stamped) is None
+    assert _refs(stamped)["partnership.js"] == (
+        app_module.asset_version("partnership.js"))
 
 
 def test_a_deferred_run_keeps_its_defer(client):

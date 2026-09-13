@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let data = null;
             let res;
             try {
-                res = await fetch(
+                res = await window.timedFetch(
                     `/api/invites/${encodeURIComponent(token)}/claim`, {
                         method: 'POST',
                         credentials: 'same-origin',
@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let res;
         let data = null;
         try {
-            res = await fetch(`/api/invites/${encodeURIComponent(token)}`);
+            res = await window.timedFetch(`/api/invites/${encodeURIComponent(token)}`);
             data = await res.json();
         } catch {
             showMessage(

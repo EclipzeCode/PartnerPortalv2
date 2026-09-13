@@ -222,17 +222,29 @@
                     <h3>Partnerships</h3>
                 </div>
 
-                <div class="proposal-tabs" role="tablist">
-                    <button class="proposal-tab active" data-tab="incoming" role="tab">
+                <!-- A real tablist: aria-selected and the roving tabindex
+                     are kept by activateTab() in proposals.js, and the
+                     arrow keys move between tabs the way the pattern
+                     prescribes. The panel is the list below. -->
+                <div class="proposal-tabs" role="tablist" aria-label="Proposals">
+                    <button class="proposal-tab active" data-tab="incoming" role="tab"
+                            type="button" id="tab-incoming" aria-selected="true"
+                            aria-controls="proposalList">
                         Needs your response <span class="tab-count" id="countIncoming">0</span>
                     </button>
-                    <button class="proposal-tab" data-tab="outgoing" role="tab">
+                    <button class="proposal-tab" data-tab="outgoing" role="tab"
+                            type="button" id="tab-outgoing" aria-selected="false"
+                            aria-controls="proposalList" tabindex="-1">
                         Sent <span class="tab-count" id="countOutgoing">0</span>
                     </button>
-                    <button class="proposal-tab" data-tab="agreed" role="tab">
+                    <button class="proposal-tab" data-tab="agreed" role="tab"
+                            type="button" id="tab-agreed" aria-selected="false"
+                            aria-controls="proposalList" tabindex="-1">
                         Agreed <span class="tab-count" id="countAgreed">0</span>
                     </button>
-                    <button class="proposal-tab" data-tab="closed" role="tab">
+                    <button class="proposal-tab" data-tab="closed" role="tab"
+                            type="button" id="tab-closed" aria-selected="false"
+                            aria-controls="proposalList" tabindex="-1">
                         Closed
                     </button>
                 </div>
@@ -250,7 +262,8 @@
                 <p id="proposalStatus" class="sr-only" role="status"
                    aria-live="polite" aria-atomic="true"></p>
 
-                <div id="proposalList" class="proposal-list"></div>
+                <div id="proposalList" class="proposal-list" role="tabpanel"
+                     aria-labelledby="tab-incoming"></div>
             </div>
 
             <!-- Main Content Area -->

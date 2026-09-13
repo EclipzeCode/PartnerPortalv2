@@ -90,14 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
         result.hidden = true;
         form.reset();
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, nameInput);
         loadOutstanding();
     });
 
     function close() {
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
     }
 

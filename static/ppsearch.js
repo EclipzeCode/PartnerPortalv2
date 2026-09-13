@@ -508,9 +508,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.className = 'partner-card'
                 + (m.match_detail.mutual ? ' mutual' : '')
                 + (m.is_demo ? ' is-example' : '');
-            card.tabIndex = 0;
-            card.setAttribute('role', 'button');
-            card.setAttribute('aria-label', `View details for ${m.name}`);
+            // The whole card is a click target for a mouse, but the thing
+            // the keyboard and a screen reader land on is the name, which is
+            // a real <button> inside the <h3>. The card itself used to be
+            // role="button" with a tabindex, and the bookmark is *also* a
+            // button inside it -- an interactive control nested in another,
+            // which assistive tech is entitled to flatten or ignore.
             card.dataset.index = String(start + offset);
 
             const badge = m.is_demo
@@ -583,7 +586,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${saveBtn}
                 <div class="partner-content">
                     <div class="card-badge-slot">${badge}</div>
-                    <h3>${esc(m.name)}</h3>
+                    <h3><button type="button" class="card-open"
+                                aria-label="View details for ${esc(m.name)}"
+                            >${esc(m.name)}</button></h3>
                     <p class="card-line card-type"><strong>Type:</strong> ${esc(m.organization_type)}</p>
                     <p class="card-line card-location"><strong>Location:</strong> ${esc(m.location)}</p>
                     <p class="card-line card-offers"><strong>Offers:</strong> ${esc((m.offers_labels || []).join(', '))}</p>
@@ -732,14 +737,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function openModal(modal, preferred) {
         if (!modal) return;
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, preferred);
     }
 
     function closeModal(modal) {
         if (!modal) return;
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
         if (modal === detailModal) writeUrl();
     }
@@ -1100,15 +1103,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const card = e.target.closest('.partner-card');
         if (!card) return;
-        const m = displayed[Number(card.dataset.index)];
-        if (m) showDetail(m);
-    });
-
-    partnersGrid.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        const card = e.target.closest('.partner-card');
-        if (!card) return;
-        e.preventDefault();
         const m = displayed[Number(card.dataset.index)];
         if (m) showDetail(m);
     });

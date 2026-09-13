@@ -40,7 +40,7 @@
     try {
         // POST, so that only this page -- never a mail client's link
         // scanner prefetching the URL -- spends the single-use token.
-        const res = await fetch('/api/verify-email', {
+        const res = await window.timedFetch('/api/verify-email', {
             method: 'POST',
             headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
             credentials: 'same-origin',

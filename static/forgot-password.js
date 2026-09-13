@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Sending...';
 
         try {
-            const res = await fetch('/forgot-password', {
+            const res = await window.timedFetch('/forgot-password', {
                 method: 'POST',
                 headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
                 credentials: 'same-origin',

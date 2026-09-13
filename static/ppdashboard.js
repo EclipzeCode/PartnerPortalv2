@@ -1020,14 +1020,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(modal, document.getElementById('eventTitle'));
     }
 
     function closeModal() {
         if (!modal) return;
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
     }
 
@@ -1306,7 +1304,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         confirmDeleteBtn.disabled = false;
         confirmDeleteModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         // Focused on the confirm button, matching the account-delete dialog in
         // settings.js. Escape and Cancel are both one key away either way.
         window.dialogOpened(confirmDeleteModal, confirmDeleteBtn);
@@ -1317,12 +1314,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         pendingDeleteId = null;
         pendingDeleteOccurrence = null;
         confirmDeleteModal.classList.remove('active');
-        // Not unconditionally 'auto': this dialog can be opened from inside
-        // the stat dialog, which is still up and still wants the page behind
-        // it held still.
-        const stillOpen = [modal, statModal].some(
-            (m) => m && m.classList.contains('active'));
-        document.body.style.overflow = stillOpen ? 'hidden' : 'auto';
+        // The scroll lock is dialogClosed's: it lets go only when the last
+        // open dialog closes, so this can be opened from inside the stat
+        // dialog and leave it held still.
         window.dialogClosed(confirmDeleteModal);
     }
 
@@ -1974,7 +1968,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         statView = view;
         statDetail = detail || null;
         statModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         renderStat();
         // Only on the way in: reopening a view while the dialog is already
         // up would otherwise record a row that is about to be repainted away
@@ -1989,7 +1982,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     function closeStat() {
         if (!statModal) return;
         statModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         statDetail = null;
         window.dialogClosed(statModal);
     }

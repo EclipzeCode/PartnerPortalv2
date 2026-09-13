@@ -577,7 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         passwordSubmitBtn.textContent = 'Updating…';
 
         try {
-            await window.api('/api/account/password', {
+            const result = await window.api('/api/account/password', {
                 method: 'POST',
                 body: { current_password: currentPassword, new_password: newPassword },
             });
@@ -586,7 +586,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // fires no 'input' event, so updatePasswordUI would not run.
             pwMeter.hidden = true;
             pwChecklist.hidden = true;
-            passwordStatus.textContent = 'Password updated.';
+            // The server signs every other device out when the password
+            // changes (see _end_other_sessions), which is the thing somebody
+            // changing a password after a scare most wants to know happened.
+            passwordStatus.textContent = result && result.other_sessions_ended
+                ? 'Password updated. Every other device was signed out; this one stays in.'
+                : 'Password updated.';
             passwordStatus.className = 'setting-status ok';
             passwordStatus.hidden = false;
         } catch (error) {

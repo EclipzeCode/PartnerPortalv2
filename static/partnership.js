@@ -26,7 +26,7 @@
 
     let partnership;
     try {
-        const res = await fetch(`/api/partnerships/${encodeURIComponent(token)}`);
+        const res = await window.timedFetch(`/api/partnerships/${encodeURIComponent(token)}`);
         if (!res.ok) throw new Error('not found');
         partnership = (await res.json()).partnership;
     } catch {

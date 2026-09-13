@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = 'Resetting...';
 
             try {
-                const res = await fetch('/api/reset-password', {
+                const res = await window.timedFetch('/api/reset-password', {
                     method: 'POST',
                     headers: window.csrfHeaders(
                         { 'Content-Type': 'application/json' }),

@@ -747,14 +747,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             : '<p class="chart-empty">Nothing to show here — the list may have '
               + 'changed since this page loaded. Reload to see it.</p>';
         stageModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
         window.dialogOpened(stageModal, stageModal.querySelector('.close-modal'));
     }
 
     function closeStage() {
         if (!stageModal) return;
         stageModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
         window.dialogClosed(stageModal);
     }
 
