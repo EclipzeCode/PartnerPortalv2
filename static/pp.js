@@ -512,23 +512,64 @@ document.addEventListener('DOMContentLoaded', () => {
     // Running only while the hero is on screen and the tab is being looked
     // at. A texture is not worth a frame of work behind a scrolled-past fold
     // or in a background tab.
-    let frame = null;
+    //
+    // Two speeds. With the pointer over the hero the lit region follows it
+    // and every frame matters. With the pointer away, all that moves is the
+    // slow breathing of the base dots -- a sine with a period of ten
+    // seconds -- which looks the same at a dozen frames a second as at
+    // sixty and costs a fifth as much. Redrawing ~2,300 arcs sixty times a
+    // second for as long as the landing page was open was the single most
+    // expensive thing on the site for a laptop battery, and nobody could
+    // see it.
+    const IDLE_FRAME_MS = 80;
+    let frame = null;        // a requestAnimationFrame id
+    let idleTimer = null;    // or, when idle, the setTimeout feeding it
     let visible = document.visibilityState === 'visible';
     let onScreen = true;
 
+    function idle() {
+        return targetStrength === 0 && strength < 0.01;
+    }
+
     function tick(now) {
+        frame = null;
         draw(now);
-        frame = requestAnimationFrame(tick);
+        schedule();
+    }
+
+    function schedule() {
+        if (!visible || !onScreen || frame !== null || idleTimer !== null) return;
+        if (idle()) {
+            idleTimer = setTimeout(() => {
+                idleTimer = null;
+                frame = requestAnimationFrame(tick);
+            }, IDLE_FRAME_MS);
+        } else {
+            frame = requestAnimationFrame(tick);
+        }
+    }
+
+    // Called when the pointer arrives: an idle wait in progress is thrown
+    // away so the first lit frame is not up to 80ms late.
+    function hurry() {
+        if (idleTimer === null) return;
+        clearTimeout(idleTimer);
+        idleTimer = null;
+        schedule();
     }
 
     function play() {
-        if (frame === null && visible && onScreen) frame = requestAnimationFrame(tick);
+        schedule();
     }
 
     function pause() {
         if (frame !== null) {
             cancelAnimationFrame(frame);
             frame = null;
+        }
+        if (idleTimer !== null) {
+            clearTimeout(idleTimer);
+            idleTimer = null;
         }
     }
 
@@ -543,6 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fieldY = pointerY;
         }
         targetStrength = 1;
+        hurry();
     });
 
     hero.addEventListener('pointerleave', () => { targetStrength = 0; });
@@ -555,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pointerX = fieldX = e.clientX - rect.left;
         pointerY = fieldY = e.clientY - rect.top;
         targetStrength = 1;
+        hurry();
         setTimeout(() => { targetStrength = 0; }, 900);
     });
 

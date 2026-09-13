@@ -1219,6 +1219,9 @@ class Message(Base):
         # than created_at because that is what the comparison now sits on --
         # and because within a thread the two orderings agree.
         Index("ix_messages_partnership", "partnership_id", "id"),
+        # For ON DELETE SET NULL when a sender's account closes; threads are
+        # always read through partnership_id.
+        Index("ix_messages_sender", "sender_id"),
     )
 
     def __repr__(self):
@@ -1813,6 +1816,9 @@ class SavedLead(Base):
         ),
         # Every read is "my shortlist, most recently saved first".
         Index("ix_saved_leads_organization", "organization_id", "created_at"),
+        # For the cascade when the saved organization is deleted; every
+        # other read goes through the index above.
+        Index("ix_saved_leads_saved_organization", "saved_organization_id"),
     )
 
     def __repr__(self):

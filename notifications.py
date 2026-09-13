@@ -85,7 +85,19 @@ CLAIM_TIMEOUT_SECONDS = 300
 # How often a worker with nothing to do looks again. The nudge below makes
 # this irrelevant to latency for mail this process queued itself; the poll is
 # what picks up another worker's orphans and rows whose backoff has expired.
+#
+# This is the *first* idle wait. Each empty poll doubles it, up to
+# IDLE_POLL_MAX_SECONDS, and any nudge or any found row resets it. Two
+# threads in each of two gunicorn workers polling every fifteen seconds is
+# a query every few seconds against a database that would otherwise be
+# idle -- Neon scales to zero on inactivity, and this was the activity. The
+# backoff means a quiet site asks a handful of times an hour instead. What
+# it costs is latency on the one case only the poll covers: rows a dead
+# process left behind, which now wait up to the ceiling rather than fifteen
+# seconds. A retry this process deferred itself is not affected; the loop
+# wakes for that on time whatever the idle backoff has reached.
 POLL_INTERVAL_SECONDS = 15
+IDLE_POLL_MAX_SECONDS = int(os.environ.get("EMAIL_IDLE_POLL_SECONDS", "900"))
 
 # How often stale claims are released and delivered rows are tidied away.
 MAINTENANCE_INTERVAL_SECONDS = 60
@@ -322,19 +334,31 @@ def _deliver(item):
         log.error("email to %s given up after %s round(s)",
                   item.to_addr, item.attempts)
         _outbox.give_up(item.id, f"gave up after {item.attempts} rounds")
-        return
+        return None
 
     index = min(item.attempts - 1, len(RETRY_ROUND_BACKOFF) - 1)
     delay = RETRY_ROUND_BACKOFF[max(0, index)]
     log.warning("email to %s deferred for %ss [round %s/%s]",
                 item.to_addr, delay, item.attempts, MAX_DELIVERY_ROUNDS)
     _outbox.retry_later(item.id, "delivery failed, will retry", delay)
+    # Returned so the loop can be back for it on time, whatever its idle
+    # backoff has reached by then.
+    return delay
+
+
+def _idle_wait(idle_rounds):
+    """Seconds to sleep after `idle_rounds` consecutive empty polls."""
+    return min(POLL_INTERVAL_SECONDS * (2 ** min(idle_rounds, 16)),
+               IDLE_POLL_MAX_SECONDS)
 
 
 def _worker_loop():
     """Claim, deliver, repeat; idle on the nudge when there is nothing to do."""
     next_maintenance = 0.0
+    idle_rounds = 0
     while not _stopping.is_set():
+        found = False
+        retry_in = None
         try:
             if time.monotonic() >= next_maintenance:
                 next_maintenance = time.monotonic() + MAINTENANCE_INTERVAL_SECONDS
@@ -346,7 +370,10 @@ def _worker_loop():
                 item = _outbox.claim()
                 if item is None:
                     break
-                _deliver(item)
+                found = True
+                delay = _deliver(item)
+                if delay is not None:
+                    retry_in = delay if retry_in is None else min(retry_in, delay)
         except Exception:
             # A worker that dies stops delivering mail for the life of the
             # process, and nothing upstream would notice. The rows are safe
@@ -355,7 +382,15 @@ def _worker_loop():
             log.exception("email worker: unexpected error")
             time.sleep(1)
 
-        _wake.wait(POLL_INTERVAL_SECONDS)
+        idle_rounds = 0 if found else idle_rounds + 1
+        wait = _idle_wait(idle_rounds)
+        if retry_in is not None:
+            wait = min(wait, retry_in)
+        # wait() is True when the nudge fired: something was just queued, so
+        # the next empty poll is the first of a new idle run, not the
+        # continuation of the old one.
+        if _wake.wait(wait):
+            idle_rounds = 0
         _wake.clear()
 
 
@@ -386,11 +421,16 @@ def start_delivery():
     durable and permanently unsent, which is the failure this table exists to
     prevent wearing a different hat.
 
-    So the web app calls this once it is serving, and the workers find the
-    orphans on their first maintenance pass.
+    So the web app calls this on every request, and the workers find the
+    orphans on their first pass -- a fresh thread runs maintenance and a
+    claim before its first wait, so starting them is enough. This used to
+    nudge them as well, on every call, which meant every HTTP request woke
+    both threads to run a claim query each: two background round trips to
+    the database per page view, on connections drawn from the same small
+    pool the request itself needed. The nudge belongs to _dispatch, which
+    fires it when there is actually something to send.
     """
     _ensure_workers()
-    _wake.set()
 
 
 def _stop_workers(timeout=5):

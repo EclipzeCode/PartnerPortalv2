@@ -1,4 +1,5 @@
 import base64
+import gzip
 import hashlib
 import logging
 import math
@@ -1538,17 +1539,15 @@ def serve_page(filename, status=200, html=None):
         body, etag = _stamped_page(filename)
     else:
         # Rendered for this request -- the og: tags on a profile or an
-        # agreement summary carry that row's own values, so nothing here is
-        # shared between requests and there is nothing to cache.
-        #
-        # Bundled here too. These two pages reach serve_page with their HTML
-        # already in hand rather than through _stamped_page, so the bundling
-        # that happens there never saw them: a profile page -- the one page
-        # here a stranger is most likely to arrive at cold, from a shared
-        # link -- was the only one still asking for five stylesheets.
-        html, _ = _bundle_stylesheets(html)
-        html, _ = _bundle_scripts(html)
-        body, _ = _stamp_asset_refs(html)
+        # agreement summary carry that row's own values. The caller built it
+        # from _stamped_page's cached, bundled, stamped copy (see
+        # _render_og_page), so all that is left to do per request is hash
+        # the result. Bundling and stamping used to happen here too, on
+        # every request to the two pages a stranger most often arrives at
+        # cold from a shared link -- three regex passes over the whole
+        # document and a stat per referenced asset, for output that was the
+        # same every time except for a few meta tags.
+        body = html
         etag = _page_etag(body)
 
     response = app.response_class(body, status=status, mimetype="text/html")
@@ -1837,6 +1836,51 @@ def sitemap_xml():
         "",
     ])
     return app.response_class(body, mimetype="application/xml")
+
+
+# --- Compression ----------------------------------------------------------
+# Flask sends what it is given, byte for byte, and nothing in front of the
+# dev server compresses. The bundles this app serves are concatenated but
+# not minified, and are mostly comments: the dashboard is ~180KB of CSS and
+# ~210KB of JS uncompressed, and /api/matches can be a few hundred KB of
+# JSON. gzip takes all of that down by roughly four to one, from the
+# standard library, for the cost of a few milliseconds a response.
+#
+# Only text-shaped bodies above a floor, and only when the client asked.
+# Anything already encoded, anything streamed (direct_passthrough -- a file
+# being sent from disk), and anything without a body is left alone. Vary
+# tells every cache between here and the browser that the same URL has two
+# shapes. The ETag is left as it was: make_conditional has already compared
+# it by the time this runs, so rewriting it here would just mean the next
+# request's If-None-Match never matches.
+#
+# Registered before the other after_request hooks on purpose. Flask runs
+# them in reverse order of registration, so this one runs last -- after
+# every header the others set, and on the final body.
+COMPRESSIBLE_TYPES = frozenset({
+    "text/html", "text/css", "text/plain", "text/calendar",
+    "text/javascript", "application/javascript", "application/json",
+    "application/xml", "image/svg+xml",
+})
+COMPRESS_MIN_BYTES = 1024
+
+
+@app.after_request
+def compress_response(response):
+    if (response.direct_passthrough
+            or response.status_code < 200 or response.status_code >= 300
+            or response.status_code == 204
+            or "Content-Encoding" in response.headers
+            or response.mimetype not in COMPRESSIBLE_TYPES
+            or "gzip" not in request.headers.get("Accept-Encoding", "")):
+        return response
+    body = response.get_data()
+    if len(body) < COMPRESS_MIN_BYTES:
+        return response
+    response.set_data(gzip.compress(body, compresslevel=6))
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers.add("Vary", "Accept-Encoding")
+    return response
 
 
 @app.after_request
@@ -2215,8 +2259,11 @@ def _render_og_page(filename, title, description):
     is, and one nobody opted into. The card carries no page-specific text for
     that reason; the title and description beside it already do that job.
     """
-    with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
-        html = f.read()
+    # The page as it would be served plain -- bundled, stamped, cached by
+    # _stamped_page and invalidated when the file or any asset it references
+    # changes. The placeholder comment sits between two <meta> tags, so the
+    # stylesheet bundling never touches it.
+    html, _ = _stamped_page(filename)
 
     title = _truncate(title, 70)
     description = _truncate(description, 200)

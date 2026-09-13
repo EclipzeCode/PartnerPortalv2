@@ -1727,6 +1727,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 || String(statDetail.id) !== String(m.id)) return;
             host.innerHTML = field('Contact', org.contact_email)
                 + field('Phone', org.contact_phone);
+            // Match entries come without a description (see _entry in
+            // matching.py); it arrives with this same response.
+            const bio = document.getElementById('statBio');
+            if (bio && m.description === undefined && org.description) {
+                bio.textContent = org.description;
+                bio.hidden = false;
+            }
         };
 
         if (contactCache.has(m.id)) {
@@ -1763,7 +1770,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="stat-row-meta">${meta || '&mdash;'}</div>
                 </div>
             </div>
-            ${m.description ? `<p class="stat-detail-note is-typed">${esc(m.description)}</p>` : ''}
+            <p class="stat-detail-note is-typed" id="statBio"${
+                m.description ? '' : ' hidden'}>${esc(m.description || '')}</p>
             <div class="stat-tags">
                 <div class="needs">
                     <h3><i class='bx bx-down-arrow-alt'></i> They can offer you</h3>

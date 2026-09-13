@@ -782,10 +782,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // addresses are part of what the example cards are demonstrating, and
     // the endpoint resolves them like any other finished profile.
     async function fillContactDetails(m, set) {
+        // Match entries no longer carry the description either (see _entry
+        // in matching.py); the same fetch that brings the contact details
+        // brings it. Rows from the saved list and the directory still have
+        // their own, and those are left alone.
+        const paint = (org) => {
+            set('partnerDetailEmail', org.contact_email);
+            set('partnerDetailPhone', org.contact_phone);
+            if (m.description === undefined) {
+                set('partnerDetailBio', org.description);
+            }
+        };
         if (contactCache.has(m.id)) {
-            const hit = contactCache.get(m.id);
-            set('partnerDetailEmail', hit.contact_email);
-            set('partnerDetailPhone', hit.contact_phone);
+            paint(contactCache.get(m.id));
             return;
         }
 
@@ -805,8 +814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Another organization may have been opened while that was in the
         // air, in which case these fields are no longer describing this one.
         if (!detailTarget || detailTarget.id !== m.id) return;
-        set('partnerDetailEmail', org.contact_email);
-        set('partnerDetailPhone', org.contact_phone);
+        paint(org);
     }
 
     function showDetail(m) {
@@ -821,7 +829,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         set('partnerDetailType', m.organization_type);
         set('partnerDetailLocation', m.location);
         set('partnerDetailScore', m.match_score);
-        set('partnerDetailBio', m.description);
+        // Blank rather than the "--" placeholder when the entry has no
+        // description field at all: that means it is on its way with the
+        // contact details, not that the organization wrote nothing.
+        if (m.description === undefined) {
+            const bio = document.getElementById('partnerDetailBio');
+            if (bio) bio.textContent = '';
+        } else {
+            set('partnerDetailBio', m.description);
+        }
         // Contact details do not ride along with the list any more -- see
         // public_dict in models.py -- so they are fetched for the one
         // organization actually being looked at. Blanked first, or the

@@ -451,15 +451,36 @@ def _hydrate(session, rows):
 
 
 def _entry(me, them):
-    """One organization as the frontend reads it: profile, score, reasons."""
+    """One organization as a match list reads it: card fields, score, reasons.
+
+    Deliberately not public_dict(). /api/matches returns up to MATCH_LIMIT of
+    these on every visit to Search, and the full profile carried a
+    description of up to 2,000 characters, three free-text notes, four
+    links and both slug arrays per row -- most of a payload that nothing on
+    a card or in the detail dialog read. The dialog already fetches
+    /api/organizations/<id> for the contact details when it opens, and that
+    response is the full profile, so the description arrives with it.
+
+    What stays is what the list itself draws or searches: the name line,
+    the labels on the card, the focus chips in the dialog, and `offers` as
+    slugs because the propose form builds its "they provide" picker from
+    them. `needs` as slugs is not read anywhere on the client.
+    """
     score, reasons, detail = score_pair(me, them)
-    data = them.public_dict()
-    data.update({
+    return {
+        "id": them.id,
+        "name": them.name,
+        "organization_type": them.organization_type,
+        "location": them.location,
+        "is_demo": them.is_demo,
+        "offers": list(them.offers or []),
+        "offers_labels": labels_for(them.offers),
+        "needs_labels": labels_for(them.needs),
+        "focus_area_labels": focus_labels_for(them.focus_areas),
         "match_score": score,
         "reasons": reasons,
         "match_detail": detail,
-    })
-    return data
+    }
 
 
 # Mutual matches first, then score, then name -- the one ordering both
