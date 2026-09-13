@@ -635,13 +635,29 @@
             </div>
             <div class="modal-body">
                 <p class="modal-intro">
-                    They have not answered yet, so this can still change. What
-                    each side gives is set from your two profiles when you
-                    propose — to change that, withdraw and propose again.
+                    They have not answered yet, so all of this can still
+                    change. Each side can only be committed to things it lists
+                    on its profile.
                 </p>
 
                 <form id="editForm" novalidate>
                     <p class="field-error" id="editError" role="alert" hidden></p>
+
+                    <!-- What each side gives, from the two profiles' offers.
+                         Built by proposals.js; the same two columns as the
+                         propose dialog in Search. -->
+                    <div class="propose-grid edit-grid">
+                        <div class="form-group">
+                            <label><i class='bx bx-up-arrow-alt'></i> You provide</label>
+                            <div class="category-picker compact" id="editProposerGives"></div>
+                            <span class="picker-count" data-for="proposer">None selected</span>
+                        </div>
+                        <div class="form-group">
+                            <label><i class='bx bx-down-arrow-alt'></i> They provide</label>
+                            <div class="category-picker compact" id="editRecipientGives"></div>
+                            <span class="picker-count" data-for="recipient">None selected</span>
+                        </div>
+                    </div>
 
                     <div class="form-group">
                         <label for="editTimeline">Timeline</label>

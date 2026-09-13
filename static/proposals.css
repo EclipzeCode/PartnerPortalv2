@@ -286,6 +286,8 @@
     font-size: 0.87rem;
     line-height: 1.6;
     color: var(--h-ink-soft);
+    /* Typed in a textarea; the paragraphs people put in it are kept. */
+    white-space: pre-line;
 }
 
 .proposal-message.reply {

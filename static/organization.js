@@ -157,6 +157,35 @@
           `
         : '';
 
+    // What a reader can do from here depends on who they are. A visitor gets
+    // the link and the public directory. A signed-in organization looking
+    // at somebody else gets the two things it would otherwise have to go
+    // back to Search and find this card again to do -- propose, and save --
+    // with Search's own card opened by the ?org= link so the proposal form
+    // is one click away rather than a search away. Looking at yourself, the
+    // useful action is editing.
+    const other = viewer && typeof viewer.match_score === 'number';
+    const self = viewer && !other;
+    const actions = [
+        `<button type="button" class="btn-share" id="shareBtn">
+            <i class='bx bx-link'></i> Copy link to this profile
+        </button>`,
+        self ? `<a class="btn-find" href="onboarding.html">
+                    <i class='bx bx-edit'></i> Edit your profile
+                </a>` : '',
+        other && !org.is_demo ? `
+            <button type="button" class="btn-share btn-save${viewer.shortlisted ? ' saved' : ''}"
+                    id="saveBtn" aria-pressed="${viewer.shortlisted ? 'true' : 'false'}">
+                <i class='bx ${viewer.shortlisted ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
+                <span>${viewer.shortlisted ? 'Saved' : 'Save for later'}</span>
+            </button>
+            <a class="btn-find" href="ppsearch.html?org=${encodeURIComponent(org.id)}&propose=1">
+                <i class='bx bx-handshake'></i> Propose a partnership
+            </a>` : '',
+        self ? '' : `<a class="${other ? 'btn-share' : 'btn-find'}"
+               href="${viewer ? 'ppsearch.html' : 'directory.html'}">Find partners like this</a>`,
+    ].join('');
+
     card.innerHTML = `
         ${org.is_demo
             ? `<div class="org-demo-banner">
@@ -219,14 +248,46 @@
         ${contact}
 
         <div class="org-actions">
-            <button type="button" class="btn-share" id="shareBtn">
-                <i class='bx bx-link'></i> Copy link to this profile
-            </button>
-            <a class="btn-find" href="${viewer ? 'ppsearch.html' : 'directory.html'}">Find partners like this</a>
+            ${actions}
         </div>
     `;
 
     document.title = `${org.name} | PartnerPortal`;
+
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const wantSaved = saveBtn.getAttribute('aria-pressed') !== 'true';
+            saveBtn.disabled = true;
+            try {
+                const res = await fetch(
+                    wantSaved ? '/api/saved'
+                              : `/api/saved/${encodeURIComponent(org.id)}`,
+                    {
+                        method: wantSaved ? 'POST' : 'DELETE',
+                        credentials: 'same-origin',
+                        headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
+                        body: wantSaved
+                            ? JSON.stringify({ organization_id: org.id }) : undefined,
+                    });
+                if (!res.ok) throw new Error('save failed');
+                saveBtn.classList.toggle('saved', wantSaved);
+                saveBtn.setAttribute('aria-pressed', String(wantSaved));
+                saveBtn.innerHTML = `<i class='bx ${
+                    wantSaved ? 'bxs-bookmark' : 'bx-bookmark'}'></i> <span>${
+                    wantSaved ? 'Saved' : 'Save for later'}</span>`;
+            } catch {
+                saveBtn.querySelector('span').textContent = 'Could not save';
+                setTimeout(() => {
+                    saveBtn.querySelector('span').textContent =
+                        saveBtn.getAttribute('aria-pressed') === 'true'
+                            ? 'Saved' : 'Save for later';
+                }, 1800);
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+    }
 
     const shareBtn = document.getElementById('shareBtn');
     shareBtn.addEventListener('click', async () => {
@@ -237,9 +298,14 @@
                 shareBtn.innerHTML = "<i class='bx bx-link'></i> Copy link to this profile";
             }, 1800);
         } catch {
-            // Clipboard needs a secure context; show the URL so it can still
-            // be copied by hand.
-            window.prompt('Copy this link:', location.href);
+            // Clipboard needs a secure context. The link is this page's own
+            // address, so say so rather than opening a prompt() -- the one
+            // native dialog on a site that styles every other one.
+            shareBtn.innerHTML = "<i class='bx bx-info-circle'></i> "
+                + 'Copy the address from your browser';
+            setTimeout(() => {
+                shareBtn.innerHTML = "<i class='bx bx-link'></i> Copy link to this profile";
+            }, 3000);
         }
     });
 })();

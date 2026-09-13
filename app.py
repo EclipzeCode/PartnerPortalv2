@@ -5140,6 +5140,13 @@ def get_organization(org, db, org_id):
         score, reasons, detail = score_pair(org, other)
         data.update({
             "match_score": score, "reasons": reasons, "match_detail": detail,
+            # Whether this one is on the caller's shortlist, so a page that
+            # shows a single organization -- the public profile, a ?org=
+            # link into Search -- can draw its bookmark without fetching the
+            # whole list to find out. About the caller, never about `other`:
+            # whether anyone has saved *them* is not in any payload (see
+            # test_privacy), which is also why the key is not spelled "saved".
+            "shortlisted": other.id in _saved_ids(db, org),
         })
     return jsonify({"organization": data})
 

@@ -1055,6 +1055,7 @@ body.ink .category-chip.checked {
     line-height: 1.65;
     color: var(--h-ink-soft);
     margin-bottom: 1.25rem;
+    white-space: pre-line;   /* keeps the paragraphs typed into the profile */
 }
 
 /* --- The exchange ---------------------------------------------------------

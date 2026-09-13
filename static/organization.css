@@ -199,6 +199,7 @@ body {
     font-size: 0.98rem;
     line-height: 1.7;
     color: var(--h-ink-soft);
+    white-space: pre-line;   /* keeps the paragraphs typed into the profile */
 }
 
 .org-card h2 {
@@ -331,6 +332,7 @@ body {
     font-size: 0.83rem;
     line-height: 1.6;
     color: var(--h-dim);
+    white-space: pre-line;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -487,6 +489,17 @@ body {
 .btn-find {
     background: var(--h-ink);
     color: var(--h-paper);
+}
+
+/* The bookmark, once set, reads as a state rather than an invitation. */
+.btn-save.saved {
+    border-color: var(--h-give);
+    color: var(--h-give);
+}
+
+.btn-save:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .btn-find:hover {

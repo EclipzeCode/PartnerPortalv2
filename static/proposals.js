@@ -38,9 +38,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Data -----------------------------------------------------------
+    // Skeletons stand in for a list that has not arrived yet. Once one has,
+    // every refresh -- after an action, after each poll of an open thread
+    // finds a new message -- keeps the cards in place until the new data is
+    // here and swaps them in one paint. Before this, each of those blanked
+    // the whole list to skeletons for a round trip, which behind an open
+    // conversation meant the page flashing every time somebody replied.
+    let loadedOnce = false;
+
     async function load({ archive } = {}) {
         list.setAttribute('aria-busy', 'true');
-        renderSkeletonRows();
+        if (!loadedOnce) renderSkeletonRows();
         try {
             const query = archive ? `?archive_limit=${archive}` : '';
             const data = await window.api(`/api/proposals${query}`);
@@ -55,9 +63,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 data.counts.accepted;
         } catch (error) {
             list.removeAttribute('aria-busy');
-            list.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+            // A failed refresh leaves the cards that are there. Only a list
+            // that never loaded has nothing better to show than the error.
+            if (!loadedOnce) {
+                list.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+            } else {
+                window.toast(error.message || 'Could not refresh proposals.', 'error');
+            }
             return;
         }
+        loadedOnce = true;
         list.removeAttribute('aria-busy');
         render();
     }
@@ -626,11 +641,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // again, which took the message thread with it: the cost of a typo was
     // the conversation that had been going on about it.
     //
-    // Terms themselves (who gives what) are deliberately not editable here.
-    // Those are built from both profiles by the picker on the matches page,
-    // which is where the rules about what each side may commit to live; a
-    // second copy of that picker in this dialog is a second place for them
-    // to be got wrong. What changes here is everything around them.
+    // The terms themselves -- who gives what -- are editable too. They were
+    // not, at first, on the argument that the picker on the matches page is
+    // where the rule about what each side may commit to lives and a second
+    // copy is a second place to get it wrong. In practice the rule is the
+    // server's (update_proposal refuses anything not on the giver's profile)
+    // and both dialogs draw their chips from the same two offer lists, so
+    // the cost of the restriction -- withdraw, lose the thread, propose
+    // again to swap one category -- bought nothing.
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
     const editTimeline = document.getElementById('editTimeline');
@@ -665,34 +683,131 @@ document.addEventListener('DOMContentLoaded', async () => {
     // labels to name them.
     let editUnits = [];
     let editDefaults = {};
+    let editGroups = [];
+    let editMe = null;
     const editQuantities = { proposer: {}, recipient: {} };
+    // What each side gives, as edited. Seeded from the proposal in openEdit.
+    const editGives = { proposer: new Set(), recipient: new Set() };
 
     async function loadUnits() {
         if (editUnits.length) return;
         try {
-            const data = await window.api('/api/categories');
+            const [data, meData] = await Promise.all([
+                window.api('/api/categories'),
+                window.api('/api/me'),
+            ]);
             editUnits = data.units || [];
             editDefaults = data.default_units || {};
+            editGroups = data.groups || [];
+            editMe = meData.organization;
         } catch {
-            // The amounts block simply does not render; everything else in
-            // the dialog still works.
+            // The amounts and pickers simply do not render; everything else
+            // in the dialog still works.
         }
     }
 
-    function renderEditAmounts(proposal) {
+    function editLabel(slug) {
+        for (const group of editGroups) {
+            const hit = (group.categories || []).find((c) => c.slug === slug);
+            if (hit) return hit.label;
+        }
+        return slug;
+    }
+
+    // The two give/receive pickers. Each column offers exactly what that
+    // side's profile lists -- the same rule the server enforces -- and
+    // starts checked at what the proposal currently says.
+    function buildEditPickers(proposal) {
+        const columns = [
+            ['proposer', document.getElementById('editProposerGives'),
+             new Set((editMe && editMe.offers) || []), proposal.you_give || []],
+            ['recipient', document.getElementById('editRecipientGives'),
+             new Set((proposal.counterpart && proposal.counterpart.offers) || []),
+             proposal.you_receive || []],
+        ];
+        columns.forEach(([side, container, allowed, chosen]) => {
+            if (!container) return;
+            container.innerHTML = '';
+            editGives[side] = new Set(chosen.filter((slug) => allowed.has(slug)));
+            if (allowed.size === 0) {
+                container.innerHTML = '<p class="picker-empty">Nothing listed yet.</p>';
+                paintEditCounts();
+                return;
+            }
+            editGroups.forEach((group) => {
+                const options = (group.categories || []).filter((c) => allowed.has(c.slug));
+                if (options.length === 0) return;
+                const wrap = document.createElement('div');
+                wrap.className = 'category-group';
+                wrap.innerHTML = `<h4>${esc(group.name)}</h4>`;
+                const row = document.createElement('div');
+                row.className = 'category-options';
+                options.forEach((c) => {
+                    const id = `edit-${side}-${c.slug}`;
+                    const on = editGives[side].has(c.slug);
+                    const label = document.createElement('label');
+                    label.className = `category-chip${on ? ' checked' : ''}`;
+                    label.setAttribute('for', id);
+                    label.innerHTML = `
+                        <input type="checkbox" id="${id}" value="${esc(c.slug)}"${on ? ' checked' : ''}>
+                        <span>${esc(c.label)}</span>`;
+                    row.appendChild(label);
+                });
+                wrap.appendChild(row);
+                container.appendChild(wrap);
+            });
+            container.onchange = (e) => {
+                const box = e.target.closest('input[type="checkbox"]');
+                if (!box) return;
+                if (box.checked) editGives[side].add(box.value);
+                else editGives[side].delete(box.value);
+                box.closest('.category-chip').classList.toggle('checked', box.checked);
+                paintEditCounts();
+                renderEditAmounts();
+            };
+        });
+        paintEditCounts();
+    }
+
+    function paintEditCounts() {
+        Object.entries(editGives).forEach(([side, set]) => {
+            const counter = editForm.querySelector(`.picker-count[data-for="${side}"]`);
+            if (counter) {
+                counter.textContent = set.size === 0 ? 'None selected' : `${set.size} selected`;
+            }
+        });
+    }
+
+    // Seeds the amounts from the proposal's structured terms, once per open;
+    // rows are then drawn from whatever is currently checked, so a category
+    // added in the picker gets an amount row and one removed loses it.
+    function seedEditQuantities(proposal) {
+        editQuantities.proposer = {};
+        editQuantities.recipient = {};
+        [['proposer', proposal.you_give_terms], ['recipient', proposal.you_receive_terms]]
+            .forEach(([side, terms]) => {
+                (terms || []).forEach((term) => {
+                    editQuantities[side][term.slug] = {
+                        amount: term.amount, unit: term.unit, detail: term.detail,
+                    };
+                });
+            });
+    }
+
+    function renderEditAmounts() {
         const host = document.getElementById('editAmounts');
         if (!host || !editUnits.length) return;
 
         const rows = [];
-        [['proposer', 'You provide', proposal.you_give_terms],
-         ['recipient', 'They provide', proposal.you_receive_terms],
-        ].forEach(([side, heading, terms]) => {
-            if (!terms || !terms.length) return;
+        [['proposer', 'You provide'], ['recipient', 'They provide']]
+        .forEach(([side, heading]) => {
+            const slugs = [...editGives[side]];
+            if (!slugs.length) return;
             rows.push(`<h4>${esc(heading)}</h4>`);
-            terms.forEach((term) => {
-                editQuantities[side][term.slug] = {
-                    amount: term.amount, unit: term.unit, detail: term.detail,
-                };
+            slugs.forEach((slug) => {
+                const held = editQuantities[side][slug] || {};
+                const term = { slug, label: editLabel(slug), amount: held.amount,
+                               unit: held.unit, detail: held.detail };
                 const unit = term.unit || editDefaults[term.slug] || 'items';
                 const options = editUnits.map((u) => `
                     <option value="${esc(u.slug)}"${u.slug === unit ? ' selected' : ''}>${
@@ -744,6 +859,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function editQuantitiesFor(side) {
         const out = {};
         Object.entries(editQuantities[side]).forEach(([slug, q]) => {
+            if (!editGives[side].has(slug)) return;
             if (q.amount === null || q.amount === undefined || q.amount === '') return;
             out[slug] = {
                 amount: q.amount,
@@ -758,14 +874,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         editing = proposal;
         editError.hidden = true;
         editError.textContent = '';
-        editQuantities.proposer = {};
-        editQuantities.recipient = {};
         editStartsOn.value = proposal.starts_on || '';
         editEndsOn.value = proposal.ends_on || '';
         editMessage.value = proposal.message || '';
         await fillTimelines(editTimeline, proposal.timeline);
         await loadUnits();
-        renderEditAmounts(proposal);
+        seedEditQuantities(proposal);
+        buildEditPickers(proposal);
+        renderEditAmounts();
 
         editModal.classList.add('active');
         document.body.style.overflow = 'hidden';
@@ -798,6 +914,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!editing) return;
             editError.hidden = true;
 
+            // The server says the same thing, but from here it is one line.
+            if (editGives.proposer.size === 0 || editGives.recipient.size === 0) {
+                editError.textContent = 'A partnership needs something from '
+                    + 'both sides. Pick at least one thing you will provide '
+                    + 'and one thing you are asking for.';
+                editError.hidden = false;
+                return;
+            }
+
             const idle = editSubmit.textContent;
             editSubmit.disabled = true;
             editSubmit.textContent = 'Saving...';
@@ -805,6 +930,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await window.api(`/api/proposals/${editing.id}`, {
                     method: 'PATCH',
                     body: {
+                        proposer_gives: [...editGives.proposer],
+                        recipient_gives: [...editGives.recipient],
                         timeline: editTimeline.value,
                         starts_on: editStartsOn.value,
                         ends_on: editEndsOn.value,
@@ -860,47 +987,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Rotating and revoking both change what a URL somebody else may be
-        // holding does, so both confirm rather than firing on one click.
-        if (act === 'rotate' || act === 'unshare') {
-            const isNew = act === 'rotate';
-            const hadLink = Boolean(proposal.share_token);
-            const ok = window.confirm(
-                isNew
-                    ? (hadLink
-                        ? `Create a new link for your partnership with ${
-                            proposal.counterpart.name}?\n\nThe current link `
-                          + 'will stop working for everyone who has it, '
-                          + 'including them.'
-                        : `Create a public link for your partnership with ${
-                            proposal.counterpart.name}?\n\nAnyone with the `
-                          + 'link will be able to read the agreement summary.')
-                    : `Remove the public link for your partnership with ${
-                        proposal.counterpart.name}?\n\nIt will stop working `
-                      + 'for everyone who has it. The agreement itself stays, '
-                      + 'and either of you can create a new link later.');
-            if (!ok) return;
-
-            btn.disabled = true;
-            try {
-                await window.api(`/api/proposals/${id}/share`,
-                    { method: isNew ? 'POST' : 'DELETE' });
-                await load();
-                window.toast(isNew
-                    ? 'New link created. The previous one no longer works.'
-                    : 'Public link removed.');
-            } catch (error) {
-                btn.disabled = false;
-                // A 409 means the proposal is no longer one with a public
-                // link -- withdrawn or declined since this list was drawn --
-                // so the card offering the control is itself out of date.
-                if (error.status === 409) await load();
-                window.toast(error.message || 'Could not change that link.',
-                    'error');
-            }
-            return;
-        }
-
         if (act === 'copy') {
             const url = `${location.origin}/partnership.html?token=${
                 encodeURIComponent(proposal.share_token)}`;
@@ -909,9 +995,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btn.textContent = 'Copied';
                 setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
             } catch {
-                // Clipboard needs a secure context; show the URL so it can
-                // still be copied by hand.
-                window.prompt('Copy this link:', url);
+                // No clipboard access (an insecure origin, or permission
+                // refused). The agreement page is one click away and its
+                // address bar holds the same link, which beats a bare
+                // prompt() dialog nobody else on this site uses.
+                window.toast('Could not copy automatically. Open "View '
+                    + 'agreement" and copy the address from your browser.',
+                'error');
             }
             return;
         }
@@ -921,13 +1011,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         // The name rides along for the confirmation toast: by the time the
         // response lands, load() has re-rendered the list and this
         // proposal's card may have moved to another tab entirely.
-        pending = { id, action: act, name: proposal.counterpart.name };
+        // Rotating and revoking a link both change what a URL somebody else
+        // may be holding does, so both confirm here rather than firing on
+        // one click -- through this same dialog, not window.confirm(),
+        // which was the one native dialog left on a site that styles every
+        // other one.
+        const hadLink = Boolean(proposal.share_token);
+        pending = { id, action: act, name: proposal.counterpart.name, hadLink };
         respondTitle.textContent = {
             accept: `Accept partnership with ${proposal.counterpart.name}?`,
             decline: `Decline proposal from ${proposal.counterpart.name}?`,
             withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`,
             complete: `Mark your partnership with ${proposal.counterpart.name} complete?`,
-            end: `End your partnership with ${proposal.counterpart.name}?`
+            end: `End your partnership with ${proposal.counterpart.name}?`,
+            rotate: hadLink
+                ? `Create a new link for your partnership with ${proposal.counterpart.name}?`
+                : `Create a public link for your partnership with ${proposal.counterpart.name}?`,
+            unshare: `Remove the public link for your partnership with ${proposal.counterpart.name}?`,
         }[act];
 
         // Every branch says something: withdrawing used to leave a blank gap
@@ -967,6 +1067,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 + `agree. They are told that you ended it, along with your `
                 + `note below if you add one. The record of what was agreed `
                 + `stays available, and you can propose again later.</p>`;
+        } else if (act === 'rotate') {
+            respondTerms.innerHTML = hadLink
+                ? `<p class="respond-note">The current link will stop working `
+                  + `for everyone who has it, including `
+                  + `${esc(proposal.counterpart.name)}. They are told a new `
+                  + `one was made.</p>`
+                : `<p class="respond-note">Anyone with the link will be able `
+                  + `to read the agreement summary: both organization names `
+                  + `and the terms, but no contact details.</p>`;
+        } else if (act === 'unshare') {
+            respondTerms.innerHTML =
+                `<p class="respond-note">It will stop working for everyone `
+                + `who has it. The agreement itself stays, and either of you `
+                + `can create a new link later.</p>`;
         } else if (act === 'withdraw') {
             respondTerms.innerHTML =
                 `<p class="respond-note">This takes the proposal back before ` +
@@ -983,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Completing takes no note -- the delivery answer is the message --
         // and withdrawing reaches nobody, so neither offers the box.
         respondMessage.parentElement.style.display =
-            (act === 'withdraw' || act === 'complete') ? 'none' : '';
+            ['withdraw', 'complete', 'rotate', 'unshare'].includes(act) ? 'none' : '';
         const messageLabel = respondMessage.parentElement.querySelector('label');
         if (messageLabel) {
             messageLabel.textContent = act === 'end'
@@ -992,10 +1106,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         respondConfirm.textContent = {
             accept: 'Accept partnership', decline: 'Decline', withdraw: 'Withdraw',
-            complete: 'Mark complete', end: 'End partnership'
+            complete: 'Mark complete', end: 'End partnership',
+            rotate: hadLink ? 'Create new link' : 'Create link',
+            unshare: 'Remove link',
         }[act];
         respondConfirm.className =
-            (act === 'accept' || act === 'complete') ? 'btn-primary' : 'btn-danger';
+            ['accept', 'complete', 'rotate'].includes(act) ? 'btn-primary' : 'btn-danger';
         respondMessage.value = '';
         openModal();
     });
@@ -1007,6 +1123,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         // the toast is worded from it after load() has already run.
         const { action, name } = pending;
         respondConfirm.disabled = true;
+
+        if (action === 'rotate' || action === 'unshare') {
+            const isNew = action === 'rotate';
+            try {
+                await window.api(`/api/proposals/${pending.id}/share`,
+                    { method: isNew ? 'POST' : 'DELETE' });
+                closeModal();
+                await load();
+                window.toast(!isNew
+                    ? 'Public link removed.'
+                    : (pending.hadLink
+                        ? 'New link created. The previous one no longer works.'
+                        : 'Public link created.'));
+            } catch (error) {
+                closeModal();
+                // A 409 means the proposal is no longer one with a public
+                // link -- withdrawn or declined since this list was drawn --
+                // so the card offering the control is itself out of date.
+                if (error.status === 409) await load();
+                window.toast(error.message || 'Could not change that link.',
+                    'error');
+            } finally {
+                respondConfirm.disabled = false;
+                pending = null;
+            }
+            return;
+        }
+
         try {
             // Each endpoint takes the field it actually reads. Sending a
             // `message` to /complete or a `reason` to /decline would be

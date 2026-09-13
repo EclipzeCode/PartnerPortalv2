@@ -282,13 +282,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // Newest first; undated entries keep their order at the end.
-        return items.sort((a, b) => {
-            if (a.at && b.at) return new Date(b.at) - new Date(a.at);
-            if (a.at) return -1;
-            if (b.at) return 1;
-            return 0;
-        });
+        // What has happened, newest first; then what is coming up, soonest
+        // first; then the undated entries (matches) in the order they came.
+        // Sorting purely by timestamp put a meeting three weeks out above a
+        // proposal that arrived this morning, which is the opposite of what
+        // a feed called Activity is read for -- the upcoming card already
+        // shows meetings in date order.
+        const now = Date.now();
+        const bucket = (item) => {
+            if (!item.at) return 2;
+            return new Date(item.at).getTime() > now ? 1 : 0;
+        };
+        return items
+            .map((item, index) => ({ item, index, bucket: bucket(item) }))
+            .sort((a, b) => {
+                if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+                if (a.bucket === 0) return new Date(b.item.at) - new Date(a.item.at);
+                if (a.bucket === 1) return new Date(a.item.at) - new Date(b.item.at);
+                return a.index - b.index;
+            })
+            .map((entry) => entry.item);
     }
 
     // --- Meetings and zones -------------------------------------------------
@@ -1686,7 +1699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${field('Location', ev.location)}
             </dl>
             ${ev.description
-                ? `<p class="stat-detail-note">${esc(ev.description)}</p>` : ''}
+                ? `<p class="stat-detail-note is-typed">${esc(ev.description)}</p>` : ''}
             <div class="stat-detail-actions">
                 <button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}"
                         data-occurs-on="${esc(ev.occurs_on || ev.date)}">
@@ -1750,7 +1763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="stat-row-meta">${meta || '&mdash;'}</div>
                 </div>
             </div>
-            ${m.description ? `<p class="stat-detail-note">${esc(m.description)}</p>` : ''}
+            ${m.description ? `<p class="stat-detail-note is-typed">${esc(m.description)}</p>` : ''}
             <div class="stat-tags">
                 <div class="needs">
                     <h3><i class='bx bx-down-arrow-alt'></i> They can offer you</h3>
@@ -1767,7 +1780,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                    target="_blank" rel="noopener">
                     <i class='bx bx-id-card'></i> View public profile
                 </a>
-                <a class="btn-ghost" href="ppsearch.html">Propose a partnership</a>
+                <a class="btn-ghost" href="ppsearch.html?org=${
+                    encodeURIComponent(m.id)}&propose=1">Propose a partnership</a>
             </div>`;
     }
 

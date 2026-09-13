@@ -47,6 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showingExamples = false;
     let displayed = [];
     let currentPage = 1;
+    // A page number read from the URL on arrival, spent by the first render.
+    let restorePage = 0;
     // Set when the server had more matches than it built. Null the
     // rest of the time, which is the normal case and says nothing.
     let matchTruncation = null;
@@ -316,7 +318,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         currentPage = 1;
         if (mode === 'browse') {
-            browseState.page = 1;
+            browseState.page = restorePage || 1;   // see readUrl
+            restorePage = 0;
             await loadBrowse();
             return;
         }
@@ -382,7 +385,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     (m.offers_labels || []).some((l) => norm(l).includes(q)) ||
                     (m.needs_labels || []).some((l) => norm(l).includes(q)))
                 : [...savedList];
-            currentPage = keepPage ? page : 1;
+            currentPage = page;
             render();
             return;
         }
@@ -410,7 +413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (m.needs_labels || []).some((l) => norm(l).includes(q)))
             : [...source];
 
-        currentPage = keepPage ? page : 1;
+        currentPage = page;
         render();
     }
 
@@ -489,6 +492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${action ? `<div class="empty-actions">${action}</div>` : ''}
                 </div>`;
             updatePagination(pages);
+            writeUrl();
             return;
         }
 
@@ -595,6 +599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         markTruncated();
         updatePagination(pages);
+        writeUrl();
     }
 
     // The reason lists are clipped to a fixed height so every card is the
@@ -736,6 +741,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
         window.dialogClosed(modal);
+        if (modal === detailModal) writeUrl();
     }
 
     document.querySelectorAll('.modal').forEach((modal) => {
@@ -871,6 +877,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openModal(detailModal);
+        writeUrl();
     }
 
     // Where the number came from. matching.py already does this arithmetic to
@@ -1378,6 +1385,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             if (!detailTarget) return;
 
+            // The server refuses this too; saying it here saves the round
+            // trip and puts the message next to the pickers it is about.
+            if (proposeSelected.proposerGives.size === 0
+                    || proposeSelected.recipientGives.size === 0) {
+                setProposeMessage('A partnership needs something from both '
+                    + 'sides. Pick at least one thing you will provide and '
+                    + 'one thing you are asking for.');
+                return;
+            }
+
             const submitBtn = proposeForm.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Sending...';
@@ -1519,7 +1536,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Focus areas are a flat list, wrapped so the same builder handles it.
         build('filterFocusPicker', [{ name: '', categories: focusAreas }],
               'focus', 'filter-focus');
+        syncBrowseFilterForm();
         paintFilterCounts();
+    }
+
+    // The form shows what browseFilters holds. Built lazily, so filters that
+    // arrived in the URL (see readUrl) were in force before the form existed
+    // to show them; this is what makes them visible and clearable.
+    function syncBrowseFilterForm() {
+        [['filterOffersPicker', browseFilters.offers],
+         ['filterNeedsPicker', browseFilters.needs],
+         ['filterFocusPicker', browseFilters.focus]].forEach(([pickerId, set]) => {
+            const picker = document.getElementById(pickerId);
+            if (!picker) return;
+            picker.querySelectorAll('input[type="checkbox"]').forEach((box) => {
+                box.checked = set.has(box.value);
+                box.closest('.category-chip').classList.toggle('checked', box.checked);
+            });
+        });
+        const typeSel = document.getElementById('filterType');
+        const locInput = document.getElementById('filterLocation');
+        const remoteBox = document.getElementById('filterRemote');
+        if (typeSel) typeSel.value = browseFilters.type;
+        if (locInput) locInput.value = browseFilters.location;
+        if (remoteBox) remoteBox.checked = browseFilters.remote;
     }
 
     // How many are ticked inside each collapsed section, so a section that is
@@ -1687,16 +1727,141 @@ document.addEventListener('DOMContentLoaded', async () => {
         else mql.addListener(onChange);   // Safari < 14
     });
 
-    // Arriving from the dashboard's "Two-way matches" card, which links to
-    // ppsearch.html?mutual=1. The filter UI is synced too, so the state is
-    // visible and can be cleared the usual way rather than being a hidden
-    // mode that only the URL knows about.
-    if (new URLSearchParams(location.search).get('mutual') === '1') {
-        mutualOnly = true;
-        const box = document.getElementById('mutualOnlyInput');
-        if (box) box.checked = true;
-        paintFilterButton();
+    // --- The URL as state -----------------------------------------------
+    // Everything that decides what the grid shows -- which view, the search
+    // box, the filters, the sort, the page, and which card is open -- is
+    // written back to the address bar as it changes, and read from it on
+    // arrival. Before this the whole of it lived in memory: a reload lost
+    // the filters, Back left the page, and there was no way to send anyone
+    // a link to a particular organization here. replaceState rather than
+    // pushState, because every filter change as its own history entry
+    // turns Back into a long walk out.
+    //
+    // Names are the API's where one exists (q, sort, page, offers, needs,
+    // focus, type, location, remote, mutual), so a link is readable and a
+    // browse URL can be pasted against /api/organizations almost verbatim.
+    // `shared_focus` is spelled out because `focus` is already the browse
+    // list; `view` and `org` are this page's own.
+
+    function writeUrl() {
+        const params = new URLSearchParams();
+        if (viewMode !== 'matches') params.set('view', viewMode);
+        const term = searchQuery();
+        if (term) params.set('q', term);
+
+        if (viewMode === 'browse') {
+            if (browseState.sort !== 'name') params.set('sort', browseState.sort);
+            if (browseState.page > 1) params.set('page', String(browseState.page));
+            [['offers', browseFilters.offers], ['needs', browseFilters.needs],
+             ['focus', browseFilters.focus]].forEach(([key, set]) => {
+                if (set.size) params.set(key, [...set].join(','));
+            });
+            if (browseFilters.type) params.set('type', browseFilters.type);
+            if (browseFilters.location) params.set('location', browseFilters.location);
+            if (browseFilters.remote) params.set('remote', '1');
+        } else {
+            if (mutualOnly) params.set('mutual', '1');
+            if (sharedFocusOnly) params.set('shared_focus', '1');
+            if (showAll) params.set('all', '1');
+            else if (currentPage > 1) params.set('page', String(currentPage));
+        }
+
+        if (detailTarget && detailModal && detailModal.classList.contains('active')) {
+            params.set('org', String(detailTarget.id));
+        }
+
+        const query = params.toString();
+        const url = location.pathname + (query ? `?${query}` : '');
+        if (url !== location.pathname + location.search) {
+            history.replaceState(null, '', url);
+        }
     }
 
-    await loadMatches();
+    // Reads the address on arrival into the same state writeUrl writes
+    // from. Returns what still has to happen once the list is loaded: which
+    // card to open, and whether to go straight on to proposing to it.
+    function readUrl() {
+        const params = new URLSearchParams(location.search);
+        const list = (key) => new Set(
+            (params.get(key) || '').split(',').map((v) => v.trim()).filter(Boolean));
+
+        if (params.get('q')) searchInput.value = params.get('q');
+
+        const view = params.get('view');
+        viewMode = (view === 'browse' || view === 'saved') ? view : 'matches';
+
+        const page = parseInt(params.get('page'), 10);
+        restorePage = page > 1 ? page : 0;
+
+        if (viewMode === 'browse') {
+            const sort = params.get('sort');
+            browseState.sort = ['name', 'newest', 'match'].includes(sort) ? sort : 'name';
+            if (browseSort) browseSort.value = browseState.sort;
+            browseFilters.offers = list('offers');
+            browseFilters.needs = list('needs');
+            browseFilters.focus = list('focus');
+            browseFilters.type = (params.get('type') || '').trim();
+            browseFilters.location = (params.get('location') || '').trim();
+            browseFilters.remote = params.get('remote') === '1';
+        } else {
+            // The filter UI is synced too, so the state is visible and can
+            // be cleared the usual way rather than being a hidden mode that
+            // only the URL knows about. ?mutual=1 is also where the
+            // dashboard's "Two-way matches" card has always linked.
+            mutualOnly = params.get('mutual') === '1';
+            sharedFocusOnly = params.get('shared_focus') === '1';
+            showAll = params.get('all') === '1';
+            const box = document.getElementById('mutualOnlyInput');
+            if (box) box.checked = mutualOnly;
+            const focusBox = document.getElementById('sharedFocusInput');
+            if (focusBox) focusBox.checked = sharedFocusOnly;
+        }
+        paintFilterButton();
+
+        const org = parseInt(params.get('org'), 10);
+        return {
+            org: org > 0 ? org : null,
+            propose: params.get('propose') === '1',
+        };
+    }
+
+    // Open one organization's card by id -- the target of a ?org= link from
+    // the dashboard, a public profile, or somebody's paste. Taken from the
+    // list already loaded when it is there; fetched on its own when it is
+    // not, so a link to a match on page 30, or to an organization that does
+    // not match at all, still opens rather than silently doing nothing.
+    async function openOrg(id, { propose = false } = {}) {
+        let m = [...displayed, ...allMatches, ...exampleMatches, ...savedList]
+            .find((x) => x.id === id);
+        if (!m) {
+            try {
+                const data = await window.api(
+                    `/api/organizations/${encodeURIComponent(id)}`);
+                m = data.organization;
+                // The same row carries the contact details the card would
+                // otherwise fetch a second time.
+                contactCache.set(m.id, m);
+            } catch (error) {
+                window.toast(error.status === 404
+                    ? 'That organization is no longer listed.'
+                    : (error.message || 'Could not open that organization.'),
+                'error');
+                writeUrl();
+                return;
+            }
+        }
+        if (!m.match_detail) m.match_detail = {};
+        showDetail(m);
+        if (propose && proposeBtn && !m.is_demo && me) proposeBtn.click();
+    }
+
+    const arrival = readUrl();
+    if (viewMode === 'browse') {
+        await setViewMode('browse');
+    } else if (viewMode === 'saved') {
+        await setViewMode('saved');
+    } else {
+        await loadMatches();
+    }
+    if (arrival.org) await openOrg(arrival.org, { propose: arrival.propose });
 });

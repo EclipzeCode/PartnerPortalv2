@@ -636,7 +636,8 @@ _EMAIL_STYLE = """\
          text-decoration: none; padding: 12px 24px; border-radius: 8px;
          font-weight: 600; margin-top: 12px; }
   .quote { border-left: 3px solid #e0e0e0; padding: 4px 0 4px 14px;
-           color: #4a4a4a; font-style: italic; margin: 16px 0; }
+           color: #4a4a4a; font-style: italic; margin: 16px 0;
+           white-space: pre-wrap; }
   .foot { color: #8d99ae; font-size: 12px; text-align: center; margin-top: 24px; }
   a { color: #4361ee; }
 </style>

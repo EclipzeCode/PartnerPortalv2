@@ -2,15 +2,19 @@
  *
  * Loaded LAST on every page, replacing the copy that each page stylesheet had
  * grown. Those copies all switched to the mobile drawer at 48em (768px), but
- * the bar needs roughly 69em to lay out: a 1.8rem logo plus six links at
- * 1.1rem with 2rem gaps. Between those two widths the links had nowhere to go
- * and wrapped onto a second line, overlapping the page beneath.
+ * the bar at the time needed roughly 69em to lay out: a 1.8rem logo plus six
+ * links at 1.1rem with 2rem gaps. Between those two widths the links had
+ * nowhere to go and wrapped onto a second line, overlapping the page beneath,
+ * so the drawer was moved out to 68.75em.
  *
- * Two changes stop that happening again:
- *   1. The drawer now opens at 68.75em, before the bar can run out of room.
- *   2. Above that, the logo, link size and gaps are all fluid, so the bar
- *      tightens gradually as the window narrows instead of holding one size
- *      until it breaks.
+ * The bar has since shrunk to three links and the account slot -- about
+ * 23em all in, with the logo -- and the 68.75em breakpoint had become a
+ * hamburger menu on a 1024px laptop, with the whole bar hidden behind it for
+ * nothing. The drawer is back at 48em, where tokens.css always said the nav
+ * collapses. Above that, the logo, link size and gaps are all fluid, so the
+ * bar tightens gradually as the window narrows instead of holding one size
+ * until it breaks; if links are ever added back, measure the bar before
+ * moving this.
  */
 
 .header {
@@ -331,10 +335,12 @@
 }
 
 /* --- Drawer ------------------------------------------------------------- */
-/* 68.75em = 1100px at the default font size, which is where the six links
-   plus the logo stop fitting. Stated in em so a larger browser font moves the
-   breakpoint out with it, rather than overflowing at the same pixel width. */
-@media (max-width: 68.75em) {
+/* 48em = 768px at the default font size -- the tablet boundary the rest of
+   the site uses. The bar itself fits down to about 40em; the drawer opens
+   earlier than that so it never has to be judged to the pixel. Stated in em
+   so a larger browser font moves the breakpoint out with it, rather than
+   overflowing at the same pixel width. ink.css mirrors this value. */
+@media (max-width: 48em) {
     #menu-icon {
         display: block;
     }
