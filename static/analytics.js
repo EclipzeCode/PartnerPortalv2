@@ -10,6 +10,24 @@
 // here is computed that the payload does not already carry, and nothing is
 // modeled or projected: every number drawn is one the server counted.
 // ---------------------------------------------------------------------------
+// The query string for /api/dashboard. `tz` is this browser's IANA zone,
+// which decides where one day of the views chart ends and the next begins:
+// without it the server buckets by UTC, and an evening's views here land on
+// tomorrow's bar. Left off when the browser cannot say, and the server falls
+// back to UTC on its own.
+function viewsQuery(days) {
+    const params = new URLSearchParams();
+    if (days) params.set('days', String(days));
+    try {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (zone) params.set('tz', zone);
+    } catch {
+        // No zone to send; UTC days, as before.
+    }
+    const query = params.toString();
+    return query ? `?${query}` : '';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const esc = window.escapeHtml;
 
@@ -24,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // each other, and this page is two round trips deep before it can draw
         // anything.
         const [dash, list] = await Promise.all([
-            window.api('/api/dashboard'),
+            window.api(`/api/dashboard${viewsQuery()}`),
             // The ring's segments open into this. A failure here is not worth
             // failing the page over -- the charts still draw, and the
             // segments say the list is unavailable when opened.
@@ -800,7 +818,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             try {
-                const fresh = await window.api(`/api/dashboard?days=${days}`);
+                const fresh = await window.api(
+                    `/api/dashboard${viewsQuery(days)}`);
                 // Same guard the directory uses: a slower answer must not
                 // land on top of a faster one somebody asked for after it.
                 if (mine !== pending) return;

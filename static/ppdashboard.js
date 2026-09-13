@@ -9,6 +9,19 @@
 // localStorage, which meant they were not saved at all -- one browser, gone
 // with site data, never following the account that made them.
 
+// This browser's IANA zone, for /api/dashboard: it decides where one day of
+// the profile-views figures ends and the next begins. Without it the server
+// counts in UTC and an evening's views land on tomorrow. Omitted when the
+// browser cannot say; the server then uses UTC, as it always did.
+function dashboardQuery() {
+    try {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return zone ? `?tz=${encodeURIComponent(zone)}` : '';
+    } catch {
+        return '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Only still read to rescue anything left behind by that older version;
     // nothing is ever written here now. See migrateLocalEvents below.
@@ -60,7 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let dashboard = null;
     try {
-        dashboard = await window.api('/api/dashboard');
+        dashboard = await window.api(`/api/dashboard${dashboardQuery()}`);
     } catch (error) {
         console.error('Could not load dashboard:', error);
         // Leaves the shimmer in place otherwise, which would read as a page
@@ -487,7 +500,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // feed is built from, so re-read it rather than leaving a stale list.
     document.addEventListener('partnerships:changed', async () => {
         try {
-            dashboard = await window.api('/api/dashboard');
+            dashboard = await window.api(`/api/dashboard${dashboardQuery()}`);
         } catch {
             return; // leave the current feed rather than blanking it
         }
@@ -515,15 +528,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             partnerSelect.appendChild(opt);
         };
 
-        (dashboard.recent_proposals || [])
-            // An agreement outlives the other side closing its account, so
-            // an accepted partnership no longer implies there is anyone left
-            // to meet. The agreement still shows on the partnerships page;
-            // it just is not something to put in the diary.
-            // 'accepted' only: a completed or ended partnership is a record
-            // rather than someone you are still arranging meetings with.
-            .filter((p) => p.status === 'accepted' && !p.counterpart.deleted)
-            .forEach((p) => addOption(p.counterpart.id, p.counterpart.name));
+        // `partners` is every live partnership, from the server. This used to
+        // be read off recent_proposals, which the server caps at five, so a
+        // partnership older than the last five proposals -- the one a
+        // standing meeting is most likely about -- could not be picked.
+        // The server already leaves out a counterpart that has closed its
+        // account (an agreement outlives that; a diary entry should not) and
+        // anything completed or ended, which is a record rather than
+        // someone you are still meeting.
+        (dashboard.partners || []).forEach((p) => addOption(p.id, p.name));
         (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));
     }
 
@@ -1552,7 +1565,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             } finally {
                 if (eventSubmitBtn) {
                     eventSubmitBtn.disabled = false;
-                    eventSubmitBtn.textContent = 'Save Event';
+                    // Back to whichever label openModal chose: this is also
+                    // the path a failed edit takes, and the form stays open.
+                    eventSubmitBtn.textContent =
+                        editingEventId !== null ? 'Save changes' : 'Save Event';
                 }
             }
 
@@ -1626,7 +1642,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function eventRow(ev) {
         const d = eventDate(ev);
         return `
-            <button type="button" class="stat-row" data-event-id="${esc(ev.id)}">
+            <button type="button" class="stat-row" data-event-id="${esc(ev.id)}"
+                    data-occurs-on="${esc(ev.occurs_on || ev.date)}">
                 <span class="stat-row-mark">${d.getDate()}<small>${
                     esc(d.toLocaleString('en-US', { month: 'short' }))
                 }</small></span>
@@ -1671,7 +1688,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${ev.description
                 ? `<p class="stat-detail-note">${esc(ev.description)}</p>` : ''}
             <div class="stat-detail-actions">
-                <button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}">
+                <button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}"
+                        data-occurs-on="${esc(ev.occurs_on || ev.date)}">
                     <i class='bx bx-trash'></i> Remove meeting
                 </button>
             </div>`;
@@ -1807,7 +1825,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (statDetail) {
             statBack.hidden = false;
             if (statDetail.kind === 'event') {
-                const ev = loadEvents().find((e) => String(e.id) === String(statDetail.id));
+                // By id *and* date: a repeating meeting is one id across many
+                // rows, and looking it up by id alone showed -- and offered to
+                // remove -- the first occurrence whichever one was clicked.
+                const ev = findOccurrence(statDetail.id, statDetail.occursOn);
                 if (!ev) { statDetail = null; return renderStat(); }
                 statTitle.textContent = ev.title;
                 statBody.innerHTML = eventDetail(ev);
@@ -1970,15 +1991,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // stacks on top of this dialog; common.js hands the Tab trap
                 // to whichever dialog is on top, so the one underneath stops
                 // grabbing focus while the question is up.
-                const found = loadEvents().find(
-                    (ev) => String(ev.id) === String(remove.dataset.removeEvent));
+                const found = findOccurrence(remove.dataset.removeEvent,
+                                             remove.dataset.occursOn);
                 if (found) openDeleteConfirm(found);
                 return;
             }
             const row = e.target.closest('.stat-row');
             if (!row) return;
             if (row.dataset.eventId) {
-                statDetail = { kind: 'event', id: row.dataset.eventId };
+                statDetail = {
+                    kind: 'event',
+                    id: row.dataset.eventId,
+                    occursOn: row.dataset.occursOn,
+                };
             } else if (row.dataset.matchId) {
                 statDetail = { kind: 'match', id: row.dataset.matchId };
             }

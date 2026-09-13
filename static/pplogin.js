@@ -19,13 +19,34 @@ const toSignIn = document.getElementById('toSignIn');
 if (toSignUp) toSignUp.addEventListener('click', showRegister);
 if (toSignIn) toSignIn.addEventListener('click', showLogin);
 
+// Which panel to open first. The page defaults to Sign In, which is right
+// for a returning visitor typing the URL and wrong for the two ways a new
+// one arrives: every "Get started" / "Create account" link points at
+// #signup, and anyone bounced here from onboarding.html has just tried to
+// build a profile without an account -- landing them on "Welcome back" with
+// a Sign Up button to find was the most expensive wrong form on the site.
+(function openRequestedPanel() {
+    const next = new URLSearchParams(location.search).get('next') || '';
+    if (location.hash === '#signup' || next.startsWith('onboarding.html')) {
+        showRegister();
+    }
+})();
+
 // Where to land after signing in. An org that has not finished onboarding is
 // sent there first, because matches are meaningless without a profile.
 function destinationFor(organization) {
     const params = new URLSearchParams(location.search);
     const next = params.get('next');
     if (!organization.onboarding_complete) return 'onboarding.html';
-    if (next && /^[a-z0-9_-]+\.html$/i.test(next)) return next;
+    // A page of this site, optionally with its own query and hash -- the
+    // shape common.js builds when it bounces a signed-out request here. The
+    // hash is what the email links carry (ppdashboard.html#incoming,
+    // #messages-12), and it used to be dropped on the way through. Anchored
+    // to a bare page name so this can never become an open redirect: no
+    // scheme, no slashes, no protocol-relative prefix.
+    if (next && /^[a-z0-9_-]+\.html(\?[^#\s]*)?(#[a-z0-9_-]*)?$/i.test(next)) {
+        return next;
+    }
     return 'ppdashboard.html';
 }
 

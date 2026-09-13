@@ -171,7 +171,12 @@ window.api = async function api(path, options = {}) {
     // decision, or a signed-out visitor would sit on a half-built page instead
     // of being sent to sign in.
     if (result.status === 401 && !opts.allowUnauthenticated) {
-        const here = encodeURIComponent(location.pathname.replace(/^\//, ''));
+        // The whole address, not just the page: every email links to a tab
+        // or a thread (ppdashboard.html#incoming, #messages-12), and a
+        // recipient who is signed out used to land on the default tab with
+        // the hash gone. pplogin.js checks the shape before following it.
+        const here = encodeURIComponent(
+            location.pathname.replace(/^\//, '') + location.search + location.hash);
         location.href = `pplogin.html?next=${here}`;
         // Never resolves; the navigation is already underway.
         return new Promise(() => {});
@@ -589,6 +594,13 @@ function routeSessionLinks(signedIn) {
     // login page, which is a nav item that punishes the click.
     document.querySelectorAll('.navbar a[href="ppdashboard.html"]')
         .forEach((link) => { link.hidden = !signedIn; });
+
+    // "Get started" / "Create account" point at the sign-up panel, which is
+    // the right first stop for a visitor and a dead end for an account that
+    // already exists. Signed in, the same click means "set up my profile".
+    document.querySelectorAll('a[href="pplogin.html#signup"]').forEach((link) => {
+        if (signedIn) link.href = 'onboarding.html';
+    });
 }
 
 async function updateNavForSession() {

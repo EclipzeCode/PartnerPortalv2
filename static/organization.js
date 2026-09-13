@@ -43,6 +43,10 @@
 
     // Signed-in extras. A 401 here is the normal case for a public visitor,
     // so it is swallowed rather than surfaced.
+    // Also decides where "Find partners like this" goes below. This page has
+    // no navbar, so common.js's routing of ppsearch.html vs directory.html
+    // never runs here; a signed-out visitor following a shared link used to
+    // click it and land on the sign-in wall instead of the public directory.
     let viewer = null;
     try {
         const res = await fetch(`/api/organizations/${encodeURIComponent(id)}`);
@@ -125,7 +129,7 @@
                     <i class='bx bx-lock-alt'></i>
                     Contact details are shown to signed-in organizations.
                     <a href="pplogin.html">Sign in</a> or
-                    <a href="onboarding.html">create a profile</a> to get in touch.
+                    <a href="pplogin.html#signup">create a profile</a> to get in touch.
                 </p>
             </section>`;
     } else {
@@ -135,7 +139,7 @@
                     <i class='bx bx-lock-alt'></i>
                     Contact details are shown to signed-in organizations.
                     <a href="pplogin.html">Sign in</a> or
-                    <a href="onboarding.html">create a profile</a> to get in touch.
+                    <a href="pplogin.html#signup">create a profile</a> to get in touch.
                 </p>
             </section>`;
     }
@@ -218,7 +222,7 @@
             <button type="button" class="btn-share" id="shareBtn">
                 <i class='bx bx-link'></i> Copy link to this profile
             </button>
-            <a class="btn-find" href="ppsearch.html">Find partners like this</a>
+            <a class="btn-find" href="${viewer ? 'ppsearch.html' : 'directory.html'}">Find partners like this</a>
         </div>
     `;
 

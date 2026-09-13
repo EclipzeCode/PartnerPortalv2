@@ -216,6 +216,17 @@ app.config.update(
 # a 500 for whoever picks a very long passphrase.
 MAX_PASSWORD_BYTES = 72
 
+# What a sign-in checks against when there is no account to check against.
+#
+# Answering "invalid email or password" for both cases is only half of not
+# disclosing which: a wrong password costs a bcrypt comparison and a missing
+# address used to cost a database miss, and the difference is tens of
+# milliseconds -- readable from across the internet with a handful of
+# samples. Both login paths now run checkpw either way, against this when
+# there is nothing else. Made once here rather than per request, so the
+# decoy path costs one bcrypt like the real one, not a hashpw and a checkpw.
+_DECOY_PASSWORD_HASH = bcrypt.hashpw(b"decoy", bcrypt.gensalt())
+
 # --- Field lengths --------------------------------------------------------
 # Ceilings for the String() columns in models.py, checked here rather than
 # left to Postgres. A value one character over the column width reaches the
@@ -1195,6 +1206,28 @@ def _page_etag(body):
     return hashlib.sha256(body.encode("utf-8")).hexdigest()[:32]
 
 
+# The homepage quotes the size of the category vocabulary three times -- a
+# hero figure and two sentences. Those used to be the literal "33", which is
+# right until somebody adds a category and wrong from then on, with nothing
+# to notice: the number is prose, and prose does not fail a test. The markup
+# now carries each one as <span data-category-total>, and the real count is
+# written in from the same constant categories.py derives it from.
+#
+# Done inside _stamped_page, not in the route: the result is a function of
+# the file and a constant, so it belongs with the rest of the once-per-version
+# work rather than being redone on every request -- which is what a route
+# that read the file and passed html= to serve_page would have cost, on the
+# most-visited page there is.
+_CATEGORY_TOTAL_RE = re.compile(r"(<span data-category-total>)\d+(</span>)")
+
+
+def _fill_constants(filename, html):
+    """`html` with the figures the markup leaves to the server written in."""
+    if filename == "index.html":
+        html = _CATEGORY_TOTAL_RE.sub(rf"\g<1>{CATEGORY_TOTAL}\g<2>", html)
+    return html
+
+
 def _stamped_page(filename, pattern=_ASSET_REF_RE):
     """The stamped body and ETag for a page in static/, cached.
 
@@ -1231,6 +1264,7 @@ def _stamped_page(filename, pattern=_ASSET_REF_RE):
 
     with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
         html = f.read()
+    html = _fill_constants(filename, html)
     # Bundled before stamping, not after: the bundle's own URL already names
     # the contents of everything in it (see _bundle_digest), so stamping it
     # again would add a ?v= that says the same thing twice. The stamp pass
@@ -2224,10 +2258,16 @@ def _org_og_description(profile):
 def organization_page():
     """Same file static/organization.html serves, with real og: tags on top.
 
-    Only completed profiles get a specific title/description, matching what
-    /api/organizations/<id>/public resolves -- a link to a half-filled or
-    missing profile falls back to a generic preview rather than a 404, since
-    organization.js is what actually tells the visitor that on the page.
+    Only completed, listed profiles get a specific title/description,
+    matching what /api/organizations/<id>/public resolves -- a link to a
+    half-filled or missing profile falls back to a generic preview rather
+    than a 404, since organization.js is what actually tells the visitor that
+    on the page.
+
+    Hidden is part of that test for the same reason it is in the API: an
+    organization an admin has taken out of the directory used to 404 from
+    /public and still hand its name and description to every link preview,
+    which is the one channel the hiding was meant to close.
     """
     org_id = request.args.get("id", "")
     title = "Organization | PartnerPortal"
@@ -2242,7 +2282,8 @@ def organization_page():
         db = get_db()
         try:
             org = db.get(Organization, int(org_id))
-            if org is not None and org.onboarding_complete:
+            if (org is not None and org.onboarding_complete
+                    and not org.hidden_at):
                 profile = org.public_profile()
                 title = f"{profile['name']} | PartnerPortal"
                 description = _org_og_description(profile)
@@ -2686,9 +2727,13 @@ def login():
         # Same response whether the email is unknown or the password is wrong,
         # so this endpoint cannot be used to enumerate registered orgs.
         invalid = jsonify({"error": "Invalid email or password."}), 401
-        if org is None or not org.password_hash:
-            return invalid
         if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            return invalid
+        if org is None or not org.password_hash:
+            # Same work as a wrong password, so the clock does not say which
+            # -- see _DECOY_PASSWORD_HASH. Unclaimed invitations and seeded
+            # examples have no hash and take this path too.
+            bcrypt.checkpw(password.encode("utf-8"), _DECOY_PASSWORD_HASH)
             return invalid
         if not bcrypt.checkpw(
             password.encode("utf-8"), org.password_hash.encode("utf-8")
@@ -2778,13 +2823,13 @@ def admin_login():
         admin = db.query(Admin).filter(Admin.email == email).one_or_none()
 
         invalid = jsonify({"error": "Invalid email or password."}), 401
+        if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            return invalid
         if admin is None:
             # Hash anyway, so a missing address and a wrong password cost the
             # same. /register makes this argument at length; the clock is a
             # side channel whatever the wording says.
-            bcrypt.checkpw(b"x", bcrypt.hashpw(b"x", bcrypt.gensalt()))
-            return invalid
-        if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            bcrypt.checkpw(password.encode("utf-8"), _DECOY_PASSWORD_HASH)
             return invalid
         if not bcrypt.checkpw(password.encode("utf-8"),
                               admin.password_hash.encode("utf-8")):
@@ -3225,7 +3270,16 @@ def admin_set_hidden(admin, db, org_id):
 
 @app.route("/logout", methods=["POST"])
 def logout():
-    session.clear()
+    """Sign the organization out, and only the organization.
+
+    The two sign-ins share one cookie (see _start_admin_session), so
+    session.clear() here signed an admin out of the admin panel every time
+    they signed out of the account they were reviewing with -- the mirror
+    of the mistake admin_logout avoids. Popping just the org keys leaves the
+    admin session and the CSRF token where they were.
+    """
+    session.pop("org_id", None)
+    session.pop("epoch", None)
     return jsonify({"message": "Signed out"}), 200
 
 
@@ -4060,6 +4114,15 @@ def save_onboarding(org, db):
             return jsonify({"error": problem, "field": "organization_name"}), 400
     if not organization_type:
         problems.append("an organization type")
+    elif organization_type not in ORGANIZATION_TYPES:
+        # The form is a <select> over this same list, so only a crafted
+        # request gets here -- but a value outside it is one the directory's
+        # exact-match type filter can never find, and one no other profile
+        # shares, so it would be stored as a category of one.
+        return jsonify({
+            "error": "That is not one of the organization types on the list.",
+            "field": "organization_type",
+        }), 400
     if len(location) < 2:
         problems.append("a location")
     if not needs:
@@ -4811,7 +4874,7 @@ VIEW_SERIES_CHOICES = (7, 30, 90)
 # two questions travel together anyway. The all-time row is the one with a
 # NULL day, which is a shape no grouped row can have.
 _VIEW_STATS = text("""
-SELECT date(viewed_at) AS day, count(*) AS n
+SELECT date(viewed_at AT TIME ZONE :zone) AS day, count(*) AS n
   FROM profile_views
  WHERE organization_id = :org_id AND viewed_at >= :since
  GROUP BY 1
@@ -4822,7 +4885,7 @@ SELECT NULL AS day, count(*) AS n
 """)
 
 
-def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
+def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS, zone="UTC"):
     """Every profile-view number the dashboard shows, from one query.
 
     Returns (total, recent, series, prior).
@@ -4840,10 +4903,14 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
     rides along on the same trip rather than paying for its own; see
     _VIEW_STATS.
 
-    Days are UTC. viewed_at is a timestamptz and the cast resolves in the
-    session's timezone, which is UTC here. A visitor's own midnight is not
-    knowable from a salted digest, and would be the wrong boundary anyway --
-    these are the profile owner's days, not the visitor's.
+    Days are the profile owner's, in `zone` -- the IANA name the dashboard
+    sends from the browser it is open in (see get_dashboard), UTC when it
+    sends nothing. viewed_at is a timestamptz; AT TIME ZONE turns it into
+    that zone's wall clock before the date is taken, and the window's edges
+    are that zone's midnights, so a view at nine in the evening in Chicago
+    lands on the bar for that evening rather than on tomorrow's. A visitor's
+    own midnight is not knowable from a salted digest, and would be the
+    wrong boundary anyway -- these are the owner's days, not the visitor's.
 
     Every day in the window is present, including the empty ones. A series
     with the gaps left out would draw a line straight across a fortnight of
@@ -4855,16 +4922,18 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS):
     disagree, by up to a day's views, for no reason a reader could see. It is
     now the sum of exactly those bars.
     """
-    today = datetime.now(timezone.utc).date()
+    tzinfo = ZoneInfo(zone)
+    today = datetime.now(tzinfo).date()
     first = today - timedelta(days=days - 1)
     prior_first = first - timedelta(days=days)
 
     def midnight(day):
-        return datetime.combine(day, time_type(0, 0), tzinfo=timezone.utc)
+        return datetime.combine(day, time_type(0, 0), tzinfo=tzinfo)
 
     rows = db.execute(_VIEW_STATS, {
         "org_id": org.id,
         "since": midnight(prior_first),
+        "zone": zone,
     }).all()
     counts = {str(day): n for day, n in rows if day is not None}
     total = next((n for day, n in rows if day is None), 0)
@@ -4926,8 +4995,9 @@ def list_saved(org, db):
     for row in rows:
         other = row.saved_organization
         # An org that has since un-finished its profile would otherwise be
-        # rendered as a card with nothing in it.
-        if other is None or not other.onboarding_complete:
+        # rendered as a card with nothing in it; one an admin has hidden
+        # would render as a card that 404s the moment it is opened.
+        if other is None or not other.onboarding_complete or other.hidden_at:
             continue
         data = other.public_dict()
         score, reasons, detail = score_pair(org, other)
@@ -4941,6 +5011,12 @@ def list_saved(org, db):
         saved.append(data)
 
     return jsonify({"saved": saved, "count": len(saved)})
+
+
+# Rows one account may create in an hour on the endpoints that only write to
+# its own dashboard -- saved leads, meetings. Nobody else is affected by
+# either, so this is a ceiling on write volume rather than on outreach.
+WRITES_PER_HOUR = 120
 
 
 @app.route("/api/saved", methods=["POST"])
@@ -4961,7 +5037,7 @@ def create_saved(org, db):
         return jsonify({"error": "Organization not found."}), 404
 
     other = db.get(Organization, target_id)
-    if other is None or not other.onboarding_complete:
+    if other is None or not other.onboarding_complete or other.hidden_at:
         return jsonify({"error": "Organization not found."}), 404
     if other.is_demo:
         # Same line create_proposal draws: example organizations have no owner
@@ -4970,6 +5046,15 @@ def create_saved(org, db):
             "error": "Example organizations cannot be saved. They are here to "
                      "show how matching works.",
         }), 400
+
+    # A bookmark is cheap and nobody is emailed, so this is only a ceiling on
+    # how fast one account can write rows. Well above anything a person
+    # clicking bookmarks reaches.
+    wait = rate_limited("saved", str(org.id), max_attempts=WRITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have saved a lot of organizations recently.",
+                        wait)
 
     existing = db.query(SavedLead).filter(
         SavedLead.organization_id == org.id,
@@ -5157,6 +5242,8 @@ def public_organization(org_id):
 # matching already apply. So this cannot be used to put a name into the
 # directory that nobody agreed to put there.
 MAX_OUTSTANDING_INVITES = 25
+# Invitations one account may create in an hour, claimed or not.
+INVITES_PER_HOUR = 20
 
 
 def _invite_dict(row, base_url=""):
@@ -5219,6 +5306,16 @@ def create_invite(org, db):
             "error": f"You have {MAX_OUTSTANDING_INVITES} invitations waiting "
                      f"to be claimed. Revoke one before sending another.",
         }), 429
+
+    # The outstanding-invitation cap above is a ceiling on rows, not on
+    # requests: create-and-revoke is two calls, and each create writes an
+    # organization row that goes on to be a name in the directory of
+    # unclaimed profiles. Metered per account, after every refusal.
+    wait = rate_limited("invites", str(org.id), max_attempts=INVITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have created a lot of invitations recently.",
+                        wait)
 
     # No address is collected. See the note on Organization.claim_token: the
     # email column is NOT NULL and unique, so an unclaimed row needs
@@ -5735,6 +5832,11 @@ def get_dashboard(org, db):
         view_days = VIEW_SERIES_DAYS
     if view_days not in VIEW_SERIES_CHOICES:
         view_days = VIEW_SERIES_DAYS
+    # The owner's timezone, for where one day of the views chart ends and
+    # the next begins. An IANA name the browser knows its own copy of;
+    # anything else, or nothing, is UTC -- the boundary every row had before
+    # the parameter existed.
+    view_zone = _known_zone(request.args.get("tz")) or "UTC"
 
     events, events_total = _expanded_events(db, org,
                                             limit=DASHBOARD_EVENT_LIMIT)
@@ -5743,7 +5845,7 @@ def get_dashboard(org, db):
     # views do.
     saved_count = len(_saved_ids(db, org))
     views_total, views_recent, views_series, views_prior = (
-        _profile_view_stats(db, org, days=view_days))
+        _profile_view_stats(db, org, days=view_days, zone=view_zone))
 
     if not org.onboarding_complete:
         return jsonify({
@@ -5790,6 +5892,24 @@ def get_dashboard(org, db):
     recent_proposals = [p.to_dict(viewer_id=org.id) for p in rows]
     _annotate_message_counts(db, org, rows, recent_proposals)
 
+    # Who a meeting can be with: every organization this one has a live
+    # partnership with, not just those among the five cards above. The
+    # dashboard used to build its partner picker from recent_proposals, so a
+    # partnership older than the last five proposals -- exactly the one a
+    # standing meeting is most likely about -- could not be chosen. Ids and
+    # names only; the counterpart's row is already joined in.
+    live = db.query(Partnership).filter(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id),
+        Partnership.status == Partnership.ACCEPTED,
+    ).all()
+    partners = sorted(
+        {(p.counterpart(org.id).id, p.counterpart(org.id).name)
+         for p in live if p.counterpart(org.id) is not None},
+        key=lambda pair: pair[1].casefold(),
+    )
+    partners = [{"id": pid, "name": name} for pid, name in partners]
+
     return jsonify({
         "organization": org.private_dict(),
         "needs_onboarding": False,
@@ -5826,6 +5946,7 @@ def get_dashboard(org, db):
         },
         "top_matches": top_matches,
         "recent_proposals": recent_proposals,
+        "partners": partners,
         "events": events,
         # How many occurrences there are in total, so the card can offer the
         # rest by name instead of implying it is showing all of them.
@@ -6104,6 +6225,13 @@ def create_event(org, db):
     # Named `zone`, not `timezone`: this module imports datetime.timezone,
     # and a local of that name would shadow it for the whole function.
     zone = _known_zone(data.get("timezone"))
+
+    # Same ceiling saved leads have, for the same reason: this writes only
+    # to the caller's own dashboard, so it only needs to stop a script.
+    wait = rate_limited("events", str(org.id), max_attempts=WRITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have added a lot of meetings recently.", wait)
 
     event = Event(
         organization_id=org.id,
@@ -6947,6 +7075,13 @@ def _partnership_dates(data):
     return starts_on, ends_on, None
 
 
+# Proposals one account may send in an hour, and to one other organization.
+# Each proposal is an email to somebody who did not ask for it; see the note
+# where these are checked.
+PROPOSALS_PER_HOUR = 20
+PROPOSALS_PER_PAIR_PER_HOUR = 3
+
+
 @app.route("/api/proposals", methods=["POST"])
 @login_required
 def create_proposal(org, db):
@@ -6987,7 +7122,11 @@ def create_proposal(org, db):
         return jsonify({"error": "Organization not found."}), 404
 
     recipient = db.get(Organization, recipient_id)
-    if recipient is None or not recipient.onboarding_complete:
+    # Hidden counts as absent here as it does everywhere a profile is read:
+    # an organization taken out of the directory should not go on receiving
+    # proposals from anyone who kept its id.
+    if (recipient is None or not recipient.onboarding_complete
+            or recipient.hidden_at):
         return jsonify({"error": "Organization not found."}), 404
     if recipient.is_demo:
         # Example organizations have no owner and cannot accept or decline, so
@@ -7110,6 +7249,30 @@ def create_proposal(org, db):
                      f"characters.",
             "field": "message",
         }), 400
+
+    # Metered late, after every check that could turn the request away, so a
+    # refused proposal never costs anything -- the convention every volume
+    # bucket in this file follows (see clear_rate_limit).
+    #
+    # Two buckets. The per-account one is the ceiling on outreach: every
+    # proposal emails its recipient, and an account working down the
+    # directory is sending mail to strangers at this app's expense. The
+    # per-pair one closes the loop the pending-uniqueness index leaves
+    # open: withdraw and re-propose is two requests, and nothing else here
+    # stopped somebody doing that to one organization all afternoon. Both
+    # generous for anyone using the site as intended -- a real organization
+    # sends a handful of proposals a week, not thirty an hour.
+    wait = rate_limited("proposals", str(org.id),
+                        max_attempts=PROPOSALS_PER_HOUR, window_seconds=3600)
+    if wait:
+        return too_many("You have sent a lot of proposals recently.", wait)
+    wait = rate_limited("proposals_to", f"{org.id}:{recipient.id}",
+                        max_attempts=PROPOSALS_PER_PAIR_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "You have proposed to this organization several times already "
+            "this hour.", wait)
 
     proposal = Partnership(
         proposer_id=org.id,

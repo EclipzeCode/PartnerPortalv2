@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${filtered
                     ? '<button type="button" class="btn-ghost" id="dirEmptyClear">'
                       + 'Clear filters</button>'
-                    : '<a class="btn-primary" href="onboarding.html">'
+                    : '<a class="btn-primary" href="pplogin.html#signup">'
                       + 'Be the first</a>'}
             </div>`;
         const btn = document.getElementById('dirEmptyClear');

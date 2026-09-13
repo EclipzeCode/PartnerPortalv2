@@ -671,11 +671,13 @@ def notify_proposal_created(proposal):
     subject = f"{proposer} proposed a partnership with you"
     review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
 
-    they_give_labels = [
-        # public_summary is heavier than we need here; format the two lists
-        # directly off the model.
-        _label(s) for s in (proposal.proposer_gives or [])
-    ]
+    # Both sides through term_lines, so a quantity shows on what they would
+    # provide as well as on what the reader would. This used to format the
+    # proposer's list as bare labels, so the recipient read "30 volunteers"
+    # against their own name and just "Volunteers" against the other side's
+    # -- the half of the exchange they were being asked to weigh.
+    they_give_labels = proposal.term_lines(proposal.proposer_gives,
+                                         proposal.proposer_quantities)
     you_give_labels = proposal.term_lines(proposal.recipient_gives,
                                         proposal.recipient_quantities)
 
@@ -1281,12 +1283,6 @@ def notify_contact_message(*, name, email, phone, message):
     text = f"New message from the PartnerPortal contact form.\n\n{detail}\n"
     # reply_to, not from: the From address must stay a verified sender.
     _dispatch(cfg["contact_to"], subject, html, text, reply_to=email)
-
-
-def _label(slug):
-    """Category labels via the shared vocabulary."""
-    from categories import label_for
-    return label_for(slug)
 
 
 def notify_profile_hidden(org, reason, hidden):

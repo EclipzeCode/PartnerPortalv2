@@ -51,12 +51,25 @@ def _same_location(a, b):
     Locations are free text ("Austin, TX" vs "austin"), so compare on the
     first comma-separated component, case-folded. This is intentionally
     forgiving -- a missed location match only costs a few points.
+
+    One thing it refuses to forgive: two short region codes that disagree.
+    "Portland, OR" and "Portland, ME" share a first component and are 2,500
+    miles apart, and the same holds for Springfield, Columbus, Salem and
+    most other American city names. Only codes are compared -- "TX" against
+    "Texas" is a spelling, not a contradiction, and falls back to the city.
     """
     if not a or not b:
         return False
-    first_a = a.split(",")[0].strip().casefold()
-    first_b = b.split(",")[0].strip().casefold()
-    return bool(first_a) and first_a == first_b
+    parts_a = [p.strip().casefold() for p in a.split(",")]
+    parts_b = [p.strip().casefold() for p in b.split(",")]
+    if not parts_a[0] or parts_a[0] != parts_b[0]:
+        return False
+    region_a = parts_a[1] if len(parts_a) > 1 else ""
+    region_b = parts_b[1] if len(parts_b) > 1 else ""
+    if (region_a and region_b and region_a != region_b
+            and len(region_a) <= 3 and len(region_b) <= 3):
+        return False
+    return True
 
 
 def rank_pair(me, them):
