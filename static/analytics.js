@@ -471,6 +471,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const faces = svgEl('g', { class: 'donut-faces' });
         const drawn = arcs.filter((a) => a.drawn);
 
+        // Through the CSSOM, never as a style *attribute*: the page ships
+        // `style-src 'self'` with no 'unsafe-inline', which blocks a style
+        // attribute however it is set (setAttribute included) and reports it
+        // to the console -- while leaving element.style.setProperty alone.
+        // Set as an attribute, --dx/--dy never reached the stylesheet, the
+        // lift transform in analytics.css was invalid at computed-value
+        // time, and the hover did nothing.
+        const pointAlong = (el, a) => {
+            el.style.setProperty('--dx', a.dx);
+            el.style.setProperty('--dy', a.dy);
+        };
+
         drawn.forEach((a) => {
             // The direction this segment points, from the middle outwards.
             // The lift below rides along it, so a slice separates from its
@@ -482,8 +494,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             a.wall = svgEl('path', {
                 class: `donut-wall step-${a.step}`,
                 d: segment(a.from, a.to, DEPTH),
-                style: `--dx:${a.dx};--dy:${a.dy}`,
             });
+            pointAlong(a.wall, a);
             walls.appendChild(a.wall);
         });
 
@@ -491,8 +503,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             a.face = svgEl('path', {
                 class: `donut-face step-${a.step}`,
                 d: segment(a.from, a.to, 0),
-                style: `--dx:${a.dx};--dy:${a.dy}`,
             });
+            pointAlong(a.face, a);
             faces.appendChild(a.face);
         });
 

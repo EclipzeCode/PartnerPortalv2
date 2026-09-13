@@ -376,6 +376,10 @@ class Organization(Base):
         # big enough for it to matter and is then hard to attribute.
         Index("ix_organizations_focus_areas", "focus_areas",
               postgresql_using="gin"),
+        # Created by the invitations migration (e7f4b2c91a58) and declared
+        # here so the model and the schema agree; the outstanding-invites
+        # list is built from this column.
+        Index("ix_organizations_invited_by", "invited_by_id"),
     )
 
     # What an organization can be mailed about, and what each category covers.

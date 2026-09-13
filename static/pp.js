@@ -218,109 +218,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Modals: the instructions guide. The contact form is contact.js, which
-// owns its own dialog because the help page has one too.
-//
-// Close handlers are scoped per-modal with modal.querySelector rather than a
-// bare document.querySelector, so adding a second modal to the page cannot
-// hand one modal the other's close button.
+// Scroll reveal for the sections below the hero. The contact dialog is
+// contact.js, which owns it because the help page has one too; the "guide"
+// modal that used to be wired here had no button that opened it and copy
+// that named a nav item this site no longer has, so it is gone.
 // ---------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-    // Focus is common.js's dialogOpened/dialogClosed: trapped inside while
-    // open, returned to whatever opened it on close.
-    function openModal(modal) {
-        if (!modal) return;
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-        window.dialogOpened(modal);
-    }
-
-    function closeModal(modal) {
-        if (!modal) return;
-        modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
-        window.dialogClosed(modal);
-    }
-
-    // contact.js opens, closes and submits #contact-modal itself, because the
-    // help page has that modal without having this file. Binding it here as
-    // well would run every close twice, and dialogClosed twice with it.
-    document.querySelectorAll('.modal:not(#contact-modal)').forEach((modal) => {
-        const closeBtn = modal.querySelector('.close-modal');
-        if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal));
-
-        const confirmBtn = modal.querySelector('.btn-confirm');
-        if (confirmBtn) confirmBtn.addEventListener('click', () => closeModal(modal));
-
-        // Click on the backdrop, but not inside the dialog itself.
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal(modal);
-        });
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        document.querySelectorAll('.modal.active:not(#contact-modal)')
-            .forEach((m) => closeModal(m));
-    });
-
-    // The guide modal has no trigger button on the page yet, hence the guard.
-    const instructionsBtn = document.getElementById('instructions-btn');
-    const instructionsModal = document.getElementById('instructions-modal');
-    if (instructionsBtn && instructionsModal) {
-        instructionsBtn.addEventListener('click', () => openModal(instructionsModal));
-    }
-
-});
-
 document.addEventListener('DOMContentLoaded', function() {
-    // Animate numbers when scrolling
-    const animateNumbers = () => {
-        // Only elements that actually declare a target. The hero stats use
-        // `.hero-stat` and are static text ("1,000+", "24h") -- selecting them
-        // here is what previously overwrote them with NaN.
-        const statItems = document.querySelectorAll('.stat-item[data-target]');
-
-        statItems.forEach(item => {
-            const target = parseInt(item.getAttribute('data-target'), 10);
-            const numberEl = item.querySelector('.stat-number');
-            if (!numberEl || Number.isNaN(target)) return;
-
-            const suffix = item.getAttribute('data-suffix') || '';
-            const duration = 2000; // Animation duration in ms
-            const startTime = performance.now();
-
-            const animate = (currentTime) => {
-                const elapsedTime = currentTime - startTime;
-                const progress = Math.min(elapsedTime / duration, 1);
-                const value = Math.floor(progress * target);
-
-                numberEl.textContent = value.toLocaleString() + suffix;
-
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                }
-            };
-
-            requestAnimationFrame(animate);
-        });
-    };
-    
-    // More precise Intersection Observer with higher threshold and rootMargin
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('active');
                 entry.target.classList.remove('pending');
-                
-                // If this is the platform section, animate numbers
-                if (entry.target.classList.contains('platform-section')) {
-                    // Only animate numbers if not already animated
-                    if (!entry.target.classList.contains('numbers-animated')) {
-                        animateNumbers();
-                        entry.target.classList.add('numbers-animated');
-                    }
-                }
             }
         });
     }, {

@@ -592,8 +592,14 @@ function routeSessionLinks(signedIn) {
 
     // Offered only when it leads somewhere. Signed out it redirects to the
     // login page, which is a nav item that punishes the click.
-    document.querySelectorAll('.navbar a[href="ppdashboard.html"]')
-        .forEach((link) => { link.hidden = !signedIn; });
+    // The footer carries the same link under "Account", and it stayed put
+    // for signed-out visitors after the nav's copy was hidden. The list item
+    // goes with it there, so the column does not keep an empty bullet.
+    document.querySelectorAll('a[href="ppdashboard.html"]')
+        .forEach((link) => {
+            const item = link.closest('li');
+            (item || link).hidden = !signedIn;
+        });
 
     // "Get started" / "Create account" point at the sign-up panel, which is
     // the right first stop for a visitor and a dead end for an account that
@@ -615,17 +621,11 @@ async function updateNavForSession() {
     if (hasSessionHint()) slot.dataset.hint = 'in';
 
     let me = null;
-    let pendingProposals = 0;
-    let unreadThreads = 0;
+    let actionable = 0;
     try {
         const data = await window.api('/api/me', { allowUnauthenticated: true });
         me = data && data.organization;
-        pendingProposals = (data && data.pending_proposals) || 0;
-        // Threads, not messages. The badge is a count of things waiting on
-        // you and the notification panel behind it lists one entry per
-        // conversation, so counting messages here made the number on the
-        // bell disagree with the list it opens.
-        unreadThreads = (data && data.unread_threads) || 0;
+        actionable = badgeCount(data);
     } catch {
         // Signed out, or the server is down. The signed-out call to action is
         // the honest thing to show in both cases.
@@ -666,7 +666,20 @@ async function updateNavForSession() {
     // same question -- is there something on the dashboard waiting for me --
     // and two competing numbers on one link would only make it ambiguous
     // which one the reader is meant to act on.
-    updateProposalBadge(pendingProposals + unreadThreads);
+    updateProposalBadge(actionable);
+}
+
+// What the dot shows: the server's `actionable`, which /api/me computes the
+// same way /api/notifications counts its actionable items -- pending
+// proposals, conversations with something unread, partnerships waiting on
+// your completion -- so opening the panel never changes the number. Threads
+// rather than messages in that sum, because the panel lists one entry per
+// conversation. The fallback covers a response from before the field
+// existed.
+function badgeCount(data) {
+    if (!data) return 0;
+    if (typeof data.actionable === 'number') return data.actionable;
+    return (data.pending_proposals || 0) + (data.unread_threads || 0);
 }
 
 // Re-reads the counts without redrawing the account menu. For pages that
@@ -678,9 +691,7 @@ window.refreshNavCounts = async function refreshNavCounts() {
         // fresh: this is called precisely because the counts have changed.
         const data = await window.api(
             '/api/me', { allowUnauthenticated: true, fresh: true });
-        updateProposalBadge(
-            ((data && data.pending_proposals) || 0)
-            + ((data && data.unread_threads) || 0));
+        updateProposalBadge(badgeCount(data));
     } catch {
         // Signed out or offline. The badge keeps whatever it last knew,
         // which is no worse than the page it is sitting on.

@@ -1355,6 +1355,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         proposeBtn.addEventListener('click', () => {
             if (!detailTarget || !me) return;
             proposeTitle.textContent = `Propose a Partnership with ${detailTarget.name}`;
+            // Every field starts clean for every target. The pickers were
+            // rebuilt per target already, but the amounts typed and the
+            // dates picked for one organization stayed put and pre-filled
+            // the next -- "30 volunteers" promised to A showing up in a
+            // proposal to B.
+            proposeQuantities.proposerGives = {};
+            proposeQuantities.recipientGives = {};
+            document.getElementById('proposeStartsOn').value = '';
+            document.getElementById('proposeEndsOn').value = '';
+            const dateError = document.getElementById('proposeDates-error');
+            if (dateError) dateError.textContent = '';
+            if (proposeTimeline) proposeTimeline.value = 'three_months';
             buildProposePickers(detailTarget);
             prefillFromMatch(detailTarget);
             renderProposeAmounts();

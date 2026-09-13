@@ -1218,14 +1218,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.dispatchEvent(new CustomEvent('partnerships:changed'));
             } else {
                 // Everything else -- a validation refusal, a network blip --
-                // is about what was typed here, so it stays here.
-                respondTerms.innerHTML =
-                    `<p class="form-message">${esc(error.message)}</p>`;
+                // is about what was typed here, so it stays here, above the
+                // terms rather than in place of them: replacing the block
+                // also threw away the delivery radios, so a retry after a
+                // blip on "Mark complete" would have sent no verdict.
+                let note = respondTerms.querySelector(':scope > .form-message');
+                if (!note) {
+                    note = document.createElement('p');
+                    note.className = 'form-message';
+                    respondTerms.prepend(note);
+                }
+                note.textContent = error.message;
+                // `pending` is deliberately kept: the dialog is still open
+                // and the button still says Accept, so it has to work.
+                respondConfirm.disabled = false;
+                return;
             }
-        } finally {
-            respondConfirm.disabled = false;
-            pending = null;
         }
+        respondConfirm.disabled = false;
+        pending = null;
     });
 
     // --- Modal ----------------------------------------------------------
@@ -1265,39 +1276,63 @@ document.addEventListener('DOMContentLoaded', async () => {
         t.addEventListener('click', () => activateTab(t.dataset.tab));
     });
 
-    // Deep link into a tab, e.g. ppdashboard.html#agreed
-    const hash = location.hash.replace('#', '');
-    if (['incoming', 'outgoing', 'agreed', 'closed'].includes(hash)) {
-        activeTab = hash;
-        tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === hash));
-    }
+    // Deep link into a tab, e.g. ppdashboard.html#agreed, or straight into
+    // one conversation: #messages-<proposal id>, which is what the "you have
+    // a new message" email and the notification bell link to. Without this
+    // the link landed on whichever tab happened to be first and left the
+    // reader to find the thread they had just been emailed about.
+    const TAB_NAMES = ['incoming', 'outgoing', 'agreed', 'closed'];
 
-    // ...or straight into one conversation: #messages-<proposal id>, which is
-    // what the "you have a new message" email links to. Without this the link
-    // landed on whichever tab happened to be first and left the reader to
-    // find the thread they had just been emailed about.
-    const threadMatch = /^messages-(\d+)$/.exec(hash);
-
-    await load();
-
-    if (threadMatch) {
-        const wanted = Number(threadMatch[1]);
+    function openThreadFromHash(wanted) {
         const proposal = proposals.find((p) => p.id === wanted);
-        if (proposal) {
-            // The thread may sit under any of the four tabs, and the one it
-            // is under is the one that should be showing behind it when the
-            // dialog is closed.
-            const tabFor = {
-                pending: proposal.direction === 'incoming' ? 'incoming' : 'outgoing',
-                accepted: 'agreed',
-            }[proposal.status] || 'closed';
-            activateTab(tabFor);
-            openThread(proposal);
-        } else {
+        if (!proposal) {
             // Party to it no longer, or it was deleted with the other
             // organization's account. Saying so beats a dialog that never
             // opens for reasons the page does not explain.
             window.toast('That conversation is no longer available.', 'error');
+            return;
         }
+        // The thread may sit under any of the four tabs, and the one it is
+        // under is the one that should be showing behind it when the dialog
+        // is closed.
+        const tabFor = {
+            pending: proposal.direction === 'incoming' ? 'incoming' : 'outgoing',
+            accepted: 'agreed',
+        }[proposal.status] || 'closed';
+        activateTab(tabFor);
+        if (openThreadId === proposal.id) return;   // already looking at it
+        if (openThreadId !== null) closeThread();
+        openThread(proposal);
     }
+
+    const hash = location.hash.replace('#', '');
+    if (TAB_NAMES.includes(hash)) {
+        activeTab = hash;
+        tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === hash));
+    }
+    const threadMatch = /^messages-(\d+)$/.exec(hash);
+
+    await load();
+
+    if (threadMatch) openThreadFromHash(Number(threadMatch[1]));
+
+    // The same links, followed while already on this page. The bell in the
+    // nav points at ppdashboard.html#incoming and #messages-<id>; from the
+    // dashboard itself those are same-document navigations, which fire no
+    // load and, until this, changed nothing but the address bar. A thread
+    // link is preceded by a reload, because the notification that led here
+    // usually exists precisely because something changed since `proposals`
+    // was fetched.
+    window.addEventListener('hashchange', async () => {
+        const next = location.hash.replace('#', '');
+        if (TAB_NAMES.includes(next)) {
+            if (openThreadId !== null) closeThread();
+            activateTab(next);
+            return;
+        }
+        const thread = /^messages-(\d+)$/.exec(next);
+        if (!thread) return;
+        await load();
+        openThreadFromHash(Number(thread[1]));
+    });
 });

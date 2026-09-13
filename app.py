@@ -871,7 +871,15 @@ def _start_session(org):
     time and a sign-in path that forgot it would hand out a cookie that
     stops working the first time the account revokes anything.
     """
+    # An admin signed in on this browser stays signed in. The two logins
+    # are independent -- different table, different cookie keys, different
+    # revocation counter -- and clearing everything here was ending the
+    # admin's session as a side effect of signing in to an organization,
+    # which nothing announced and nothing intended.
+    admin = {key: session[key] for key in ("admin_id", "admin_epoch")
+             if key in session}
     session.clear()
+    session.update(admin)
     session["org_id"] = org.id
     session["epoch"] = org.session_epoch
     session.permanent = True
@@ -2027,10 +2035,10 @@ CSRF_COOKIE = "pp_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 CSRF_SESSION_KEY = "csrf"
 # The methods that can change something. GET/HEAD/OPTIONS are not on it
-# because nothing here changes state on one -- the closest is
-# /api/verify-email, which is a GET carrying its own single-use token, and
-# is reached by following a link out of an email, which a token in a header
-# could never survive.
+# because nothing here changes state on one. The mailed links (verify,
+# reset, confirm a new address, claim an invitation) all land on a static
+# page whose script then POSTs the token from the URL, so even those go
+# through the unsafe-method path.
 CSRF_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
 
@@ -2564,12 +2572,6 @@ def register():
             "organization": {"onboarding_complete": False},
         }), 201
 
-    wait = rate_limited("register", client_ip(), max_attempts=5,
-                        window_seconds=3600)
-    if wait:
-        return too_many(
-            "Too many accounts created from this connection recently.", wait)
-
     # Checked before anything is looked up, and answered the same way whatever
     # was asked for. A connection that has already been told twice that an
     # address is taken gets nothing further out of this endpoint -- not a
@@ -2592,21 +2594,42 @@ def register():
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
     if not is_valid_email(email):
-        return jsonify({"error": "Please enter a valid email address."}), 400
+        return jsonify({"error": "Please enter a valid email address.",
+                        "field": "email"}), 400
     if length_problem("contact_email", email):
         # The same column width the profile's contact address is held to --
         # checked here because email is written on this path too.
-        return jsonify({"error": "Please enter a valid email address."}), 400
+        return jsonify({"error": "Please enter a valid email address.",
+                        "field": "email"}), 400
     domain = email.rsplit("@", 1)[-1]
     if domain in DISPOSABLE_EMAIL_DOMAINS:
         return jsonify({
             "error": "Please use a permanent email address -- that one looks "
                      "like a temporary inbox provider.",
+            "field": "email",
         }), 400
 
     problem = password_problem(password, email=email, name=name)
     if problem:
-        return jsonify({"error": problem}), 400
+        return jsonify({"error": problem, "field": "password"}), 400
+
+    # Metered here, after every check that can turn the request away for
+    # free, and immediately before the two things worth metering -- the
+    # bcrypt and the insert. This bucket used to be the first thing in the
+    # handler, which made it count validation failures: five rejected
+    # passwords, or five people behind one office NAT each mistyping once,
+    # closed signup for that address for an hour with a message about "too
+    # many accounts created". A request refused by the checks above costs
+    # nothing and so is not counted, which is the rule every other volume
+    # bucket in this file already follows (see clear_rate_limit).
+    #
+    # The existence gate above stays where it is: it records nothing, and
+    # its whole point is to answer before anything is looked up.
+    wait = rate_limited("register", client_ip(), max_attempts=5,
+                        window_seconds=3600)
+    if wait:
+        return too_many(
+            "Too many accounts created from this connection recently.", wait)
 
     # Hashed before the insert is attempted, so both answers cost the same.
     #
@@ -2659,7 +2682,8 @@ def register():
             rate_limited("register_exists", client_ip(),
                          max_attempts=MAX_EXISTENCE_DISCLOSURES,
                          window_seconds=EXISTENCE_DISCLOSURE_WINDOW)
-            return jsonify({"error": "That email is already registered."}), 409
+            return jsonify({"error": "That email is already registered.",
+                            "field": "email"}), 409
 
         notify_email_verification(org, verify_raw)
 
@@ -3409,6 +3433,12 @@ def reset_password():
         org.session_epoch = (org.session_epoch or 0) + 1
         db.commit()
 
+        # The same notice a change from Settings sends. A reset is the path
+        # somebody who has stolen the inbox would use, and this is the one
+        # message that reaches the owner regardless -- it was only ever sent
+        # on the in-app path, which is the path an intruder does not take.
+        notify_password_changed(org)
+
         # Proving control of the inbox and choosing a new password is the
         # same proof /login asks for; signing in here saves a redundant trip
         # back through it, the same reasoning /register signs someone in on
@@ -3452,14 +3482,25 @@ REQUIRE_EMAIL_VERIFICATION = (
 )
 
 
-@app.route("/api/verify-email", methods=["GET"])
+@app.route("/api/verify-email", methods=["POST"])
 def verify_email():
-    """The link in notify_email_verification. Deliberately unauthenticated,
-    like /api/partnerships/<token> -- the token itself is the credential, and
-    requiring a session too would break the link for whoever reads their
-    email on a different device than the one they signed up on.
+    """What verify-email.html posts once it has loaded. Deliberately
+    unauthenticated, like /api/partnerships/<token> -- the token itself is
+    the credential, and requiring a session too would break the link for
+    whoever reads their email on a different device than the one they signed
+    up on.
+
+    A POST from the page rather than a GET the mailed link could hit
+    directly, for the same reason /api/account/email/confirm is one: link
+    scanners and preview fetchers (Outlook Safe Links, corporate mail
+    gateways) follow GET links before the person does. Against the old GET
+    the scanner spent the single-use token, and the person who then clicked
+    was told the link was "invalid or already used" -- verified, and shown
+    an error page saying otherwise. A scanner fetches verify-email.html and
+    stops; only a browser running the page's script reaches this.
     """
-    token = (request.args.get("token") or "").strip()
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
     if not token:
         return jsonify({"error": "This link is missing its token."}), 400
 
@@ -3578,12 +3619,34 @@ def get_me(org, db):
         .join(Partnership, Message.partnership_id == Partnership.id)
         .where(_unread_by(org.id))
     ).subquery()
-    pending_proposals, unread_messages, unread_threads = db.execute(
+    # The third kind of thing waiting on you: a live partnership the other
+    # side has marked complete and you have not. _notifications_for counts
+    # it as actionable, and the badge is meant to be the same number as that
+    # list -- without this here the dot read one figure until the panel
+    # opened and another after.
+    mine_completed = case(
+        (Partnership.proposer_id == org.id, Partnership.proposer_completed_at),
+        else_=Partnership.recipient_completed_at,
+    )
+    theirs_completed = case(
+        (Partnership.proposer_id == org.id, Partnership.recipient_completed_at),
+        else_=Partnership.proposer_completed_at,
+    )
+    awaiting_q = (
+        select(func.count(Partnership.id))
+        .where(or_(Partnership.proposer_id == org.id,
+                   Partnership.recipient_id == org.id),
+               Partnership.status == Partnership.ACCEPTED,
+               theirs_completed.isnot(None),
+               mine_completed.is_(None))
+    ).scalar_subquery()
+    pending_proposals, unread_messages, unread_threads, awaiting = db.execute(
         select(
             pending_q,
             select(func.count(unread_base.c.id)).scalar_subquery(),
             select(func.count(func.distinct(unread_base.c.partnership_id)))
             .scalar_subquery(),
+            awaiting_q,
         )
     ).one()
     return jsonify({
@@ -3597,6 +3660,11 @@ def get_me(org, db):
         # is a different and equally true number, and the two are told apart
         # by name rather than by whichever caller happened to read it.
         "unread_threads": unread_threads,
+        "awaiting_completion": awaiting,
+        # The badge, precomputed: identical by construction to the
+        # `actionable` count /api/notifications returns, so the dot does not
+        # change when the panel opens.
+        "actionable": pending_proposals + unread_threads + awaiting,
     })
 
 
@@ -6916,12 +6984,17 @@ def _event_ics(event, host):
     # to be when the file was downloaded. It also stays one entry they can
     # move or delete as a series, which matches how it behaves here.
     #
-    # UNTIL is written as a UTC timestamp rather than a DATE. The spec
-    # requires UNTIL to match DTSTART's value type, and DTSTART is a local
-    # date-time for a timed meeting -- but a floating or zoned UNTIL is the
-    # part of RRULE implementations disagree about most. The end of the last
-    # day in UTC is unambiguous everywhere and cannot cut the final
-    # occurrence short, whichever zone the meeting is in.
+    # UNTIL follows DTSTART's form, which is what the spec requires and, it
+    # turns out, the only thing that keeps the last meeting. For a zoned
+    # DTSTART, UNTIL must be UTC: it is the end of the last day *in the
+    # meeting's zone*, converted. This used to be written as 23:59:59Z of
+    # that date, on the theory that the end of the day in UTC could not cut
+    # anything short -- which is true east of Greenwich and false west of
+    # it: a 5 pm Pacific meeting on the final date is 00:00Z the next day,
+    # later than the UNTIL, and every calendar correctly dropped it. Evening
+    # meetings are what community organizations hold. For a floating
+    # DTSTART (no recorded zone) UNTIL is floating too, so the comparison
+    # happens in whatever wall clock the reader applies to both.
     if event.repeat and event.repeat_until:
         frequency = {
             "weekly": "FREQ=WEEKLY",
@@ -6933,10 +7006,14 @@ def _event_ics(event, host):
         }[event.repeat]
         if event.all_day:
             until = event.repeat_until.strftime("%Y%m%d")
-            lines.append(f"RRULE:{frequency};UNTIL={until}")
+        elif zone:
+            last_moment = datetime.combine(
+                event.repeat_until, time_type(23, 59, 59), tzinfo=ZoneInfo(zone)
+            ).astimezone(timezone.utc)
+            until = last_moment.strftime("%Y%m%dT%H%M%SZ")
         else:
-            until = event.repeat_until.strftime("%Y%m%d")
-            lines.append(f"RRULE:{frequency};UNTIL={until}T235959Z")
+            until = event.repeat_until.strftime("%Y%m%dT235959")
+        lines.append(f"RRULE:{frequency};UNTIL={until}")
 
     # Cancelled occurrences, as dates the rule does not produce after all.
     #
@@ -8022,6 +8099,14 @@ def end_proposal(org, db, proposal_id):
     })
 
 
+# Rotating or revoking a link emails the other organization every time, and
+# nothing else bounded how often. Ten an hour is far more than anyone doing
+# it on purpose needs and stops one account from using the button to fill a
+# partner's inbox. Per account rather than per pair: the inbox being
+# protected is the counterpart's, and the same person holds every link.
+SHARE_LINK_CHANGES_PER_HOUR = 10
+
+
 @app.route("/api/proposals/<int:proposal_id>/share", methods=["POST"])
 @login_required
 def rotate_share_link(org, db, proposal_id):
@@ -8045,6 +8130,12 @@ def rotate_share_link(org, db, proposal_id):
         return jsonify({
             "error": "This proposal has no public link.",
         }), 409
+
+    wait = rate_limited("share_link", str(org.id),
+                        max_attempts=SHARE_LINK_CHANGES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have changed public links a lot recently.", wait)
 
     proposal.share_token = secrets.token_urlsafe(24)
     db.commit()
@@ -8084,6 +8175,12 @@ def revoke_share_link(org, db, proposal_id):
         }), 409
 
     if proposal.share_token is not None:
+        wait = rate_limited("share_link", str(org.id),
+                            max_attempts=SHARE_LINK_CHANGES_PER_HOUR,
+                            window_seconds=3600)
+        if wait:
+            return too_many(
+                "You have changed public links a lot recently.", wait)
         proposal.share_token = None
         db.commit()
         notify_share_link_changed(proposal, org, revoked=True)

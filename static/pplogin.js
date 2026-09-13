@@ -32,6 +32,18 @@ if (toSignIn) toSignIn.addEventListener('click', showLogin);
     }
 })();
 
+// Somebody already signed in has nothing to do here. common.js has already
+// asked /api/me for the nav (the request is shared, so this costs nothing
+// extra); if it names an organization, go where a fresh sign-in would have.
+// replace() rather than href, so Back does not return to a page that only
+// bounces forward again.
+window.api('/api/me', { allowUnauthenticated: true }).then((data) => {
+    const org = data && data.organization;
+    if (org) location.replace(destinationFor(org));
+}).catch(() => {
+    // Signed out, or the server is unreachable. Either way the form stays.
+});
+
 // Where to land after signing in. An org that has not finished onboarding is
 // sent there first, because matches are meaningless without a profile.
 function destinationFor(organization) {
@@ -268,15 +280,28 @@ function routeRegisterError(error) {
         setBanner(registerBanner, message, 'error');
         return;
     }
+    // The server names the field when it can, and that is authoritative:
+    // a moderation refusal or "Organization name is too long" says `name`,
+    // and used to land under Email because the word-matching below saw
+    // "name" and had no branch for it.
+    const byField = {
+        name: [nameInput, nameError],
+        email: [registerEmailInput, registerEmailError],
+        password: [pwInput, registerPasswordError],
+    }[error.data && error.data.field];
+    if (byField) {
+        setFieldError(byField[0], byField[1], message);
+        byField[0].focus();
+        return;
+    }
+    // Older or field-less answers, routed by what they talk about.
     const lower = message.toLowerCase();
     if (lower.includes('password')) {
         setFieldError(pwInput, registerPasswordError, message);
-    } else if (lower.includes('email') || lower.includes('name')) {
-        // Covers "already registered", "valid email address" and the
-        // disposable-domain message, all of which are about the email field;
-        // the org-name-in-password case is caught by the password branch
-        // above since its message also contains "password".
+    } else if (lower.includes('email')) {
         setFieldError(registerEmailInput, registerEmailError, message);
+    } else if (lower.includes('name')) {
+        setFieldError(nameInput, nameError, message);
     } else {
         setBanner(registerBanner, message, 'error');
     }

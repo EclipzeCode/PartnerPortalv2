@@ -409,9 +409,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // Order matters when the link names a <select>-backed filter. readUrl()
+    // assigns to selects whose options come from /api/categories, and a
+    // value with no matching option yet is silently dropped -- so a first
+    // load() fired before the vocabulary arrived went out unfiltered, while
+    // the re-read inside fillVocabulary() then made the control *look*
+    // applied. Anyone opening ?type=Non-profit saw "Filters (1)" over an
+    // unfiltered grid. For those links the vocabulary is awaited first; for
+    // every other link the two requests still overlap as before.
+    const vocabulary = fillVocabulary();
+    const arrival = new URLSearchParams(location.search);
+    if (['type', 'offers', 'needs'].some((key) => arrival.get(key))) {
+        await vocabulary;
+    }
     readUrl();
     paintFilterToggle();
     await load();
-    fillVocabulary();
     noteSignedIn();
 });

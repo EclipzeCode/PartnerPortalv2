@@ -38,7 +38,14 @@
     let result;
     let ok = true;
     try {
-        const res = await fetch(`/api/verify-email?token=${encodeURIComponent(token)}`);
+        // POST, so that only this page -- never a mail client's link
+        // scanner prefetching the URL -- spends the single-use token.
+        const res = await fetch('/api/verify-email', {
+            method: 'POST',
+            headers: window.csrfHeaders({ 'Content-Type': 'application/json' }),
+            credentials: 'same-origin',
+            body: JSON.stringify({ token }),
+        });
         result = await res.json().catch(() => ({}));
         ok = res.ok;
     } catch {

@@ -227,8 +227,9 @@ custom domain.
 `/robots.txt` and `/sitemap.xml` are routes rather than files in `static/`,
 because both have to name this site's own origin and a file cannot know it.
 They are built from `request.url_root`, so moving to a custom domain does not
-leave a sitemap advertising the old host. The sitemap offers three pages —
-the landing page, the help page and the sign-in page. `organization.html` is
+leave a sitemap advertising the old host. The sitemap offers four pages —
+the landing page, the public directory, the help page and the sign-in page.
+`organization.html` is
 deliberately not among them: public profiles are what a directory would most
 want found, but nobody agreed to being published into search results by
 filling in onboarding, so listing them wants a per-organization opt-in

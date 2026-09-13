@@ -246,13 +246,12 @@
                 const data = await window.api('/api/notifications');
                 render(list, data.notifications || [], data.unseen || 0);
                 everRendered = true;
-                // The dot and this list are two counts of the same thing,
-                // from two endpoints, and they disagreed: the dot adds
-                // pending proposals to unread messages from /api/me, while
-                // this counts what is actionable across a 60-day window.
-                // Opening the panel is the moment to settle that -- the
-                // reader is looking at the items the number is supposed to
-                // describe.
+                // The dot and this list count the same three things --
+                // /api/me's `actionable` is built to match this endpoint's
+                // -- so this is a refresh from the newer answer, not a
+                // correction. It used to be one: the dot left out
+                // partnerships waiting on your completion, so the number
+                // changed the moment the panel opened.
                 if (typeof data.actionable === 'number'
                     && window.setNotificationDot) {
                     window.setNotificationDot(data.actionable);
@@ -289,6 +288,25 @@
             if (e.key !== 'Escape' || dropdown.hidden) return;
             setOpen(false);
             toggle.focus();
+        });
+
+        // Every item links to ppdashboard.html#<tab or thread>. From the
+        // dashboard itself that is a same-document navigation, which the
+        // dashboard handles through `hashchange` -- except that the browser
+        // fires none when the hash is already what the link names, so a
+        // thread opened from here, closed, and clicked again did nothing.
+        // Dispatching the event by hand makes the second click work like the
+        // first; every other case is left to the browser.
+        list.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href]');
+            if (!link) return;
+            setOpen(false);
+            const target = new URL(link.href, location.href);
+            if (target.pathname === location.pathname
+                    && target.hash && target.hash === location.hash) {
+                e.preventDefault();
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }
         });
 
         document.getElementById('notifyClear')

@@ -816,57 +816,6 @@ body.home .modal-intro {
     margin-bottom: 1.5rem;
 }
 
-body.home .instruction-step {
-    display: grid;
-    grid-template-columns: 2.4rem 1fr;
-    gap: 1rem;
-    padding: 0.9rem 0;
-    border-bottom: 1px solid var(--h-rule);
-}
-
-body.home .instruction-step:last-child {
-    border-bottom: none;
-}
-
-body.home .step-number {
-    font-family: var(--h-mono);
-    font-size: 0.7rem;
-    color: var(--h-dim);
-}
-
-body.home .step-content h3 {
-    font-size: 0.95rem;
-    font-weight: 500;
-    margin-bottom: 0.3rem;
-}
-
-body.home .step-content p {
-    font-size: 0.87rem;
-    line-height: 1.6;
-    color: var(--h-ink-soft);
-}
-
-/* The guide modal's own confirm button. Not a .btn-primary in the markup, so
-   ink.css does not reach it. */
-body.home .btn-confirm {
-    background: var(--h-ink);
-    color: var(--h-paper);
-    border: 1px solid var(--h-edge);
-    border-radius: 0;
-    padding: 0.8rem 1.4rem;
-    font-family: var(--h-sans);
-    font-size: 0.88rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease;
-}
-
-body.home .btn-confirm:hover {
-    background: var(--h-give);
-    border-color: var(--h-give);
-    color: var(--h-on-give);
-}
-
 body.home #contactForm .btn-primary {
     width: 100%;
 }

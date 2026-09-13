@@ -314,12 +314,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         : `Get <span>Started</span>`;
     }
     document.title = me.onboarding_complete
-      ? 'Partner Portal | Edit Profile'
-      : 'Partner Portal | Get Started';
+      ? 'Edit profile | PartnerPortal'
+      : 'Get started | PartnerPortal';
 
-    if (me.onboarding_complete) {
-      submitBtn.innerHTML = `<i class='bx bx-save'></i> Update profile`;
-    }
+    editing = Boolean(me.onboarding_complete);
+    submitBtn.innerHTML = idleSubmitLabel();
 
     // Only now: the key is per-organization, and until /api/me answers there
     // is no way to know whose draft this browser is holding. Everything
@@ -499,7 +498,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    ['needs', 'offers', 'focus'].forEach((side) => {
+    // Only the two trade pickers are required. Focus areas are optional --
+    // the card says so -- and `pickers` has no entry for them, so including
+    // 'focus' here threw on an empty selection and left the Save button
+    // dead with no message.
+    ['needs', 'offers'].forEach((side) => {
       if (selected[side].size > 0) return;
       const picker = pickers[side];
       picker.classList.add('input-error');
@@ -743,11 +746,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       : 'Only signed-in organizations will see them. Your contact email and phone stay private either way.';
   }
 
+  // Whether this visit is editing a finished profile rather than setting one
+  // up. Decided once /api/me answers; the button label, the success message
+  // and the tab title all read from it.
+  let editing = false;
+
+  function idleSubmitLabel() {
+    return editing
+      ? `<i class='bx bx-save'></i> Update profile`
+      : `<i class='bx bx-search-alt-2'></i> Save &amp; Find Matches`;
+  }
+
   function setLoadingState(isLoading) {
     submitBtn.disabled = isLoading;
+    // Restored from the mode rather than a fixed string: a failed save in
+    // edit mode used to hand the button back reading "Save & Find Matches".
     submitBtn.innerHTML = isLoading
       ? `<i class='bx bx-loader-alt bx-spin'></i> Saving...`
-      : `<i class='bx bx-search-alt-2'></i> Save &amp; Find Matches`;
+      : idleSubmitLabel();
   }
 
   // ---- Live sidebar feedback -------------------------------------------
@@ -813,7 +829,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // The draft existed to survive losing the page before this point.
       clearDraft();
-      showSuccess('Profile saved. Finding your matches...');
+      showSuccess(editing
+        ? 'Profile updated. Refreshing your matches...'
+        : 'Profile saved. Finding your matches...');
       successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => { window.location.href = 'ppsearch.html'; }, 900);
     } catch (error) {
