@@ -409,6 +409,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             + `</span>`;
     }
 
+    // What a shared meeting says about itself on the card: that it is
+    // shared, and whether it is still waiting on somebody.
+    function sharedLabel(ev) {
+        const sh = ev.shared;
+        if (!sh) return '';
+        const ended = ['ended', 'completed', 'declined', 'withdrawn']
+            .includes(sh.partnership_status);
+        const text = sh.status === 'proposed'
+            ? (sh.awaiting_you ? 'Proposed — waiting on you' : 'Proposed — waiting on them')
+            : (ended ? 'Shared · partnership ' + sh.partnership_status : 'Shared · agreed');
+        return `<span class="event-shared${sh.awaiting_you ? ' is-awaiting' : ''}">`
+            + `<i class='bx bx-group' aria-hidden="true"></i> ${esc(text)}</span>`;
+    }
+
     function zoneSuffix(ev) {
         if (!ev.timezone || ev.all_day) return '';
         if (ev.timezone === localZone()) return '';
@@ -1160,19 +1174,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const timeLabel = eventTimeLabel(event);
 
         const item = document.createElement('div');
-        item.className = 'event-item' + (isPastEvent(event) ? ' is-past' : '');
+        const sh = event.shared;
+        item.className = 'event-item' + (isPastEvent(event) ? ' is-past' : '')
+            + (sh ? ` is-shared shared-${sh.status}` : '');
 
-        item.innerHTML = `
-            <div class="event-date">
-                <span class="event-day">${date.getDate()}</span>
-                <span class="event-month">${monthLabel}</span>
-            </div>
-            <div class="event-details">
-                <h4>${esc(event.title)}</h4>
-                <p>With ${esc(event.partner)}</p>
-                <span class="event-time"><i class='bx bx-time'></i> ${timeLabel}</span>
-                ${repeatLabel(event)}
-            </div>
+        // A shared meeting is the partnership's, and changes from the
+        // conversation it was arranged in -- where the other side is told
+        // and can answer. So its controls are: download it once agreed,
+        // and open that conversation. The personal edit/remove buttons
+        // would let one side change it silently, which the server refuses
+        // anyway (see _shared_refusal in app.py).
+        const controls = sh
+            ? `${sh.status === 'accepted' ? `
+                <a class="btn-event" title="Add to calendar" download
+                   href="/api/events/${encodeURIComponent(event.id)}.ics">
+                    <i class='bx bx-calendar-plus'></i>
+                </a>` : ''}
+               <a class="btn-event" title="Open the conversation"
+                  href="#messages-${encodeURIComponent(sh.partnership_id)}">
+                   <i class='bx bx-message-dots'></i>
+               </a>`
+            : `
             <a class="btn-event" title="Add to calendar" download
                href="/api/events/${encodeURIComponent(event.id)}.ics">
                 <i class='bx bx-calendar-plus'></i>
@@ -1184,7 +1206,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="btn-event" title="Remove event" data-event-id="${event.id}"
                     data-occurs-on="${esc(event.occurs_on || event.date)}">
                 <i class='bx bx-trash'></i>
-            </button>
+            </button>`;
+
+        item.innerHTML = `
+            <div class="event-date">
+                <span class="event-day">${date.getDate()}</span>
+                <span class="event-month">${monthLabel}</span>
+            </div>
+            <div class="event-details">
+                <h4>${esc(event.title)}</h4>
+                <p>With ${esc(event.partner)}</p>
+                <span class="event-time"><i class='bx bx-time'></i> ${timeLabel}</span>
+                ${repeatLabel(event)}
+                ${sharedLabel(event)}
+            </div>
+            ${controls}
         `;
         return item;
     }
@@ -1746,10 +1782,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${ev.description
                 ? `<p class="stat-detail-note is-typed">${esc(ev.description)}</p>` : ''}
             <div class="stat-detail-actions">
-                <button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}"
+                ${ev.shared
+                    ? `<a class="btn-primary" href="#messages-${
+                        encodeURIComponent(ev.shared.partnership_id)}" data-close-stat>
+                           <i class='bx bx-message-dots'></i> Open the conversation
+                       </a>`
+                    : `<button type="button" class="btn-danger" data-remove-event="${esc(ev.id)}"
                         data-occurs-on="${esc(ev.occurs_on || ev.date)}">
                     <i class='bx bx-trash'></i> Remove meeting
-                </button>
+                </button>`}
             </div>`;
     }
 
@@ -2049,6 +2090,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Row clicks and the in-detail remove button.
         statBody.addEventListener('click', (e) => {
+            if (e.target.closest('[data-close-stat]')) {
+                closeStat();
+                return;    // the hash change opens the thread
+            }
             const remove = e.target.closest('[data-remove-event]');
             if (remove) {
                 // The same confirmation the card's trash button opens. It

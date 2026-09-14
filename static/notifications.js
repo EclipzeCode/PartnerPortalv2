@@ -73,6 +73,11 @@
                 };
             case 'partnership_ended':
                 return { icon: 'bx-stop-circle', text: `${who} ended your partnership` };
+            case 'meeting_proposed':
+                return {
+                    icon: 'bx-calendar-event',
+                    text: `${who} proposed a meeting — accept, suggest a time, or decline`,
+                };
             case 'message':
                 return {
                     icon: 'bx-message-dots',

@@ -512,6 +512,138 @@
     word-break: break-word;
 }
 
+/* ------------------------------------------------------------------------- *
+ * Shared meetings in the thread
+ *
+ * The server writes a card for each step (proposed, moved, accepted...),
+ * and proposals.js draws the meeting as it stands now under the newest one.
+ * The card sits inside the message, under the sentence saying what
+ * happened, so the transcript still reads top to bottom.
+ * ------------------------------------------------------------------------- */
+
+.message.is-meeting .message-body {
+    font-style: italic;
+    color: var(--h-dim);
+}
+
+.meeting-card {
+    margin-top: 0.55rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--h-rule);
+    border-left: 3px solid var(--h-give);
+    background: var(--h-paper);
+}
+
+.meeting-card.status-declined,
+.meeting-card.status-cancelled {
+    border-left-color: var(--h-rule);
+    opacity: 0.75;
+}
+
+.meeting-card.status-accepted {
+    border-left-color: var(--h-take);
+}
+
+.meeting-card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.meeting-card-head i {
+    color: var(--h-give);
+    font-size: 1rem;
+    align-self: center;
+}
+
+.meeting-card-head strong {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+.meeting-state {
+    margin-left: auto;
+    font-family: var(--h-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+.meeting-when {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+    color: var(--h-ink);
+}
+
+.meeting-where,
+.meeting-notes {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--h-ink-soft);
+}
+
+.meeting-notes {
+    white-space: pre-wrap;
+}
+
+.meeting-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.65rem;
+}
+
+.meeting-actions .btn-primary,
+.meeting-actions .btn-ghost {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+}
+
+/* The form that proposes one, in place of the message box while open. */
+.meeting-form {
+    padding: 0.9rem 1rem 1rem;
+    border: 1px solid var(--h-rule);
+    border-left: 3px solid var(--h-give);
+    margin-bottom: 1rem;
+}
+
+.meeting-form h3 {
+    font-family: var(--h-sans);
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin: 0 0 0.6rem;
+    color: var(--h-ink);
+}
+
+.meeting-form-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 0.7fr;
+    gap: 0.6rem;
+}
+
+@media (max-width: 34rem) {
+    .meeting-form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.meeting-all-day {
+    margin: -0.2rem 0 0.8rem;
+    font-size: 0.82rem;
+}
+
+.meeting-form-zone {
+    margin: 0 0 0.6rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--h-dim);
+}
+
 .message-closed {
     padding: 0.85rem 0 0.85rem 1rem;
     border-left: 3px solid var(--h-rule);

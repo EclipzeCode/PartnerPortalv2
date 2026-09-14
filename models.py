@@ -1258,12 +1258,29 @@ class Message(Base):
 
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # What kind of entry this is in the thread. 'text' is a message somebody
+    # typed. 'meeting' is a card about a shared meeting -- proposed, moved,
+    # accepted, declined, cancelled -- written by the server when one side
+    # acts, with `body` a sentence saying what happened so that everything
+    # that reads a thread as text (unread counts, the email digest, search)
+    # keeps working without knowing about meetings.
+    TEXT = "text"
+    MEETING = "meeting"
+
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=TEXT, default=TEXT
+    )
+    meeting_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL")
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     partnership = relationship("Partnership", back_populates="messages")
     sender = relationship("Organization", foreign_keys=[sender_id], lazy="joined")
+    meeting = relationship("Event", foreign_keys=[meeting_id], lazy="joined")
 
     __table_args__ = (
         # Every read is "this thread, oldest first", and the unread count is
@@ -1274,6 +1291,8 @@ class Message(Base):
         # For ON DELETE SET NULL when a sender's account closes; threads are
         # always read through partnership_id.
         Index("ix_messages_sender", "sender_id"),
+        # ON DELETE SET NULL when a meeting row goes.
+        Index("ix_messages_meeting", "meeting_id"),
     )
 
     def __repr__(self):
@@ -1291,6 +1310,14 @@ class Message(Base):
             "sender_id": self.sender_id,
             "mine": viewer_id is not None and self.sender_id == viewer_id,
             "sender_deleted": self.sender is None,
+            "kind": self.kind,
+            # The meeting as it stands now, not as it stood when this card
+            # was written: a card about a proposal that has since been
+            # accepted shows it accepted. The thread renders the actions on
+            # the newest card for a meeting only.
+            "meeting": (self.meeting.to_dict(viewer_id=viewer_id)
+                        if self.kind == self.MEETING and self.meeting is not None
+                        else None),
         }
 
 
@@ -1420,6 +1447,44 @@ class Event(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    # --- Shared meetings ---------------------------------------------------
+    # A meeting with a partnership_id belongs to the partnership rather than
+    # to the organization that created it: both parties see it, either can
+    # answer it, and it is proposed and agreed inside the message thread.
+    # organization_id then records who proposed it. Everything above this
+    # line is what a personal meeting is, and every existing row stays one:
+    # partnership_id null, share_status null.
+    #
+    # A shared meeting is a small proposal, and follows the same turn-taking
+    # a partnership proposal does: it waits on one side (awaiting_id), and
+    # that side accepts, declines, or moves it -- which hands the turn back.
+    # Moving an accepted meeting puts it back to proposed, because a time
+    # the other side did not agree to is not agreed. Changing the title,
+    # place or notes does not.
+    #
+    # One-off only. Recurrence with per-occurrence exceptions is one
+    # organization's calendar bookkeeping; across two parties who can each
+    # counter and cancel occurrences it is a different feature.
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+    SHARE_STATUSES = (PROPOSED, ACCEPTED, DECLINED, CANCELLED)
+
+    partnership_id: Mapped[int | None] = mapped_column(
+        ForeignKey("partnerships.id", ondelete="CASCADE")
+    )
+    share_status: Mapped[str | None] = mapped_column(String(9))
+    awaiting_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+
+    partnership = relationship("Partnership", foreign_keys=[partnership_id])
+
     # Eagerly loaded, because every read of a meeting expands it and every
     # expansion consults these. Lazy would be one query per meeting on the
     # dashboard -- the N+1 this whole file is otherwise careful to avoid.
@@ -1465,10 +1530,95 @@ class Event(Base):
         ),
         # Every read is "this org's meetings, soonest first".
         Index("ix_events_organization_date", "organization_id", "date", "time"),
+        # Shared meetings are read by partnership: the thread's cards, and
+        # the other party's dashboard.
+        Index("ix_events_partnership", "partnership_id"),
+        CheckConstraint(
+            "(partnership_id IS NULL) = (share_status IS NULL)",
+            name="ck_events_shared_has_status",
+        ),
+        CheckConstraint(
+            "share_status IS NULL OR share_status IN "
+            "('proposed', 'accepted', 'declined', 'cancelled')",
+            name="ck_events_share_status",
+        ),
+        # See the note above the sharing columns: shared meetings do not
+        # repeat.
+        CheckConstraint(
+            "partnership_id IS NULL OR repeat IS NULL",
+            name="ck_events_shared_is_one_off",
+        ),
     )
 
     def __repr__(self):
         return f"<Event {self.id} org={self.organization_id} {self.date} {self.title!r}>"
+
+    # --- Sharing -----------------------------------------------------------
+    @property
+    def shared(self):
+        return self.partnership_id is not None
+
+    def is_party(self, org_id):
+        """Whether `org_id` may see this meeting: its owner, or, for a shared
+        one, either side of the partnership it belongs to."""
+        if org_id == self.organization_id:
+            return True
+        p = self.partnership if self.shared else None
+        return p is not None and org_id in (p.proposer_id, p.recipient_id)
+
+    def counterpart_id(self, org_id):
+        """The other party of a shared meeting, from `org_id`'s side."""
+        p = self.partnership
+        if p is None:
+            return None
+        return p.recipient_id if p.proposer_id == org_id else p.proposer_id
+
+    def awaits(self, org_id):
+        return (self.share_status == self.PROPOSED
+                and org_id is not None and self.awaiting_id == org_id)
+
+    def hand_turn_to_other(self, org_id):
+        self.awaiting_id = self.counterpart_id(org_id)
+
+    def live(self):
+        """Still on either calendar: proposed or agreed."""
+        return self.share_status in (self.PROPOSED, self.ACCEPTED)
+
+    def counterpart_name(self, org_id):
+        """Who this meeting is with, as `org_id` sees it: the live name of
+        the other party while it exists, the snapshot on the partnership
+        once it does not, the note the owner wrote for a personal one."""
+        if not self.shared:
+            return self.partner_name
+        party = self.partnership.counterpart_party(org_id)
+        return party.get("name") or self.partner_name
+
+    def share_dict(self, viewer_id):
+        """The sharing facts, from `viewer_id`'s side, or None if personal."""
+        if not self.shared:
+            return None
+        p = self.partnership
+        proposer_side = self.organization_id == viewer_id
+        return {
+            "partnership_id": self.partnership_id,
+            "status": self.share_status,
+            "proposed_by_you": proposer_side,
+            "proposed_by": (p.proposer_party() if p.proposer_id == self.organization_id
+                            else p.recipient_party()).get("name"),
+            "awaiting_you": self.awaits(viewer_id),
+            "awaiting_them": (self.share_status == self.PROPOSED
+                              and not self.awaits(viewer_id)),
+            "can_respond": self.awaits(viewer_id),
+            # Either side can move or cancel a live meeting.
+            "can_change": self.live(),
+            "cancelled_by_you": (self.cancelled_by_id is not None
+                                 and self.cancelled_by_id == viewer_id),
+            "responded_at": (self.responded_at.isoformat()
+                             if self.responded_at else None),
+            # A partnership that has ended leaves its agreed meetings in
+            # place, flagged: people have put them in calendars.
+            "partnership_status": p.status if p is not None else None,
+        }
 
     def lands_on(self, when):
         """Does this series produce an occurrence on `when`, exceptions aside?
@@ -1632,8 +1782,11 @@ class Event(Base):
                 break
         return dates
 
-    def to_dict(self, on=None):
+    def to_dict(self, on=None, viewer_id=None):
         """The shape ppdashboard.js already renders.
+
+        `viewer_id` matters for a shared meeting: whose turn it is and who
+        "the partner" is depend on which side is looking.
 
         date and time are formatted as the browser's own `YYYY-MM-DD` and
         `HH:MM`, which is what the date/time inputs produce and what the
@@ -1704,9 +1857,11 @@ class Event(Base):
             # dashboard reads that as "the viewer's own zone", which is the
             # assumption those rows were written under.
             "timezone": self.timezone,
-            "partner": self.partner_name,
+            "partner": self.counterpart_name(viewer_id) if viewer_id else self.partner_name,
             "description": self.description or "",
             "location": self.location or "",
+            # None for a personal meeting; see share_dict.
+            "shared": self.share_dict(viewer_id) if viewer_id else None,
         }
 
 

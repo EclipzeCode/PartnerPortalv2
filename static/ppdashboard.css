@@ -791,6 +791,28 @@
    shows one date, and this is the only thing on it saying that editing or
    deleting will take the whole series with it. Sits beside the time and
    reads as metadata rather than as a second heading. */
+/* A shared meeting's tag on the card: that it is shared, and whether it is
+   still waiting on somebody. */
+.event-shared {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+    margin-left: 0.5rem;
+    font-family: var(--h-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    color: var(--h-take);
+}
+
+.event-shared.is-awaiting {
+    color: var(--h-give);
+}
+
+.event-item.shared-proposed {
+    border-left: 3px solid var(--h-give);
+}
+
 .event-repeat {
     display: inline-flex;
     align-items: center;

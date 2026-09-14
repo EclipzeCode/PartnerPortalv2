@@ -261,7 +261,9 @@ with different terms rather than only yes or no; the lifecycle after that --
 completing takes both sides, ending takes one, and each side records whether
 the other delivered; shareable agreement summaries whose link can be rotated
 or revoked; message threads on a proposal; meetings, with the timezone they
-were arranged in and a calendar file per meeting; quantified partnership
+were arranged in and a calendar file per meeting, including meetings
+proposed inside a conversation that both organizations answer and both
+calendars carry; quantified partnership
 terms; inviting an organization that has no account yet and letting it claim
 the profile later; an analytics page for an organization's own numbers; and
 transactional email for all of it.

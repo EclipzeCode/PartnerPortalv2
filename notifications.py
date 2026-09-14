@@ -1117,6 +1117,76 @@ def notify_email_verification(org, token):
     _dispatch(org.email, "Verify your email for PartnerPortal", html, text)
 
 
+def notify_meeting_update(event, proposal, actor, what):
+    """One side did something to a shared meeting; the other is told.
+
+    `what` is proposed, moved, changed, accepted, declined or cancelled. One
+    template, because the reader needs the same three things each time:
+    who, which meeting, and where to answer. Under the partnerships
+    preference, like every other message about a live agreement.
+    """
+    other = proposal.counterpart(actor.id)
+    if other is None or not other.wants_email("partnerships"):
+        return
+    cfg = _config()
+    to_addr = other.contact_email or other.email
+    thread_url = f"{cfg['app_url']}/ppdashboard.html#messages-{proposal.id}"
+
+    day = event.date.strftime("%A, %B %d").replace(" 0", " ")
+    if event.all_day:
+        when = f"{day}, all day"
+    else:
+        when = f"{day} at {event.time.strftime('%I:%M %p').lstrip('0')}"
+        if event.timezone:
+            when += f" ({event.timezone})"
+
+    headline, subject, ask = {
+        "proposed": (f"{actor.name} proposed a meeting",
+                     f"{actor.name} proposed a meeting: {event.title}",
+                     "Accept it, suggest another time, or decline -- from the "
+                     "conversation."),
+        "moved": (f"{actor.name} suggested a different time",
+                  f"{actor.name} suggested a different time for {event.title}",
+                  "The meeting is waiting on your answer again: accept the new "
+                  "time, suggest another, or decline."),
+        "changed": (f"{actor.name} updated a meeting",
+                    f"{actor.name} updated the meeting {event.title}",
+                    "The time has not changed; the title, place or notes have."),
+        "accepted": (f"{actor.name} accepted your meeting",
+                     f"{actor.name} accepted the meeting: {event.title}",
+                     "It is on both calendars now. You can download it from "
+                     "your dashboard."),
+        "declined": (f"{actor.name} declined the meeting",
+                     f"{actor.name} declined the meeting: {event.title}",
+                     "You can suggest another time from the conversation."),
+        "cancelled": (f"{actor.name} cancelled the meeting",
+                      f"{actor.name} cancelled the meeting: {event.title}",
+                      "It has been taken off both calendars."),
+    }[what]
+
+    where = f"<p>Where: {escape(event.location)}</p>" if event.location else ""
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(headline)}</h1>
+  <p class="meta">{escape(event.title)} &middot; {escape(when)}</p>
+  {where}
+  <p>{escape(ask)}</p>
+
+  <a class="cta" href="{escape(thread_url)}">Open the conversation</a>
+
+  <p class="foot">You are receiving this because you and {escape(actor.name)}
+  have a proposal open on PartnerPortal.</p>
+</div></body></html>
+"""
+    text = (
+        f"{headline}.\n\n{event.title} -- {when}\n"
+        + (f"Where: {event.location}\n" if event.location else "")
+        + f"\n{ask}\n\nOpen the conversation: {thread_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text, preferences=True)
+
+
 def notify_invitation(inviter, invited, to_addr, token):
     """An invitation, sent to an address the inviter typed.
 

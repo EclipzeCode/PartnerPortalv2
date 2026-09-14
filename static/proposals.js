@@ -487,7 +487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // declines, or either side ends the partnership -- and the form has to
     // go when it does, rather than failing on submit.
     function paintThreadOpenState(open) {
-        messageForm.hidden = !open;
+        messageForm.hidden = !open || !meetingForm.hidden;
         messageClosed.hidden = open;
         if (!open) {
             const proposal = proposals.find((p) => p.id === openThreadId);
@@ -511,6 +511,233 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- Shared meetings -------------------------------------------------
+    // A meeting is arranged inside the thread. The server writes a card
+    // into the conversation for each step; this draws the meeting as it
+    // stands now under the newest of them, with the answers the reader
+    // still has.
+    function meetingWhen(ev) {
+        const [y, mo, d] = ev.date.split('-').map(Number);
+        const day = new Date(y, mo - 1, d).toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric',
+        });
+        if (ev.all_day) return `${day}, all day`;
+        const [hh, mm] = ev.time.split(':').map(Number);
+        const clock = new Date(y, mo - 1, d, hh, mm).toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit',
+        });
+        let zone = '';
+        if (ev.timezone) {
+            try {
+                const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                if (ev.timezone !== local) {
+                    const part = new Intl.DateTimeFormat('en-US', {
+                        timeZone: ev.timezone, timeZoneName: 'short',
+                    }).formatToParts(new Date(y, mo - 1, d, hh, mm))
+                        .find((x) => x.type === 'timeZoneName');
+                    if (part) zone = ` ${part.value}`;
+                }
+            } catch { /* a zone this browser lacks */ }
+        }
+        const hours = Number(ev.duration);
+        const length = hours ? ` · ${hours} hr${hours === 1 ? '' : 's'}` : '';
+        return `${day}, ${clock}${zone}${length}`;
+    }
+
+    function meetingCard(ev, current) {
+        const sh = ev.shared || {};
+        const state = {
+            proposed: sh.awaiting_you ? 'Waiting on you' : 'Waiting on them',
+            accepted: 'On both calendars',
+            declined: 'Declined',
+            cancelled: sh.cancelled_by_you ? 'You cancelled it' : 'Cancelled',
+        }[sh.status] || sh.status;
+        const actions = [];
+        if (current && sh.can_respond) {
+            actions.push(`<button type="button" class="btn-primary" data-meet="accept" data-meet-id="${ev.id}">Accept</button>`);
+            actions.push(`<button type="button" class="btn-ghost" data-meet="move" data-meet-id="${ev.id}">Suggest another time</button>`);
+            actions.push(`<button type="button" class="btn-ghost" data-meet="decline" data-meet-id="${ev.id}">Decline</button>`);
+        } else if (current && sh.can_change) {
+            if (sh.status === 'accepted') {
+                actions.push(`<a class="btn-ghost" download href="/api/events/${encodeURIComponent(ev.id)}.ics"><i class='bx bx-calendar-plus'></i> Add to calendar</a>`);
+            }
+            actions.push(`<button type="button" class="btn-ghost" data-meet="move" data-meet-id="${ev.id}">${
+                sh.status === 'accepted' ? 'Move it' : 'Change the time'}</button>`);
+            actions.push(`<button type="button" class="btn-ghost" data-meet="cancel" data-meet-id="${ev.id}">Cancel meeting</button>`);
+        }
+        return `
+            <div class="meeting-card status-${esc(sh.status || '')}">
+                <div class="meeting-card-head">
+                    <i class='bx bx-calendar-event' aria-hidden="true"></i>
+                    <strong>${esc(ev.title)}</strong>
+                    <span class="meeting-state">${esc(state)}</span>
+                </div>
+                <p class="meeting-when">${esc(meetingWhen(ev))}</p>
+                ${ev.location ? `<p class="meeting-where">${esc(ev.location)}</p>` : ''}
+                ${ev.description ? `<p class="meeting-notes">${esc(ev.description)}</p>` : ''}
+                ${actions.length ? `<div class="meeting-actions">${actions.join('')}</div>` : ''}
+            </div>`;
+    }
+
+    const meetingForm = document.getElementById('meetingForm');
+    const meetingFormTitle = document.getElementById('meetingFormTitle');
+    const meetingFormError = document.getElementById('meetingFormError');
+    const meetingSubmit = document.getElementById('meetingSubmitBtn');
+    const meetingProposeBtn = document.getElementById('meetingProposeBtn');
+    const meetingFields = {
+        title: document.getElementById('meetingTitle'),
+        date: document.getElementById('meetingDate'),
+        time: document.getElementById('meetingTime'),
+        duration: document.getElementById('meetingDuration'),
+        allDay: document.getElementById('meetingAllDay'),
+        location: document.getElementById('meetingLocation'),
+        notes: document.getElementById('meetingNotes'),
+    };
+    let meetingEditing = null;   // meeting id when suggesting a time, else null
+
+    function localZone() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+        } catch { return null; }
+    }
+
+    function showMeetingError(text) {
+        meetingFormError.textContent = text || '';
+        meetingFormError.hidden = !text;
+    }
+
+    function syncMeetingAllDay() {
+        const on = meetingFields.allDay.checked;
+        meetingFields.time.disabled = on;
+        meetingFields.duration.disabled = on;
+    }
+    meetingFields.allDay.addEventListener('change', syncMeetingAllDay);
+
+    function openMeetingForm(existing) {
+        meetingEditing = existing ? existing.id : null;
+        showMeetingError('');
+        meetingForm.reset();
+        if (existing) {
+            meetingFields.title.value = existing.title || '';
+            meetingFields.date.value = existing.date || '';
+            meetingFields.time.value = existing.all_day ? '' : (existing.time || '');
+            meetingFields.duration.value = existing.duration ?? '';
+            meetingFields.allDay.checked = Boolean(existing.all_day);
+            meetingFields.location.value = existing.location || '';
+            meetingFields.notes.value = existing.description || '';
+        }
+        // Only the schedule moves when suggesting a time; the rest stays
+        // as the meeting has it, editable but not the point.
+        meetingFormTitle.textContent = existing
+            ? 'Suggest a different time' : 'Propose a meeting';
+        meetingSubmit.textContent = existing ? 'Suggest this time' : 'Propose';
+        const zone = localZone();
+        document.getElementById('meetingZoneNote').textContent = zone
+            ? `Times are in ${zone}. ${
+                openThreadId !== null
+                    ? 'Your partner sees them in theirs.' : ''}`
+            : '';
+        syncMeetingAllDay();
+        meetingForm.hidden = false;
+        messageForm.hidden = true;
+        meetingFields.title.focus();
+    }
+
+    function closeMeetingForm() {
+        meetingForm.hidden = true;
+        messageForm.hidden = !(proposals.find((p) => p.id === openThreadId) || {}).messages_open;
+        meetingEditing = null;
+    }
+
+    if (meetingProposeBtn) {
+        meetingProposeBtn.addEventListener('click', () => openMeetingForm(null));
+    }
+    document.getElementById('meetingCancelBtn')
+        .addEventListener('click', closeMeetingForm);
+
+    function meetingBody() {
+        const allDay = meetingFields.allDay.checked;
+        return {
+            title: meetingFields.title.value.trim(),
+            date: meetingFields.date.value,
+            all_day: allDay,
+            time: allDay ? '00:00' : meetingFields.time.value,
+            duration: allDay || !meetingFields.duration.value
+                ? null : Number(meetingFields.duration.value),
+            timezone: localZone(),
+            location: meetingFields.location.value.trim(),
+            description: meetingFields.notes.value.trim(),
+        };
+    }
+
+    // The thread is refetched in full after any meeting action: several
+    // cards can change at once (the new one, and the one before it losing
+    // its buttons), and `since` polling would only bring the new one.
+    async function refreshThread() {
+        if (openThreadId === null) return;
+        const data = await window.api(`/api/proposals/${openThreadId}/messages`);
+        threadMessages = data.messages || [];
+        threadSignature = signatureFor(threadMessages, data.open);
+        renderThread(threadMessages);
+        paintThreadOpenState(data.open);
+        await load();
+        if (window.refreshNavCounts) window.refreshNavCounts();
+    }
+
+    meetingForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (openThreadId === null) return;
+        const body = meetingBody();
+        if (!body.title) { showMeetingError('Give the meeting a title.'); meetingFields.title.focus(); return; }
+        if (!body.date) { showMeetingError('Pick a date.'); meetingFields.date.focus(); return; }
+        if (!body.all_day && !body.time) { showMeetingError('Pick a start time.'); meetingFields.time.focus(); return; }
+        showMeetingError('');
+        meetingSubmit.disabled = true;
+        try {
+            const path = meetingEditing === null
+                ? `/api/proposals/${openThreadId}/meetings`
+                : `/api/proposals/${openThreadId}/meetings/${meetingEditing}`;
+            const result = await window.api(path, {
+                method: meetingEditing === null ? 'POST' : 'PATCH', body,
+            });
+            closeMeetingForm();
+            await refreshThread();
+            window.toast(result.message || 'Sent.');
+            document.dispatchEvent(new CustomEvent('partnerships:changed'));
+        } catch (error) {
+            showMeetingError(error.message || 'Could not send that.');
+        } finally {
+            meetingSubmit.disabled = false;
+        }
+    });
+
+    messageThread.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-meet]');
+        if (!btn || openThreadId === null) return;
+        const id = Number(btn.dataset.meetId);
+        const act = btn.dataset.meet;
+        const current = [...threadMessages].reverse()
+            .find((m) => m.meeting && m.meeting.id === id);
+        if (act === 'move') {
+            openMeetingForm(current ? current.meeting : { id });
+            meetingForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+        btn.disabled = true;
+        try {
+            const result = await window.api(
+                `/api/proposals/${openThreadId}/meetings/${id}/${act}`,
+                { method: 'POST' });
+            await refreshThread();
+            window.toast(result.message);
+            document.dispatchEvent(new CustomEvent('partnerships:changed'));
+        } catch (error) {
+            btn.disabled = false;
+            window.toast(error.message || 'Could not do that.', 'error');
+            if (error.status === 409) refreshThread();
+        }
+    });
+
     function messageDate(iso) {
         const at = new Date(iso);
         if (Number.isNaN(at.getTime())) return '';
@@ -531,8 +758,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 + 'here stays with the proposal.</p>';
             return;
         }
+        // The actions for a meeting go on its newest card only: every
+        // earlier card about the same meeting is history.
+        const newestFor = new Map();
+        messages.forEach((m) => {
+            if (m.kind === 'meeting' && m.meeting) newestFor.set(m.meeting.id, m.id);
+        });
         messageThread.innerHTML = messages.map((m) => `
-            <div class="message${m.mine ? ' mine' : ''}">
+            <div class="message${m.mine ? ' mine' : ''}${
+                m.kind === 'meeting' ? ' is-meeting' : ''}">
                 <p class="message-meta">
                     <strong>${esc(m.mine ? 'You' : m.sender_name)}</strong>${
                         m.sender_deleted && !m.mine
@@ -542,6 +776,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="message-time">${esc(messageDate(m.created_at))}</span>
                 </p>
                 <p class="message-body">${esc(m.body)}</p>
+                ${m.kind === 'meeting' && m.meeting
+                    ? meetingCard(m.meeting, newestFor.get(m.meeting.id) === m.id)
+                    : ''}
             </div>`).join('');
         // Newest is at the bottom, which is where a thread is read from --
         // unless the reader had scrolled up, in which case a message
@@ -591,6 +828,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function closeThread() {
         stopThreadPolling();
+        meetingForm.hidden = true;
+        meetingEditing = null;
         openThreadId = null;
         threadMessages = [];
         threadSignature = '';

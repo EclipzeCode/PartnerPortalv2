@@ -385,7 +385,61 @@
                               placeholder="Write a message..."></textarea>
                     <p class="field-error" id="messageError" role="alert" hidden></p>
                     <div class="form-actions">
+                        <!-- Opens the meeting form below. A meeting arranged
+                             here goes to both calendars once the other side
+                             accepts; see the shared-meeting routes in app.py. -->
+                        <button type="button" class="btn-ghost" id="meetingProposeBtn">
+                            <i class='bx bx-calendar-plus'></i> Propose a meeting
+                        </button>
                         <button type="submit" class="btn-primary" id="messageSend">Send</button>
+                    </div>
+                </form>
+
+                <!-- The shared-meeting form. Filled by proposals.js for a new
+                     proposal or, with a meeting id, for suggesting a different
+                     time. Native date and time inputs rather than the
+                     dashboard's hour/minute selects: this is one time, not a
+                     series, and the browser's own picker is enough. -->
+                <form id="meetingForm" class="meeting-form" hidden novalidate>
+                    <h3 id="meetingFormTitle">Propose a meeting</h3>
+                    <p class="field-error" id="meetingFormError" role="alert" hidden></p>
+                    <div class="form-group">
+                        <label for="meetingTitle">What is it about?</label>
+                        <input type="text" id="meetingTitle" maxlength="200"
+                               placeholder="Kick-off call">
+                    </div>
+                    <div class="meeting-form-row">
+                        <div class="form-group">
+                            <label for="meetingDate">Date</label>
+                            <input type="date" id="meetingDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="meetingTime">Time</label>
+                            <input type="time" id="meetingTime" step="300">
+                        </div>
+                        <div class="form-group">
+                            <label for="meetingDuration">Hours</label>
+                            <input type="number" id="meetingDuration" min="0.25" max="24"
+                                   step="0.25" placeholder="1">
+                        </div>
+                    </div>
+                    <label class="checkbox-label meeting-all-day">
+                        <input type="checkbox" id="meetingAllDay">
+                        <span>All day</span>
+                    </label>
+                    <div class="form-group">
+                        <label for="meetingLocation">Where <span class="optional">(optional)</span></label>
+                        <input type="text" id="meetingLocation" maxlength="255"
+                               placeholder="Video call, or an address">
+                    </div>
+                    <div class="form-group">
+                        <label for="meetingNotes">Notes <span class="optional">(optional)</span></label>
+                        <textarea id="meetingNotes" rows="2" maxlength="4000"></textarea>
+                    </div>
+                    <p class="meeting-form-zone" id="meetingZoneNote"></p>
+                    <div class="form-actions">
+                        <button type="button" class="btn-ghost" id="meetingCancelBtn">Cancel</button>
+                        <button type="submit" class="btn-primary" id="meetingSubmitBtn">Propose</button>
                     </div>
                 </form>
 

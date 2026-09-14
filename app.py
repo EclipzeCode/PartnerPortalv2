@@ -56,7 +56,8 @@ from notifications import (
     notify_profile_hidden,
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
     notify_email_change_notice, notify_email_change_requested,
-    notify_email_verification, notify_invitation, notify_message_received,
+    notify_email_verification, notify_invitation, notify_meeting_update,
+    notify_message_received,
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
     notify_proposal_responded, notify_proposal_updated,
@@ -3691,15 +3692,22 @@ def get_me(org, db):
                theirs_completed.isnot(None),
                mine_completed.is_(None))
     ).scalar_subquery()
-    pending_proposals, unread_messages, unread_threads, awaiting = db.execute(
-        select(
+    # Shared meetings waiting on this organization's answer, which the
+    # notification list counts as actionable too.
+    meetings_q = (
+        select(func.count(Event.id))
+        .where(Event.share_status == Event.PROPOSED,
+               Event.awaiting_id == org.id)
+    ).scalar_subquery()
+    pending_proposals, unread_messages, unread_threads, awaiting, meetings = (
+        db.execute(select(
             pending_q,
             select(func.count(unread_base.c.id)).scalar_subquery(),
             select(func.count(func.distinct(unread_base.c.partnership_id)))
             .scalar_subquery(),
             awaiting_q,
-        )
-    ).one()
+            meetings_q,
+        )).one())
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
@@ -3712,10 +3720,11 @@ def get_me(org, db):
         # by name rather than by whichever caller happened to read it.
         "unread_threads": unread_threads,
         "awaiting_completion": awaiting,
+        "awaiting_meetings": meetings,
         # The badge, precomputed: identical by construction to the
         # `actionable` count /api/notifications returns, so the dot does not
         # change when the panel opens.
-        "actionable": pending_proposals + unread_threads + awaiting,
+        "actionable": pending_proposals + unread_threads + awaiting + meetings,
     })
 
 
@@ -4214,6 +4223,21 @@ def _detach_partnerships(db, org):
                     else proposal.proposer_id)
         if other_id is None:
             db.delete(proposal)
+            continue
+        # A shared meeting is the partnership's, and the partnership is
+        # surviving; but events.organization_id cascades, so one this org
+        # proposed would vanish from the other side's calendar with the
+        # account. It passes to them instead. Nothing is left waiting on an
+        # organization that no longer exists to answer.
+        db.query(Event).filter(
+            Event.partnership_id == proposal.id,
+            Event.organization_id == org.id,
+        ).update({"organization_id": other_id}, synchronize_session=False)
+        db.query(Event).filter(
+            Event.partnership_id == proposal.id,
+            Event.share_status == Event.PROPOSED,
+        ).update({"share_status": Event.CANCELLED, "awaiting_id": None},
+                 synchronize_session=False)
 
 
 # --- Onboarding -------------------------------------------------------------
@@ -5867,6 +5891,19 @@ def _notifications_for(db, org):
         if p.status == Partnership.ENDED and p.ended_by_id != org.id:
             add("partnership_ended", p.ended_at, p, tab="closed")
 
+    # Shared meetings waiting on this organization. Linked to the thread
+    # they were proposed in, which is where they are answered.
+    pending_meetings = db.query(Event).options(joinedload(Event.partnership)).filter(
+        Event.share_status == Event.PROPOSED,
+        Event.awaiting_id == org.id,
+    ).all()
+    for event in pending_meetings:
+        proposal = event.partnership
+        if proposal is None:
+            continue
+        add("meeting_proposed", event.created_at, proposal,
+            actionable=True, tab=f"messages-{proposal.id}")
+
     by_id = {p.id: p for p in rows}
     for partnership_id, count, latest in unread:
         proposal = by_id.get(partnership_id)
@@ -6236,10 +6273,60 @@ def _events_for(db, org):
     row fan-out is small and the saved trip is not.
     """
     return db.query(Event).options(
-        joinedload(Event.exceptions)
+        joinedload(Event.exceptions),
+        joinedload(Event.partnership),
     ).filter(
-        Event.organization_id == org.id
+        _visible_meetings(org)
     ).order_by(Event.date, Event.time).all()
+
+
+def _party_partnerships(org):
+    """Subquery: ids of every partnership `org` is a side of."""
+    return select(Partnership.id).where(
+        or_(Partnership.proposer_id == org.id,
+            Partnership.recipient_id == org.id))
+
+
+def _visible_meetings(org):
+    """SQL for the meetings on `org`'s dashboard.
+
+    Its own personal ones, and every shared one on a partnership it is a
+    party to that is still live -- proposed or agreed. A declined or
+    cancelled shared meeting leaves both calendars; the thread keeps the
+    record of it. Not `organization_id == org.id` alone, which would have
+    shown an organization the shared meetings it proposed and then had
+    declined, and hidden from it the ones the other side proposed.
+    """
+    return or_(
+        and_(Event.organization_id == org.id, Event.partnership_id.is_(None)),
+        and_(Event.partnership_id.in_(_party_partnerships(org)),
+             Event.share_status.in_((Event.PROPOSED, Event.ACCEPTED))),
+    )
+
+
+def _load_visible_meeting(db, org, event_id):
+    """One meeting `org` may see, shared or not, or None."""
+    return db.query(Event).options(
+        joinedload(Event.exceptions), joinedload(Event.partnership),
+    ).filter(Event.id == event_id, _visible_meetings(org)).one_or_none()
+
+
+def _shared_refusal(event):
+    """The 409 the personal-meeting routes give a shared meeting.
+
+    Shared meetings change from the conversation they were agreed in, where
+    the other side is told and can answer. The personal routes would have
+    let the proposer edit or delete one silently, which is what makes it
+    not shared.
+    """
+    if not event.shared:
+        return None
+    return jsonify({
+        "error": "This meeting is shared with your partner. Move, cancel or "
+                 "change it from your conversation with them.",
+        "shared": True,
+        "partnership_id": event.partnership_id,
+    }), 409
 
 
 # Reading the zone list is a directory walk, so it is done once. The set is
@@ -6420,7 +6507,7 @@ def _expanded_events(db, org, limit=None):
     if limit is not None:
         out = out[:limit]
     # to_dict only for what is actually being sent.
-    return [event.to_dict(on=on) for _d, _t, on, event in out], total
+    return [event.to_dict(on=on, viewer_id=org.id) for _d, _t, on, event in out], total
 
 
 @app.route("/api/events", methods=["GET"])
@@ -6677,14 +6764,14 @@ def update_event(org, db, event_id):
     that knows about the time should not be able to blank the description by
     not mentioning it.
     """
-    event = db.query(Event).filter(
-        Event.id == event_id,
-        # Scoped to the caller, so another org's meeting cannot be edited --
-        # or probed for existence -- through this route.
-        Event.organization_id == org.id,
-    ).one_or_none()
+    # Scoped to what the caller may see, so another org's meeting cannot be
+    # edited -- or probed for existence -- through this route.
+    event = _load_visible_meeting(db, org, event_id)
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
+    refused = _shared_refusal(event)
+    if refused:
+        return refused
 
     data = request.get_json(silent=True) or {}
 
@@ -6974,7 +7061,7 @@ def _vtimezone(zone_name, year):
     return lines
 
 
-def _ics_body(event):
+def _ics_body(event, viewer_id=None):
     """The descriptive half of a VEVENT: what the meeting is, not when.
 
     Shared by the series and by each moved occurrence, because an exception
@@ -6983,7 +7070,7 @@ def _ics_body(event):
     """
     # Who it is with is the one thing on the card that has nowhere else to go
     # in a calendar entry, so it leads the description.
-    detail = f"With {event.partner_name}"
+    detail = f"With {event.counterpart_name(viewer_id) if viewer_id else event.partner_name}"
     if event.description:
         detail += "\n\n" + event.description
     lines = [
@@ -7016,7 +7103,7 @@ def _ics_schedule(when, at, duration, all_day, zone):
     return lines
 
 
-def _ics_override(event, exception, stamp, host, zone):
+def _ics_override(event, exception, stamp, host, zone, viewer_id=None):
     """One moved occurrence, as a VEVENT that replaces a single instance.
 
     RECURRENCE-ID names the instance by the date the rule produced, which is
@@ -7045,12 +7132,12 @@ def _ics_override(event, exception, stamp, host, zone):
     # meeting happens, never which clock it is read against.
     lines += _ics_schedule(exception.date, exception.time, exception.duration,
                            exception.all_day, None if exception.all_day else zone)
-    lines += _ics_body(event)
+    lines += _ics_body(event, viewer_id)
     lines.append("END:VEVENT")
     return lines
 
 
-def _event_ics(event, host):
+def _event_ics(event, host, viewer_id=None):
     """One meeting as an iCalendar document.
 
     Three shapes, because a meeting can be three different kinds of thing:
@@ -7152,7 +7239,7 @@ def _event_ics(event, host):
                     datetime.combine(d, event.time).strftime("%Y%m%dT%H%M%S")
                     for d in dropped))
 
-    lines += _ics_body(event)
+    lines += _ics_body(event, viewer_id)
     lines.append("END:VEVENT")
 
     # ...and moved occurrences, each as its own VEVENT carrying RECURRENCE-ID.
@@ -7166,7 +7253,7 @@ def _event_ics(event, host):
                             key=lambda e: e.occurs_on):
         if not event.lands_on(exception.occurs_on):
             continue
-        lines += _ics_override(event, exception, stamp, host, zone)
+        lines += _ics_override(event, exception, stamp, host, zone, viewer_id)
 
     lines.append("END:VCALENDAR")
 
@@ -7187,14 +7274,14 @@ def event_calendar(org, db, event_id):
     with no cookie to send, so it would need a bearer token in the URL, and
     that is a different feature with a different threat model.
     """
-    event = db.query(Event).filter(
-        Event.id == event_id,
-        Event.organization_id == org.id,
-    ).one_or_none()
+    # Either party of a shared meeting may download it; the UID is the
+    # row's, so both calendars hold the same event.
+    event = _load_visible_meeting(db, org, event_id)
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
 
-    body = _event_ics(event, request.host.split(":")[0] or "partnerportal")
+    body = _event_ics(event, request.host.split(":")[0] or "partnerportal",
+                      viewer_id=org.id)
     response = app.response_class(body, mimetype="text/calendar")
     response.headers["Content-Type"] = "text/calendar; charset=utf-8"
     # A filename made from the title would have to be sanitized for quotes,
@@ -7209,14 +7296,14 @@ def event_calendar(org, db, event_id):
 @app.route("/api/events/<int:event_id>", methods=["DELETE"])
 @login_required
 def delete_event(org, db, event_id):
-    event = db.query(Event).filter(
-        Event.id == event_id,
-        # Scoped to the caller, so another org's meeting id cannot be deleted
-        # -- or probed for existence -- through this route.
-        Event.organization_id == org.id,
-    ).one_or_none()
+    # Scoped to what the caller may see, so another org's meeting id cannot
+    # be deleted -- or probed for existence -- through this route.
+    event = _load_visible_meeting(db, org, event_id)
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
+    refused = _shared_refusal(event)
+    if refused:
+        return refused
 
     # A DELETE carries no body in most clients, so the scope rides in the
     # query string here rather than in JSON -- unlike the PATCH above, which
@@ -8231,6 +8318,17 @@ def end_proposal(org, db, proposal_id):
     proposal.ended_at = datetime.now(timezone.utc)
     proposal.ended_by_id = org.id
     proposal.end_reason = reason or None
+    # A meeting still waiting for an answer dies with the partnership:
+    # nobody agreed to it, and the thread it would be answered in is about
+    # to close. Agreed meetings stay, flagged on the dashboard -- people
+    # have already put them in calendars, and taking a meeting out of
+    # somebody's day without a word is worse than showing it under an
+    # ended partnership.
+    db.query(Event).filter(
+        Event.partnership_id == proposal.id,
+        Event.share_status == Event.PROPOSED,
+    ).update({"share_status": Event.CANCELLED, "cancelled_by_id": org.id,
+              "awaiting_id": None}, synchronize_session=False)
     db.commit()
 
     notify_partnership_ended(proposal, org)
@@ -8552,6 +8650,311 @@ def _maybe_notify_message(db, proposal, sender, message):
         return
 
     notify_message_received(proposal, sender, message)
+
+
+# --- Shared meetings ---------------------------------------------------------
+# A meeting proposed inside a conversation, to both calendars. It follows the
+# proposal's own rules: only the two parties, only while the thread is open,
+# and it waits on one side at a time. Each step is written into the thread as
+# a message of kind 'meeting', so the conversation shows what was arranged
+# and the unread counts, the bell and the email digest all notice it without
+# knowing what a meeting is. See the notes on Event's sharing columns.
+
+MEETING_TITLE_MAX = 200
+
+
+def _meeting_fields(data, *, partial=False):
+    """Validate the schedule and description of a shared meeting.
+
+    Returns (fields, problems). With partial=True only keys present in the
+    body are read, for a move; otherwise the required ones are required.
+    The rules are create_event's: a date, a time unless all day, a length
+    between 0 and 24 hours or none, a recognized zone or none.
+    """
+    fields, problems = {}, []
+
+    if "title" in data or not partial:
+        title = (data.get("title") or "").strip()
+        if not title:
+            problems.append("a title")
+        elif len(title) > MEETING_TITLE_MAX:
+            problems.append("a shorter title")
+        else:
+            fields["title"] = title
+
+    if "all_day" in data or not partial:
+        fields["all_day"] = bool(data.get("all_day"))
+
+    if "date" in data or not partial:
+        try:
+            fields["date"] = datetime.strptime(data.get("date") or "", "%Y-%m-%d").date()
+        except ValueError:
+            problems.append("a valid date")
+
+    if "time" in data or not partial:
+        if fields.get("all_day"):
+            fields["time"] = time_type(0, 0)
+        else:
+            try:
+                fields["time"] = datetime.strptime(data.get("time") or "", "%H:%M").time()
+            except ValueError:
+                problems.append("a valid start time")
+
+    if "duration" in data or not partial:
+        if fields.get("all_day"):
+            fields["duration"] = None
+        else:
+            duration, bad = _event_duration(data.get("duration"))
+            if bad:
+                problems.append(bad)
+            else:
+                fields["duration"] = duration
+
+    if "timezone" in data or not partial:
+        fields["timezone"] = _known_zone(data.get("timezone"))
+
+    for key, limit in (("location", 255), ("description", 4000)):
+        if key in data or not partial:
+            value = (data.get(key) or "").strip()
+            if len(value) > limit:
+                problems.append(f"a shorter {key}")
+            else:
+                fields[key] = value or None
+
+    return fields, problems
+
+
+def _meeting_line(event, viewer_id=None):
+    """"Board sync, Tue Sep 22, 3:00 PM CT" -- the meeting in one line, for
+    the thread entries and the emails. The zone is named because the two
+    parties may not share one."""
+    day = event.date.strftime("%a %b %d").replace(" 0", " ")
+    if event.all_day:
+        when = f"{day}, all day"
+    else:
+        clock = event.time.strftime("%I:%M %p").lstrip("0")
+        when = f"{day}, {clock}"
+        if event.timezone:
+            try:
+                zone = datetime.combine(event.date, event.time,
+                                        tzinfo=ZoneInfo(event.timezone))
+                when += f" {zone.tzname()}"
+            except Exception:
+                when += f" ({event.timezone})"
+    return f"{event.title}, {when}"
+
+
+def _meeting_entry(db, proposal, actor, event, what, now):
+    """Write one step into the thread and move the actor's read marker past
+    it, exactly as create_message does for typed text."""
+    sentence = {
+        "proposed": f"Proposed a meeting: {_meeting_line(event)}",
+        "moved": f"Suggested a different time: {_meeting_line(event)}",
+        "accepted": f"Accepted the meeting: {_meeting_line(event)}",
+        "declined": f"Declined the meeting: {_meeting_line(event)}",
+        "cancelled": f"Cancelled the meeting: {_meeting_line(event)}",
+        "changed": f"Updated the meeting: {_meeting_line(event)}",
+    }[what]
+    message = Message(
+        partnership_id=proposal.id, sender_id=actor.id, sender_name=actor.name,
+        body=sentence, kind=Message.MEETING, meeting_id=event.id,
+    )
+    db.add(message)
+    db.flush()
+    proposal.mark_read_through(actor.id, message.id, now)
+    return message
+
+
+def _load_shared_meeting(db, proposal, meeting_id):
+    return db.query(Event).options(joinedload(Event.partnership)).filter(
+        Event.id == meeting_id,
+        Event.partnership_id == proposal.id,
+    ).one_or_none()
+
+
+def _meeting_payload(event, message, org):
+    return {
+        "meeting": event.to_dict(viewer_id=org.id),
+        "sent": message.to_dict(viewer_id=org.id),
+    }
+
+
+@app.route("/api/proposals/<int:proposal_id>/meetings", methods=["POST"])
+@login_required
+def propose_meeting(org, db, proposal_id):
+    proposal, error = _thread_or_error(db, org, proposal_id, lock=True)
+    if error:
+        return error
+    if not proposal.messages_open():
+        return jsonify({
+            "error": f"This proposal was {proposal.status}, so the "
+                     f"conversation is closed and no meeting can be arranged "
+                     f"in it.",
+        }), 409
+    other = proposal.counterpart(org.id)
+    if other is None:
+        return jsonify({
+            "error": "The other organization has closed its account.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    fields, problems = _meeting_fields(data)
+    if problems:
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+
+    wait = rate_limited("events", str(org.id), max_attempts=WRITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have added a lot of meetings recently.", wait)
+
+    now = datetime.now(timezone.utc)
+    event = Event(
+        organization_id=org.id,
+        partnership_id=proposal.id,
+        share_status=Event.PROPOSED,
+        awaiting_id=other.id,
+        partner_name=other.name,
+        **fields,
+    )
+    db.add(event)
+    db.flush()
+    message = _meeting_entry(db, proposal, org, event, "proposed", now)
+    db.commit()
+
+    notify_meeting_update(event, proposal, org, "proposed")
+    return jsonify({"message": "Meeting proposed",
+                    **_meeting_payload(event, message, org)}), 201
+
+
+@app.route("/api/proposals/<int:proposal_id>/meetings/<int:meeting_id>",
+           methods=["PATCH"])
+@login_required
+def change_meeting(org, db, proposal_id, meeting_id):
+    """Move a shared meeting, or change what it says.
+
+    Either party, while it is live. A change to the date, time or length
+    is a new proposal of a time -- it goes back to proposed and waits on
+    the other side, whoever had agreed to what. A change to the title,
+    place or notes is not, and leaves the status alone.
+    """
+    proposal, error = _thread_or_error(db, org, proposal_id, lock=True)
+    if error:
+        return error
+    event = _load_shared_meeting(db, proposal, meeting_id)
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+    if not proposal.messages_open():
+        return jsonify({
+            "error": f"This proposal was {proposal.status}, so the "
+                     f"conversation is closed.",
+        }), 409
+    if not event.live():
+        return jsonify({
+            "error": f"This meeting was {event.share_status}.",
+        }), 409
+
+    data = request.get_json(silent=True) or {}
+    # all_day decides how time and duration are read, so it has to be known
+    # before either is parsed even when only one of them was sent.
+    merged = dict(data)
+    merged.setdefault("all_day", event.all_day)
+    if merged["all_day"] != event.all_day:
+        merged.setdefault("time", event.time.strftime("%H:%M"))
+        merged.setdefault("duration", event.duration)
+    fields, problems = _meeting_fields(merged, partial=True)
+    if problems:
+        return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+    if not fields:
+        return jsonify({"error": "Nothing to change was sent."}), 400
+
+    schedule_keys = {"date", "time", "duration", "all_day", "timezone"}
+    moved = any(key in fields and fields[key] != getattr(event, key)
+                for key in schedule_keys)
+    for key, value in fields.items():
+        setattr(event, key, value)
+
+    now = datetime.now(timezone.utc)
+    if moved:
+        event.share_status = Event.PROPOSED
+        event.hand_turn_to_other(org.id)
+        event.responded_at = None
+    message = _meeting_entry(db, proposal, org, event,
+                             "moved" if moved else "changed", now)
+    db.commit()
+
+    notify_meeting_update(event, proposal, org, "moved" if moved else "changed")
+    return jsonify({
+        "message": "Time suggested" if moved else "Meeting updated",
+        **_meeting_payload(event, message, org),
+    })
+
+
+def _answer_meeting(org, db, proposal_id, meeting_id, *, accept):
+    proposal, error = _thread_or_error(db, org, proposal_id, lock=True)
+    if error:
+        return error
+    event = _load_shared_meeting(db, proposal, meeting_id)
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+    if event.share_status != Event.PROPOSED:
+        return jsonify({"error": f"This meeting was already {event.share_status}."}), 409
+    if not event.awaits(org.id):
+        return jsonify({"error": "This meeting is waiting on the other "
+                                 "organization's answer, not yours."}), 403
+
+    now = datetime.now(timezone.utc)
+    event.share_status = Event.ACCEPTED if accept else Event.DECLINED
+    event.awaiting_id = None
+    event.responded_at = now
+    what = "accepted" if accept else "declined"
+    message = _meeting_entry(db, proposal, org, event, what, now)
+    db.commit()
+
+    notify_meeting_update(event, proposal, org, what)
+    return jsonify({"message": "Meeting agreed" if accept else "Meeting declined",
+                    **_meeting_payload(event, message, org)})
+
+
+@app.route("/api/proposals/<int:proposal_id>/meetings/<int:meeting_id>/accept",
+           methods=["POST"])
+@login_required
+def accept_meeting(org, db, proposal_id, meeting_id):
+    return _answer_meeting(org, db, proposal_id, meeting_id, accept=True)
+
+
+@app.route("/api/proposals/<int:proposal_id>/meetings/<int:meeting_id>/decline",
+           methods=["POST"])
+@login_required
+def decline_meeting(org, db, proposal_id, meeting_id):
+    return _answer_meeting(org, db, proposal_id, meeting_id, accept=False)
+
+
+@app.route("/api/proposals/<int:proposal_id>/meetings/<int:meeting_id>/cancel",
+           methods=["POST"])
+@login_required
+def cancel_meeting(org, db, proposal_id, meeting_id):
+    """Either party, any live meeting. Cancelling one's own proposal before
+    an answer and cancelling an agreed meeting are the same act here: the
+    meeting leaves both calendars and the thread says who did it."""
+    proposal, error = _thread_or_error(db, org, proposal_id, lock=True)
+    if error:
+        return error
+    event = _load_shared_meeting(db, proposal, meeting_id)
+    if event is None:
+        return jsonify({"error": "Meeting not found."}), 404
+    if not event.live():
+        return jsonify({"error": f"This meeting was already {event.share_status}."}), 409
+
+    now = datetime.now(timezone.utc)
+    event.share_status = Event.CANCELLED
+    event.cancelled_by_id = org.id
+    event.awaiting_id = None
+    message = _meeting_entry(db, proposal, org, event, "cancelled", now)
+    db.commit()
+
+    notify_meeting_update(event, proposal, org, "cancelled")
+    return jsonify({"message": "Meeting cancelled",
+                    **_meeting_payload(event, message, org)})
 
 
 @app.route("/api/partnerships/<token>", methods=["GET"])
