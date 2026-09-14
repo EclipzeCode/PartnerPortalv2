@@ -150,9 +150,9 @@ def test_marking_read_clears_the_news(client, login, make_org, session):
 
 
 def test_marking_read_does_not_clear_the_work(client, login, make_org, session):
-    """A proposal waiting on an answer has not been dealt with because
-    somebody looked at a list, so it is never marked seen and the count of
-    what is actionable does not move."""
+    """Seen is not answered. Opening the panel marks a waiting proposal seen
+    -- the dot is about what is new, and it has now been shown -- but the
+    entry stays in the list, still flagged as work, until it is answered."""
     from models import Partnership
     me = make_org(offers=["mentors"], needs=["web_development"])
     them = make_org(offers=["web_development"], needs=["mentors"])
@@ -166,11 +166,40 @@ def test_marking_read_does_not_clear_the_work(client, login, make_org, session):
 
     before = _notifications(client)
     assert before["actionable"] >= 1
+    assert before["unseen"] >= 1
 
     marked = client.post("/api/notifications/read").get_json()
     assert marked["actionable"] == before["actionable"]
+    assert marked["unseen"] == 0
     actionable = [n for n in marked["notifications"] if n["actionable"]]
-    assert actionable and all(not n["seen"] for n in actionable)
+    assert actionable and all(n["seen"] for n in actionable)
+
+
+def test_the_badge_is_what_is_new_and_clears_when_the_panel_opens(
+        client, login, make_org, session):
+    """/api/me's `unseen` is the dot. It counts the same entries the panel
+    lists, whatever their kind, and marking read -- which the panel does on
+    opening -- takes it to zero while the work count stands."""
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    session.add(Partnership(
+        proposer_id=them.id, recipient_id=me.id,
+        status=Partnership.PENDING,
+        proposer_gives=["web_development"], recipient_gives=["mentors"],
+        proposer_name=them.name, recipient_name=me.name))
+    session.commit()
+    login(me)
+
+    me_before = client.get("/api/me").get_json()
+    assert me_before["unseen"] >= 1
+    assert me_before["actionable"] >= 1
+    assert me_before["unseen"] == _notifications(client)["unseen"]
+
+    client.post("/api/notifications/read")
+    me_after = client.get("/api/me").get_json()
+    assert me_after["unseen"] == 0
+    assert me_after["actionable"] == me_before["actionable"]
 
 
 def test_the_nav_badge_is_untouched_by_marking_read(client, login, make_org,

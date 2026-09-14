@@ -3708,6 +3708,13 @@ def get_me(org, db):
             awaiting_q,
             meetings_q,
         )).one())
+    # The badge, from the same function that draws the panel, so the two
+    # can never disagree: a count of entries newer than the last time the
+    # panel was opened. Two extra queries on the most-called route; they
+    # are the same two the panel runs, and the alternative was a SQL
+    # restatement of the panel's rules that had already drifted once.
+    _, counts = _notifications_for(db, org)
+
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
@@ -3721,10 +3728,10 @@ def get_me(org, db):
         "unread_threads": unread_threads,
         "awaiting_completion": awaiting,
         "awaiting_meetings": meetings,
-        # The badge, precomputed: identical by construction to the
-        # `actionable` count /api/notifications returns, so the dot does not
-        # change when the panel opens.
-        "actionable": pending_proposals + unread_threads + awaiting + meetings,
+        # What the panel would count: the work still waiting, and what is
+        # new since it was last opened. The dot shows `unseen`.
+        "actionable": counts["actionable"],
+        "unseen": counts["unseen"],
     })
 
 
@@ -5847,12 +5854,15 @@ def _notifications_for(db, org):
             "counterpart": proposal.counterpart_party(org.id).get("name"),
             "proposal_id": proposal.id,
             "actionable": actionable,
-            # Read already, if the list has been marked read since this
-            # happened. Never true of something actionable: a proposal
-            # waiting on an answer has not been dealt with because somebody
-            # looked at a list, and dimming it would say it had.
-            "seen": bool(
-                not actionable and seen_at is not None and at <= seen_at),
+            # Shown already: the panel has been opened since this happened.
+            # "Seen" is about the badge, not the work -- an actionable entry
+            # keeps its flag and its styling however many times it has been
+            # looked at, and only answering it removes it. The two used to
+            # be conflated: actionable items could never be seen, so the dot
+            # counted them and stayed lit after the panel was opened, which
+            # reads as a badge that does not work rather than as work that
+            # is still waiting.
+            "seen": bool(seen_at is not None and at <= seen_at),
             "href": f"ppdashboard.html#{tab}",
         }
         if count is not None:
@@ -5916,15 +5926,15 @@ def _notifications_for(db, org):
 
     # Counted before the slice below, never after.
     #
-    # `actionable` is what the nav badge shows, and it was summed from the
-    # already-truncated list -- so an organization with a busy month could be
-    # told nothing was waiting on it while a proposal sat unanswered, purely
-    # because thirty newer things had happened since. The count has to
-    # describe the work, not the page.
+    # `unseen` is what the nav badge shows: entries of any kind newer than
+    # the last time the panel was opened. `actionable` is the work still
+    # waiting, shown as a line in the panel's header and never by the dot.
+    # Both are summed before the list is truncated -- an organization with a
+    # busy month could otherwise be told nothing was new while thirty newer
+    # things hid an older one.
     counts = {
         "actionable": sum(1 for i in items if i["actionable"]),
-        "unseen": sum(1 for i in items
-                      if not i["actionable"] and not i["seen"]),
+        "unseen": sum(1 for i in items if not i["seen"]),
     }
 
     # The limit is on how long the list is to read, and history is what it is
@@ -5963,16 +5973,16 @@ def list_notifications(org, db):
 def mark_notifications_read(org, db):
     """Catch the list up to now.
 
-    Clears the news and leaves the work. Everything informational that has
-    already happened is marked seen; anything still waiting on this
-    organization is untouched and stays in the list, because it is still
-    waiting -- and the nav badge, which counts exactly that, does not move.
+    Called by the panel when it opens. Everything that has happened so far
+    is marked seen, which clears the badge; anything still waiting on this
+    organization stays in the list, flagged as waiting, because looking at
+    it has not answered it.
 
     A timestamp rather than a per-item dismissal. Every entry in this list is
     derived from a partnership row or a message, so there is no row to mark;
     "everything up to here" is the only thing that can be recorded without
-    inventing a table to record it in, and it is also what somebody clicking
-    a button called "mark all read" actually means.
+    inventing a table to record it in, and it is also what opening a
+    panel of notifications actually means.
     """
     org.notifications_seen_at = datetime.now(timezone.utc)
     db.commit()

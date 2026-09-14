@@ -711,27 +711,25 @@
     gap: 1rem;
 }
 
-.notify-clear {
-    background: none;
-    border: 0;
-    padding: 0;
+/* "2 waiting on you" in the panel header: the work count, which the dot on
+   the bell no longer carries. */
+.notify-waiting {
     font-family: var(--h-mono, monospace);
     font-size: 0.62rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--h-give);
-    cursor: pointer;
 }
-
-.notify-clear:hover { text-decoration: underline; }
 
 /* Seen news is dimmed rather than removed: it is still what happened, and a
    list that deletes itself as you read it cannot be re-read. Only ever
    applied to non-actionable entries -- something still waiting on you is
    never dimmed, because dimming it would say it had been dealt with. */
-.notify-list li.is-seen .notify-text,
-.notify-list li.is-seen .notify-when { opacity: 0.55; }
-.notify-list li.is-seen a i { opacity: 0.4; }
+/* Seen dims the news. Work that is still waiting stays at full strength
+   however many times the panel has been opened: seen is not answered. */
+.notify-list li.is-seen:not(.is-actionable) .notify-text,
+.notify-list li.is-seen:not(.is-actionable) .notify-when { opacity: 0.55; }
+.notify-list li.is-seen:not(.is-actionable) a i { opacity: 0.4; }
 
 /* Loading placeholders in the notification panel. Laid out on the same grid
    the real rows use, so the panel does not resize when the list arrives --

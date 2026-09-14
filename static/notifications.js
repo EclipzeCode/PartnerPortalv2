@@ -119,8 +119,10 @@
                  role="region" aria-label="Notifications">
                 <div class="notify-head">
                     <span>Notifications</span>
-                    <button type="button" class="notify-clear" id="notifyClear"
-                            hidden>Mark all read</button>
+                    <!-- The work still waiting, as words. The dot on the
+                         bell is only what is new since the panel was last
+                         opened; this is what has not been answered. -->
+                    <span class="notify-waiting" id="notifyWaiting" hidden></span>
                 </div>
                 <ul class="notify-list" id="notifyList">${SKELETON_ROWS}</ul>
                 <!-- The list arrives after the panel opens, so opening it
@@ -143,19 +145,21 @@
         return wrap;
     }
 
-    function render(list, items, unseen) {
-        const clear = document.getElementById('notifyClear');
+    function render(list, items, actionable) {
+        const waiting = document.getElementById('notifyWaiting');
         const status = document.getElementById('notifyStatus');
         if (status) {
             status.textContent = items.length === 0
                 ? 'No new notifications.'
                 : `${items.length} notification${
-                    items.length === 1 ? '' : 's'}.`;
+                    items.length === 1 ? '' : 's'}${
+                    actionable ? `, ${actionable} waiting on you` : ''}.`;
         }
-        // Only when there is news to clear. Actionable entries are not
-        // cleared by this and the button must not imply they are, so an
-        // inbox holding nothing but work offers nothing to press.
-        if (clear) clear.hidden = !unseen;
+        if (waiting) {
+            waiting.hidden = !actionable;
+            waiting.textContent = actionable
+                ? `${actionable} waiting on you` : '';
+        }
         if (!items.length) {
             list.innerHTML =
                 '<li class="notify-empty">Nothing new. Proposals and replies '
@@ -253,19 +257,17 @@
             }
             fetching = true;
             try {
-                const data = await window.api('/api/notifications');
-                render(list, data.notifications || [], data.unseen || 0);
+                // Opening the panel is reading it. The list is fetched and
+                // marked seen in one call, so the dot -- which counts what
+                // is new since the panel was last opened -- clears the
+                // moment the reader has been shown what it was counting.
+                // Entries that are still waiting on an answer keep their
+                // flag and styling in the list; seen is not done.
+                const data = await window.api('/api/notifications/read',
+                                              { method: 'POST' });
+                render(list, data.notifications || [], data.actionable || 0);
                 everRendered = true;
-                // The dot and this list count the same three things --
-                // /api/me's `actionable` is built to match this endpoint's
-                // -- so this is a refresh from the newer answer, not a
-                // correction. It used to be one: the dot left out
-                // partnerships waiting on your completion, so the number
-                // changed the moment the panel opened.
-                if (typeof data.actionable === 'number'
-                    && window.setNotificationDot) {
-                    window.setNotificationDot(data.actionable);
-                }
+                if (window.setNotificationDot) window.setNotificationDot(0);
             } catch {
                 // Only when there is nothing better to show. Replacing a
                 // list the reader is looking at with an error, because a
@@ -318,22 +320,5 @@
                 window.dispatchEvent(new HashChangeEvent('hashchange'));
             }
         });
-
-        document.getElementById('notifyClear')
-            .addEventListener('click', async (e) => {
-                // Inside the panel, so the document listener above would
-                // otherwise read it as a click outside and close the thing
-                // the reader is looking at.
-                e.stopPropagation();
-                try {
-                    const data = await window.api('/api/notifications/read',
-                                                  { method: 'POST' });
-                    render(list, data.notifications || [], 0);
-                    // The dot is deliberately not touched. It counts work,
-                    // and marking the news read has not answered a proposal.
-                } catch {
-                    window.toast('Could not mark those read.', 'error');
-                }
-            });
     };
 })();

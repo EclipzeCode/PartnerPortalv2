@@ -723,16 +723,17 @@ async function updateNavForSession() {
     updateProposalBadge(actionable);
 }
 
-// What the dot shows: the server's `actionable`, which /api/me computes the
-// same way /api/notifications counts its actionable items -- pending
-// proposals, conversations with something unread, partnerships waiting on
-// your completion -- so opening the panel never changes the number. Threads
-// rather than messages in that sum, because the panel lists one entry per
-// conversation. The fallback covers a response from before the field
-// existed.
+// What the dot shows: how many entries in the notification panel are new
+// since it was last opened -- the server's `unseen`, computed by the same
+// function that draws the panel. Opening the panel marks everything seen,
+// so the dot clears the moment the reader has been shown what it counted.
+// It used to show the work still waiting, which never cleared by looking
+// and so read as a badge that did not work. The work count is now a line in
+// the panel's header instead. The fallback covers a response from before
+// the field existed.
 function badgeCount(data) {
     if (!data) return 0;
-    if (typeof data.actionable === 'number') return data.actionable;
+    if (typeof data.unseen === 'number') return data.unseen;
     return (data.pending_proposals || 0) + (data.unread_threads || 0);
 }
 
