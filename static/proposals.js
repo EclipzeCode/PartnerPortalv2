@@ -559,8 +559,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         messageError.hidden = true;
         messageBody.value = '';
 
-        messageModal.classList.add('active');
-        window.dialogOpened(messageModal, messageBody);
+        window.showDialog(messageModal, messageBody);
 
         let data;
         try {
@@ -595,8 +594,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         openThreadId = null;
         threadMessages = [];
         threadSignature = '';
-        messageModal.classList.remove('active');
-        window.dialogClosed(messageModal);
+        window.hideDialog(messageModal);
     }
 
     messageModal.querySelector('.close-modal').addEventListener('click', closeThread);
@@ -922,14 +920,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         buildEditPickers(proposal);
         renderEditAmounts();
 
-        editModal.classList.add('active');
-        window.dialogOpened(editModal, editStartsOn);
+        window.showDialog(editModal, editStartsOn);
     }
 
     function closeEdit() {
         editing = null;
-        editModal.classList.remove('active');
-        window.dialogClosed(editModal);
+        window.hideDialog(editModal);
     }
 
     if (editModal) {
@@ -1292,15 +1288,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Focus is common.js's dialogOpened/dialogClosed: trapped inside while
     // open, returned to the Accept/Decline/Withdraw button on close.
     function openModal() {
-        modal.classList.add('active');
         // The note, not the confirm button: this dialog is a decision, and
         // landing on the control that commits it invites a stray Enter.
-        window.dialogOpened(modal, respondMessage);
+        window.showDialog(modal, respondMessage);
     }
 
     function closeModal() {
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
     }
 
     modal.querySelector('.close-modal').addEventListener('click', closeModal);

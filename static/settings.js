@@ -322,13 +322,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // focus in the tick the class lands. The helper retries until it can, and
     // traps Tab inside the dialog meanwhile.
     function openModal(modal, focusTarget) {
-        modal.classList.add('active');
-        window.dialogOpened(modal, focusTarget);
+        window.showDialog(modal, focusTarget);
     }
 
     function closeModal(modal) {
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
     }
 
     function openModals() {
@@ -475,73 +473,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     confirmNewPasswordInput.addEventListener('input',
         () => setPwFieldError(confirmNewPasswordInput, confirmNewPasswordError, ''));
 
-    // Same five checks app.py's password_problem() enforces server-side, in
-    // the same order pplogin.js's signup checklist uses -- restated here, as
-    // reset-password.js also does, rather than shared across the three pages
-    // that each need it for one form.
-    const SPECIAL_CHARS_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
+    // The checks, the score and the meter painter are password-field.js's,
+    // shared with the sign-up, claim and reset forms. The painter is kept so
+    // it can be run again after reset() empties the field, which fires no
+    // 'input' event.
+    const paintPasswordMeter = window.wirePasswordMeter(newPasswordInput);
 
-    function passwordChecks(password) {
-        return {
-            length: password.length >= 10,
-            lower: /[a-z]/.test(password),
-            upper: /[A-Z]/.test(password),
-            digit: /[0-9]/.test(password),
-            special: SPECIAL_CHARS_RE.test(password),
-        };
-    }
-
-    function passwordIsAcceptable(checks) {
-        return Object.values(checks).every(Boolean);
-    }
-
-    const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-    // The colors these four levels are drawn in live in settings.css, keyed
-    // off data-score. They were four hardcoded hex values assigned inline
-    // from here, which meant they could not follow the theme -- #dc2626 on
-    // the near-black page is 4.0:1, on the one label whose whole job is to be
-    // read at a glance.
-
-    function passwordStrength(password, checks) {
-        const satisfied = Object.values(checks).filter(Boolean).length;
-        let score;
-        if (satisfied <= 2) score = 1;
-        else if (satisfied === 3) score = 2;
-        else if (satisfied === 4) score = 3;
-        else score = password.length >= 14 ? 4 : 3;
-        return score;
-    }
-
-    const pwMeter = document.getElementById('pwMeter');
-    const pwMeterFill = document.getElementById('pwMeterFill');
-    const pwMeterLabel = document.getElementById('pwMeterLabel');
-    const pwChecklist = document.getElementById('pwChecklist');
-
-    function updatePasswordUI() {
-        const password = newPasswordInput.value;
-        const hasValue = password.length > 0;
-        pwMeter.hidden = !hasValue;
-        pwChecklist.hidden = !hasValue;
-        if (!hasValue) return;
-
-        const checks = passwordChecks(password);
-        pwChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
-            const met = Boolean(checks[item.dataset.rule]);
-            item.classList.toggle('met', met);
-            const icon = item.querySelector('i');
-            if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
-        });
-
-        const score = passwordStrength(password, checks);
-        pwMeter.dataset.score = String(score);
-        pwMeterFill.style.width = `${(score / 4) * 100}%`;
-        pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
-    }
-
-    newPasswordInput.addEventListener('input', () => {
-        updatePasswordUI();
-        setPwFieldError(newPasswordInput, newPasswordError, '');
-    });
+    newPasswordInput.addEventListener('input',
+        () => setPwFieldError(newPasswordInput, newPasswordError, ''));
 
     passwordForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -557,8 +496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'Enter your current password.');
             firstInvalid = currentPasswordInput;
         }
-        const checks = passwordChecks(newPassword);
-        if (!passwordIsAcceptable(checks)) {
+        if (!window.passwordAcceptable(newPassword)) {
             setPwFieldError(newPasswordInput, newPasswordError,
                 'Password does not meet the requirements below.');
             firstInvalid = firstInvalid || newPasswordInput;
@@ -582,10 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: { current_password: currentPassword, new_password: newPassword },
             });
             passwordForm.reset();
-            // Clears the meter/checklist too -- reset() empties the field but
-            // fires no 'input' event, so updatePasswordUI would not run.
-            pwMeter.hidden = true;
-            pwChecklist.hidden = true;
+            paintPasswordMeter();   // reset() fires no 'input' event
             // The server signs every other device out when the password
             // changes (see _end_other_sessions), which is the thing somebody
             // changing a password after a scare most wants to know happened.

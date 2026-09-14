@@ -116,79 +116,16 @@ function clearButtonLoading(btn) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // --- Password rules ------------------------------------------------------
-// Same five checks app.py's password_problem() enforces server-side, in the
-// same order the checklist below displays them. The server additionally
-// rejects a handful of common passwords and passwords containing the email
-// or org name -- not mirrored here, since duplicating a blocklist client-side
-// just to fail the same request twice adds no value; that feedback surfaces
-// through the banner instead if it is ever what trips someone up.
-const SPECIAL_CHARS_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
-
-function passwordChecks(password) {
-    return {
-        length: password.length >= 10,
-        lower: /[a-z]/.test(password),
-        upper: /[A-Z]/.test(password),
-        digit: /[0-9]/.test(password),
-        special: SPECIAL_CHARS_RE.test(password),
-    };
-}
-
-function passwordIsAcceptable(checks) {
-    return Object.values(checks).every(Boolean);
-}
-
-// A 1-4 heuristic, not a real entropy estimate: reaching "Strong" needs every
-// rule satisfied *and* real length margin above the 10-character floor, so
-// the meter rewards actually going further rather than just clearing the bar.
-const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-// The colors for these four levels live in pplogin.css, keyed off
-// data-score. They were four hardcoded hex values assigned inline from here,
-// which meant they could not follow the theme -- the same fix the settings
-// page's copy of this meter already has.
-
-function passwordStrength(password, checks) {
-    const satisfied = Object.values(checks).filter(Boolean).length;
-    let score;
-    if (satisfied <= 2) score = 1;
-    else if (satisfied === 3) score = 2;
-    else if (satisfied === 4) score = 3;
-    else score = password.length >= 14 ? 4 : 3;
-    return score;
-}
-
-// --- Password strength UI -------------------------------------------------
+// The five checks, the strength score and the meter painter are
+// password-field.js's, shared with settings, claim and reset. The server
+// additionally rejects a handful of common passwords and passwords
+// containing the email or org name -- not mirrored here, since duplicating
+// a blocklist client-side just to fail the same request twice adds no value;
+// that feedback surfaces through the field error instead.
 const pwInput = document.getElementById('register-password');
-const pwMeter = document.getElementById('pwMeter');
-const pwMeterFill = document.getElementById('pwMeterFill');
-const pwMeterLabel = document.getElementById('pwMeterLabel');
-const pwChecklist = document.getElementById('pwChecklist');
-
-function updatePasswordUI() {
-    const password = pwInput.value;
-    const hasValue = password.length > 0;
-
-    pwMeter.hidden = !hasValue;
-    pwChecklist.hidden = !hasValue;
-    if (!hasValue) return;
-
-    const checks = passwordChecks(password);
-
-    pwChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
-        const met = Boolean(checks[item.dataset.rule]);
-        item.classList.toggle('met', met);
-        const icon = item.querySelector('i');
-        if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
-    });
-
-    const score = passwordStrength(password, checks);
-    pwMeter.dataset.score = String(score);
-    pwMeterFill.style.width = `${(score / 4) * 100}%`;
-    pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
-}
 
 if (pwInput) {
-    pwInput.addEventListener('input', updatePasswordUI);
+    window.wirePasswordMeter(pwInput);
     // Clears whatever server-side password error is showing as soon as the
     // field changes, so it does not linger once the person starts fixing it.
     pwInput.addEventListener('input', () => {
@@ -237,8 +174,7 @@ registerForm.addEventListener('submit', async (e) => {
             'That does not look like a valid email address.');
     }
 
-    const checks = passwordChecks(password);
-    if (!passwordIsAcceptable(checks)) {
+    if (!window.passwordAcceptable(password)) {
         fail(pwInput, registerPasswordError,
             'Password does not meet the requirements below.');
     }

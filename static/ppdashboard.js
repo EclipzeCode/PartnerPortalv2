@@ -1076,14 +1076,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (el) el.disabled = false;
             });
         }
-        modal.classList.add('active');
-        window.dialogOpened(modal, document.getElementById('eventTitle'));
+        window.showDialog(modal, document.getElementById('eventTitle'));
     }
 
     function closeModal() {
         if (!modal) return;
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
     }
 
     // Wrapped: the handler receives a MouseEvent, which would arrive as the
@@ -1360,21 +1358,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             `${day}, ${eventTimeLabel(event)} \u00b7 with ${event.partner}`;
 
         confirmDeleteBtn.disabled = false;
-        confirmDeleteModal.classList.add('active');
         // Focused on the confirm button, matching the account-delete dialog in
         // settings.js. Escape and Cancel are both one key away either way.
-        window.dialogOpened(confirmDeleteModal, confirmDeleteBtn);
+        window.showDialog(confirmDeleteModal, confirmDeleteBtn);
     }
 
     function closeDeleteConfirm() {
         if (!confirmDeleteModal) return;
         pendingDeleteId = null;
         pendingDeleteOccurrence = null;
-        confirmDeleteModal.classList.remove('active');
         // The scroll lock is dialogClosed's: it lets go only when the last
         // open dialog closes, so this can be opened from inside the stat
         // dialog and leave it held still.
-        window.dialogClosed(confirmDeleteModal);
+        window.hideDialog(confirmDeleteModal);
     }
 
     if (confirmDeleteModal) {
@@ -2022,23 +2018,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const wasOpen = statModal.classList.contains('active');
         statView = view;
         statDetail = detail || null;
-        statModal.classList.add('active');
-        renderStat();
         // Only on the way in: reopening a view while the dialog is already
         // up would otherwise record a row that is about to be repainted away
-        // as the control to return to.
+        // as the control to return to. dialogOpened ignores a repeat anyway;
+        // the class is what has to be there before renderStat paints.
         if (!wasOpen) {
-            window.dialogOpened(statModal, document.getElementById('statClose'));
+            window.showDialog(statModal, document.getElementById('statClose'));
         }
+        renderStat();
         if (view === 'matches' || view === 'mutual') ensureMatches();
         if (view === 'saved') ensureSaved();
     }
 
     function closeStat() {
         if (!statModal) return;
-        statModal.classList.remove('active');
         statDetail = null;
-        window.dialogClosed(statModal);
+        window.hideDialog(statModal);
     }
 
     document.querySelectorAll('.stat-card[data-stat]').forEach((card) => {

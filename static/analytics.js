@@ -746,14 +746,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // under a segment that is plainly not empty.
             : '<p class="chart-empty">Nothing to show here — the list may have '
               + 'changed since this page loaded. Reload to see it.</p>';
-        stageModal.classList.add('active');
-        window.dialogOpened(stageModal, stageModal.querySelector('.close-modal'));
+        window.showDialog(stageModal, stageModal.querySelector('.close-modal'));
     }
 
     function closeStage() {
         if (!stageModal) return;
-        stageModal.classList.remove('active');
-        window.dialogClosed(stageModal);
+        window.hideDialog(stageModal);
     }
 
     if (stageModal) {

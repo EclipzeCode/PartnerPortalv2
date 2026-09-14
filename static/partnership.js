@@ -7,14 +7,7 @@
 (async function () {
     const card = document.getElementById('agreementCard');
 
-    function esc(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    const esc = window.escapeHtml;
 
     const token = new URLSearchParams(location.search).get('token');
     if (!token) {

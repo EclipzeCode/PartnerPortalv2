@@ -99,4 +99,78 @@ function wirePasswordToggles(root = document) {
 
 window.wirePasswordToggles = wirePasswordToggles;
 
+// --- The rules, and the meter that shows them ------------------------------
+//
+// The same five checks app.py's password_problem() enforces, in the same
+// order every checklist lists them, in one place. They used to be restated
+// in pplogin.js, settings.js, claim.js and reset-password.js -- four copies
+// of a regex and a scoring table that had to agree with each other and with
+// the server, and could only drift. This file is already what those four
+// pages share.
+const PASSWORD_SPECIAL_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
+const PASSWORD_STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
+
+function passwordChecks(password) {
+    return {
+        length: password.length >= 10,
+        lower: /[a-z]/.test(password),
+        upper: /[A-Z]/.test(password),
+        digit: /[0-9]/.test(password),
+        special: PASSWORD_SPECIAL_RE.test(password),
+    };
+}
+
+function passwordAcceptable(password) {
+    return Object.values(passwordChecks(password)).every(Boolean);
+}
+
+// 1-4. All five rules met is Good; Strong needs fourteen characters on top.
+function passwordStrength(password, checks = passwordChecks(password)) {
+    const satisfied = Object.values(checks).filter(Boolean).length;
+    if (satisfied <= 2) return 1;
+    if (satisfied === 3) return 2;
+    if (satisfied === 4) return 3;
+    return password.length >= 14 ? 4 : 3;
+}
+
+// Keeps a meter and checklist in step with an input. The elements are the
+// four ids every page's markup already uses; the colors for the four
+// levels live in CSS, keyed off data-score. Returns the painter so a page
+// can call it again after a reset.
+function wirePasswordMeter(input, {
+    meter = document.getElementById('pwMeter'),
+    fill = document.getElementById('pwMeterFill'),
+    label = document.getElementById('pwMeterLabel'),
+    checklist = document.getElementById('pwChecklist'),
+} = {}) {
+    function paint() {
+        const password = input.value;
+        const hasValue = password.length > 0;
+        if (meter) meter.hidden = !hasValue;
+        if (checklist) checklist.hidden = !hasValue;
+        if (!hasValue) return;
+
+        const checks = passwordChecks(password);
+        if (checklist) {
+            checklist.querySelectorAll('li[data-rule]').forEach((item) => {
+                const met = Boolean(checks[item.dataset.rule]);
+                item.classList.toggle('met', met);
+                const icon = item.querySelector('i');
+                if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
+            });
+        }
+        const score = passwordStrength(password, checks);
+        if (meter) meter.dataset.score = String(score);
+        if (fill) fill.style.width = `${(score / 4) * 100}%`;
+        if (label) label.textContent = PASSWORD_STRENGTH_LABELS[score - 1];
+    }
+    input.addEventListener('input', paint);
+    return paint;
+}
+
+window.passwordChecks = passwordChecks;
+window.passwordAcceptable = passwordAcceptable;
+window.passwordStrength = passwordStrength;
+window.wirePasswordMeter = wirePasswordMeter;
+
 document.addEventListener('DOMContentLoaded', () => wirePasswordToggles());

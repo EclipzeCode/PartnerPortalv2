@@ -22,13 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function open() {
         setMessage('');
-        modal.classList.add('active');
-        window.dialogOpened(modal);
+        window.showDialog(modal);
     }
 
     function close() {
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
     }
 
     // Every button that asks for this form, rather than one id: the home page

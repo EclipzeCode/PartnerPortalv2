@@ -12,14 +12,7 @@
 (async function () {
     const card = document.getElementById('orgCard');
 
-    function esc(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    const esc = window.escapeHtml;
 
     const id = new URLSearchParams(location.search).get('id');
     if (!id || !/^\d+$/.test(id)) {

@@ -736,14 +736,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // returned to whatever opened it on close.
     function openModal(modal, preferred) {
         if (!modal) return;
-        modal.classList.add('active');
-        window.dialogOpened(modal, preferred);
+        window.showDialog(modal, preferred);
     }
 
     function closeModal(modal) {
         if (!modal) return;
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
         if (modal === detailModal) writeUrl();
     }
 

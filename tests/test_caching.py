@@ -154,7 +154,7 @@ def test_scripts_are_bundled_into_one_request(client):
     body = response.get_data(as_text=True)
 
     members = re.findall(r'/\* --- (\S+) --- \*/', body)
-    assert members == ["csrf.js", "common.js", "notifications.js",
+    assert members == ["base.js", "common.js", "notifications.js",
                        "ppdashboard.js", "proposals.js", "invites.js"], members
 
     # Named by its contents, so it can be kept for a year.
@@ -165,7 +165,7 @@ def test_a_lone_script_is_stamped_not_bundled():
     """A run of one is already one request.
 
     No page ships a single script any more -- every standalone page loads
-    csrf.js beside its own -- so the run-of-one path is exercised on a
+    base.js beside its own -- so the run-of-one path is exercised on a
     fragment of markup rather than on a page. The property is the bundler's,
     not any page's: one script is left alone and then stamped individually,
     which is also what proves stamping works for scripts that never reach a

@@ -1,17 +1,23 @@
-// Reading this session's CSRF token back out of the cookie the server set.
+// The small script every page shares -- including the standalone ones
+// (claim, the token pages, the public profile and agreement) that do not
+// load common.js because they have no nav to wire. Three things live here
+// because all of those pages need them and each used to carry its own copy:
 //
-// The server mints a token into the signed session and publishes a readable
-// copy as `pp_csrf` (see send_csrf_cookie in app.py). Every state-changing
-// request has to echo it back in the X-CSRF-Token header; a cross-site page
-// cannot, because the same-origin policy will not let it read this cookie.
+//   csrfToken / csrfHeaders  -- reading this session's CSRF token back out
+//                               of the cookie the server set. The server
+//                               mints a token into the signed session and
+//                               publishes a readable copy as `pp_csrf` (see
+//                               send_csrf_cookie in app.py); every
+//                               state-changing request echoes it in the
+//                               X-CSRF-Token header, which a cross-site page
+//                               cannot do because it cannot read the cookie.
+//   timedFetch               -- fetch() with a ceiling on how long it may
+//                               hang; see the note at its definition.
+//   escapeHtml               -- the one escaper, for anything that goes near
+//                               innerHTML. It was defined in common.js and
+//                               redefined by hand in six standalone scripts.
 //
-// Its own file rather than a function inside common.js, because the pages
-// that most need it are the ones that do not load common.js. claim.html,
-// confirm-email.html and reset-password.html are deliberately standalone --
-// they are reached from a link in an email by somebody who may not be signed
-// in, and they have no nav to wire up -- but they all POST. Three inline
-// copies of a cookie parser is how one of them ends up subtly different from
-// the other two.
+// This file was csrf.js until the second and third arrived.
 
 (() => {
     const COOKIE = 'pp_csrf';
@@ -63,5 +69,16 @@
     window.csrfHeaders = function csrfHeaders(extra = {}) {
         const token = window.csrfToken();
         return token ? { ...extra, 'X-CSRF-Token': token } : { ...extra };
+    };
+
+    // Escapes text before it goes anywhere near innerHTML. Organization
+    // names, descriptions and messages are all user-supplied.
+    window.escapeHtml = function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     };
 })();

@@ -857,15 +857,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clearModal = document.getElementById('clearConfirmModal');
 
   function openClearModal() {
-    clearModal.classList.add('active');
     // Focus lands on Cancel, not the destructive confirm: this dialog exists
     // because clearing cannot be undone, so a stray Enter should do nothing.
-    window.dialogOpened(clearModal, document.getElementById('clearCancelBtn'));
+    window.showDialog(clearModal, document.getElementById('clearCancelBtn'));
   }
 
   function closeClearModal() {
-    clearModal.classList.remove('active');
-    window.dialogClosed(clearModal);
+    window.hideDialog(clearModal);
   }
 
   function doClear() {

@@ -93,14 +93,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (emailInput) setError('', emailInput, emailError);
         result.hidden = true;
         form.reset();
-        modal.classList.add('active');
-        window.dialogOpened(modal, nameInput);
+        window.showDialog(modal, nameInput);
         loadOutstanding();
     });
 
     function close() {
-        modal.classList.remove('active');
-        window.dialogClosed(modal);
+        window.hideDialog(modal);
     }
 
     modal.querySelector('.close-modal').addEventListener('click', close);

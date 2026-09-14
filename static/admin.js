@@ -521,15 +521,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             hideReason.value = '';
             showError(hideError, '');
             hideModal.hidden = false;
-            hideModal.classList.add('active');
-            window.dialogOpened(hideModal, hideReason);
+            window.showDialog(hideModal, hideReason);
         }
     });
 
     function closeHide() {
-        hideModal.classList.remove('active');
+        window.hideDialog(hideModal);
         hideModal.hidden = true;
-        window.dialogClosed(hideModal);
         pendingHideId = null;
     }
 

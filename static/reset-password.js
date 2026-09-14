@@ -9,14 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.getElementById('resetCard');
     const token = new URLSearchParams(location.search).get('token');
 
-    function esc(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    const esc = window.escapeHtml;
 
     function showStatus(icon, tone, title, body) {
         card.innerHTML = `
@@ -35,43 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     renderForm();
-
-    // --- Password rules -----------------------------------------------------
-    // Same five checks app.py's password_problem() enforces, in the same
-    // order pplogin.js's signup checklist uses, restated here rather than
-    // shared across files per that file's own note on why: duplicating a
-    // dozen lines is simpler than a shared module two pages reach for.
-    const SPECIAL_CHARS_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
-
-    function passwordChecks(password) {
-        return {
-            length: password.length >= 10,
-            lower: /[a-z]/.test(password),
-            upper: /[A-Z]/.test(password),
-            digit: /[0-9]/.test(password),
-            special: SPECIAL_CHARS_RE.test(password),
-        };
-    }
-
-    function passwordIsAcceptable(checks) {
-        return Object.values(checks).every(Boolean);
-    }
-
-    const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-    // The colors for these four levels live in notice.css, keyed off
-    // data-score. They were four hardcoded hex values assigned inline from
-    // here, which meant they could not follow the theme -- the third copy of
-    // this meter to be fixed the same way, after settings and sign-up.
-
-    function passwordStrength(password, checks) {
-        const satisfied = Object.values(checks).filter(Boolean).length;
-        let score;
-        if (satisfied <= 2) score = 1;
-        else if (satisfied === 3) score = 2;
-        else if (satisfied === 4) score = 3;
-        else score = password.length >= 14 ? 4 : 3;
-        return score;
-    }
 
     function renderForm() {
         card.innerHTML = `
@@ -132,11 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const banner = document.getElementById('formBanner');
         const submitBtn = document.getElementById('submitBtn');
 
-        const pwMeter = document.getElementById('pwMeter');
-        const pwMeterFill = document.getElementById('pwMeterFill');
-        const pwMeterLabel = document.getElementById('pwMeterLabel');
-        const pwChecklist = document.getElementById('pwChecklist');
-
         function setBanner(message, tone) {
             banner.textContent = message || '';
             banner.className = 'form-banner' + (tone ? ` ${tone}` : '');
@@ -148,31 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
             input.classList.toggle('input-error', Boolean(message));
         }
 
-        function updatePasswordUI() {
-            const password = pwInput.value;
-            const hasValue = password.length > 0;
-            pwMeter.hidden = !hasValue;
-            pwChecklist.hidden = !hasValue;
-            if (!hasValue) return;
-
-            const checks = passwordChecks(password);
-            pwChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
-                const met = Boolean(checks[item.dataset.rule]);
-                item.classList.toggle('met', met);
-                const icon = item.querySelector('i');
-                if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
-            });
-
-            const score = passwordStrength(password, checks);
-            pwMeter.dataset.score = String(score);
-            pwMeterFill.style.width = `${(score / 4) * 100}%`;
-            pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
-        }
-
-        pwInput.addEventListener('input', () => {
-            updatePasswordUI();
-            setFieldError(pwInput, pwError, '');
-        });
+        // The rules, score and meter are password-field.js's; the form is
+        // rendered after load, so the meter is wired here.
+        window.wirePasswordMeter(pwInput);
+        pwInput.addEventListener('input', () => setFieldError(pwInput, pwError, ''));
         confirmInput.addEventListener('input', () => setFieldError(confirmInput, confirmError, ''));
 
         form.addEventListener('submit', async (e) => {
@@ -185,8 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const confirm = confirmInput.value;
 
             let firstInvalid = null;
-            const checks = passwordChecks(password);
-            if (!passwordIsAcceptable(checks)) {
+            if (!window.passwordAcceptable(password)) {
                 setFieldError(pwInput, pwError, 'Password does not meet the requirements below.');
                 firstInvalid = pwInput;
             } else if (password !== confirm) {

@@ -14,14 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.getElementById('claimCard');
     const token = new URLSearchParams(location.search).get('token');
 
-    function esc(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    const esc = window.escapeHtml;
 
     function showMessage(title, body, cta) {
         card.innerHTML = `
@@ -31,32 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    // Same five rules app.py's password_problem() enforces, in the order the
-    // checklist below shows them -- the third copy of this on the site, and
-    // deliberately identical to the other two so a password accepted on one
-    // page is accepted on all of them.
-    const SPECIAL_CHARS_RE = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    function passwordChecks(password) {
-        return {
-            length: password.length >= 10,
-            lower: /[a-z]/.test(password),
-            upper: /[A-Z]/.test(password),
-            digit: /[0-9]/.test(password),
-            special: SPECIAL_CHARS_RE.test(password),
-        };
-    }
-
-    const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'];
-
-    function passwordStrength(password, checks) {
-        const satisfied = Object.values(checks).filter(Boolean).length;
-        if (satisfied <= 2) return 1;
-        if (satisfied === 3) return 2;
-        if (satisfied === 4) return 3;
-        return password.length >= 14 ? 4 : 3;
-    }
 
     function renderForm(invite) {
         // Who sent it, said first. An invitation from nobody in particular is
@@ -136,10 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const banner = document.getElementById('formBanner');
         const submitBtn = document.getElementById('submitBtn');
 
-        const pwMeter = document.getElementById('pwMeter');
-        const pwMeterFill = document.getElementById('pwMeterFill');
-        const pwMeterLabel = document.getElementById('pwMeterLabel');
-        const pwChecklist = document.getElementById('pwChecklist');
 
         function setFieldError(input, errorEl, message) {
             if (errorEl) errorEl.textContent = message || '';
@@ -155,28 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
             banner.hidden = !message;
         }
 
+        // The rules, score and meter are password-field.js's; the form is
+        // rendered after load, so the meter is wired here rather than on
+        // DOMContentLoaded.
+        window.wirePasswordMeter(pwInput);
         pwInput.addEventListener('input', () => {
-            const password = pwInput.value;
-            const has = password.length > 0;
-            pwMeter.hidden = !has;
-            pwChecklist.hidden = !has;
             if (pwInput.classList.contains('input-error')) {
                 setFieldError(pwInput, pwError, '');
             }
-            if (!has) return;
-
-            const checks = passwordChecks(password);
-            pwChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
-                const met = Boolean(checks[item.dataset.rule]);
-                item.classList.toggle('met', met);
-                const icon = item.querySelector('i');
-                if (icon) icon.className = met ? 'bx bx-check-circle' : 'bx bx-circle';
-            });
-
-            const score = passwordStrength(password, checks);
-            pwMeter.dataset.score = String(score);
-            pwMeterFill.style.width = `${(score / 4) * 100}%`;
-            pwMeterLabel.textContent = STRENGTH_LABELS[score - 1];
         });
 
         form.addEventListener('submit', async (e) => {
@@ -205,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 fail(emailInput, emailError,
                     'That does not look like a valid email address.');
             }
-            if (!Object.values(passwordChecks(password)).every(Boolean)) {
+            if (!window.passwordAcceptable(password)) {
                 fail(pwInput, pwError,
                     'Password does not meet the requirements below.');
             }

@@ -206,17 +206,7 @@ window.api = async function api(path, options = {}) {
     return data;
 };
 
-// Escapes text before it goes anywhere near innerHTML. Organization names and
-// notes are user-supplied, so this is the difference between a profile and
-// stored XSS.
-window.escapeHtml = function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-};
+// window.escapeHtml is base.js's, which every page loads ahead of this one.
 
 // --- Toasts -----------------------------------------------------------
 // Several actions here succeed by navigating: sending a proposal lands you on
@@ -464,6 +454,25 @@ window.dialogClosed = function dialogClosed(modal) {
     // closes -- confirming a proposal or removing a meeting re-renders the
     // list its button was in.
     if (state.opener && document.contains(state.opener)) state.opener.focus();
+};
+
+// Showing and hiding a dialog is the same two lines on every page -- toggle
+// the class the stylesheet keys on, then tell the focus/scroll bookkeeping
+// above -- and every page wrote them itself, in a dozen open/close pairs
+// that differed only in the name of the modal. These are those two lines,
+// once. Pages keep their own thin wrappers where they add something (the
+// search page rewrites the URL on close; the dashboard clears its pending
+// delete), and call these from them.
+window.showDialog = function showDialog(modal, preferred) {
+    if (!modal) return;
+    modal.classList.add('active');
+    window.dialogOpened(modal, preferred);
+};
+
+window.hideDialog = function hideDialog(modal) {
+    if (!modal) return;
+    modal.classList.remove('active');
+    window.dialogClosed(modal);
 };
 
 // --- Character counters ------------------------------------------------

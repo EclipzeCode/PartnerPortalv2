@@ -9,14 +9,7 @@
 (async function () {
     const card = document.getElementById('verifyCard');
 
-    function esc(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    const esc = window.escapeHtml;
 
     function show(icon, tone, title, body) {
         card.innerHTML = `
