@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="The terms on which organizations use PartnerPortal: who may use it, what they may do on it, what the agreements it records are and are not, and how the service may change.">
+    <!-- Every stylesheet and font on this page is served from here.
+         The Google Fonts and unpkg <link>s that used to sit at the end
+         of this head, and the three preconnects that existed to warm
+         them, are gone -- see fonts.css and boxicons.css. -->
+    <title>Terms of use | PartnerPortal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <!-- SVG first for anything modern (one file, sharp at every size); the
+         .ico is the legacy fallback and is also what a bare /favicon.ico
+         request gets. -->
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Three states: an explicit choice stored by
+         the control in Settings wins, and with nothing stored the operating
+         system decides.
+
+         This resolves to a real answer and always sets the attribute, rather
+         than leaving the light case unset and letting a prefers-color-scheme
+         block in the CSS carry it. There are seven dark rules across five
+         stylesheets, two of them inside print blocks that are load-bearing on
+         specificity -- a parallel copy of each under a media query is the
+         version of this that silently rots when one of them is edited and its
+         twin is not. Resolving here means every one of those rules stays an
+         ordinary [data-theme="dark"] match and none of them had to change.
+
+         The listener keeps a system choice honest if the OS flips while the
+         page is open; an explicit choice ignores it. -->
+    <script>
+      (function () {
+        var mq = window.matchMedia
+          && window.matchMedia('(prefers-color-scheme: dark)');
+        function chosen() {
+          try {
+            var v = localStorage.getItem('partnerPortalTheme');
+            return v === 'dark' || v === 'light' ? v : null;
+          } catch (e) {
+            return null; /* storage disabled; the OS still gets a say */
+          }
+        }
+        function apply() {
+          document.documentElement.setAttribute(
+            'data-theme', chosen() || (mq && mq.matches ? 'dark' : 'light'));
+        }
+        apply();
+        if (mq && mq.addEventListener) {
+          mq.addEventListener('change', function () { if (!chosen()) apply(); });
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="tokens.css">
+    <!-- The redesign's shared layer: palette, type, buttons, controls, nav,
+         footer. Between tokens.css and the page stylesheets, so those can
+         override it. -->
+    <link rel="stylesheet" href="ink.css">
+    <link rel="stylesheet" href="pphelp.css">
+    <link rel="stylesheet" href="shared.css">
+    <!-- The canonical control and modal stylesheet. Needed here since the
+         contact form moved onto this page. -->
+    <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="nav.css">
+    <link rel="stylesheet" href="boxicons.css">
+    <link rel="stylesheet" href="fonts.css">
+</head>
+<body class="ink">
+    <a class="skip-link" href="#main">Skip to main content</a>
+<!-- Navigation Bar -->
+    <header class="header">
+        <a href="index.html" class="logo">PartnerPortal</a>
+        <button type="button" class="bx bx-menu" id="menu-icon"
+                aria-label="Menu" aria-expanded="false"></button>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="directory.html">Connect</a>
+            <a href="ppdashboard.html">Dashboard</a>
+            <!-- Account slot. Both states ship in the markup and share one grid
+                 cell (nav.css), so the bar reserves the CTA's width either way and
+                 signing in never shifts the links. common.js picks the state. -->
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <a href="pplogin.html" class="nav-auth-cta">Login <span class="cta-sep">|</span> Create Account</a>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="analytics.html"><i class='bx bx-line-chart'></i> Analytics</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <a href="pphelp.html"><i class='bx bx-help-circle'></i> Help</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="help-main" id="main" tabindex="-1">
+        <div class="help-head">
+            <p class="eyebrow">Terms of use</p>
+            <h1>The terms on which PartnerPortal is offered</h1>
+            <p class="help-lede">
+                Plain language on purpose. The Privacy page says what is stored
+                and who sees it; this page says what you are agreeing to by
+                using the site. Where a sentence depends on a fact about the
+                operator rather than on how the software works, it is marked
+                <mark class="legal-todo">[like this]</mark> and has to be filled in and reviewed before
+                this page is published.
+            </p>
+            <p class="help-aside">
+                Effective <mark class="legal-todo">[DATE]</mark>. Earlier versions: none.
+            </p>
+        </div>
+
+        <nav class="help-toc" aria-label="On this page">
+            <a href="#who">Who we are</a>
+            <a href="#eligibility">Who may use it</a>
+            <a href="#account">Your account</a>
+            <a href="#conduct">What you may not do</a>
+            <a href="#content">Your profile and content</a>
+            <a href="#agreements">Matches and agreements</a>
+            <a href="#service">The service itself</a>
+            <a href="#ending">Ending things</a>
+            <a href="#legal">Law and liability</a>
+            <a href="#changes">Changes to these terms</a>
+        </nav>
+
+        <section class="help-section" id="who">
+            <h2>Who we are</h2>
+            <p>
+                PartnerPortal is operated by <mark class="legal-todo">[LEGAL ENTITY NAME]</mark>,
+                <mark class="legal-todo">[entity type and registration, e.g. a nonprofit corporation registered in STATE, number 00000]</mark>,
+                at <mark class="legal-todo">[POSTAL ADDRESS]</mark>. "We" and "us" on this page means that
+                entity. You can reach us through the contact form on any page
+                or at <mark class="legal-todo">[CONTACT EMAIL]</mark>.
+            </p>
+        </section>
+
+        <section class="help-section" id="eligibility">
+            <h2>Who may use it</h2>
+            <dl class="help-defs">
+                <dt>Organizations, through people</dt>
+                <dd>
+                    An account on PartnerPortal <em>is</em> an organization. By
+                    creating one you confirm that you are authorized to act for
+                    that organization &mdash; to describe it, to propose
+                    partnerships in its name, and to accept them. What you
+                    agree to here, you agree to on its behalf as well as your
+                    own.
+                </dd>
+                <dt>Age</dt>
+                <dd>
+                    You must be at least <mark class="legal-todo">[MINIMUM AGE, e.g. 18]</mark> to
+                    create or operate an account.
+                </dd>
+                <dt>One account per organization</dt>
+                <dd>
+                    Each organization has one profile. If your organization was
+                    invited and a profile already exists for it, claim that one
+                    rather than creating another. We may merge or remove
+                    duplicates.
+                </dd>
+            </dl>
+        </section>
+
+        <section class="help-section" id="account">
+            <h2>Your account</h2>
+            <p>
+                You are responsible for keeping your password to yourself and
+                for what is done from your account. If you think someone else
+                has it, change it from Settings &mdash; that signs every other
+                device out &mdash; or use the password reset, and tell us.
+            </p>
+            <p>
+                We send email about the account itself (verification, resets,
+                security notices) whether or not you have turned off
+                notifications about partnership activity, because that is how
+                you keep control of it.
+            </p>
+        </section>
+
+        <section class="help-section" id="conduct">
+            <h2>What you may not do</h2>
+            <p>
+                The site exists so that small organizations can find each
+                other and agree to trade something real. Anything that works
+                against that is out. In particular, you may not:
+            </p>
+            <ul class="help-list">
+                <li>Describe an organization you do not represent, or describe yours in a way you know to be false.</li>
+                <li>Use the name of another organization or person in a way meant to mislead.</li>
+                <li>Collect other organizations' contact details from the site for any purpose other than the partnership you are proposing to them, or in bulk by any means.</li>
+                <li>Use proposals, messages, invitations or the contact form to send advertising, solicitations unrelated to a partnership, or repeated unwanted contact.</li>
+                <li>Harass, threaten or demean anyone through the site.</li>
+                <li>Work around the limits the site places on how often something can be done, or probe it for weaknesses without our written permission.</li>
+                <li>Use the site for anything unlawful.</li>
+            </ul>
+        </section>
+
+        <section class="help-section" id="content">
+            <h2>Your profile and content</h2>
+            <dl class="help-defs">
+                <dt>It stays yours</dt>
+                <dd>
+                    What you write &mdash; your profile, your messages, the
+                    terms you propose &mdash; remains yours. You give us
+                    permission to store it and show it as the site works: your
+                    profile to other organizations and, in the public parts, to
+                    anyone; your messages to the organization you sent them to;
+                    an agreement's terms to the other party and, once accepted,
+                    to anyone holding the agreement's link. We do not sell it
+                    or use it for advertising.
+                </dd>
+                <dt>We may take a profile out of the directory</dt>
+                <dd>
+                    If a profile breaks the rules above, or a name is not one
+                    we can show, we may remove it from the directory and from
+                    match results. You are told the reason by email, you can
+                    still sign in, and any partnership you have already agreed
+                    is unaffected. We may close an account outright for
+                    repeated or serious misuse.
+                </dd>
+            </dl>
+        </section>
+
+        <section class="help-section" id="agreements">
+            <h2>Matches and agreements</h2>
+            <dl class="help-defs">
+                <dt>A match is a ranking, not a recommendation</dt>
+                <dd>
+                    Matching compares what two profiles say they need and
+                    offer. We do not verify what any organization says about
+                    itself, and a high score is not a statement by us that an
+                    organization is who it says it is or will do what it
+                    offers. Look before you agree, as you would anywhere.
+                </dd>
+                <dt>An agreement summary is a record, not a contract</dt>
+                <dd>
+                    When both organizations accept a proposal, the site
+                    records the terms each side committed to and makes a
+                    summary page that either side can share. That page says
+                    what was agreed on PartnerPortal. It is not a contract
+                    drafted by us, we are not a party to it, and whether it
+                    is enforceable between the two organizations is a matter
+                    for them and for the law that applies to them. If you
+                    need a binding agreement, make one.
+                </dd>
+                <dt>Delivery is between the two of you</dt>
+                <dd>
+                    PartnerPortal does not perform, supervise or guarantee any
+                    part of a partnership. Whether an organization provides
+                    what it committed to is its responsibility, and any
+                    dispute about it is between the organizations involved.
+                    Each side may record whether the other delivered; that
+                    record is visible only to the two of you and is not a
+                    finding by us.
+                </dd>
+            </dl>
+        </section>
+
+        <section class="help-section" id="service">
+            <h2>The service itself</h2>
+            <p>
+                PartnerPortal is free to use. It is offered as it is, without
+                a promise that it will always be available, that matching
+                will find anyone, or that it will be free of errors. We may
+                change how it works, add or remove features, or stop offering
+                it. If we stop, we will give <mark class="legal-todo">[NOTICE PERIOD, e.g. 30 days]</mark>
+                notice by email to the address on your account and give you a
+                way to get a copy of your organization's data before it goes.
+            </p>
+            <p class="help-aside">
+                The application runs on Render and the database on Neon;
+                their availability is theirs to promise, not ours.
+            </p>
+        </section>
+
+        <section class="help-section" id="ending">
+            <h2>Ending things</h2>
+            <p>
+                You can delete your account from Settings at any time. The
+                Privacy page says exactly what goes and what stays: in short,
+                everything of yours goes, except that an agreement the other
+                organization also accepted remains on their record with your
+                organization's name as it was, because it is their record too.
+            </p>
+            <p>
+                We may suspend or close an account that breaks these terms.
+                Where we can, we will say why first.
+            </p>
+        </section>
+
+        <section class="help-section" id="legal">
+            <h2>Law and liability</h2>
+            <p class="help-aside">
+                <mark class="legal-todo">[COUNSEL REVIEW REQUIRED. The two paragraphs below are a plain-language placeholder for the disclaimer, limitation of liability and governing-law clauses. Their enforceable wording depends on the jurisdiction chosen and should be written or approved by a lawyer.]</mark>
+            </p>
+            <p>
+                To the extent the law allows, we are not liable for what any
+                organization does or fails to do in a partnership arranged
+                through the site, for anything an organization says about
+                itself, or for loss arising from the site being unavailable or
+                behaving wrongly. Where liability cannot be excluded, it is
+                limited to <mark class="legal-todo">[LIMIT, e.g. the greater of $100 or the amount you paid us in the past twelve months (which is nothing)]</mark>.
+            </p>
+            <p>
+                These terms are governed by the law of <mark class="legal-todo">[STATE / COUNTRY]</mark>,
+                and any dispute about them or about the site is to be brought
+                in the courts of <mark class="legal-todo">[VENUE]</mark>, unless the law where you are
+                gives you a right that cannot be taken away by this paragraph.
+            </p>
+        </section>
+
+        <section class="help-section" id="changes">
+            <h2>Changes to these terms</h2>
+            <p>
+                If we change these terms in a way that matters, we will email
+                the address on your account at least <mark class="legal-todo">[NOTICE PERIOD, e.g. 14 days]</mark>
+                before the change takes effect and say what changed. Continuing
+                to use the site after that date is agreement to the new terms;
+                if you do not agree, delete your account before then. The
+                effective date at the top of this page is always the current
+                one.
+            </p>
+        </section>
+
+        <section class="help-section help-contact">
+            <h2>Questions?</h2>
+            <p>
+                If anything here is unclear, ask before you rely on it.
+            </p>
+            <button type="button" class="btn-primary" data-contact-open>
+                <i class='bx bx-envelope'></i> Contact us
+            </button>
+        </section>
+    </main>
+
+    <div id="contact-modal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true">
+            <div class="modal-header">
+                <h2>Get in touch</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">Tell us about your organization and what you are hoping to find in a partner &mdash; or ask us anything about how PartnerPortal works. We read every message.</p>
+                <form id="contactForm">
+                    <div class="form-group">
+                        <label for="contactName">Your name</label>
+                        <input type="text" id="contactName" maxlength="255" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmail">Email</label>
+                        <input type="email" id="contactEmail" maxlength="255" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactPhone">Phone <span class="optional">(optional)</span></label>
+                        <input type="tel" id="contactPhone" maxlength="64">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactMessage">How can we help?</label>
+                        <textarea id="contactMessage" rows="4" maxlength="4000" required></textarea>
+                    </div>
+                    <!-- Honeypot, same as the signup form: named to look worth
+                         filling in to a bot, hidden from real visitors by
+                         position rather than display:none (see .hp-field in
+                         forms.css), and never touched by a person. Any value
+                         here means a script filled every field it found. -->
+                    <div class="hp-field" aria-hidden="true">
+                        <label for="contactWebsite">Leave this field blank</label>
+                        <input type="text" id="contactWebsite" name="website" tabindex="-1" autocomplete="off">
+                    </div>
+
+                    <button type="submit" class="btn-primary">Send message</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+<footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <span class="footer-brand-name">PartnerPortal</span>
+                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="pplogin.html#signup">Get Started</a></li>
+                    <li><a href="directory.html">Find Partners</a></li>
+                    <li><a href="pphelp.html">Help</a></li>
+                    <li><a href="privacy.html">Privacy</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="pplogin.html">Log In</a></li>
+                    <li><a href="pplogin.html#signup">Create Account</a></li>
+                    <li><a href="ppdashboard.html">Dashboard</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <span>Built for organizations that lift each other up.</span>
+        </div>
+    </footer>
+
+    <script src="base.js"></script>
+
+    <script src="common.js"></script>
+    <script src="notifications.js"></script>
+    <script src="contact.js"></script>
+</body>
+</html>
