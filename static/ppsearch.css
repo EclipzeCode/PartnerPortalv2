@@ -387,6 +387,18 @@
     color: var(--h-ink);
 }
 
+/* The scale. A bare "92" read as a percentage -- the landing page even
+   wrote one -- and a score is a sum of points capped at 100, not a share
+   of anything. Said the same way everywhere a score appears. */
+.partner-score small {
+    margin-left: 0.1rem;
+    font-family: var(--h-mono);
+    font-size: 0.62rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--h-dim);
+}
+
 /* Browse lists organizations that have nothing to exchange with you, which
    matches never did. A bare 0 reads as a judgment on them rather than on the
    pairing, so ppsearch.js writes an em dash instead. */

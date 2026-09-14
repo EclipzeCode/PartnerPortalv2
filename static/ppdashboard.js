@@ -121,6 +121,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // two-way yet", "shortlisted", "none yet" -- is gone: it was a caption on
     // a number that had not been asked about yet, and five of them made a row
     // of readings read as a paragraph.
+    const inviter = dashboard.invited_by;
+    const inviterBanner = document.getElementById('inviterBanner');
+    if (inviterBanner && inviter && !dashboard.needs_onboarding) {
+        document.getElementById('inviterName').textContent = inviter.name;
+        document.getElementById('inviterProfile').href =
+            `organization.html?id=${encodeURIComponent(inviter.id)}`;
+        document.getElementById('inviterPropose').href =
+            `ppsearch.html?org=${encodeURIComponent(inviter.id)}&propose=1`;
+        inviterBanner.hidden = false;
+    }
+
     setStat('statMatches', stats.total_matches);
     setStat('statProfileTags', stats.needs_count + stats.offers_count);
     setStat('savedLeadsCount', stats.saved || 0);
@@ -532,12 +543,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         partnerSelect.innerHTML = '<option value="">Select a partner</option>';
 
         const seen = new Set();
-        const addOption = (id, name) => {
+        const addOption = (id, name, note) => {
             if (!name || seen.has(String(id))) return;
             seen.add(String(id));
             const opt = document.createElement('option');
             opt.value = String(id);
+            // The name alone is what is stored; the note ("proposal open")
+            // only labels the choice.
             opt.textContent = name;
+            opt.label = note ? `${name} (${note})` : name;
             partnerSelect.appendChild(opt);
         };
 
@@ -549,8 +563,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         // account (an agreement outlives that; a diary entry should not) and
         // anything completed or ended, which is a record rather than
         // someone you are still meeting.
-        (dashboard.partners || []).forEach((p) => addOption(p.id, p.name));
+        (dashboard.partners || []).forEach((p) => addOption(p.id, p.name, p.note));
         (dashboard.top_matches || []).forEach((m) => addOption(m.id, m.name));
+        // Anyone at all. A meeting is this organization's own calendar
+        // entry -- nothing is sent to the other party -- so there is no
+        // reason it has to be with someone on PartnerPortal. The picker
+        // used to be the only way to name a partner, which made "no
+        // partners yet" a dead end for a form that never needed one.
+        const other = document.createElement('option');
+        other.value = OTHER_PARTNER;
+        other.textContent = 'Someone else…';
+        partnerSelect.appendChild(other);
+        partnerSelect.addEventListener('change', syncOtherPartner);
+    }
+
+    const OTHER_PARTNER = 'other:';
+    const otherGroup = document.getElementById('eventPartnerOtherGroup');
+    const otherInput = document.getElementById('eventPartnerOther');
+
+    function syncOtherPartner() {
+        if (!otherGroup || !partnerSelect) return;
+        const on = partnerSelect.value === OTHER_PARTNER;
+        otherGroup.hidden = !on;
+        if (!on && otherInput) {
+            otherInput.value = '';
+            setFieldError(otherInput, '');
+        } else if (on && otherInput) {
+            otherInput.focus();
+        }
+    }
+
+    // The name the form will send: the chosen partner's, or what was typed.
+    function chosenPartnerName() {
+        if (!partnerSelect) return '';
+        if (partnerSelect.value === OTHER_PARTNER) {
+            return otherInput ? otherInput.value.trim() : '';
+        }
+        const option = partnerSelect.options[partnerSelect.selectedIndex];
+        return option ? option.textContent : '';
     }
 
     // --- Events -----------------------------------------------------------
@@ -904,6 +954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // offering an edit that cannot be saved.
         [document.getElementById('eventTitle'),
          document.getElementById('eventPartner'),
+         document.getElementById('eventPartnerOther'),
          document.getElementById('eventLocation'),
          document.getElementById('eventDescription'),
          eventRepeat, eventRepeatUntil].forEach((el) => {
@@ -985,15 +1036,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             [...select.options]
                 .filter((o) => o.value.startsWith('kept:'))
                 .forEach((o) => o.remove());
-            const known = [...select.options].some((o) => o.text === event.partner);
-            if (!known && event.partner) {
-                const opt = document.createElement('option');
-                opt.value = `kept:${event.partner}`;
-                opt.textContent = event.partner;
-                select.appendChild(opt);
+            const match = [...select.options]
+                .find((o) => o.value !== OTHER_PARTNER && o.text === event.partner);
+            if (match) {
+                select.value = match.value;
+            } else if (event.partner) {
+                // Someone not on the list -- typed in, or a partnership since
+                // closed. The name goes back into the free-text field, which
+                // is where it would have been entered.
+                select.value = OTHER_PARTNER;
+                if (otherInput) otherInput.value = event.partner;
+            } else {
+                select.value = '';
             }
-            select.value = [...select.options]
-                .find((o) => o.text === event.partner)?.value || '';
         } else {
             eventForm.reset();
             // reset() restores the markup's defaults, which for the two
@@ -1007,12 +1062,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // values the schedule fields are showing -- and for a repeating
         // meeting that overrides what was filled in above.
         syncScope();
+        syncOtherPartner();
         if (!event || !event.repeat) {
             // Nothing is scoped away when there is no choice to make, so a
             // one-off never opens with disabled fields left by the last
             // repeating meeting that was edited in this dialog.
             [document.getElementById('eventTitle'),
              document.getElementById('eventPartner'),
+             document.getElementById('eventPartnerOther'),
              document.getElementById('eventLocation'),
              document.getElementById('eventDescription'),
              eventRepeat, eventRepeatUntil].forEach((el) => {
@@ -1473,11 +1530,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (!partner.value) {
-            // The dropdown is empty until there is someone to meet with, so
-            // say that rather than asking for a choice that cannot be made.
-            fail(partner, partner.options.length <= 1
-                ? 'No partners yet — agree a partnership first, then schedule with them.'
-                : 'Choose who the meeting is with.');
+            fail(partner, 'Choose who the meeting is with.');
+        } else if (partner.value === OTHER_PARTNER && !chosenPartnerName()) {
+            fail(otherInput, 'Say who the meeting is with.');
         }
 
         return problems;
@@ -1524,7 +1579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 repeat: eventRepeat.value || null,
                 repeat_until: eventRepeat.value
                     ? (eventRepeatUntil.value || null) : null,
-                partner: select.options[select.selectedIndex].text,
+                partner: chosenPartnerName(),
                 description: document.getElementById('eventDescription').value.trim(),
                 location: document.getElementById('eventLocation').value.trim()
             };
@@ -1634,7 +1689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const meta = [m.organization_type, m.location].filter(Boolean).map(esc).join(' · ');
         return `
             <button type="button" class="stat-row" data-match-id="${m.id}">
-                <span class="stat-row-mark">${esc(m.match_score)}<small>match</small></span>
+                <span class="stat-row-mark">${esc(m.match_score)}<small>of 100</small></span>
                 <span class="stat-row-main">
                     <span class="stat-row-title">${esc(m.name)}${
                         m.match_detail && m.match_detail.mutual
@@ -1756,7 +1811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return `
             <div class="stat-detail-head">
-                <span class="stat-row-mark">${esc(m.match_score)}<small>match</small></span>
+                <span class="stat-row-mark">${esc(m.match_score)}<small>of 100</small></span>
                 <div>
                     <div class="stat-row-title">${esc(m.name)}${
                         d.mutual ? '<span class="mutual-flag">2-way</span>' : ''

@@ -48,16 +48,99 @@ def test_a_pending_proposal_can_be_corrected(client, login, pair):
     assert updated["status"] == "pending"
 
 
-def test_only_the_sender_may_edit(client, login, pair):
+def test_the_recipient_editing_is_a_counter_offer(client, login, pair, outbox):
+    """The recipient's edit hands the proposal back to the proposer.
+
+    Before this the recipient's answers were yes and no; changing a term
+    meant declining and proposing afresh the other way. Now their edit is
+    their answer, and the proposer is the one who has to accept it.
+    """
     proposer, recipient = pair
     login(proposer)
     proposal_id = _propose(client, recipient).get_json()["proposal"]["id"]
     client.post("/logout")
 
     login(recipient)
+    outbox.clear()
     response = client.patch(f"/api/proposals/{proposal_id}",
                             json={"message": "Actually, make it December."})
-    assert response.status_code == 403
+    assert response.status_code == 200
+    countered = response.get_json()["proposal"]
+    assert countered["status"] == "pending"
+    assert countered["countered"] is True
+    assert countered["awaiting_you"] is False       # it is the proposer's turn
+    assert countered["can_respond"] is False
+    assert countered["can_edit"] is False           # not until they answer
+    assert [kind for kind, _, _ in outbox] == ["notify_proposal_updated"]
+
+    # Answering their own counter is not theirs to do.
+    assert client.post(f"/api/proposals/{proposal_id}/accept").status_code == 403
+    second = client.patch(f"/api/proposals/{proposal_id}", json={"message": "and January"})
+    assert second.status_code == 403
+    client.post("/logout")
+
+    # The proposer now sees it as waiting on them, and can accept it.
+    login(proposer)
+    mine = client.get(f"/api/proposals/{proposal_id}").get_json()["proposal"]
+    assert mine["awaiting_you"] is True
+    assert mine["can_respond"] is True
+    assert mine["message"] == "Actually, make it December."
+    assert client.get("/api/me").get_json()["pending_proposals"] == 1
+    accepted = client.post(f"/api/proposals/{proposal_id}/accept")
+    assert accepted.status_code == 200
+    assert accepted.get_json()["proposal"]["status"] == "accepted"
+
+
+def test_a_counter_offer_can_be_countered_back(client, login, pair):
+    proposer, recipient = pair
+    login(proposer)
+    proposal_id = _propose(client, recipient).get_json()["proposal"]["id"]
+    client.post("/logout")
+
+    login(recipient)
+    assert client.patch(f"/api/proposals/{proposal_id}",
+                        json={"timeline": "six_months"}).status_code == 200
+    client.post("/logout")
+
+    login(proposer)
+    back = client.patch(f"/api/proposals/{proposal_id}",
+                        json={"timeline": "three_months"})
+    assert back.status_code == 200
+    assert back.get_json()["proposal"]["awaiting_you"] is False
+    assert back.get_json()["proposal"]["countered"] is False
+    client.post("/logout")
+
+    login(recipient)
+    theirs = client.get(f"/api/proposals/{proposal_id}").get_json()["proposal"]
+    assert theirs["awaiting_you"] is True
+    assert theirs["timeline"] == "three_months"
+
+
+def test_the_recipient_counters_with_their_own_offers(client, login, pair):
+    """Each side is still held to its own list, whoever is editing.
+
+    The columns in the edit dialog are "you" and "they" from the editor's
+    point of view; the server checks proposer_gives against the proposer's
+    offers and recipient_gives against the recipient's regardless of who
+    sent the request.
+    """
+    proposer, recipient = pair
+    login(proposer)
+    proposal_id = _propose(client, recipient).get_json()["proposal"]["id"]
+    client.post("/logout")
+
+    login(recipient)
+    # The recipient cannot commit the proposer to something the proposer
+    # never listed...
+    refused = client.patch(f"/api/proposals/{proposal_id}",
+                           json={"proposer_gives": ["web_development"]})
+    assert refused.status_code == 400
+    assert "their list of offers" in refused.get_json()["error"]
+    # ...nor themselves.
+    refused = client.patch(f"/api/proposals/{proposal_id}",
+                           json={"recipient_gives": ["grant_writing"]})
+    assert refused.status_code == 400
+    assert "your list of offers" in refused.get_json()["error"]
 
 
 def test_an_accepted_partnership_is_fixed(client, login, pair):

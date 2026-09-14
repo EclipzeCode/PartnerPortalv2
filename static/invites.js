@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('inviteForm');
     const nameInput = document.getElementById('inviteName');
     const nameError = document.getElementById('inviteName-error');
+    const emailInput = document.getElementById('inviteEmail');
+    const emailError = document.getElementById('inviteEmail-error');
+    const sentNote = document.getElementById('inviteSentNote');
     const submitBtn = document.getElementById('inviteSubmitBtn');
     const result = document.getElementById('inviteResult');
     const linkInput = document.getElementById('inviteLink');
@@ -32,10 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // unset in development). The page does.
     const absolute = (path) => new URL(path, location.href).href;
 
-    function setError(message) {
-        nameError.textContent = message || '';
-        nameInput.classList.toggle('input-error', Boolean(message));
-        nameInput.setAttribute('aria-invalid', message ? 'true' : 'false');
+    function setError(message, input = nameInput, note = nameError) {
+        note.textContent = message || '';
+        input.classList.toggle('input-error', Boolean(message));
+        input.setAttribute('aria-invalid', message ? 'true' : 'false');
     }
 
     function renderOutstanding(invites) {
@@ -87,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     openBtn.addEventListener('click', () => {
         setError('');
+        if (emailInput) setError('', emailInput, emailError);
         result.hidden = true;
         form.reset();
         modal.classList.add('active');
@@ -115,6 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
             nameInput.focus();
             return;
         }
+        const email = emailInput ? emailInput.value.trim() : '';
+        if (emailInput) setError('', emailInput, emailError);
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setError('That does not look like an email address.', emailInput, emailError);
+            emailInput.focus();
+            return;
+        }
 
         const idle = submitBtn.innerHTML;
         submitBtn.disabled = true;
@@ -128,9 +139,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const data = await window.api('/api/invites', {
-                method: 'POST', body: { name },
+                method: 'POST', body: email ? { name, email } : { name },
             });
             linkInput.value = absolute(data.invite.claim_url);
+            if (sentNote) {
+                sentNote.hidden = !data.emailed_to;
+                sentNote.textContent = data.emailed_to
+                    ? `Sent to ${data.emailed_to}. The same link is below in case `
+                      + 'you want to pass it on another way.'
+                    : '';
+            }
             result.hidden = false;
             form.reset();
             // Straight to the thing they came for.
@@ -140,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             if (error.data && error.data.field === 'name') {
                 setError(error.message);
+            } else if (error.data && error.data.field === 'email' && emailInput) {
+                setError(error.message, emailInput, emailError);
+                emailInput.focus();
             } else {
                 window.toast(error.message || 'Could not create the invitation.',
                     'error');

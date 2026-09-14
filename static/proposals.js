@@ -79,12 +79,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function forTab(tab) {
         switch (tab) {
+            // "Needs your response" is whose turn it is, not who sent it: a
+            // proposal of yours that came back countered sits here too, and
+            // one you countered moves to Sent until they answer.
             case 'incoming':
                 return proposals.filter(
-                    (p) => p.direction === 'incoming' && p.status === 'pending');
+                    (p) => p.status === 'pending' && p.awaiting_you);
             case 'outgoing':
                 return proposals.filter(
-                    (p) => p.direction === 'outgoing' && p.status === 'pending');
+                    (p) => p.status === 'pending' && !p.awaiting_you);
             case 'agreed':
                 // Live agreements only. A partnership that has run its course
                 // sat here indefinitely, so this tab slowly became a list of
@@ -142,6 +145,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // side's account of whether the other delivered.
     function lifecycleNote(p) {
         const parts = [];
+
+        if (p.status === 'pending' && p.countered) {
+            parts.push(p.awaiting_you
+                ? '<p class="lifecycle-note"><i class=\'bx bx-transfer-alt\'></i> '
+                  + esc(p.counterpart.name) + ' suggested different terms. '
+                  + 'The terms above are theirs: accept them, decline, or '
+                  + 'counter with your own.</p>'
+                : '<p class="lifecycle-note"><i class=\'bx bx-transfer-alt\'></i> '
+                  + 'You suggested different terms. Waiting on '
+                  + esc(p.counterpart.name) + '.</p>');
+        }
 
         if (p.status === 'accepted' && (p.you_marked_complete || p.they_marked_complete)) {
             parts.push(p.you_marked_complete
@@ -241,8 +255,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (p.can_edit) {
                 // Before Withdraw, because correcting a term is the lighter
-                // of the two and used to be reachable only through it.
-                actions.push('<button class="btn-ghost" data-act="edit">Edit terms</button>');
+                // of the two and used to be reachable only through it. The
+                // proposer correcting an unanswered proposal is editing;
+                // anyone whose turn it is -- the recipient, or the proposer
+                // answering a counter -- is countering: the same dialog,
+                // but their change is their answer.
+                actions.push(`<button class="btn-ghost" data-act="edit">${
+                    p.awaiting_you ? 'Counter' : 'Edit terms'}</button>`);
             }
             if (p.can_withdraw) {
                 actions.push('<button class="btn-ghost" data-act="withdraw">Withdraw</button>');
@@ -295,7 +314,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             other.location ? ' · ' + esc(other.location) : ''
                         } · ${esc(when)}</p>
                     </div>
-                    <span class="status-pill status-${p.status}">${esc(p.status)}</span>
+                    <span class="status-pill status-${p.status}">${
+                        esc(p.status === 'pending' && p.countered ? 'countered' : p.status)
+                    }</span>
                 </div>
                 ${termsBlock(p)}
                 ${p.timeline_label
@@ -715,6 +736,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // The two give/receive pickers. Each column offers exactly what that
     // side's profile lists -- the same rule the server enforces -- and
     // starts checked at what the proposal currently says.
+    // The two columns are "you provide" and "they provide", whichever party
+    // is editing. Internally they stay keyed proposer/recipient -- the
+    // markup's ids and counters are -- so the mapping onto the proposal's
+    // actual sides happens once, on submit. `you_give` and `you_receive`
+    // are already from the viewer's point of view.
     function buildEditPickers(proposal) {
         const columns = [
             ['proposer', document.getElementById('editProposerGives'),
@@ -872,6 +898,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         editing = proposal;
         editError.hidden = true;
         editError.textContent = '';
+        // Countering is the same form with a different framing: the change
+        // is the answer, and it goes to the other side to accept.
+        const countering = Boolean(proposal.awaiting_you);
+        const title = document.getElementById('editModalTitle');
+        const intro = editModal.querySelector('.modal-intro');
+        if (title) title.textContent = countering ? 'Suggest different terms' : 'Edit proposal';
+        if (intro) {
+            intro.textContent = countering
+                ? `Change anything below and send it back. ${proposal.counterpart.name} `
+                  + 'can then accept these terms, decline, or suggest their own. '
+                  + 'Each side can only be committed to things it lists on its profile.'
+                : 'They have not answered yet, so all of this can still change. '
+                  + 'Each side can only be committed to things it lists on its profile.';
+        }
+        editSubmit.textContent = countering ? 'Send counter-offer' : 'Save changes';
         editStartsOn.value = proposal.starts_on || '';
         editEndsOn.value = proposal.ends_on || '';
         editMessage.value = proposal.message || '';
@@ -922,24 +963,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             const idle = editSubmit.textContent;
             editSubmit.disabled = true;
             editSubmit.textContent = 'Saving...';
+            // The dialog's "you"/"they" columns map onto the proposal's real
+            // sides according to which party is editing.
+            const iAmProposer = editing.direction === 'outgoing';
+            const mine = iAmProposer ? 'proposer' : 'recipient';
+            const theirs = iAmProposer ? 'recipient' : 'proposer';
+            const countering = Boolean(editing.awaiting_you);
             try {
                 await window.api(`/api/proposals/${editing.id}`, {
                     method: 'PATCH',
                     body: {
-                        proposer_gives: [...editGives.proposer],
-                        recipient_gives: [...editGives.recipient],
+                        [`${mine}_gives`]: [...editGives.proposer],
+                        [`${theirs}_gives`]: [...editGives.recipient],
                         timeline: editTimeline.value,
                         starts_on: editStartsOn.value,
                         ends_on: editEndsOn.value,
-                        proposer_quantities: editQuantitiesFor('proposer'),
-                        recipient_quantities: editQuantitiesFor('recipient'),
+                        [`${mine}_quantities`]: editQuantitiesFor('proposer'),
+                        [`${theirs}_quantities`]: editQuantitiesFor('recipient'),
                         message: editMessage.value.trim(),
                     },
                 });
                 const name = editing.counterpart.name;
                 closeEdit();
+                if (countering) activateTab('outgoing');
                 await load();
-                window.toast(`Proposal updated. ${name} has been told.`);
+                window.toast(countering
+                    ? `Counter-offer sent. ${name} has been asked to answer it.`
+                    : `Proposal updated. ${name} has been told.`);
+                document.dispatchEvent(new CustomEvent('partnerships:changed'));
             } catch (error) {
                 // Answered while it was being corrected. There is nothing
                 // left to edit and no field to focus, so this leaves the
@@ -1016,7 +1067,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         pending = { id, action: act, name: proposal.counterpart.name, hadLink };
         respondTitle.textContent = {
             accept: `Accept partnership with ${proposal.counterpart.name}?`,
-            decline: `Decline proposal from ${proposal.counterpart.name}?`,
+            decline: proposal.countered && proposal.direction === 'outgoing'
+                ? `Decline ${proposal.counterpart.name}'s counter-offer?`
+                : `Decline proposal from ${proposal.counterpart.name}?`,
             withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`,
             complete: `Mark your partnership with ${proposal.counterpart.name} complete?`,
             end: `End your partnership with ${proposal.counterpart.name}?`,

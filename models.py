@@ -749,6 +749,22 @@ class Partnership(Base):
     )
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Whose answer a pending proposal is waiting for. A proposal starts with
+    # the recipient, and either side changing the terms hands the turn to
+    # the other: the recipient's edit is a counter-offer the proposer now has
+    # to accept, decline or counter again. Before this the recipient's only
+    # answers were yes and no, and "yes, but half the hours" meant declining
+    # and proposing afresh in the other direction, losing the thread and
+    # the history with it. Only meaningful while pending.
+    PROPOSER_SIDE = "proposer"
+    RECIPIENT_SIDE = "recipient"
+    SIDES = (PROPOSER_SIDE, RECIPIENT_SIDE)
+
+    awaiting_side: Mapped[str] = mapped_column(
+        String(9), nullable=False, server_default=RECIPIENT_SIDE,
+        default=RECIPIENT_SIDE,
+    )
+
     # --- Messages ----------------------------------------------------------
     # How far into the thread each side has read, so "how many are waiting on
     # me" is one indexed comparison rather than a read flag per message per
@@ -800,6 +816,10 @@ class Partnership(Base):
         CheckConstraint(
             "proposer_id <> recipient_id", name="ck_partnerships_not_self"
         ),
+        CheckConstraint(
+            "awaiting_side IN ('proposer', 'recipient')",
+            name="ck_partnerships_awaiting_side",
+        ),
         # At most one live proposal in a given direction. Without this, a
         # double-clicked submit button creates two pending proposals and the
         # recipient sees the same request twice.
@@ -816,6 +836,30 @@ class Partnership(Base):
     def __repr__(self):
         return (f"<Partnership {self.id} {self.proposer_id}->{self.recipient_id} "
                 f"{self.status}>")
+
+    def side_of(self, org_id):
+        """Which party `org_id` is, or None for a stranger."""
+        if org_id == self.proposer_id:
+            return self.PROPOSER_SIDE
+        if org_id == self.recipient_id:
+            return self.RECIPIENT_SIDE
+        return None
+
+    def awaiting_id(self):
+        """The organization whose answer is due, or None if it has left."""
+        return (self.recipient_id if self.awaiting_side == self.RECIPIENT_SIDE
+                else self.proposer_id)
+
+    def awaits(self, org_id):
+        """Whether the pending proposal is waiting on `org_id`."""
+        return (self.status == self.PENDING
+                and org_id is not None and self.awaiting_id() == org_id)
+
+    def hand_turn_to_other(self, org_id):
+        """After `org_id` changed the terms, the other side has to answer."""
+        side = self.side_of(org_id)
+        self.awaiting_side = (self.RECIPIENT_SIDE if side == self.PROPOSER_SIDE
+                              else self.PROPOSER_SIDE)
 
     def counterpart(self, org_id):
         """The other organization, from `org_id`'s point of view.
@@ -1082,22 +1126,30 @@ class Partnership(Base):
                 "you_receive_terms": self.terms(
                     self.receives_for(viewer_id),
                     self.counterpart_quantities(viewer_id)),
-                # Only the recipient of a pending proposal can accept or
-                # decline it; only the proposer can withdraw it.
-                "can_respond": (
-                    self.status == self.PENDING and self.recipient_id == viewer_id
+                # Whoever the pending proposal is waiting on can accept,
+                # decline, or counter it; only the proposer can withdraw it.
+                "awaiting_you": self.awaits(viewer_id),
+                # True once the recipient has countered: the terms on the
+                # table are theirs, and the proposer is the one answering.
+                "countered": (
+                    self.status == self.PENDING
+                    and self.awaiting_side == self.PROPOSER_SIDE
                 ),
+                "can_respond": self.awaits(viewer_id),
                 "can_withdraw": (
                     self.status == self.PENDING and self.proposer_id == viewer_id
                 ),
-                # The same window as withdrawing, and the same side. Editing
-                # stops at acceptance: from then on this is a record of what
-                # two organizations agreed to, with a public summary either
-                # may already have sent somewhere, and one of them changing
-                # it afterward would make it a claim rather than an
+                # The side whose turn it is may change the terms (a counter,
+                # which hands the turn back), and the proposer may correct
+                # theirs while the recipient is still considering them.
+                # Editing stops at acceptance: from then on this is a record
+                # of what two organizations agreed to, with a public summary
+                # either may already have sent somewhere, and one of them
+                # changing it afterward would make it a claim rather than an
                 # agreement. See update_proposal in app.py.
                 "can_edit": (
-                    self.status == self.PENDING and self.proposer_id == viewer_id
+                    self.status == self.PENDING
+                    and (self.awaits(viewer_id) or self.proposer_id == viewer_id)
                 ),
                 # Either party may close a live agreement. Completing needs
                 # both, so the button goes once this side has marked it;

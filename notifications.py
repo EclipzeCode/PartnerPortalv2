@@ -620,8 +620,28 @@ def _send(to_addr, subject, html, text, reply_to=None):
     return False
 
 
-def _dispatch(to_addr, subject, html, text, reply_to=None):
+def _preferences_note(html, text):
+    """Append the line saying how to stop getting messages like this one.
+
+    For every notification an organization can switch off in Settings.
+    Those switches existed and nothing that reached an inbox mentioned them,
+    so the only way to find out a message was optional was to go looking.
+    Spliced in ahead of the closing tags rather than written into eight
+    templates, so the eight cannot drift.
+    """
+    url = f"{_config()['app_url']}/settings.html"
+    note_html = (f'<p class="foot">Change which emails you get: '
+                 f'<a href="{escape(url)}">notification settings</a>.</p>\n')
+    html = html.replace("</div></body></html>", note_html + "</div></body></html>", 1)
+    text = text.rstrip("\n") + f"\n\nChange which emails you get: {url}\n"
+    return html, text
+
+
+def _dispatch(to_addr, subject, html, text, reply_to=None, preferences=False):
     """Write the message down, then nudge a worker to deliver it.
+
+    `preferences` marks a message the recipient could have switched off in
+    Settings; it gets the line saying so (see _preferences_note).
 
     Never blocks the caller on the provider: the only thing that happens
     inside the request is one INSERT, and Resend is talked to on a worker.
@@ -642,6 +662,8 @@ def _dispatch(to_addr, subject, html, text, reply_to=None):
     if not to_addr:
         log.warning("email not queued: no recipient for %r", subject)
         return None
+    if preferences:
+        html, text = _preferences_note(html, text)
 
     try:
         message_id = _outbox.add(to_addr, subject, html, text, reply_to)
@@ -754,36 +776,52 @@ def notify_proposal_created(proposal):
         + quote_text
         + f"\nReview it here: {review_url}\n"
     )
-    _dispatch(to_addr, subject, html, text)
+    _dispatch(to_addr, subject, html, text, preferences=True)
 
 
-def notify_proposal_updated(proposal):
-    """The recipient is told when a pending proposal's terms change.
+def notify_proposal_updated(proposal, editor):
+    """The other side is told when a pending proposal's terms change.
 
-    Not a courtesy. The recipient is being asked to accept a specific set of
-    terms, and an edit that arrived silently would mean the thing they said
-    yes to was not the thing they read. So this goes out on every change,
-    and it restates the terms rather than only announcing that they moved.
+    Not a courtesy. Whoever answers next is being asked to accept a specific
+    set of terms, and an edit that arrived silently would mean the thing
+    they said yes to was not the thing they read. So this goes out on every
+    change, and it restates the terms rather than only announcing that they
+    moved.
+
+    `editor` is whichever party changed them. The proposer correcting an
+    unanswered proposal and the recipient countering it are the same
+    message with different verbs: in both cases the terms below are what is
+    now on the table, and the reader is the one who has to answer.
     """
-    if proposal.recipient is None or not proposal.recipient.wants_email("proposals"):
+    other = proposal.counterpart(editor.id)
+    if other is None or not other.wants_email("proposals"):
         return
     cfg = _config()
-    to_addr = proposal.recipient.contact_email or proposal.recipient.email
-    proposer = proposal.proposer.name if proposal.proposer else "An organization"
+    to_addr = other.contact_email or other.email
+    countered = editor.id == proposal.recipient_id
 
-    subject = f"{proposer} updated their partnership proposal"
+    subject = (f"{editor.name} proposed changes to your partnership proposal"
+               if countered
+               else f"{editor.name} updated their partnership proposal")
     review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
 
-    they_give_labels = proposal.term_lines(proposal.proposer_gives,
-                                          proposal.proposer_quantities)
-    you_give_labels = proposal.term_lines(proposal.recipient_gives,
-                                        proposal.recipient_quantities)
+    they_give_labels = proposal.term_lines(
+        proposal.gives_for(editor.id), proposal.quantities_for(editor.id))
+    you_give_labels = proposal.term_lines(
+        proposal.receives_for(editor.id), proposal.counterpart_quantities(editor.id))
     dates = _dates_line(proposal)
+
+    headline = (f"{editor.name} suggested different terms" if countered
+                else f"{editor.name} changed their proposal")
+    foot = ("They are asking you to accept these instead, decline, or "
+            "suggest your own." if countered else
+            "Nothing has been agreed yet — this is still waiting on your "
+            "answer.")
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
 <body><div class="card">
-  <h1>{escape(proposer)} changed their proposal</h1>
+  <h1>{escape(headline)}</h1>
   <p class="meta">These are the terms as they stand now.</p>
 
   {_terms_block("They would provide", they_give_labels)}
@@ -792,19 +830,20 @@ def notify_proposal_updated(proposal):
 
   <a class="cta" href="{escape(review_url)}">Review proposal</a>
 
-  <p class="foot">Nothing has been agreed yet — this is still waiting on
-  your answer.</p>
+  <p class="foot">{escape(foot)}</p>
 </div></body></html>
 """
 
     text = (
-        f"{proposer} changed the terms of their partnership proposal.\n\n"
+        (f"{editor.name} suggested different terms for your partnership "
+         f"proposal.\n\n" if countered else
+         f"{editor.name} changed the terms of their partnership proposal.\n\n")
         + _terms_text("They would provide", they_give_labels)
         + _terms_text("You would provide", you_give_labels)
         + (f"{dates}\n" if dates else "")
         + f"\nReview it here: {review_url}\n"
     )
-    _dispatch(to_addr, subject, html, text)
+    _dispatch(to_addr, subject, html, text, preferences=True)
 
 
 def _dates_line(proposal):
@@ -820,13 +859,18 @@ def _dates_line(proposal):
     return ""
 
 
-def notify_proposal_responded(proposal):
-    """The proposer gets an email when the recipient accepts or declines."""
-    if not proposal.proposer.wants_email("proposals"):
+def notify_proposal_responded(proposal, responder_org):
+    """The other side gets an email when a proposal is accepted or declined.
+
+    `responder_org` is whoever answered: the recipient in the ordinary
+    case, the proposer when they are answering a counter-offer.
+    """
+    other = proposal.counterpart(responder_org.id)
+    if other is None or not other.wants_email("proposals"):
         return
     cfg = _config()
-    to_addr = proposal.proposer.contact_email or proposal.proposer.email
-    responder = proposal.recipient.name
+    to_addr = other.contact_email or other.email
+    responder = responder_org.name
     accepted = proposal.status == "accepted"
 
     subject = (f"{responder} accepted your partnership proposal"
@@ -870,13 +914,13 @@ def notify_proposal_responded(proposal):
 
   <a class="cta" href="{escape(cta_url)}">{escape(cta_label)}</a>
 
-  <p class="foot">You are receiving this because you proposed a partnership
-  with {escape(responder)} on PartnerPortal.</p>
+  <p class="foot">You are receiving this because you and {escape(responder)}
+  had a partnership proposal open on PartnerPortal.</p>
 </div></body></html>
 """
 
     text = text_body + quote_text
-    _dispatch(to_addr, subject, html, text)
+    _dispatch(to_addr, subject, html, text, preferences=True)
 
 
 def notify_completion_marked(proposal, actor):
@@ -915,7 +959,7 @@ def notify_completion_marked(proposal, actor):
         f"{actor.name} marked your partnership complete on PartnerPortal.\n"
         f"It closes once you confirm from your side: {review_url}\n"
     )
-    _dispatch(to_addr, subject, html, text)
+    _dispatch(to_addr, subject, html, text, preferences=True)
 
 
 def notify_partnership_completed(proposal, other):
@@ -944,7 +988,7 @@ def notify_partnership_completed(proposal, other):
         "Both organizations have confirmed your partnership is complete on "
         f"PartnerPortal.\nThe shared summary stays available: {url}\n"
     )
-    _dispatch(to_addr, "Your partnership is complete", html, text)
+    _dispatch(to_addr, "Your partnership is complete", html, text, preferences=True)
 
 
 def notify_partnership_ended(proposal, actor):
@@ -985,7 +1029,7 @@ def notify_partnership_ended(proposal, actor):
         + reason_text
         + f"\nThe record of what was agreed stays available: {url}\n"
     )
-    _dispatch(to_addr, f"{actor.name} ended your partnership", html, text)
+    _dispatch(to_addr, f"{actor.name} ended your partnership", html, text, preferences=True)
 
 
 def notify_message_received(proposal, sender, message):
@@ -1029,7 +1073,7 @@ def notify_message_received(proposal, sender, message):
         f"{message.body}\n\n"
         f"Reply here: {thread_url}\n"
     )
-    _dispatch(to_addr, subject, html, text)
+    _dispatch(to_addr, subject, html, text, preferences=True)
 
 
 def notify_email_verification(org, token):
@@ -1071,6 +1115,53 @@ def notify_email_verification(org, token):
         f"action is needed.\n"
     )
     _dispatch(org.email, "Verify your email for PartnerPortal", html, text)
+
+
+def notify_invitation(inviter, invited, to_addr, token):
+    """An invitation, sent to an address the inviter typed.
+
+    The link is the same one the inviter can copy from the dashboard; this
+    only saves them pasting it into their own mail. The inviter's name is in
+    the subject because that is the only reason a stranger opens it, and
+    the message says plainly that the address was typed by them -- the
+    recipient never asked PartnerPortal for anything.
+
+    No preference check: the recipient has no account to hold one, and this
+    is one message, not a stream. reply_to is the inviter's contact address
+    so a reply goes to the person who actually knows them.
+    """
+    cfg = _config()
+    claim_url = f"{cfg['app_url']}/claim.html?token={token}"
+    reply_to = inviter.contact_email or inviter.email
+
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(inviter.name)} invited {escape(invited.name)} to PartnerPortal</h1>
+  <p class="meta">A profile is waiting for you to claim.</p>
+
+  <p>PartnerPortal matches nonprofits, community organizations and small
+  businesses on what they need and what they can offer, so both sides gain.
+  {escape(inviter.name)} thinks {escape(invited.name)} has something to trade
+  with them, and set up a profile to get you started.</p>
+
+  <a class="cta" href="{escape(claim_url)}">Claim your profile</a>
+
+  <p class="foot">{escape(inviter.name)} typed this address in; PartnerPortal
+  has not stored it and will not write again. If this is not for you, there
+  is nothing to do -- the link only works for whoever opens it first.
+  Replying reaches {escape(inviter.name)} directly.</p>
+</div></body></html>
+"""
+    text = (
+        f"{inviter.name} invited {invited.name} to PartnerPortal, which matches "
+        f"organizations on what they need and what they can offer.\n\n"
+        f"Claim the profile they set up for you: {claim_url}\n\n"
+        f"{inviter.name} typed this address in; PartnerPortal has not stored it "
+        f"and will not write again. Replying reaches them directly.\n"
+    )
+    _dispatch(to_addr, f"{inviter.name} invited you to PartnerPortal",
+              html, text, reply_to=reply_to)
 
 
 def notify_password_reset(org, token):
@@ -1159,7 +1250,7 @@ def notify_share_link_changed(proposal, actor, revoked):
         f"{detail}\n\n{url}\n"
     )
     _dispatch(to_addr, f"{actor.name} changed your partnership's public link",
-              html, text)
+              html, text, preferences=True)
 
 
 def notify_email_change_requested(org, token):

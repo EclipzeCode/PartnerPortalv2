@@ -605,6 +605,13 @@ function hasSessionHint() {
 // sign-out -- deleting an account, for one.
 window.forgetSession = function forgetSession() {
     rememberSessionHint(false);
+    // The sign-in page's remembered address goes with the session: signing
+    // out is the moment somebody hands the browser to the next person.
+    try {
+        localStorage.removeItem('partnerPortalLastEmail');
+    } catch {
+        // Nothing stored.
+    }
 };
 
 // Where "Connect" and "Find partners" go, and whether "Dashboard" is offered
@@ -896,7 +903,7 @@ function wireAccountMenu() {
             // Cleared here as well as on the next /api/me, so the page landed
             // on after signing out does not briefly draw an avatar for an
             // account that just signed out of it.
-            rememberSessionHint(false);
+            window.forgetSession();
             location.href = 'index.html';
         });
     }

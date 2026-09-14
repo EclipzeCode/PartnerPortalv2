@@ -156,7 +156,7 @@
         ? `
             <div class="org-match">
                 <span class="org-match-score">${esc(viewer.match_score)}</span>
-                <span class="org-match-label">match with you${
+                <span class="org-match-label">of 100 with you${
                     viewer.match_detail && viewer.match_detail.mutual
                         ? ' &middot; two-way'
                         : ''

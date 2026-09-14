@@ -125,3 +125,68 @@ def test_an_unfinished_profile_cannot_invite(client, login, make_org):
     response = _invite(client)
     assert response.status_code == 409
     assert response.get_json()["needs_onboarding"] is True
+
+
+def test_an_address_has_the_invitation_mailed(client, login, make_org, outbox):
+    """Optional, and not stored: the row keeps its placeholder address."""
+    me = make_org(needs=["web_development"], offers=["grant_writing"])
+    login(me)
+    outbox.clear()
+
+    response = client.post("/api/invites", json={
+        "name": "pytest mailed org", "email": "pytest-invitee@example.com"})
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body["emailed_to"] == "pytest-invitee@example.com"
+    token = body["invite"]["claim_url"].split("token=")[1]
+
+    assert [kind for kind, _, _ in outbox] == ["notify_invitation"]
+    _, args, _ = outbox[0]
+    inviter, invited, to_addr, sent_token = args
+    assert inviter.id == me.id
+    assert invited.name == "pytest mailed org"
+    assert to_addr == "pytest-invitee@example.com"
+    assert sent_token == token
+    # The typed address is not kept on the profile.
+    assert invited.email.endswith("@invite.invalid")
+
+    # A malformed one is refused before anything is written.
+    refused = client.post("/api/invites", json={
+        "name": "pytest other org", "email": "not-an-address"})
+    assert refused.status_code == 400
+    assert refused.get_json()["field"] == "email"
+
+    # And no address at all is still the copy-the-link flow.
+    plain = client.post("/api/invites", json={"name": "pytest plain org"})
+    assert plain.status_code == 201
+    assert plain.get_json()["emailed_to"] is None
+
+
+def test_the_dashboard_points_a_claimed_profile_at_its_inviter(
+        client, login, make_org):
+    """Until the two are talking; then the pointer has done its job."""
+    inviter = make_org(name="pytest inviter",
+                       needs=["web_development"], offers=["grant_writing"])
+    login(inviter)
+    token = _invite(client).get_json()["invite"]["claim_url"].split("token=")[1]
+    client.post("/logout")
+
+    client.post(f"/api/invites/{token}/claim", json={
+        "email": "pytest-pointed@example.com", "password": "Claimed-Pass-7!",
+    })
+    client.post("/api/onboarding", json={
+        "organization_name": "pytest pointed org",
+        "organization_type": "Non-profit", "location": "Somewhere, ST",
+        "needs": ["grant_writing"], "offers": ["web_development"],
+    })
+    dashboard = client.get("/api/dashboard").get_json()
+    assert dashboard["invited_by"] == {"id": inviter.id, "name": "pytest inviter"}
+
+    # Proposing to them is the pointer's whole purpose; once done, it goes.
+    sent = client.post("/api/proposals", json={
+        "recipient_id": inviter.id,
+        "proposer_gives": ["web_development"],
+        "recipient_gives": ["grant_writing"],
+    })
+    assert sent.status_code == 201
+    assert client.get("/api/dashboard").get_json()["invited_by"] is None

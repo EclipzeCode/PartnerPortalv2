@@ -22,9 +22,10 @@ to trade resources with each other.
    commit to things it actually listed. A term can carry a quantity — "30
    volunteers", "4,000 square feet" — so that what was agreed to is specific
    enough to judge at completion.
-4. **Confirming** — the receiving organization accepts or declines. Acceptance
-   generates a public summary page, shareable with a board or a funder without
-   anyone needing an account.
+4. **Confirming** — the receiving organization accepts, declines, or
+   counters with different terms, which hands the proposal back for the
+   same three answers. Acceptance generates a public summary page,
+   shareable with a board or a funder without anyone needing an account.
 
 ## Stack
 
@@ -139,7 +140,7 @@ there rather than on someone's first deploy.
 | `render.yaml` | Deployment blueprint |
 
 Pages, all under `static/`: `index.html` (landing), `pplogin.html`,
-`pphelp.html`, `onboarding.html`, `ppsearch.html` (matches, directory and
+`pphelp.html`, `privacy.html`, `onboarding.html`, `ppsearch.html` (matches, directory and
 shortlist), `ppdashboard.html` (dashboard, partnerships and messages),
 `analytics.html` (an organization's own numbers), `settings.html`,
 `organization.html` (public profile), `partnership.html` (public agreement
@@ -227,8 +228,9 @@ custom domain.
 `/robots.txt` and `/sitemap.xml` are routes rather than files in `static/`,
 because both have to name this site's own origin and a file cannot know it.
 They are built from `request.url_root`, so moving to a custom domain does not
-leave a sitemap advertising the old host. The sitemap offers four pages —
-the landing page, the public directory, the help page and the sign-in page.
+leave a sitemap advertising the old host. The sitemap offers five pages —
+the landing page, the public directory, the help page, the privacy page and
+the sign-in page.
 `organization.html` is
 deliberately not among them: public profiles are what a directory would most
 want found, but nobody agreed to being published into search results by
@@ -254,7 +256,8 @@ Working: accounts and sessions (including changing the sign-in address, which
 only moves once a link sent to the new one is opened); onboarding;
 bidirectional matching; a browsable directory with server-side search,
 filters and paging; a private shortlist; public organization profiles;
-partnership proposals with mutual confirmation; the lifecycle after that --
+partnership proposals with mutual confirmation, where either side can answer
+with different terms rather than only yes or no; the lifecycle after that --
 completing takes both sides, ending takes one, and each side records whether
 the other delivered; shareable agreement summaries whose link can be rotated
 or revoked; message threads on a proposal; meetings, with the timezone they

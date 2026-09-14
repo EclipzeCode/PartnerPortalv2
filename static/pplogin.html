@@ -133,29 +133,28 @@
                      somewhere they are not looking. -->
                 <p class="form-banner" id="registerBanner" role="alert" hidden></p>
 
-                <!-- Every input below carries a real label. These forms were
-                     labeled by placeholder alone, which names nothing: a
-                     placeholder is a hint, it is not exposed as the control's
-                     name, and it is gone the moment someone starts typing.
-                     .sr-only (shared.css) is the same treatment ppdashboard's
-                     message box uses -- the label is in the accessibility
-                     tree and off the screen, so the card's layout is
-                     unchanged. -->
+                <!-- Every input below carries a visible label. These forms
+                     were labeled by placeholder alone, then by a label kept
+                     off screen, which fixed the accessibility tree and left
+                     the sighted problem in place: a placeholder is gone the
+                     moment someone starts typing, so a half-filled form no
+                     longer said which field was which. The placeholders
+                     that remain are examples, not names. -->
                 <div class="field">
-                    <label class="sr-only" for="register-name">Organization name</label>
-                    <input type="text" id="register-name" aria-describedby="register-name-error" placeholder="Organization name" autocomplete="organization">
+                    <label for="register-name">Organization name</label>
+                    <input type="text" id="register-name" aria-describedby="register-name-error" placeholder="Riverside Community Trust" autocomplete="organization">
                     <p class="field-error" id="register-name-error"></p>
                 </div>
 
                 <div class="field">
-                    <label class="sr-only" for="register-email">Email</label>
-                    <input type="email" id="register-email" aria-describedby="register-email-error" placeholder="Email" autocomplete="email">
+                    <label for="register-email">Email</label>
+                    <input type="email" id="register-email" aria-describedby="register-email-error" placeholder="you@organization.org" autocomplete="email">
                     <p class="field-error" id="register-email-error"></p>
                 </div>
 
                 <div class="field">
-                    <label class="sr-only" for="register-password">Password</label>
-                    <input type="password" id="register-password" aria-describedby="register-password-error" placeholder="Password" autocomplete="new-password">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" aria-describedby="register-password-error" autocomplete="new-password">
                     <p class="field-error" id="register-password-error"></p>
 
                     <!-- Live strength meter, shown once the field has a value.
@@ -202,14 +201,14 @@
                 <p class="form-banner" id="loginBanner" role="alert" hidden></p>
 
                 <div class="field">
-                    <label class="sr-only" for="login-email">Email</label>
-                    <input type="email" id="login-email" aria-describedby="login-email-error" placeholder="Email" autocomplete="email">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" aria-describedby="login-email-error" placeholder="you@organization.org" autocomplete="email">
                     <p class="field-error" id="login-email-error"></p>
                 </div>
 
                 <div class="field">
-                    <label class="sr-only" for="login-password">Password</label>
-                    <input type="password" id="login-password" aria-describedby="login-password-error" placeholder="Password" autocomplete="current-password">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" aria-describedby="login-password-error" autocomplete="current-password">
                     <p class="field-error" id="login-password-error"></p>
                 </div>
 
@@ -251,6 +250,8 @@
                 <a href="index.html">Home</a>
                 <a href="pplogin.html#signup">Get Started</a>
                 <a href="directory.html">Find Partners</a>
+                <a href="pphelp.html">Help</a>
+                <a href="privacy.html">Privacy</a>
             </nav>
         </div>
     </footer>

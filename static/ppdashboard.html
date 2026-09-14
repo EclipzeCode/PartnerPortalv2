@@ -141,6 +141,21 @@
                 <a href="settings.html" class="btn-action ghost">Verify now</a>
             </div>
 
+            <!-- For an organization that arrived by invitation: who asked
+                 them here, and the shortest path to proposing to them. The
+                 server sends it only while there is nothing yet between the
+                 two -- see _inviter_pointer in app.py. -->
+            <div class="verify-banner invite-banner" id="inviterBanner" hidden>
+                <i class='bx bx-user-plus' aria-hidden="true"></i>
+                <p>
+                    <strong id="inviterName"></strong>
+                    <span>invited you to PartnerPortal. Their profile shows what
+                    they need and offer; a proposal is how you start.</span>
+                </p>
+                <a class="btn-action ghost" id="inviterProfile">See their profile</a>
+                <a class="btn-action" id="inviterPropose">Propose a partnership</a>
+            </div>
+
             <!-- Who you are, before anything you have. The page used to open
                  on six counts with no statement of whose they were; this says
                  that first, the way a profile page does, and carries the two
@@ -537,6 +552,14 @@
                             <option value="">Select a partner</option>
                         </select>
                     </div>
+                    <!-- Shown when "Someone else" is picked above. A meeting
+                         is this organization's own calendar entry, so the
+                         other party does not have to be on PartnerPortal. -->
+                    <div class="form-group" id="eventPartnerOtherGroup" hidden>
+                        <label for="eventPartnerOther">Who is it with?</label>
+                        <input type="text" id="eventPartnerOther" maxlength="255"
+                               placeholder="Organization or person" autocomplete="organization">
+                    </div>
                     <div class="form-group">
                         <label for="eventDescription">Description</label>
                         <textarea id="eventDescription" rows="2"></textarea>
@@ -619,6 +642,8 @@
                     <li><a href="index.html">Home</a></li>
                     <li><a href="pplogin.html#signup">Get Started</a></li>
                     <li><a href="ppsearch.html">Find Partners</a></li>
+                    <li><a href="pphelp.html">Help</a></li>
+                    <li><a href="privacy.html">Privacy</a></li>
                 </ul>
             </div>
             <div class="footer-col">
@@ -732,9 +757,19 @@
                                placeholder="Riverside Community Trust">
                         <p class="field-error" id="inviteName-error"></p>
                     </div>
+                    <!-- Optional. With an address the link is mailed as well
+                         as shown; the reply-to is this organization's own
+                         contact address, so a reply reaches the person who
+                         knows them. The address is not stored. -->
+                    <div class="form-group">
+                        <label for="inviteEmail">Their email <span class="optional">(optional)</span></label>
+                        <input type="email" id="inviteEmail" aria-describedby="inviteEmail-error"
+                               autocomplete="off" placeholder="hello@riversidetrust.org">
+                        <p class="field-error" id="inviteEmail-error"></p>
+                    </div>
                     <div class="modal-actions">
                         <button type="submit" class="btn-primary" id="inviteSubmitBtn">
-                            <i class='bx bx-link'></i> Create invitation link
+                            <i class='bx bx-link'></i> Create invitation
                         </button>
                     </div>
                 </form>
@@ -743,6 +778,7 @@
                      toast: it has to stay on screen long enough to be copied,
                      and a toast that vanishes takes the whole point with it. -->
                 <div class="invite-result" id="inviteResult" hidden>
+                    <p class="invite-sent" id="inviteSentNote" hidden></p>
                     <label for="inviteLink">Send them this link</label>
                     <div class="invite-link-row">
                         <input type="text" id="inviteLink" readonly>

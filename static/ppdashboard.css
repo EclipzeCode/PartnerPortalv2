@@ -103,6 +103,14 @@
     margin-bottom: 1.75rem;
 }
 
+.verify-banner.invite-banner {
+    border-left-color: var(--h-give);
+}
+
+.verify-banner.invite-banner > i {
+    color: var(--h-give);
+}
+
 .verify-banner > i {
     font-size: 1.05rem;
     color: var(--h-take);
@@ -1399,6 +1407,14 @@
     font-size: 0.78rem;
     line-height: 1.5;
     color: var(--h-dim);
+}
+
+/* "Sent to x" above the link, when an address was given. */
+.invite-sent {
+    margin: 0 0 0.8rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--h-give);
 }
 
 .invite-outstanding {

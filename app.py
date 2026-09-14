@@ -56,7 +56,7 @@ from notifications import (
     notify_profile_hidden,
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
     notify_email_change_notice, notify_email_change_requested,
-    notify_email_verification, notify_message_received,
+    notify_email_verification, notify_invitation, notify_message_received,
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
     notify_proposal_responded, notify_proposal_updated,
@@ -1620,7 +1620,8 @@ def html_page(page):
 # nobody has been asked. The page is paged and carries no contact details, so
 # what a crawler gets is what a visitor gets.
 _SITEMAP_PAGES = (
-    "index.html", "directory.html", "pphelp.html", "pplogin.html",
+    "index.html", "directory.html", "pphelp.html", "privacy.html",
+    "pplogin.html",
 )
 
 
@@ -3656,10 +3657,13 @@ def get_me(org, db):
     # of *things waiting on you*, and the notification list under it
     # deliberately collapses a conversation into one entry -- so the badge
     # counts threads, or it says 6 over a panel that lists 1.
+    # Pending proposals whose answer is this organization's: the ones sent
+    # to it that it has not countered, and the ones it sent that came back
+    # countered. `awaiting_side` names the party; this resolves it.
     pending_q = (
         select(func.count(Partnership.id))
-        .where(Partnership.recipient_id == org.id,
-               Partnership.status == Partnership.PENDING)
+        .where(Partnership.status == Partnership.PENDING,
+               _awaiting(org.id))
     ).scalar_subquery()
     unread_base = (
         select(Message.id, Message.partnership_id)
@@ -5440,6 +5444,16 @@ def create_invite(org, db):
     if problem:
         return jsonify({"error": problem, "field": "name"}), 400
 
+    # Optional. The link is always returned to be copied; an address here
+    # additionally has it mailed, with the inviter's contact address as the
+    # reply-to. Not stored anywhere -- the profile keeps its placeholder
+    # address until whoever claims it chooses their own.
+    email = (data.get("email") or "").strip().lower()
+    if email and (not is_valid_email(email)
+                  or length_problem("contact_email", email)):
+        return jsonify({"error": "Please enter a valid email address.",
+                        "field": "email"}), 400
+
     # A ceiling rather than a rate limit, because the cost here is rows that
     # sit unclaimed rather than work done per request. Somebody recruiting
     # partners sends a handful; a script fills the table.
@@ -5480,9 +5494,13 @@ def create_invite(org, db):
     db.add(invited)
     db.commit()
 
+    if email:
+        notify_invitation(org, invited, email, token)
+
     return jsonify({
-        "message": "Invitation created",
+        "message": "Invitation sent" if email else "Invitation created",
         "invite": _invite_dict(invited),
+        "emailed_to": email or None,
     }), 201
 
 
@@ -5654,6 +5672,16 @@ NOTIFICATION_WINDOW = timedelta(days=60)
 NOTIFICATION_LIMIT = 30
 
 
+def _awaiting(org_id):
+    """SQL for "this pending proposal is waiting on `org_id`"."""
+    return or_(
+        and_(Partnership.awaiting_side == Partnership.RECIPIENT_SIDE,
+             Partnership.recipient_id == org_id),
+        and_(Partnership.awaiting_side == Partnership.PROPOSER_SIDE,
+             Partnership.proposer_id == org_id),
+    )
+
+
 def _unread_by(org_id):
     """A message in a thread that `org_id` is party to and has not read.
 
@@ -5722,8 +5750,7 @@ def _notification_rows(db, org, since, thread_ids):
     )
 
     reasons = [
-        and_(Partnership.status == Partnership.PENDING,
-             Partnership.recipient_id == org.id),
+        and_(Partnership.status == Partnership.PENDING, _awaiting(org.id)),
         and_(Partnership.status == Partnership.ACCEPTED,
              theirs_completed.isnot(None),
              mine_completed.is_(None)),
@@ -5811,9 +5838,13 @@ def _notifications_for(db, org):
     for p in rows:
         incoming = p.recipient_id == org.id
 
-        if incoming and p.status == Partnership.PENDING:
-            # The only one that is genuinely waiting on this organization.
-            add("proposal_received", p.created_at, p,
+        if p.status == Partnership.PENDING and p.awaits(org.id):
+            # Yours to answer: a proposal sent to you, or your own proposal
+            # sent back with different terms. Dated by the last change
+            # rather than the send for a counter, which is when it became
+            # something waiting on you.
+            add("proposal_countered" if not incoming else "proposal_received",
+                p.updated_at if not incoming else p.created_at, p,
                 actionable=True, tab="incoming")
         elif not incoming and p.status == Partnership.ACCEPTED:
             add("proposal_accepted", p.responded_at, p, tab="agreed")
@@ -5944,10 +5975,13 @@ def _dashboard_counts(db, org):
 
     row = db.execute(
         select(
+            # Waiting on you: pending and yours to answer, either as the
+            # recipient or as a proposer whose proposal was countered.
             counting(Partnership.status == Partnership.PENDING,
-                     Partnership.recipient_id == org.id),
+                     _awaiting(org.id)),
+            # Sent, waiting: pending and the other side's to answer.
             counting(Partnership.status == Partnership.PENDING,
-                     Partnership.proposer_id == org.id),
+                     ~_awaiting(org.id)),
             counting(Partnership.status == Partnership.ACCEPTED),
             counting(Partnership.status == Partnership.COMPLETED),
             select(func.count(SavedLead.id))
@@ -6086,7 +6120,7 @@ def get_dashboard(org, db):
     fetched = db.query(Partnership).filter(
         party,
         or_(Partnership.id.in_(newest_ids),
-            Partnership.status == Partnership.ACCEPTED),
+            Partnership.status.in_((Partnership.ACCEPTED, Partnership.PENDING))),
     ).order_by(Partnership.created_at.desc()).all()
     rows = fetched[:5]
     recent_proposals = [p.to_dict(viewer_id=org.id) for p in rows]
@@ -6098,13 +6132,23 @@ def get_dashboard(org, db):
     # partnership older than the last five proposals -- exactly the one a
     # standing meeting is most likely about -- could not be chosen. Ids and
     # names only; the counterpart's row is already joined in.
-    live = [p for p in fetched if p.status == Partnership.ACCEPTED]
-    partners = sorted(
-        {(p.counterpart(org.id).id, p.counterpart(org.id).name)
-         for p in live if p.counterpart(org.id) is not None},
-        key=lambda pair: pair[1].casefold(),
-    )
-    partners = [{"id": pid, "name": name} for pid, name in partners]
+    #
+    # Organizations mid-proposal are offered too, marked as such: the meeting
+    # most worth putting in a calendar is often the one where the terms get
+    # settled, and it used to be impossible to schedule unless the other
+    # side happened to be a top-five match. Agreed partners first.
+    seen = set()
+    partners = []
+    for status, label in ((Partnership.ACCEPTED, None),
+                          (Partnership.PENDING, "proposal open")):
+        found = []
+        for p in fetched:
+            other = p.counterpart(org.id)
+            if p.status != status or other is None or other.id in seen:
+                continue
+            seen.add(other.id)
+            found.append({"id": other.id, "name": other.name, "note": label})
+        partners.extend(sorted(found, key=lambda item: item["name"].casefold()))
 
     return jsonify({
         "organization": org.private_dict(),
@@ -6143,6 +6187,7 @@ def get_dashboard(org, db):
         "top_matches": top_matches,
         "recent_proposals": recent_proposals,
         "partners": partners,
+        "invited_by": _inviter_pointer(db, org, fetched),
         "events": events,
         # How many occurrences there are in total, so the card can offer the
         # rest by name instead of implying it is showing all of them.
@@ -6155,6 +6200,31 @@ def get_dashboard(org, db):
 # they belonged to one browser, died with site data, and never followed the
 # account. Everything else on the dashboard is server-backed, so this was the
 # one place the page lost work someone had done.
+def _inviter_pointer(db, org, partnerships):
+    """Who invited this organization, while that is still worth acting on.
+
+    An invitation creates the profile and then says nothing more: the org
+    that claimed it landed on a dashboard with no trace of who had asked
+    them here, and had to find their inviter in the directory to propose
+    anything. This names them, with a link straight to a proposal, until
+    the two have a proposal or partnership between them -- at which point
+    the pointer has done its job.
+
+    None when there is nothing to point at: not invited, the inviter has
+    since left or is not listed, or the two are already talking.
+    """
+    inviter = org.invited_by
+    if (inviter is None or not inviter.onboarding_complete
+            or inviter.hidden_at or inviter.is_demo):
+        return None
+    if any(p.counterpart(org.id) is not None
+           and p.counterpart(org.id).id == inviter.id
+           and p.status in (Partnership.PENDING, Partnership.ACCEPTED)
+           for p in partnerships):
+        return None
+    return {"id": inviter.id, "name": inviter.name}
+
+
 def _events_for(db, org):
     """This org's meetings, soonest first. Covered by ix_events_organization_date.
 
@@ -7580,7 +7650,9 @@ def _proposal_counts(db, org):
     has the archive statuses) and folding them together would give each
     caller three numbers it does not use.
     """
-    incoming = case((Partnership.recipient_id == org.id, True), else_=False)
+    # "Incoming" for the tab counts means waiting on this organization,
+    # which a countered proposal of its own now is.
+    incoming = case((_awaiting(org.id), True), else_=False)
     rows = db.query(
         Partnership.status,
         incoming.label("incoming"),
@@ -7759,9 +7831,17 @@ def get_proposal(org, db, proposal_id):
 @app.route("/api/proposals/<int:proposal_id>", methods=["PATCH"])
 @login_required
 def update_proposal(org, db, proposal_id):
-    """Correct a proposal that has not been answered yet.
+    """Change the terms of a proposal that has not been settled yet.
 
-    Only the proposer, and only while it is pending. Both halves matter.
+    Two people may do this, and only while it is pending. The proposer may
+    correct their own terms while the recipient is still considering them,
+    as always. And whoever the proposal is currently waiting on may change
+    the terms as their answer -- a counter-offer -- which hands the turn to
+    the other side: the recipient counters, the proposer must now accept,
+    decline or counter back. Before this the recipient's answers were yes
+    and no, and "yes, but half the hours" meant declining and proposing
+    afresh in the other direction, which lost the thread and the history
+    with it.
 
     Until now the only way to change a term was to withdraw and send again,
     which loses the message thread with it -- so the cost of a typo in the
@@ -7782,30 +7862,37 @@ def update_proposal(org, db, proposal_id):
     proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
-    if proposal.proposer_id != org.id:
-        return jsonify({
-            "error": "Only the organization that sent this proposal can "
-                     "change it.",
-        }), 403
     if proposal.status != Partnership.PENDING:
         return jsonify({
             "error": f"This proposal was already {proposal.status}, so its "
                      f"terms are fixed.",
         }), 409
+    if not (proposal.awaits(org.id) or proposal.proposer_id == org.id):
+        # The recipient, after countering: the terms are with the proposer
+        # now, and changing them again before they answer would be arguing
+        # with oneself.
+        return jsonify({
+            "error": "This proposal is waiting on the other organization. "
+                     "You can change the terms again once they answer.",
+        }), 403
 
     data = request.get_json(silent=True) or {}
-    recipient = proposal.recipient
-    if recipient is None:
+    other = proposal.counterpart(org.id)
+    if other is None:
         return jsonify({
             "error": "The other organization has closed its account.",
         }), 409
+    mine = proposal.side_of(org.id) == Partnership.PROPOSER_SIDE
 
     # The same rule create_proposal enforces, re-checked rather than assumed:
     # neither side may be committed to something it has not listed as an
-    # offer, and either profile may have changed since this was sent.
+    # offer, and either profile may have changed since this was sent. Which
+    # list is "yours" depends on which party is editing.
     for key, offers, whose in (
-        ("proposer_gives", set(org.offers or []), "you"),
-        ("recipient_gives", set(recipient.offers or []), "they"),
+        ("proposer_gives", set((org if mine else other).offers or []),
+         "you" if mine else "they"),
+        ("recipient_gives", set((other if mine else org).offers or []),
+         "they" if mine else "you"),
     ):
         if key not in data:
             continue
@@ -7874,15 +7961,20 @@ def update_proposal(org, db, proposal_id):
             }), 400
         proposal.message = message or None
 
+    # Whoever changed the terms has, by doing so, put them to the other side.
+    # For the proposer correcting an unanswered proposal this is a no-op --
+    # it was already the recipient's turn.
+    countered = proposal.awaits(org.id) and proposal.proposer_id != org.id
+    proposal.hand_turn_to_other(org.id)
     db.commit()
 
-    # The recipient is told, because the thing they were asked to answer has
-    # changed underneath them -- and because an edit nobody is told about is
-    # a way to alter what somebody is about to accept.
-    notify_proposal_updated(proposal)
+    # The other side is told, because the thing they were asked to answer
+    # has changed underneath them -- and because an edit nobody is told
+    # about is a way to alter what somebody is about to accept.
+    notify_proposal_updated(proposal, org)
 
     return jsonify({
-        "message": "Proposal updated",
+        "message": "Counter-offer sent" if countered else "Proposal updated",
         "proposal": proposal.to_dict(viewer_id=org.id),
     })
 
@@ -7894,13 +7986,16 @@ def accept_proposal(org, db, proposal_id):
     proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
-    if proposal.recipient_id != org.id:
-        return jsonify({"error": "Only the organization that received this "
-                                 "proposal can accept it."}), 403
     if proposal.status != Partnership.PENDING:
         return jsonify({
             "error": f"This proposal was already {proposal.status}."
         }), 409
+    if not proposal.awaits(org.id):
+        # The recipient until they counter, the proposer after. Answering a
+        # proposal that is waiting on the other side is not this party's to
+        # do, whichever party they are.
+        return jsonify({"error": "This proposal is waiting on the other "
+                                 "organization's answer, not yours."}), 403
 
     data = request.get_json(silent=True) or {}
     response_message = (data.get("message") or "").strip()
@@ -7923,7 +8018,7 @@ def accept_proposal(org, db, proposal_id):
     proposal.share_token = secrets.token_urlsafe(24)
     db.commit()
 
-    notify_proposal_responded(proposal)
+    notify_proposal_responded(proposal, org)
 
     return jsonify({
         "message": "Partnership agreed",
@@ -7938,13 +8033,13 @@ def decline_proposal(org, db, proposal_id):
     proposal = _load_party_proposal(db, org, proposal_id, lock=True)
     if proposal is None:
         return jsonify({"error": "Proposal not found."}), 404
-    if proposal.recipient_id != org.id:
-        return jsonify({"error": "Only the organization that received this "
-                                 "proposal can decline it."}), 403
     if proposal.status != Partnership.PENDING:
         return jsonify({
             "error": f"This proposal was already {proposal.status}."
         }), 409
+    if not proposal.awaits(org.id):
+        return jsonify({"error": "This proposal is waiting on the other "
+                                 "organization's answer, not yours."}), 403
 
     data = request.get_json(silent=True) or {}
     response_message = (data.get("message") or "").strip()
@@ -7960,7 +8055,7 @@ def decline_proposal(org, db, proposal_id):
     proposal.response_message = response_message or None
     db.commit()
 
-    notify_proposal_responded(proposal)
+    notify_proposal_responded(proposal, org)
 
     return jsonify({
         "message": "Proposal declined",

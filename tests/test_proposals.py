@@ -134,7 +134,8 @@ def test_only_the_recipient_can_accept_or_decline(client, login, pair):
     proposal_id = _propose(client, recipient).get_json()["proposal"]["id"]
 
     # The proposer is a party to it, so this is 403 -- they may see it, but
-    # answering their own proposal is not theirs to do.
+    # answering their own proposal is not theirs to do. (Until the recipient
+    # counters, at which point it is: see test_proposal_editing.)
     assert client.post(f"/api/proposals/{proposal_id}/accept").status_code == 403
     assert client.post(f"/api/proposals/{proposal_id}/decline").status_code == 403
     client.post("/logout")

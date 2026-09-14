@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="How PartnerPortal works: setting up a profile, how two-way matching is scored, proposing and agreeing a partnership, and what the public agreement page shows.">
+    <meta name="description" content="What PartnerPortal stores about an organization, who can see each part of it, what it sends by email, and how to change or delete it.">
     <!-- Every stylesheet and font on this page is served from here.
          The Google Fonts and unpkg <link>s that used to sit at the end
          of this head, and the three preconnects that existed to warm
          them, are gone -- see fonts.css and boxicons.css. -->
-    <title>Help | PartnerPortal</title>
+    <title>Privacy | PartnerPortal</title>
     <!-- SVG first for anything modern (one file, sharp at every size); the
          .ico is the legacy fallback and is also what a bare /favicon.ico
          request gets. -->
@@ -97,7 +97,7 @@
                         <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
                         <a href="analytics.html"><i class='bx bx-line-chart'></i> Analytics</a>
                         <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
-                        <a href="pphelp.html" class="active"><i class='bx bx-help-circle'></i> Help</a>
+                        <a href="pphelp.html"><i class='bx bx-help-circle'></i> Help</a>
                         <button type="button" class="account-signout" id="accountSignOut">
                             <i class='bx bx-log-out'></i> Log out
                         </button>
@@ -109,235 +109,186 @@
 
     <main class="help-main" id="main" tabindex="-1">
         <div class="help-head">
-            <p class="eyebrow">Help</p>
-            <h1>How PartnerPortal works</h1>
+            <p class="eyebrow">Privacy</p>
+            <h1>What PartnerPortal keeps, and who sees it</h1>
             <p class="help-lede">
-                Most partnerships between small organizations fall apart
-                because one side is doing a favor. Everything here is built
-                around the opposite: matching on what you need <em>and</em>
-                what you can offer, so both sides walk in with something to
-                gain.
+                Written from how the site actually works rather than as a
+                legal document. Every statement here corresponds to something
+                the software does; when the software changes, this page is
+                changed with it.
             </p>
         </div>
 
         <nav class="help-toc" aria-label="On this page">
-            <a href="#matching">Matching</a>
-            <a href="#proposals">Proposals</a>
-            <a href="#after">After you agree</a>
-            <a href="#privacy">Privacy</a>
-            <a href="#faq">Common questions</a>
+            <a href="#stored">What is stored</a>
+            <a href="#visible">Who sees what</a>
+            <a href="#email">Email</a>
+            <a href="#counting">What is counted</a>
+            <a href="#control">Changing and deleting</a>
+            <a href="#hosting">Where it lives</a>
         </nav>
 
-        <section class="help-section" id="matching">
-            <h2>Matching</h2>
+        <section class="help-section" id="stored">
+            <h2>What is stored</h2>
             <p>
-                Every organization lists what it <strong>needs</strong> and
-                what it can <strong>offer</strong>, from a shared vocabulary of
-                about thirty categories. Everyone else is then ranked by how
-                well the two profiles fit <em>in both directions</em>.
+                An account <em>is</em> an organization. The account holds a
+                sign-in email address and a password, kept only as a bcrypt
+                hash; the profile holds what you enter during onboarding &mdash;
+                the organization's name, type and location, what it needs and
+                offers from the shared category list, focus areas, the free-text
+                notes and description, a contact email and phone number, and
+                up to four links.
             </p>
-            <div class="help-cards">
-                <div class="help-card">
-                    <h3><i class='bx bx-transfer'></i> Two-way match</h3>
-                    <p>
-                        They offer something you need, <em>and</em> they need
-                        something you offer. These rank far above everything
-                        else, and are marked <strong>2-way</strong> wherever
-                        they appear.
-                    </p>
-                </div>
-                <div class="help-card">
-                    <h3><i class='bx bx-link'></i> One-way match</h3>
-                    <p>
-                        Only one direction is satisfied. Still worth seeing,
-                        but be honest about what it is: a request for a favor
-                        rather than an exchange.
-                    </p>
-                </div>
-            </div>
+            <p>
+                Beyond the profile, the site keeps what you do on it: proposals
+                and their terms, the message threads attached to them, the
+                meetings you add to your own calendar, your private shortlist
+                with its notes, invitations you have created, and the
+                notification and email preferences you set.
+            </p>
             <p class="help-aside">
-                Shared focus areas — the causes you work on — nudge the
-                ranking, but never create a match on their own. Caring about
-                the same thing is not the same as having something to trade.
-            </p>
-            <p>
-                <strong>Seeing nobody?</strong> Widen what you list on either
-                side, browse the full directory rather than just your matches,
-                or invite an organization you already work with from the
-                button on your dashboard.
+                Email addresses typed into the invitation form are used to send
+                that one message and are not stored. The same is true of the
+                contact form's details, which are kept only so somebody can
+                reply to you.
             </p>
         </section>
 
-        <section class="help-section" id="proposals">
-            <h2>Proposals</h2>
-            <ol class="help-steps">
-                <li>
-                    <h3>Open a match and propose</h3>
-                    <p>
-                        The terms start pre-filled from the overlap that
-                        produced the match. Each side can only commit to
-                        things it has actually listed as an offer — you
-                        cannot be signed up to something you never said you
-                        could do, and neither can they.
-                    </p>
-                </li>
-                <li>
-                    <h3>They accept, decline, or counter</h3>
-                    <p>
-                        The proposal waits on whoever received it. They can
-                        accept it as it stands, decline it, or change the
-                        terms and send it back &mdash; at which point it waits
-                        on you, with their terms on the table, and you have the
-                        same three answers. The thread and the history stay
-                        with it however many times it goes back and forth. You
-                        can withdraw a proposal you sent at any point before it
-                        is accepted.
-                    </p>
-                </li>
-                <li>
-                    <h3>It becomes an agreement</h3>
-                    <p>
-                        Accepting generates a public summary page you can send
-                        to a board or a funder without them needing an account.
-                        You can rotate that link, or revoke it entirely, from
-                        the partnership itself.
-                    </p>
-                </li>
-            </ol>
-            <p class="help-aside">
-                You can hold one live proposal or partnership with any given
-                organization at a time. Finish or end the current one before
-                starting another.
-            </p>
-        </section>
-
-        <section class="help-section" id="after">
-            <h2>After you agree</h2>
-            <p>
-                A partnership can <strong>complete</strong> or <strong>end</strong>,
-                and the difference is deliberate.
-            </p>
+        <section class="help-section" id="visible">
+            <h2>Who sees what</h2>
             <dl class="help-defs">
-                <dt>Completing takes both sides</dt>
+                <dt>Anyone, without an account</dt>
                 <dd>
-                    You each mark it complete, and each record whether the
-                    other side delivered what it committed to. Nobody grades
-                    their own homework, and one organization cannot decide
-                    alone that the other one is finished.
+                    Your public profile: name, type, location, whether you are
+                    open to remote partnerships, description, focus areas, what
+                    you need and offer, and your notes. Your links appear there
+                    only if you ticked <em>Show these links to everyone</em>.
+                    The public directory lists the same profiles. Public profiles
+                    are marked <code>noindex</code> and are not in the sitemap,
+                    so search engines are asked not to list them.
                 </dd>
-                <dt>Ending takes one</dt>
+                <dt>Signed-in organizations</dt>
                 <dd>
-                    Either side can end a partnership on its own, with a
-                    reason that goes to the other organization. Requiring
-                    agreement would mean being held to a partnership by
-                    somebody who simply never answers.
+                    Everything above, plus your contact email and phone number,
+                    your links, and how well your profile matches theirs. They
+                    see contact details one profile at a time; listings and
+                    search results never carry them.
+                </dd>
+                <dt>Anyone with an agreement link</dt>
+                <dd>
+                    An accepted partnership has a summary page: both
+                    organizations' names, types and locations, the terms each
+                    side agreed to, the timeline, and the proposer's note. It
+                    carries no contact details, no messages, no delivery
+                    verdicts and no reason a partnership ended. Either
+                    organization can replace or remove the link at any time.
+                </dd>
+                <dt>Only the two of you</dt>
+                <dd>
+                    Message threads, the terms of a proposal that has not been
+                    accepted, whether each side said the other delivered, and
+                    the reason given for ending a partnership.
+                </dd>
+                <dt>Only you</dt>
+                <dd>
+                    Your shortlist and its notes, your meetings, your
+                    analytics, your email preferences, and your sign-in address
+                    (partners see your contact address, which may be the same
+                    one).
+                </dd>
+                <dt>Administrators</dt>
+                <dd>
+                    People who run the site can see organization names,
+                    sign-in addresses and profiles in order to act on flagged
+                    names and contact-form messages, and can take a profile
+                    out of the directory. Every such action is recorded
+                    with who took it and why, and the organization is emailed
+                    the reason.
                 </dd>
             </dl>
-            <p class="help-aside">
-                Delivery verdicts and the reason a partnership ended stay
-                between the two of you. Neither ever reaches the public
-                summary page.
+        </section>
+
+        <section class="help-section" id="email">
+            <h2>Email</h2>
+            <p>
+                PartnerPortal sends transactional email only: verification and
+                password-reset links, confirmations when your sign-in address
+                or password changes, and notices about partnership activity
+                &mdash; a proposal received, answered or changed, a message in
+                a thread, a partnership completing or ending, a public link
+                changing. There is no newsletter and no marketing list.
+            </p>
+            <p>
+                The activity notices can be switched off per category in
+                Settings, and each one carries a link to do so. Account
+                messages &mdash; verification, resets, security notices &mdash;
+                cannot be switched off, because they are how you keep control
+                of the account. Mail is delivered through Resend.
             </p>
         </section>
 
-        <section class="help-section" id="privacy">
-            <h2>Privacy</h2>
+        <section class="help-section" id="counting">
+            <h2>What is counted</h2>
             <ul class="help-list">
                 <li>
-                    <strong>Your shortlist is private.</strong> Saving an
-                    organization is a bookmark, not an approach — they are
-                    never told.
+                    <strong>Profile views.</strong> Opening a public profile
+                    records a view against a salted, one-way hash of the viewer
+                    &mdash; the account for a signed-in viewer, the connection
+                    and browser for anyone else &mdash; so that one person
+                    counts once a day. The hash cannot be turned back into who
+                    looked, and the organization sees a count, never a list.
+                    Your own visits to your own profile are not counted.
                 </li>
                 <li>
-                    <strong>Profile views are counted, never itemized.</strong>
-                    You see how often your profile was opened, never by whom.
+                    <strong>Rate limits.</strong> Sign-ins, sign-ups, resets and
+                    other bounded actions are counted per connection and per
+                    account for up to an hour, to slow down guessing and bulk
+                    use. Those rows are deleted as they age out.
                 </li>
                 <li>
-                    <strong>Contact details are not published.</strong> The
-                    public profile page carries no email or phone number.
-                    Signed-in organizations see them on your profile, one
-                    organization at a time.
-                </li>
-                <li>
-                    <strong>Links are opt-in.</strong> Your website and social
-                    links appear on the public page only if you tick the box.
-                </li>
-                <li>
-                    <strong>Messages need a proposal.</strong> Nobody can
-                    message you out of the directory — a thread only exists on
-                    a proposal, and closes when that proposal settles.
+                    <strong>No analytics scripts.</strong> There is no
+                    third-party analytics, advertising or tracking script on
+                    any page, and no cookies beyond the signed-in session and
+                    the token that protects forms.
                 </li>
             </ul>
         </section>
 
-        <section class="help-section" id="faq">
-            <h2>Common questions</h2>
+        <section class="help-section" id="control">
+            <h2>Changing and deleting</h2>
+            <p>
+                Everything on your profile can be changed from <em>Edit
+                profile</em>. Your sign-in address and password change from
+                Settings; changing the address only takes effect once a link
+                sent to the new one is opened, and the old address is told.
+                Changing the password signs out every other device.
+            </p>
+            <p>
+                Deleting your account, also from Settings, removes the account,
+                the profile, your shortlist, your meetings, your profile-view
+                counts and every proposal that was not agreed. An agreed
+                partnership stays on the other organization's record with your
+                name as it was, because it is their record too; messages you
+                sent in those threads stay with the thread, attributed to a
+                closed account.
+            </p>
+        </section>
 
-            <details class="help-faq">
-                <summary>Do I have to verify my email?</summary>
-                <p>
-                    Not right now. Verifying shows partners the address behind
-                    your account is real, but nothing is blocked while you have
-                    not.
-                </p>
-            </details>
-
-            <details class="help-faq">
-                <summary>Can I change my terms after sending a proposal?</summary>
-                <p>
-                    Yes, while it is still waiting for an answer — open it from
-                    your dashboard and edit the terms. Once the other side has
-                    accepted, the agreement is fixed: it is a record of what
-                    two organizations agreed to, and one of them editing it
-                    afterward would make it worth nothing.
-                </p>
-            </details>
-
-            <details class="help-faq">
-                <summary>What happens if the other organization closes its account?</summary>
-                <p>
-                    An agreement you actually reached survives, and its public
-                    summary keeps working — it is a record of something that
-                    happened, and it is not theirs alone to delete. Proposals
-                    that never became agreements are removed.
-                </p>
-            </details>
-
-            <details class="help-faq">
-                <summary>Someone has a profile but has never signed in. Why?</summary>
-                <p>
-                    Profiles can be created by invitation, and stay unclaimed
-                    until that organization opens the link and sets a password.
-                    An unclaimed profile is invisible — it does not appear in
-                    the directory or in anybody's matches.
-                </p>
-            </details>
-
-            <details class="help-faq">
-                <summary>Why can I not propose to an example organization?</summary>
-                <p>
-                    The ones marked as examples are fictional, shown to
-                    demonstrate how matching works while the directory is
-                    small. They have nobody behind them to accept or decline,
-                    so a proposal would sit unanswered forever.
-                </p>
-            </details>
-
-            <details class="help-faq">
-                <summary>How do I delete my account?</summary>
-                <p>
-                    Settings &rarr; Delete account. It asks for your password,
-                    and it cannot be undone. Agreements you reached with
-                    organizations that are still here stay, so the other side
-                    does not lose its own history.
-                </p>
-            </details>
+        <section class="help-section" id="hosting">
+            <h2>Where it lives</h2>
+            <p>
+                The application runs on Render and the database on Neon, both
+                in the United States. Connections are over HTTPS. Passwords are
+                never stored or logged in the clear, and the single-use tokens
+                in emailed links are stored only as hashes.
+            </p>
         </section>
 
         <section class="help-section help-contact">
-            <h2>Still stuck?</h2>
+            <h2>Questions?</h2>
             <p>
-                Send us the details and we will get back to you.
+                If something here does not match what you see, or you want a
+                copy of what is stored about your organization, ask.
             </p>
             <button type="button" class="btn-primary" data-contact-open>
                 <i class='bx bx-envelope'></i> Contact us

@@ -190,6 +190,17 @@
 
 .field {
     margin-bottom: 1rem;
+    text-align: left;
+}
+
+.field > label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--h-dim);
 }
 
 .container input {

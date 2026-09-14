@@ -261,6 +261,7 @@ registerForm.addEventListener('submit', async (e) => {
         // is the only sign a verification email was sent -- the redirect
         // itself is instant otherwise, and this is the one moment there is
         // somewhere on-page to say so.
+        rememberEmail(email);
         setBanner(registerBanner,
             "Account created. We've sent a verification link to your email.",
             'success');
@@ -311,6 +312,37 @@ function routeRegisterError(error) {
 const loginForm = document.querySelector('.sign-in form');
 const loginBanner = document.getElementById('loginBanner');
 const loginEmailInput = document.getElementById('login-email');
+
+// The address used last time, offered again. Only the address: it is the
+// half of a sign-in that is not a secret, and it is what somebody coming
+// back on the same browser retypes every time. The browser's own autofill
+// covers this for many people and not for everyone -- a shared office
+// machine with autofill off, a browser that never offered to save. Kept in
+// this browser only, cleared by signing out, and never sent anywhere.
+const LAST_EMAIL_KEY = 'partnerPortalLastEmail';
+
+function rememberEmail(email) {
+    try {
+        if (email) localStorage.setItem(LAST_EMAIL_KEY, email);
+        else localStorage.removeItem(LAST_EMAIL_KEY);
+    } catch {
+        // Storage disabled; the form still works.
+    }
+}
+
+(function prefillLastEmail() {
+    if (!loginEmailInput || loginEmailInput.value) return;
+    try {
+        const last = localStorage.getItem(LAST_EMAIL_KEY);
+        if (!last) return;
+        loginEmailInput.value = last;
+        // The password is what they still have to type.
+        const password = document.getElementById('login-password');
+        if (password && !location.hash) password.focus();
+    } catch {
+        // Nothing remembered.
+    }
+})();
 const loginEmailError = document.getElementById('login-email-error');
 const loginPasswordInput = document.getElementById('login-password');
 const loginPasswordError = document.getElementById('login-password-error');
@@ -356,6 +388,7 @@ loginForm.addEventListener('submit', async (e) => {
             body: { email, password },
             allowUnauthenticated: true
         });
+        rememberEmail(email);
         // Left in the loading state on purpose: the navigation below is the
         // next thing to happen, and putting "Sign In" back first would flash
         // an idle-looking button on a page that is already leaving.

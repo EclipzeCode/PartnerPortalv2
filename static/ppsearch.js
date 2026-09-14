@@ -582,7 +582,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.innerHTML = `
                 <div class="partner-score${noOverlap ? ' none' : ''}"${
                     noOverlap ? ' title="No overlap with your profile yet"' : ''
-                }>${noOverlap ? '&mdash;' : m.match_score}</div>
+                }>${noOverlap ? '&mdash;' : `${m.match_score}<small>/100</small>`}</div>
                 ${saveBtn}
                 <div class="partner-content">
                     <div class="card-badge-slot">${badge}</div>
