@@ -1236,9 +1236,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderEditAmounts();
 
         window.showDialog(editModal, editStartsOn);
+        editOpenedAs = editSnapshot();
     }
 
-    function closeEdit() {
+    // What the form held when it opened, so closing can tell a form that
+    // was looked at from one that was worked on.
+    let editOpenedAs = '';
+
+    function editSnapshot() {
+        return JSON.stringify({
+            gives: [...editGives.proposer].sort(),
+            gets: [...editGives.recipient].sort(),
+            quantities: editQuantities,
+            timeline: editTimeline.value,
+            starts: editStartsOn.value,
+            ends: editEndsOn.value,
+            message: editMessage.value,
+        });
+    }
+
+    function closeEdit({ force = false } = {}) {
+        if (!editing) return;
+        // A backdrop click or a stray Escape used to drop a half-written
+        // counter-offer without a word; now it asks.
+        if (!force && editSnapshot() !== editOpenedAs
+                && !window.confirm(
+                    'Discard these changes? What you have filled in will '
+                    + 'be lost.')) {
+            return;
+        }
         editing = null;
         window.hideDialog(editModal);
     }
@@ -1306,7 +1332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     },
                 });
                 const name = editing.counterpart.name;
-                closeEdit();
+                closeEdit({ force: true });
                 if (countering) activateTab('outgoing');
                 await load();
                 window.toast(countering
@@ -1320,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // form cannot fix -- the same reasoning as the respond
                 // dialog below.
                 if (error.status === 409) {
-                    closeEdit();
+                    closeEdit({ force: true });
                     await load();
                     window.toast(error.message, 'error');
                     return;

@@ -597,6 +597,65 @@ body.ink .header {
     border-bottom: 1px solid var(--h-rule);
 }
 
+/* The slim bar on the two standalone public pages (a profile, an
+   agreement), which carry no shared nav because they do not load the script
+   that builds it. Same width as the sheet below it, so it reads as the
+   sheet's own header rather than the site's. */
+.public-bar {
+    max-width: 48rem;
+    margin: 0 auto 1.5rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--h-rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.public-brand {
+    font-family: var(--h-sans);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+    text-decoration: none;
+}
+
+.public-brand:hover {
+    color: var(--h-give);
+}
+
+.public-links {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.public-links a {
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--h-ink-soft);
+    text-decoration: none;
+}
+
+.public-links a:hover {
+    color: var(--h-ink);
+}
+
+.public-links .public-cta {
+    padding: 0.5rem 0.9rem;
+    background: var(--h-ink);
+    color: var(--h-paper);
+}
+
+.public-links .public-cta:hover {
+    background: var(--h-give);
+    color: var(--h-on-give);
+}
+
 body.ink .logo {
     font-family: var(--h-sans);
     font-weight: 600;

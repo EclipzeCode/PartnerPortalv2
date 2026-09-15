@@ -779,7 +779,7 @@ def notify_proposal_created(proposal):
     _dispatch(to_addr, subject, html, text, preferences=True)
 
 
-def notify_proposal_updated(proposal, editor):
+def notify_proposal_updated(proposal, editor, countered=None):
     """The other side is told when a pending proposal's terms change.
 
     Not a courtesy. Whoever answers next is being asked to accept a specific
@@ -789,16 +789,23 @@ def notify_proposal_updated(proposal, editor):
     moved.
 
     `editor` is whichever party changed them. The proposer correcting an
-    unanswered proposal and the recipient countering it are the same
-    message with different verbs: in both cases the terms below are what is
-    now on the table, and the reader is the one who has to answer.
+    unanswered proposal and either side countering are the same message
+    with different verbs: in both cases the terms below are what is now on
+    the table, and the reader is the one who has to answer.
+
+    `countered` is whether the edit was an answer -- made by the side whose
+    turn it was. The caller knows, because it decided before it moved the
+    turn; left unsaid, the old rule of thumb (the recipient counters, the
+    proposer corrects) applies, which is wrong only for the proposer
+    countering back.
     """
     other = proposal.counterpart(editor.id)
     if other is None or not other.wants_email("proposals"):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    countered = editor.id == proposal.recipient_id
+    if countered is None:
+        countered = editor.id == proposal.recipient_id
 
     subject = (f"{editor.name} proposed changes to your partnership proposal"
                if countered

@@ -8215,7 +8215,12 @@ def update_proposal(org, db, proposal_id):
             }), 400
         proposal.message = message or None
 
-    countered = proposal.awaits(org.id) and proposal.proposer_id != org.id
+    # A counter-offer is an edit made by whoever was being asked to answer:
+    # the recipient answering a proposal with different terms, or the
+    # proposer answering a counter with different terms again. The proposer
+    # correcting a proposal nobody has answered yet is neither -- it was
+    # already the recipient's turn. Decided here, before the turn moves.
+    countered = proposal.awaits(org.id)
 
     # A body that leaves every term as it was is not an edit and not a
     # counter-offer, and used to be treated as both: the turn flipped to the
@@ -8240,7 +8245,7 @@ def update_proposal(org, db, proposal_id):
     # The other side is told, because the thing they were asked to answer
     # has changed underneath them -- and because an edit nobody is told
     # about is a way to alter what somebody is about to accept.
-    notify_proposal_updated(proposal, org)
+    notify_proposal_updated(proposal, org, countered=countered)
 
     return jsonify({
         "message": "Counter-offer sent" if countered else "Proposal updated",

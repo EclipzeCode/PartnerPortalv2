@@ -742,8 +742,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.showDialog(modal, preferred);
     }
 
-    function closeModal(modal) {
+    function closeModal(modal, { force = false } = {}) {
         if (!modal) return;
+        // The propose form is the one dialog here with typing in it worth
+        // losing. A click on the backdrop or a stray Escape used to drop a
+        // half-written message and every amount with it; now it asks.
+        if (modal === proposeModal && !force && proposeIsDirty()
+                && !window.confirm(
+                    'Discard this proposal? What you have filled in will '
+                    + 'be lost.')) {
+            return;
+        }
         window.hideDialog(modal);
         if (modal === detailModal) writeUrl();
     }
@@ -808,9 +817,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `/api/organizations/${encodeURIComponent(m.id)}`);
             org = (data && data.organization) || {};
         } catch {
-            // Leaves the placeholder dashes. Not worth an error state: the
-            // rest of the profile is on screen and the propose button --
-            // which is the actual next step -- is unaffected.
+            // Now "--" is the truth: asked, and nothing came back. Not
+            // worth an error state: the rest of the profile is on screen
+            // and the propose button -- the actual next step -- is
+            // unaffected.
+            if (detailTarget && detailTarget.id === m.id) paint({});
             return;
         }
 
@@ -846,9 +857,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // public_dict in models.py -- so they are fetched for the one
         // organization actually being looked at. Blanked first, or the
         // previous organization's address would sit under this one's name
-        // for as long as the request takes.
-        set('partnerDetailEmail', '');
-        set('partnerDetailPhone', '');
+        // for as long as the request takes -- to an ellipsis rather than
+        // to "--", which is what set() writes for an empty value and reads
+        // as "none listed" for the half second before the real ones land.
+        set('partnerDetailEmail', '\u2026');
+        set('partnerDetailPhone', '\u2026');
         fillContactDetails(m, set);
 
         // Highlight the categories that actually drove the match, so the two
@@ -1166,9 +1179,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             proposeTimeline.appendChild(opt);
         });
         proposeTimeline.value = 'three_months';
-    } catch {
-        // api() redirects on 401. Anything else leaves the propose flow off,
-        // which is better than a half-built form.
+    } catch (error) {
+        // api() redirects on 401. Anything else leaves the propose flow
+        // off, which is better than a half-built form -- but not silently:
+        // without these two answers the propose picker shows "Nothing
+        // listed yet" on the caller's own side, which reads as a profile
+        // problem rather than a network one.
+        window.toast(
+            ((error && error.message) || 'Could not load your profile.')
+            + ' Proposing is off until the page is reloaded.', 'error');
     }
 
     // Terms are drawn from what each side can actually supply: your own offers
@@ -1237,6 +1256,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Every field is optional. A term with no amount is exactly what every
     // proposal was before this existed, and renders the same way.
     const proposeQuantities = { proposerGives: {}, recipientGives: {} };
+
+    // What the form held when it opened, so closing can tell a form that
+    // was looked at from one that was filled in. The prefill from the match
+    // is part of the snapshot: it is the server's suggestion, not the
+    // visitor's work.
+    let proposeOpenedAs = '';
+
+    function proposeSnapshot() {
+        const field = (id) => {
+            const el = document.getElementById(id);
+            return el ? el.value : '';
+        };
+        return JSON.stringify({
+            gives: [...proposeSelected.proposerGives].sort(),
+            gets: [...proposeSelected.recipientGives].sort(),
+            quantities: proposeQuantities,
+            timeline: field('proposeTimeline'),
+            starts: field('proposeStartsOn'),
+            ends: field('proposeEndsOn'),
+            message: field('proposeMessage'),
+        });
+    }
+
+    function proposeIsDirty() {
+        return proposeModal && proposeModal.classList.contains('active')
+            && proposeSnapshot() !== proposeOpenedAs;
+    }
 
     function unitSelect(side, slug, chosen) {
         const options = unitOptions.map((u) => {
@@ -1402,6 +1448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setProposeMessage('');
             closeModal(detailModal);
             openModal(proposeModal);
+            proposeOpenedAs = proposeSnapshot();
         });
     }
 
@@ -1466,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         message: document.getElementById('proposeMessage').value.trim()
                     }
                 });
-                closeModal(proposeModal);
+                closeModal(proposeModal, { force: true });
                 // Queued rather than shown: the redirect below would destroy
                 // a toast raised here before anyone could read it. common.js
                 // picks this up on the dashboard, which is the first moment
