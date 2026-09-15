@@ -344,6 +344,68 @@
                 </div>
             </div>
 
+            <!-- Visibility ------------------------------------------------- -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-search-alt'></i> Visibility</h3>
+                    <p>Who can find your public profile from outside PartnerPortal.</p>
+                </div>
+
+                <!-- Off for everyone until they say otherwise: filling in a
+                     profile is not agreeing to be published into search
+                     results. On, the profile page drops its noindex tag and is
+                     listed in the sitemap. -->
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="searchableToggle">List my profile in search engines</label>
+                        <p>
+                            Your public profile is always reachable by link. This also
+                            lets Google and the others index it, so somebody searching
+                            for your organization can land here. Contact details stay
+                            behind sign-in either way.
+                        </p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="searchableToggle" disabled>
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <p class="setting-status" id="searchableStatus" role="status" hidden></p>
+            </div>
+
+            <!-- Blocked ---------------------------------------------------- -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-hide'></i> Blocked organizations</h3>
+                    <p>
+                        Organizations you have blocked cannot propose to you or
+                        message you, and do not appear in your matches. They are
+                        not told. Block one from inside its conversation.
+                    </p>
+                </div>
+                <ul class="blocked-list" id="blockedList" aria-live="polite">
+                    <li class="blocked-empty">Loading&hellip;</li>
+                </ul>
+            </div>
+
+            <!-- Sessions --------------------------------------------------- -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h3><i class='bx bx-id-card'></i> Signed-in devices</h3>
+                    <p>
+                        Left yourself signed in somewhere else? This signs every
+                        other browser out of your account and keeps this one.
+                        Changing your password does the same.
+                    </p>
+                </div>
+                <div class="settings-links">
+                    <button type="button" class="btn-ghost" id="endSessionsBtn">
+                        <i class='bx bx-log-out'></i> Sign out everywhere else
+                    </button>
+                </div>
+                <p class="setting-status" id="sessionsStatus" role="status" hidden></p>
+            </div>
+
             <!-- Change password ------------------------------------------- -->
             <div class="settings-card">
                 <div class="settings-card-header">

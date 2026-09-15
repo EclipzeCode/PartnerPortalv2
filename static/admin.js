@@ -86,6 +86,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             </article>`;
     }
 
+    // A reported thread. The admin cannot read the thread from here -- the
+    // messages are between two organizations and the admin API does not
+    // serve them -- so the row carries what the reporter said and who the
+    // two parties are, with the reported organization's profile a click
+    // away and the hide control on the flagged/hidden rows for what follows.
+    function reportRow(r) {
+        const profile = r.reported_id
+            ? `<a href="organization.html?id=${encodeURIComponent(r.reported_id)}"
+                  target="_blank" rel="noopener">Open ${esc(r.reported_name)}'s profile</a>`
+            : '<span class="admin-dim">reported organization has closed its account</span>';
+        return `
+            <article class="admin-row">
+              <div class="admin-row-main">
+                <p class="admin-row-title">
+                  ${esc(r.reporter_name)}
+                  <span class="admin-dim">reported</span>
+                  ${esc(r.reported_name)}
+                  ${r.partnership_id
+                      ? `<span class="admin-dim">proposal #${esc(r.partnership_id)}</span>`
+                      : ''}
+                </p>
+                <p class="admin-row-body">${esc(r.reason)}</p>
+                <p class="admin-dim">${esc(when(r.created_at))} &middot; ${profile}</p>
+              </div>
+              <div class="admin-row-actions">
+                <button type="button" class="btn-ghost"
+                        data-handle-report="${r.id}">Mark handled</button>
+              </div>
+            </article>`;
+    }
+
     function orgRow(org, kind) {
         const meta = [org.organization_type, org.location]
             .filter(Boolean).map(esc).join(' &middot; ');
@@ -149,6 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const c = data.counts;
         document.getElementById('adminCounts').innerHTML = [
             ['Messages waiting', c.contact_messages],
+            ['Reports waiting', c.reports],
             ['Names flagged', c.flagged],
             ['Hidden', c.hidden],
         ].map(([label, n]) => `
@@ -206,6 +238,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             row: messageRow,
             noun: 'message',
             blank: 'Nothing waiting.',
+        },
+        {
+            name: 'reports',
+            key: 'reports',
+            host: 'adminReports',
+            search: 'searchReports',
+            pager: 'pagerReports',
+            count: 'countReports',
+            row: reportRow,
+            noun: 'report',
+            blank: 'Nothing reported.',
         },
         {
             name: 'flagged',
@@ -494,6 +537,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (handle) {
             return act(() => call(
                 `/api/admin/contact-messages/${handle.dataset.handle}/handled`,
+                { method: 'POST', body: { handled: true } }));
+        }
+
+        const report = e.target.closest('[data-handle-report]');
+        if (report) {
+            return act(() => call(
+                `/api/admin/reports/${report.dataset.handleReport}/handled`,
                 { method: 'POST', body: { handled: true } }));
         }
 

@@ -655,6 +655,51 @@
     color: var(--h-dim);
 }
 
+/* Report or block: a quiet control under the thread, and the form it opens. */
+.thread-safety {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--h-rule);
+}
+
+.thread-safety-toggle {
+    background: none;
+    border: none;
+    padding: 0.25rem 0;
+    font-family: var(--h-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+    cursor: pointer;
+}
+
+.thread-safety-toggle:hover,
+.thread-safety-toggle[aria-expanded="true"] {
+    color: var(--h-take);
+}
+
+.report-form {
+    margin-top: 0.6rem;
+    display: grid;
+    gap: 0.6rem;
+}
+
+.report-form label {
+    font-size: 0.85rem;
+}
+
+.report-block {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    color: var(--h-ink-soft);
+}
+
+.report-block input {
+    margin-top: 0.25rem;
+}
+
 .message-closed {
     padding: 0.85rem 0 0.85rem 1rem;
     border-left: 3px solid var(--h-rule);

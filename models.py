@@ -139,6 +139,15 @@ class Organization(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # Whether the public profile may be listed by search engines. Off by
+    # default: filling in onboarding is not agreeing to be published into
+    # search results. On, the profile page drops its noindex tag and joins
+    # the sitemap -- the same shape links_public has, and the opt-in the
+    # README said the sitemap was waiting for.
+    searchable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+
     # --- State -------------------------------------------------------------
     # Only completed profiles are matchable; a half-filled row would pollute
     # everyone else's results.
@@ -551,6 +560,7 @@ class Organization(Base):
             # So the settings page can say a change is waiting rather than
             # showing the old address with no sign anything is in flight.
             "pending_email": self.pending_email,
+            "searchable": self.searchable,
         })
         return data
 
@@ -2142,6 +2152,127 @@ class ContactMessage(Base):
             "email": self.email,
             "phone": self.phone,
             "message": self.message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "handled_at": self.handled_at.isoformat() if self.handled_at else None,
+        }
+
+
+class Block(Base):
+    """One organization refusing to hear from another.
+
+    The README's open item: messaging exists only on a proposal somebody
+    sent you, which bounds exposure, but nothing let the recipient of an
+    unwelcome approach make it stop -- declining closed that thread and
+    nothing stopped the next proposal. A block does. While it stands the
+    blocked organization cannot propose to the blocker, cannot post in a
+    thread the two share, and does not appear in the blocker's matches or
+    directory; any proposal pending between them is settled the moment the
+    block is made.
+
+    One direction, and private. The blocked organization is never told --
+    a proposal it tries to send is refused in the same words a paused
+    account would get -- because the alternative is a notification that
+    says "they blocked you", which is the thing most likely to provoke the
+    behavior the block exists to end. Blocking back is allowed and changes
+    nothing, since the effect is already symmetrical where it matters.
+
+    CASCADE both ways: a block is between two live accounts, and outlives
+    neither.
+    """
+
+    __tablename__ = "blocks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    blocker_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    blocked_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    blocked = relationship(
+        "Organization", foreign_keys=[blocked_id], lazy="joined"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("blocker_id", "blocked_id", name="uq_blocks_pair"),
+        CheckConstraint("blocker_id <> blocked_id", name="ck_blocks_not_self"),
+        Index("ix_blocks_blocked", "blocked_id"),
+    )
+
+    def __repr__(self):
+        return f"<Block {self.blocker_id} -> {self.blocked_id}>"
+
+    def to_dict(self):
+        other = self.blocked
+        return {
+            "id": self.id,
+            "organization_id": self.blocked_id,
+            "name": other.name if other is not None else None,
+            "organization_type": (other.organization_type
+                                  if other is not None else None),
+            "location": other.location if other is not None else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ThreadReport(Base):
+    """A conversation somebody asked a person to look at.
+
+    The other half of Block. A block is what the reporting organization can
+    do for itself; a report is what it can ask of the site. It carries the
+    thread, who raised it, who it is about and why, and lands in the admin
+    panel's queue beside the contact messages -- where an admin can read the
+    thread and, if warranted, hide the reported organization from the
+    directory with the powers that already exist.
+
+    The reporter's word is a claim, not a verdict: nothing happens to the
+    reported organization on a report alone, and it is not told.
+    """
+
+    __tablename__ = "thread_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    partnership_id: Mapped[int | None] = mapped_column(
+        ForeignKey("partnerships.id", ondelete="SET NULL")
+    )
+    reporter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    reported_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL")
+    )
+    # Snapshots, so the queue still reads once a party is gone.
+    reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    reported_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    handled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    __table_args__ = (
+        Index("ix_thread_reports_queue", "handled_at", "created_at"),
+        Index("ix_thread_reports_partnership", "partnership_id"),
+    )
+
+    def __repr__(self):
+        return f"<ThreadReport {self.id} partnership={self.partnership_id}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "partnership_id": self.partnership_id,
+            "reporter_id": self.reporter_id,
+            "reporter_name": self.reporter_name,
+            "reported_id": self.reported_id,
+            "reported_name": self.reported_name,
+            "reason": self.reason,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "handled_at": self.handled_at.isoformat() if self.handled_at else None,
         }

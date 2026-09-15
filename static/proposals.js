@@ -514,9 +514,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!open) {
             const proposal = proposals.find((p) => p.id === openThreadId);
             const status = proposal ? proposal.status : 'closed';
-            messageClosed.textContent =
-                `This proposal was ${status}, so the conversation is closed. `
-                + 'Everything said here stays with it.';
+            // A live proposal whose thread is closed is one a block has
+            // closed -- from either side, and the words do not say which.
+            messageClosed.textContent = ['pending', 'accepted'].includes(status)
+                ? 'This conversation is closed. Everything said here stays '
+                  + 'with it.'
+                : `This proposal was ${status}, so the conversation is closed. `
+                  + 'Everything said here stays with it.';
             stopThreadPolling();
         }
     }
@@ -885,7 +889,100 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (window.refreshNavCounts) window.refreshNavCounts();
     }
 
+    // --- Report or block ---------------------------------------------------
+    const reportToggle = document.getElementById('reportToggle');
+    const reportForm = document.getElementById('reportForm');
+    const reportReason = document.getElementById('reportReason');
+    const reportBlock = document.getElementById('reportBlock');
+    const reportError = document.getElementById('reportError');
+    const reportSubmit = document.getElementById('reportSubmit');
+    const blockOnlyBtn = document.getElementById('blockOnlyBtn');
+
+    function setReportOpen(open) {
+        if (!reportForm) return;
+        reportForm.hidden = !open;
+        reportToggle.setAttribute('aria-expanded', String(open));
+        if (open) {
+            const proposal = proposals.find((p) => p.id === openThreadId);
+            const name = proposal && proposal.counterpart
+                ? proposal.counterpart.name : 'this organization';
+            document.getElementById('reportBlockName').textContent = name;
+            reportError.hidden = true;
+            reportReason.focus();
+        } else {
+            reportReason.value = '';
+            reportBlock.checked = false;
+        }
+    }
+
+    function showReportError(text) {
+        reportError.textContent = text || '';
+        reportError.hidden = !text;
+    }
+
+    // After a block the thread is closed and the proposal settled, and the
+    // list and the nav both have to say so.
+    async function afterSafetyAction(message) {
+        setReportOpen(false);
+        window.toast(message);
+        await refreshThread();
+        document.dispatchEvent(new CustomEvent('partnerships:changed'));
+    }
+
+    if (reportToggle) {
+        reportToggle.addEventListener('click', () => setReportOpen(reportForm.hidden));
+        document.getElementById('reportCancel')
+            .addEventListener('click', () => setReportOpen(false));
+
+        reportForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (openThreadId === null) return;
+            const reason = reportReason.value.trim();
+            if (!reason) {
+                showReportError('Say what the problem is.');
+                reportReason.focus();
+                return;
+            }
+            reportSubmit.disabled = true;
+            try {
+                const result = await window.api(
+                    `/api/proposals/${openThreadId}/report`,
+                    { method: 'POST', body: { reason, block: reportBlock.checked } });
+                await afterSafetyAction(result.message);
+            } catch (error) {
+                showReportError(error.message || 'Could not send that.');
+            } finally {
+                reportSubmit.disabled = false;
+            }
+        });
+
+        blockOnlyBtn.addEventListener('click', async () => {
+            const proposal = proposals.find((p) => p.id === openThreadId);
+            const other = proposal && proposal.counterpart;
+            if (!other || other.id === null || other.id === undefined) {
+                showReportError('That organization has closed its account.');
+                return;
+            }
+            if (!window.confirm(`Block ${other.name}? They will not be able to `
+                    + 'propose to you or message you again, and any proposal '
+                    + 'between you is closed. You can undo this in Settings.')) {
+                return;
+            }
+            blockOnlyBtn.disabled = true;
+            try {
+                const result = await window.api('/api/blocks',
+                    { method: 'POST', body: { organization_id: other.id } });
+                await afterSafetyAction(result.message);
+            } catch (error) {
+                showReportError(error.message || 'Could not block them.');
+            } finally {
+                blockOnlyBtn.disabled = false;
+            }
+        });
+    }
+
     function closeThread() {
+        setReportOpen(false);
         stopThreadPolling();
         meetingForm.hidden = true;
         meetingEditing = null;

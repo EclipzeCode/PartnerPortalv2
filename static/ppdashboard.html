@@ -457,6 +457,35 @@
                 <!-- Replaces the form once the proposal is settled. The
                      thread stays readable; it just stops accepting posts. -->
                 <p class="message-closed" id="messageClosed" hidden></p>
+
+                <!-- The way out of an unwelcome conversation. A report goes
+                     to the admin queue; a block closes this thread, settles
+                     any pending proposal between the two, and keeps the
+                     other organization from proposing again. The other side
+                     is not told either way -- see models.Block. -->
+                <div class="thread-safety">
+                    <button type="button" class="thread-safety-toggle" id="reportToggle"
+                            aria-expanded="false" aria-controls="reportForm">
+                        <i class='bx bx-flag' aria-hidden="true"></i> Report or block
+                    </button>
+                    <form id="reportForm" class="report-form" hidden novalidate>
+                        <label for="reportReason">What is the problem?</label>
+                        <textarea id="reportReason" rows="3" maxlength="2000"
+                                  placeholder="Say what happened. Somebody will read this conversation."></textarea>
+                        <label class="report-block">
+                            <input type="checkbox" id="reportBlock">
+                            <span>Also block <span id="reportBlockName">this organization</span>
+                                &mdash; they will not be able to propose to you or message
+                                you again, and they are not told.</span>
+                        </label>
+                        <p class="field-error" id="reportError" role="alert" hidden></p>
+                        <div class="form-actions">
+                            <button type="button" class="btn-ghost" id="reportCancel">Cancel</button>
+                            <button type="button" class="btn-ghost" id="blockOnlyBtn">Block only</button>
+                            <button type="submit" class="btn-danger" id="reportSubmit">Send report</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

@@ -307,6 +307,110 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // --- Search indexing ---------------------------------------------------
+    const searchable = document.getElementById('searchableToggle');
+    const searchableStatus = document.getElementById('searchableStatus');
+    if (searchable) {
+        searchable.checked = Boolean(me.searchable);
+        searchable.disabled = false;
+        searchable.addEventListener('change', async () => {
+            const wanted = searchable.checked;
+            searchable.disabled = true;
+            try {
+                await window.api('/api/settings', {
+                    method: 'PATCH', body: { searchable: wanted },
+                });
+                searchableStatus.textContent = wanted
+                    ? 'Search engines may now list your profile. It can take '
+                      + 'them a while to notice.'
+                    : 'Your profile asks search engines not to list it. Copies '
+                      + 'they already hold fade on their own schedule.';
+                searchableStatus.className = 'setting-status ok';
+                searchableStatus.hidden = false;
+            } catch (error) {
+                searchable.checked = !wanted;
+                searchableStatus.textContent =
+                    error.message || 'Could not save that. Please try again.';
+                searchableStatus.className = 'setting-status error';
+                searchableStatus.hidden = false;
+            } finally {
+                searchable.disabled = false;
+            }
+        });
+    }
+
+    // --- Blocked organizations ---------------------------------------------
+    const blockedList = document.getElementById('blockedList');
+
+    function paintBlocked(blocks) {
+        if (!blockedList) return;
+        if (!blocks.length) {
+            blockedList.innerHTML =
+                '<li class="blocked-empty">You have not blocked anyone.</li>';
+            return;
+        }
+        const esc = window.escapeHtml;
+        blockedList.innerHTML = blocks.map((b) => `
+            <li class="blocked-row">
+                <div>
+                    <strong>${esc(b.name || 'An organization')}</strong>
+                    <p>${esc([b.organization_type, b.location]
+                        .filter(Boolean).join(' · '))}</p>
+                </div>
+                <button type="button" class="btn-ghost" data-unblock="${b.organization_id}">
+                    Unblock
+                </button>
+            </li>`).join('');
+    }
+
+    if (blockedList) {
+        window.api('/api/blocks').then((data) => {
+            paintBlocked(data.blocks || []);
+        }).catch((error) => {
+            blockedList.innerHTML = `<li class="blocked-empty">${
+                window.escapeHtml(error.message || 'Could not load these.')}</li>`;
+        });
+
+        blockedList.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-unblock]');
+            if (!btn) return;
+            btn.disabled = true;
+            try {
+                await window.api(`/api/blocks/${encodeURIComponent(btn.dataset.unblock)}`,
+                                 { method: 'DELETE' });
+                const data = await window.api('/api/blocks');
+                paintBlocked(data.blocks || []);
+                window.toast('Unblocked. They can propose to you again.');
+            } catch (error) {
+                btn.disabled = false;
+                window.toast(error.message || 'Could not unblock them.', 'error');
+            }
+        });
+    }
+
+    // --- Other sessions ----------------------------------------------------
+    const endSessionsBtn = document.getElementById('endSessionsBtn');
+    const sessionsStatus = document.getElementById('sessionsStatus');
+    if (endSessionsBtn) {
+        endSessionsBtn.addEventListener('click', async () => {
+            endSessionsBtn.disabled = true;
+            try {
+                const result = await window.api('/api/account/sessions/others',
+                                                { method: 'DELETE' });
+                sessionsStatus.textContent = result.message
+                    || 'Signed out everywhere else.';
+                sessionsStatus.className = 'setting-status ok';
+            } catch (error) {
+                sessionsStatus.textContent =
+                    error.message || 'Could not do that. Please try again.';
+                sessionsStatus.className = 'setting-status error';
+            } finally {
+                sessionsStatus.hidden = false;
+                endSessionsBtn.disabled = false;
+            }
+        });
+    }
+
     // --- Modals ------------------------------------------------------------
     const confirmModal = document.getElementById('confirmDeleteModal');
     const passwordModal = document.getElementById('passwordDeleteModal');

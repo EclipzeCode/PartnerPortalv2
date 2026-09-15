@@ -50,8 +50,9 @@ from matching import (
 )
 from moderation import screen_name
 from models import (
-    Admin, AdminAction, ContactMessage, Event, EventException, Message,
-    Organization, Partnership, ProfileView, RateLimitAttempt, SavedLead,
+    Admin, AdminAction, Block, ContactMessage, Event, EventException,
+    Message, Organization, Partnership, ProfileView, RateLimitAttempt,
+    SavedLead, ThreadReport,
 )
 from notifications import (
     notify_profile_hidden,
@@ -1913,6 +1914,27 @@ def sitemap_xml():
         entry.append("  </url>")
         urls.extend(entry)
 
+    # Profiles whose owners opted in (Settings, "List my profile in search
+    # engines"), and only those: the opt-in this file's docstring said the
+    # sitemap was waiting for. Listed and unhidden as well, since a profile
+    # that does not resolve is not one to advertise.
+    db = get_db()
+    try:
+        ids = db.execute(
+            select(Organization.id).where(
+                Organization.searchable.is_(True),
+                Organization.onboarding_complete.is_(True),
+                Organization.hidden_at.is_(None),
+                Organization.is_demo.is_(False),
+            ).order_by(Organization.id)
+        ).scalars().all()
+    finally:
+        db.close()
+    for org_id in ids:
+        urls += ["  <url>",
+                 f"    <loc>{escape(root)}/organization.html?id={org_id}</loc>",
+                 "  </url>"]
+
     body = "\n".join([
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -2430,6 +2452,10 @@ def _org_og_description(profile):
     return "An organization profile on PartnerPortal."
 
 
+_NOINDEX_TAG = '<meta name="robots" content="noindex, nofollow">'
+_INDEX_TAG = '<meta name="robots" content="index, follow">'
+
+
 @app.route("/organization.html")
 def organization_page():
     """Same file static/organization.html serves, with real og: tags on top.
@@ -2446,6 +2472,7 @@ def organization_page():
     which is the one channel the hiding was meant to close.
     """
     org_id = request.args.get("id", "")
+    searchable = False
     title = "Organization | PartnerPortal"
     description = (
         "See what this organization offers and needs, and get in touch to "
@@ -2463,10 +2490,17 @@ def organization_page():
                 profile = org.public_profile()
                 title = f"{profile['name']} | PartnerPortal"
                 description = _org_og_description(profile)
+                searchable = bool(org.searchable and not org.is_demo)
         finally:
             db.close()
-    return serve_page("organization.html",
-                      html=_render_og_page("organization.html", title, description))
+    html = _render_og_page("organization.html", title, description)
+    if searchable:
+        # The page ships with noindex, which is right for everyone who has
+        # not said otherwise. An organization that opted in gets the tag
+        # inverted rather than removed, so what a crawler reads is an
+        # explicit yes and not the absence of a no.
+        html = html.replace(_NOINDEX_TAG, _INDEX_TAG, 1)
+    return serve_page("organization.html", html=html)
 
 
 @app.route("/partnership.html")
@@ -3127,6 +3161,14 @@ def _admin_sections():
             "search": (Organization.name, Organization.email,
                        Organization.location, Organization.hidden_reason),
         },
+        "reports": {
+            "query": lambda db: db.query(ThreadReport).filter(
+                ThreadReport.handled_at.is_(None)),
+            "order": (ThreadReport.created_at,),
+            "serialize": lambda row: row.to_dict(),
+            "search": (ThreadReport.reporter_name, ThreadReport.reported_name,
+                       ThreadReport.reason),
+        },
         "actions": {
             "query": lambda db: db.query(AdminAction),
             "order": (AdminAction.created_at.desc(),),
@@ -3208,6 +3250,7 @@ def admin_overview(admin, db):
         # Each section's first page, under the key the page already reads,
         # so the shape of this response has not changed.
         "contact_messages": sections["contact_messages"]["rows"],
+        "reports": sections["reports"]["rows"],
         "flagged": sections["flagged"]["rows"],
         "hidden": sections["hidden"]["rows"],
         "actions": sections["actions"]["rows"],
@@ -3220,6 +3263,7 @@ def admin_overview(admin, db):
             # re-counted. These were three more queries answering a question
             # the section queries had already answered.
             "contact_messages": sections["contact_messages"]["total"],
+            "reports": sections["reports"]["total"],
             "flagged": sections["flagged"]["total"],
             "hidden": sections["hidden"]["total"],
         },
@@ -3266,6 +3310,31 @@ def admin_handle_message(admin, db, message_id):
         target_type="contact_message", target_id=row.id, email=row.email)
     db.commit()
     return jsonify({"message": "Saved", "contact_message": row.to_dict()})
+
+
+@app.route("/api/admin/reports/<int:report_id>/handled", methods=["POST"])
+@admin_required
+def admin_handle_report(admin, db, report_id):
+    """Take a report off the queue, or put it back. Same shape as a
+    contact message: nothing is deleted, and nothing happens to the
+    reported organization here -- hiding it is its own decision, with its
+    own route and its own reason."""
+    row = db.get(ThreadReport, report_id)
+    if row is None:
+        return jsonify({"error": "Report not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    handled = data.get("handled", True)
+    if not isinstance(handled, bool):
+        return jsonify({"error": "Handled must be true or false."}), 400
+
+    row.handled_at = datetime.now(timezone.utc) if handled else None
+    record_admin_action(
+        db, admin, "handle_report" if handled else "reopen_report",
+        target_type="thread_report", target_id=row.id,
+        partnership_id=row.partnership_id, reported=row.reported_name)
+    db.commit()
+    return jsonify({"message": "Saved", "report": row.to_dict()})
 
 
 @app.route("/api/admin/organizations/<int:org_id>/flag", methods=["DELETE"])
@@ -3874,7 +3943,8 @@ def update_settings(org, db):
     # pedantic is a client sending a setting this version has never heard of,
     # where "saved" is exactly the wrong answer.
     if not any(field in data
-               for field in ("email_notifications", "email_preferences")):
+               for field in ("email_notifications", "email_preferences",
+                             "searchable")):
         return jsonify({
             "error": "No known setting was included in that request.",
         }), 400
@@ -3925,6 +3995,15 @@ def update_settings(org, db):
         # sitting alongside them that nothing consults.
         for key in Organization.EMAIL_CATEGORIES:
             prefs[key] = value
+
+    if "searchable" in data:
+        value = data["searchable"]
+        if not isinstance(value, bool):
+            return jsonify({
+                "error": "Searchable must be true or false.",
+                "field": "searchable",
+            }), 400
+        org.searchable = value
 
     org.email_preferences = prefs
     # Still written, and never read. See the column: a rollback that found
@@ -4034,6 +4113,22 @@ def change_password(org, db):
 # password reset -- it cannot take over an account, only finish a change the
 # account holder started while holding a valid session -- so it does not need
 # the tighter hour.
+@app.route("/api/account/sessions/others", methods=["DELETE"])
+@login_required
+def end_other_sessions(org, db):
+    """Sign this account out everywhere but here.
+
+    What changing the password already did, on its own: for the laptop
+    left signed in at a library, without having to invent a new password
+    to get it. No password asked, because this only ever removes access.
+    There is no per-device list -- sessions are a signed cookie and an
+    epoch, not rows -- so the answer is all of them or none.
+    """
+    _end_other_sessions(org)
+    db.commit()
+    return jsonify({"message": "Signed out everywhere else."})
+
+
 EMAIL_CHANGE_TOKEN_LIFETIME = timedelta(days=7)
 
 
@@ -4617,7 +4712,7 @@ def _slug_list(raw):
     return clean_categories([part.strip() for part in (raw or "").split(",")])
 
 
-def _directory_filters(args, exclude_id=None):
+def _directory_filters(args, exclude_id=None, viewer_id=None):
     """What the directory shows, as a list of conditions.
 
     Split out from the ordering and paging below because there are now two
@@ -4638,6 +4733,10 @@ def _directory_filters(args, exclude_id=None):
     ]
     if exclude_id is not None:
         conditions.append(Organization.id != exclude_id)
+    # What the viewer has blocked is not in the viewer's directory. Only the
+    # signed-in listing passes this; the public one has no viewer.
+    if viewer_id is not None:
+        conditions.append(Organization.id.notin_(_blocked_ids(viewer_id)))
 
     # Seeded examples are excluded by default, exactly as they are from
     # matches -- they have no owner and nothing to follow up on. Available on
@@ -4738,7 +4837,7 @@ def _directory_by_fit(db, org, args):
             Organization.location,
             Organization.remote_friendly,
             Organization.organization_type,
-        ).where(*_directory_filters(args, org.id))
+        ).where(*_directory_filters(args, org.id, viewer_id=org.id))
     ).all()
 
     total = len(rows)
@@ -4758,7 +4857,7 @@ def _directory_by_fit(db, org, args):
     }
 
 
-def _directory_query(db, args, *, exclude_id=None):
+def _directory_query(db, args, *, exclude_id=None, viewer_id=None):
     """The directory, filtered/sorted/paged from `args`.
 
     Returns (rows, meta) where meta carries what the page control needs --
@@ -4776,7 +4875,8 @@ def _directory_query(db, args, *, exclude_id=None):
     `exclude_id` is the only thing that differs about the query itself. What
     each caller does with the rows is its own business and stays there.
     """
-    query = db.query(Organization).filter(*_directory_filters(args, exclude_id))
+    query = db.query(Organization).filter(
+        *_directory_filters(args, exclude_id, viewer_id=viewer_id))
 
     # "match" is not a SQL sort -- there is no score column for ORDER BY to
     # read -- so it is served by _directory_by_fit instead, and anything
@@ -4853,7 +4953,8 @@ def list_organizations(org, db):
     if _directory_sort(request.args) == "match":
         rows, meta = _directory_by_fit(db, org, request.args)
     else:
-        rows, meta = _directory_query(db, request.args, exclude_id=org.id)
+        rows, meta = _directory_query(db, request.args, exclude_id=org.id,
+                                      viewer_id=org.id)
 
     saved_ids = _saved_ids(db, org)
     organizations = []
@@ -5370,6 +5471,193 @@ def create_saved(org, db):
 # Length cap on a shortlist note. Generous enough for the reason someone
 # saved an organization, short enough that this stays a note rather than a
 # document nobody will reread.
+# --- Blocks and reports ------------------------------------------------------
+
+def _blocked_between(db, a_id, b_id):
+    """Whether either organization has blocked the other."""
+    return db.query(Block.id).filter(or_(
+        and_(Block.blocker_id == a_id, Block.blocked_id == b_id),
+        and_(Block.blocker_id == b_id, Block.blocked_id == a_id),
+    )).first() is not None
+
+
+def _blocked_ids(org_id):
+    """Subquery: the organizations `org_id` has blocked.
+
+    The blocker's side only. What the blocked organization sees is
+    deliberately unchanged -- see models.Block on why it is never told --
+    so the blocker's own matches and directory are where the block shows.
+    """
+    return select(Block.blocked_id).where(Block.blocker_id == org_id)
+
+
+def _thread_open(db, proposal):
+    """Whether this thread takes new messages: live, and nobody has blocked.
+
+    One test for the four places that ask, so a block closes the thread in
+    the same words everywhere and the read endpoint reports what the write
+    endpoints will do.
+    """
+    if not proposal.messages_open():
+        return False
+    if proposal.proposer_id is None or proposal.recipient_id is None:
+        return True
+    return not _blocked_between(db, proposal.proposer_id, proposal.recipient_id)
+
+
+_THREAD_CLOSED = "This conversation is closed."
+
+
+def _settle_pending_between(db, blocker, blocked_id, now):
+    """Close any pending proposal between the two, from the blocker's side.
+
+    A block is an answer to whatever is on the table: a proposal the
+    blocker received is declined, one it sent is withdrawn. Nothing is
+    mailed -- the other side sees a settled proposal, which is what it
+    would see if the blocker had pressed the button.
+    """
+    pending = db.query(Partnership).filter(
+        Partnership.status == Partnership.PENDING,
+        or_(and_(Partnership.proposer_id == blocker.id,
+                 Partnership.recipient_id == blocked_id),
+            and_(Partnership.proposer_id == blocked_id,
+                 Partnership.recipient_id == blocker.id)),
+    ).all()
+    for proposal in pending:
+        proposal.status = (Partnership.WITHDRAWN
+                           if proposal.proposer_id == blocker.id
+                           else Partnership.DECLINED)
+        proposal.responded_at = now
+    if pending:
+        db.query(Event).filter(
+            Event.partnership_id.in_([p.id for p in pending]),
+            Event.share_status == Event.PROPOSED,
+        ).update({"share_status": Event.CANCELLED,
+                  "cancelled_by_id": blocker.id, "awaiting_id": None},
+                 synchronize_session=False)
+
+
+@app.route("/api/blocks", methods=["GET"])
+@login_required
+def list_blocks(org, db):
+    rows = db.query(Block).filter(Block.blocker_id == org.id).order_by(
+        Block.created_at.desc()).all()
+    return jsonify({"blocks": [row.to_dict() for row in rows]})
+
+
+@app.route("/api/blocks", methods=["POST"])
+@login_required
+def create_block(org, db):
+    """Refuse to hear from an organization. Idempotent."""
+    data = request.get_json(silent=True) or {}
+    try:
+        target_id = int(data.get("organization_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Which organization is this about?"}), 400
+    if target_id == org.id:
+        return jsonify({"error": "You cannot block your own organization."}), 400
+    if not valid_id(target_id):
+        return jsonify({"error": "Organization not found."}), 404
+    other = db.get(Organization, target_id)
+    if other is None or other.is_demo or other.claim_token is not None:
+        return jsonify({"error": "Organization not found."}), 404
+
+    wait = rate_limited("blocks", str(org.id), max_attempts=WRITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have changed your blocks a lot recently.", wait)
+
+    now = datetime.now(timezone.utc)
+    existing = db.query(Block).filter(
+        Block.blocker_id == org.id, Block.blocked_id == target_id
+    ).one_or_none()
+    if existing is None:
+        db.add(Block(blocker_id=org.id, blocked_id=target_id))
+        # A blocked organization is not one to keep on a shortlist.
+        db.query(SavedLead).filter(
+            SavedLead.organization_id == org.id,
+            SavedLead.saved_organization_id == target_id,
+        ).delete(synchronize_session=False)
+    _settle_pending_between(db, org, target_id, now)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+    return jsonify({
+        "message": f"{other.name} is blocked. They can no longer propose to "
+                   f"you or message you, and they are not told.",
+        "organization_id": target_id,
+    }), 201
+
+
+@app.route("/api/blocks/<int:org_id>", methods=["DELETE"])
+@login_required
+def delete_block(org, db, org_id):
+    row = db.query(Block).filter(
+        Block.blocker_id == org.id, Block.blocked_id == org_id
+    ).one_or_none()
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return jsonify({"message": "Unblocked", "organization_id": org_id})
+
+
+MAX_REPORT_REASON = 2000
+REPORTS_PER_HOUR = 10
+
+
+@app.route("/api/proposals/<int:proposal_id>/report", methods=["POST"])
+@login_required
+def report_thread(org, db, proposal_id):
+    """Ask a person to look at this conversation.
+
+    Optionally blocks the other side in the same request, since the two
+    are usually wanted together and asking twice is a way to get one.
+    """
+    proposal = _load_party_proposal(db, org, proposal_id)
+    if proposal is None:
+        return jsonify({"error": "Proposal not found."}), 404
+    other = proposal.counterpart_party(org.id)
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"error": "Say what the problem is.", "field": "reason"}), 400
+    if len(reason) > MAX_REPORT_REASON:
+        return jsonify({
+            "error": f"Keep it under {MAX_REPORT_REASON} characters.",
+            "field": "reason",
+        }), 400
+    block = data.get("block", False)
+    if not isinstance(block, bool):
+        return jsonify({"error": "Block must be true or false."}), 400
+
+    wait = rate_limited("reports", str(org.id), max_attempts=REPORTS_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have sent several reports recently.", wait)
+
+    db.add(ThreadReport(
+        partnership_id=proposal.id,
+        reporter_id=org.id, reporter_name=org.name,
+        reported_id=other.get("id"), reported_name=other.get("name") or "",
+        reason=reason,
+    ))
+    blocked = bool(block and other.get("id") is not None)
+    if blocked:
+        if db.query(Block).filter(Block.blocker_id == org.id,
+                                  Block.blocked_id == other["id"]).first() is None:
+            db.add(Block(blocker_id=org.id, blocked_id=other["id"]))
+        _settle_pending_between(db, org, other["id"], datetime.now(timezone.utc))
+    db.commit()
+    return jsonify({
+        "message": ("Reported and blocked. Somebody will look at the "
+                    "conversation." if blocked else
+                    "Reported. Somebody will look at the conversation."),
+        "blocked": blocked,
+    }), 201
+
+
 MAX_SAVED_NOTE = 500
 
 
@@ -7667,6 +7955,13 @@ def create_proposal(org, db):
             "error": "This is an example organization, shown to illustrate how "
                      "matching works. You can only propose to real organizations."
         }), 400
+    if _blocked_between(db, org.id, recipient.id):
+        # Either direction, in words that do not say which. A blocked
+        # organization is not told it was blocked; see models.Block.
+        return jsonify({
+            "error": "This organization is not taking proposals from you "
+                     "right now.",
+        }), 403
 
     # One live partnership per pair, in either direction.
     #
@@ -8755,7 +9050,7 @@ def list_messages(org, db, proposal_id):
         # Echoed so the client can tell a delta from a full reply without
         # having to remember what it asked for.
         "since": since,
-        "open": proposal.messages_open(),
+        "open": _thread_open(db, proposal),
         "counterpart": proposal.counterpart_party(org.id),
     })
 
@@ -8788,6 +9083,8 @@ def create_message(org, db, proposal_id):
                      f"conversation is closed. You can propose again to "
                      f"reopen one.",
         }), 409
+    if not _thread_open(db, proposal):
+        return jsonify({"error": _THREAD_CLOSED}), 409
 
     data = request.get_json(silent=True) or {}
     body = (data.get("body") or "").strip()
@@ -9010,6 +9307,8 @@ def propose_meeting(org, db, proposal_id):
                      f"conversation is closed and no meeting can be arranged "
                      f"in it.",
         }), 409
+    if not _thread_open(db, proposal):
+        return jsonify({"error": _THREAD_CLOSED}), 409
     other = proposal.counterpart(org.id)
     if other is None:
         return jsonify({
@@ -9067,6 +9366,8 @@ def change_meeting(org, db, proposal_id, meeting_id):
             "error": f"This proposal was {proposal.status}, so the "
                      f"conversation is closed.",
         }), 409
+    if not _thread_open(db, proposal):
+        return jsonify({"error": _THREAD_CLOSED}), 409
     if not event.live():
         return jsonify({
             "error": f"This meeting was {event.share_status}.",

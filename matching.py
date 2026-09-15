@@ -268,6 +268,19 @@ def _directions(me):
     return they_give, i_give
 
 
+def _not_blocked_by(me):
+    """SQL: not an organization `me` has blocked.
+
+    Applied wherever candidates are selected, so a blocked organization is
+    gone from the count, the shortlist and the list alike -- three places
+    that would otherwise disagree about how many matches there are.
+    """
+    from models import Block, Organization
+
+    return Organization.id.notin_(
+        select(Block.blocked_id).where(Block.blocker_id == me.id))
+
+
 def _present(*conditions):
     """The conditions that exist, for a caller that may have been given None."""
     return [c for c in conditions if c is not None]
@@ -320,6 +333,7 @@ def match_counts(session, me, *, demo=False):
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
         Organization.hidden_at.is_(None),
+        _not_blocked_by(me),
         or_(*_present(they_give, i_give)),
     )
     if demo is not None:
@@ -360,6 +374,7 @@ def _mutual_candidates(session, me, *, demo=False):
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
         Organization.hidden_at.is_(None),
+        _not_blocked_by(me),
         they_give,
         i_give,
     )
@@ -415,6 +430,7 @@ def _candidates(session, me, *, demo=False):
         # it asks the same question -- an organization taken out of the
         # listings should not reappear as somebody's top match.
         Organization.hidden_at.is_(None),
+        _not_blocked_by(me),
     )
     if demo is not None:
         stmt = stmt.where(Organization.is_demo.is_(demo))

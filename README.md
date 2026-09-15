@@ -231,12 +231,11 @@ They are built from `request.url_root`, so moving to a custom domain does not
 leave a sitemap advertising the old host. The sitemap offers five pages —
 the landing page, the public directory, the help page, the privacy page and
 the sign-in page.
-`organization.html` is
-deliberately not among them: public profiles are what a directory would most
-want found, but nobody agreed to being published into search results by
-filling in onboarding, so listing them wants a per-organization opt-in
-driving both the sitemap and the `noindex` tag — the shape `links_public`
-already has. Until that exists, the profiles stay out.
+Public profiles join it only
+when their owner has opted in (Settings, "List my profile in search
+engines"): nobody agreed to being published into search results by filling
+in onboarding, so `searchable` is off by default, and the same flag inverts
+the profile page's `noindex` tag. Everyone else's profile stays out.
 
 ## Data model note
 
@@ -281,9 +280,17 @@ sending domain:
   answers cost the same hash and the same write, and one connection is told
   twice an hour before the endpoint closes for every address.
 
-Not built: a block or report on message threads. Exposure is bounded while
-threads only exist on a proposal somebody sent you and close when it settles,
-but that stops being true if messaging is ever opened up to the directory.
+Also built: blocking and reporting from inside a conversation. A block
+settles any pending proposal between the two, closes the thread, keeps the
+blocked organization from proposing again and out of the blocker's matches
+and directory -- and is never announced to the blocked side. A report lands
+in the admin panel's queue beside the contact messages. Settings has the
+list of blocks, a "sign out everywhere else" button (the same revocation a
+password change does), and the per-organization opt-in to search indexing
+that drives both the profile page's robots tag and the sitemap.
+
+Not built: a per-device list of sessions. Sessions are a signed cookie and an
+epoch rather than rows, so revocation is all-or-nothing.
 
 ## License
 

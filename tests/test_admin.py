@@ -31,6 +31,7 @@ ADMIN_ROUTES = [
     ("get", "/api/admin/me"),
     ("get", "/api/admin/overview"),
     ("post", "/api/admin/contact-messages/1/handled"),
+    ("post", "/api/admin/reports/1/handled"),
     ("delete", "/api/admin/organizations/1/flag"),
     ("post", "/api/admin/organizations/1/hidden"),
 ]
