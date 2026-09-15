@@ -19,9 +19,18 @@ services:
     # there is nothing new to apply.
     buildCommand: pip install -r requirements.txt && alembic upgrade head
 
-    # Two workers is plenty at this scale. `--timeout 120` covers Neon waking
-    # from scale-to-zero on the first request after an idle period.
-    startCommand: gunicorn app:app --workers 2 --timeout 120 --access-logfile -
+    # Two worker processes, four threads each. gunicorn's default sync
+    # worker serves one request at a time, so `--workers 2` alone was two
+    # concurrent requests for the whole site -- and every request here is at
+    # least one round trip to Neon, so one slow query (a cold start, a big
+    # directory scan) queued everybody behind it. Threads let a worker keep
+    # serving while another request waits on the database, which is what
+    # every request spends most of its time doing. DB_POOL_SIZE below is
+    # sized to match: see db.py.
+    #
+    # `--timeout 120` covers Neon waking from scale-to-zero on the first
+    # request after an idle period.
+    startCommand: gunicorn app:app --workers 2 --worker-class gthread --threads 4 --timeout 120 --access-logfile -
 
     healthCheckPath: /api/categories
 
@@ -36,6 +45,16 @@ services:
         value: "0"
       - key: DATABASE_URL
         sync: false
+      # Sized for the threaded worker above: four requests in flight per
+      # process, and a rate-limited request holds two connections at once
+      # (its own session and the limiter's). Four kept warm plus six of
+      # overflow is ten per process, twenty across both -- well inside what
+      # the smallest Neon compute allows, and far above what two sync
+      # workers could ever have used.
+      - key: DB_POOL_SIZE
+        value: "4"
+      - key: DB_MAX_OVERFLOW
+        value: "6"
       - key: SECRET_KEY
         sync: false
 

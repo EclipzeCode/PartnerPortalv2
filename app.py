@@ -8,6 +8,7 @@ import re
 import secrets
 import threading
 import time
+from collections import deque
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
 from html import escape
@@ -28,7 +29,7 @@ from flask import (
 
 from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, load_only
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
@@ -786,6 +787,73 @@ def clear_rate_limit(bucket, key):
         db.close()
 
 
+# --- Read limits ------------------------------------------------------------
+# The limiter above records every attempt in Postgres, and for what it meters
+# that is right: a login guess or a proposal sent has to be counted whichever
+# worker took it and whatever the handler did next. The two public *read*
+# routes -- the directory and a profile -- went through the same table, which
+# meant every anonymous GET cost a write to a database in another data
+# center: a read that costs a write, six hundred times an hour per visitor,
+# to guard against enumeration.
+#
+# Those two are metered here instead, in process memory. A sliding window
+# per key, with the same answer shape as rate_limited: zero if the request
+# may proceed, otherwise seconds until it may. What is given up is that the
+# count is per process rather than global -- with N gunicorn workers a
+# determined caller has N times the budget. The budget exists to make walking
+# the membership list take days rather than seconds and to leave a trail; a
+# small multiple of it does neither less. What is gained is that the common
+# case, a person reading the directory, touches no database at all for the
+# check.
+#
+# Deliberately not used for anything that meters guessing or volume of
+# writes. Those keep the table.
+
+_read_windows = {}
+_read_lock = threading.Lock()
+_read_sweep_after = 0.0
+READ_SWEEP_INTERVAL = 300
+
+
+def _sweep_read_windows(now):
+    """Drop keys nothing has touched for longer than any window keeps."""
+    global _read_sweep_after
+    if now < _read_sweep_after:
+        return
+    _read_sweep_after = now + READ_SWEEP_INTERVAL
+    stale = [key for key, (window, hits) in _read_windows.items()
+             if not hits or hits[-1] <= now - window]
+    for key in stale:
+        del _read_windows[key]
+
+
+def read_limited(bucket, key, max_attempts, window_seconds):
+    """Seconds until `key` may read `bucket` again, or 0 if it may now.
+
+    Records the read when it is allowed and nothing when it is not, exactly
+    as rate_limited does, so the two can be swapped at a call site without
+    the surrounding code changing.
+    """
+    now = time.monotonic()
+    with _read_lock:
+        _sweep_read_windows(now)
+        window, hits = _read_windows.setdefault(
+            (bucket, key), (float(window_seconds), deque()))
+        floor = now - window
+        while hits and hits[0] <= floor:
+            hits.popleft()
+        if len(hits) >= max_attempts:
+            return max(1, math.ceil(hits[0] + window - now))
+        hits.append(now)
+        return 0
+
+
+def forget_read_limits():
+    """Drop every in-memory read count. For the test suite."""
+    with _read_lock:
+        _read_windows.clear()
+
+
 # Where somebody refused by the name filter is told to go.
 #
 # The address itself rather than a link to the contact form, and that is the
@@ -1036,8 +1104,14 @@ _asset_lock = threading.Lock()
 # Local .css/.js in an href/src. Anchored on the quote and excluding "/" and
 # ":" so an absolute URL (the Google Fonts stylesheet, unpkg's boxicons) is
 # left alone -- stamping one would break it.
+#
+# A font under fonts/ is allowed too, for the <link rel="preload"> in each
+# page's head. It gets the same stamp the stylesheet gives that file (both
+# go through asset_version), which is what makes the preload useful: a
+# preload whose URL differs from the one the @font-face asks for is a second
+# download, not a head start.
 _ASSET_REF_RE = re.compile(
-    r'((?:href|src)=")([A-Za-z0-9._-]+\.(?:css|js))(")'
+    r'((?:href|src)=")((?:fonts/)?[A-Za-z0-9._-]+\.(?:css|js|woff2))(")'
 )
 
 # The same idea one level down: a font referenced from inside a stylesheet.
@@ -1888,10 +1962,43 @@ def compress_response(response):
     body = response.get_data()
     if len(body) < COMPRESS_MIN_BYTES:
         return response
-    response.set_data(gzip.compress(body, compresslevel=6))
+    response.set_data(_gzipped(body, response))
     response.headers["Content-Encoding"] = "gzip"
     response.headers.add("Vary", "Accept-Encoding")
     return response
+
+
+# Compressed bodies for the versioned assets, by ETag. A bundle is a hundred
+# kilobytes that is byte-identical for every visitor until a file in it
+# changes, and it was gzipped from scratch on every request that did not
+# come with a matching If-None-Match -- which is every first visit. The ETag
+# is a hash of the uncompressed body, so it is exactly the right key: same
+# tag, same bytes, same gzip. Bounded by the number of distinct asset
+# versions a process has served, which is small and grows only on deploy.
+_gzip_cache = {}
+_gzip_lock = threading.Lock()
+GZIP_CACHE_MAX = 64
+
+
+def _gzipped(body, response):
+    """`body` compressed, from the cache when the response is a stamped asset."""
+    cache_control = response.headers.get("Cache-Control", "")
+    etag = response.get_etag()[0]
+    if "immutable" not in cache_control or not etag:
+        return gzip.compress(body, compresslevel=6)
+
+    key = (request.path, etag)
+    with _gzip_lock:
+        hit = _gzip_cache.get(key)
+    if hit is not None:
+        return hit
+
+    packed = gzip.compress(body, compresslevel=6)
+    with _gzip_lock:
+        if len(_gzip_cache) >= GZIP_CACHE_MAX:
+            _gzip_cache.clear()
+        _gzip_cache[key] = packed
+    return packed
 
 
 @app.after_request
@@ -4856,7 +4963,7 @@ def public_directory():
     directory learns nothing at all. They carry is_demo so the page can label
     them, which it does.
     """
-    wait = rate_limited("public_directory", client_ip(),
+    wait = read_limited("public_directory", client_ip(),
                         max_attempts=DIRECTORY_READS_PER_HOUR,
                         window_seconds=3600)
     if wait:
@@ -5169,7 +5276,12 @@ def list_saved(org, db):
     exactly the loss this table exists to prevent -- if it no longer overlaps
     it simply scores low, and stays where it was put.
     """
-    rows = db.query(SavedLead).filter(
+    # The saved organization comes along in the same statement. It was a
+    # lazy load per row, so a shortlist of thirty was thirty-one round trips
+    # to a database a network hop away.
+    rows = db.query(SavedLead).options(
+        joinedload(SavedLead.saved_organization)
+    ).filter(
         SavedLead.organization_id == org.id
     ).order_by(SavedLead.created_at.desc()).all()
 
@@ -5391,11 +5503,11 @@ def public_organization(org_id):
         # _record_profile_view.
         viewer = current_org(db)
         if viewer is not None:
-            wait = rate_limited("public_profile_account", str(viewer.id),
+            wait = read_limited("public_profile_account", str(viewer.id),
                                 max_attempts=PROFILE_READS_PER_HOUR,
                                 window_seconds=3600)
         else:
-            wait = rate_limited("public_profile", client_ip(),
+            wait = read_limited("public_profile", client_ip(),
                                 max_attempts=PROFILE_READS_PER_HOUR,
                                 window_seconds=3600)
         if wait:
@@ -5804,11 +5916,27 @@ def _notification_rows(db, org, since, thread_ids):
     if thread_ids:
         reasons.append(Partnership.id.in_(thread_ids))
 
-    return db.query(Partnership).filter(
+    # The parties are lazy="joined" on the model, and the join brought every
+    # column of both organizations along -- descriptions, notes, four URLs,
+    # token columns -- for a list that reads one name per row. This runs on
+    # every page that draws the nav bell, so it narrows the join to the two
+    # columns counterpart_party() actually needs. The row identity is what
+    # tells it the organization still exists.
+    return db.query(Partnership).options(*_party_names_only()).filter(
         or_(Partnership.proposer_id == org.id,
             Partnership.recipient_id == org.id),
         or_(*reasons),
     ).all()
+
+
+def _party_names_only():
+    """Loader options: join both parties, but only their id and name."""
+    return (
+        joinedload(Partnership.proposer).load_only(
+            Organization.id, Organization.name),
+        joinedload(Partnership.recipient).load_only(
+            Organization.id, Organization.name),
+    )
 
 
 def _notifications_for(db, org):
@@ -5914,7 +6042,9 @@ def _notifications_for(db, org):
 
     # Shared meetings waiting on this organization. Linked to the thread
     # they were proposed in, which is where they are answered.
-    pending_meetings = db.query(Event).options(joinedload(Event.partnership)).filter(
+    pending_meetings = db.query(Event).options(
+        joinedload(Event.partnership).options(*_party_names_only()),
+    ).filter(
         Event.share_status == Event.PROPOSED,
         Event.awaiting_id == org.id,
     ).all()
@@ -8490,6 +8620,9 @@ def revoke_share_link(org, db, proposal_id):
 # inbox reachable from the directory would undo both.
 MAX_MESSAGE_BODY = 4000
 
+MESSAGE_PAGE = 100
+MESSAGE_PAGE_MAX = 500
+
 # How long to wait before emailing the same thread again. A conversation is a
 # handful of messages in a few minutes, and one email per message turns the
 # useful "someone replied" into something people filter. The window resets
@@ -8549,10 +8682,37 @@ def list_messages(org, db, proposal_id):
     except (TypeError, ValueError):
         since = None
 
+    # `before` walks backward into history, `limit` bounds any one answer.
+    # A full fetch used to be the whole thread, however long, on every open
+    # -- so a conversation that had run for a year cost a year of messages
+    # to glance at. It is now the newest MESSAGE_PAGE of them, and the page
+    # says whether there are older ones; the client asks for those with the
+    # oldest id it holds. A delta (`since`) is unbounded on purpose: it is
+    # what happened in the last twelve seconds, which is not many.
+    try:
+        before = int(request.args["before"]) if "before" in request.args else None
+    except (TypeError, ValueError):
+        before = None
+    try:
+        limit = int(request.args.get("limit", MESSAGE_PAGE))
+    except (TypeError, ValueError):
+        limit = MESSAGE_PAGE
+    limit = max(1, min(limit, MESSAGE_PAGE_MAX))
+
     query = db.query(Message).filter(Message.partnership_id == proposal.id)
     if since is not None:
         query = query.filter(Message.id > since)
-    rows = query.order_by(Message.created_at, Message.id).all()
+        rows = query.order_by(Message.created_at, Message.id).all()
+        has_more = False
+    else:
+        if before is not None:
+            query = query.filter(Message.id < before)
+        # Newest first to take the page from the end, then back into
+        # display order. One extra row is the has_more flag.
+        page = query.order_by(Message.created_at.desc(),
+                              Message.id.desc()).limit(limit + 1).all()
+        has_more = len(page) > limit
+        rows = list(reversed(page[:limit]))
 
     # Only when it would actually move. The marker is a position in the
     # thread, and every use of it (the unread counts on the dashboard and in
@@ -8585,6 +8745,8 @@ def list_messages(org, db, proposal_id):
         # What this response carries, which on a full fetch is the whole
         # thread and on a delta is what has happened since `since`.
         "count": len(rows),
+        # Whether the thread has messages older than the first one here.
+        "has_more": has_more,
         # Echoed so the client can tell a delta from a full reply without
         # having to remember what it asked for.
         "since": since,

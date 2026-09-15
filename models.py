@@ -380,6 +380,10 @@ class Organization(Base):
         # here so the model and the schema agree; the outstanding-invites
         # list is built from this column.
         Index("ix_organizations_invited_by", "invited_by_id"),
+        # The directory's and the matcher's base filter, as a partial index
+        # over exactly the rows that pass it.
+        Index("ix_organizations_listed", "id",
+              postgresql_where=text("onboarding_complete IS TRUE AND hidden_at IS NULL")),
     )
 
     # What an organization can be mailed about, and what each category covers.
@@ -1533,6 +1537,11 @@ class Event(Base):
         # Shared meetings are read by partnership: the thread's cards, and
         # the other party's dashboard.
         Index("ix_events_partnership", "partnership_id"),
+        # "A shared meeting waiting on this organization" -- asked for the
+        # nav badge on every page. Partial, since only proposed shared
+        # meetings carry an awaiting_id.
+        Index("ix_events_awaiting", "awaiting_id", "share_status",
+              postgresql_where=text("awaiting_id IS NOT NULL")),
         CheckConstraint(
             "(partnership_id IS NULL) = (share_status IS NULL)",
             name="ck_events_shared_has_status",

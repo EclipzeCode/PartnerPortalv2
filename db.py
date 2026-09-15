@@ -54,12 +54,15 @@ DATABASE_URL = _normalize(DATABASE_URL)
 # connection, and the pool's job is to keep that one warm rather than to fan
 # out. The defaults were not sized for this app, they were just never said.
 #
-# Two plus three of overflow, then. The overflow is not for concurrency that
-# does not exist -- it is headroom for the moment a connection is being
-# recycled or pre-ping finds a dead one, so a request borrows a second rather
-# than waiting on the first. Overridable because the right number is a
-# property of the deployment, not of this file: raise it with --threads or a
-# non-sync worker class, both of which make one process genuinely concurrent.
+# Two plus three of overflow, then, as the default for a plain `python
+# app.py` or a sync worker. The overflow is not for concurrency that does
+# not exist -- it is headroom for the moment a connection is being recycled
+# or pre-ping finds a dead one, so a request borrows a second rather than
+# waiting on the first. Overridable because the right number is a property
+# of the deployment, not of this file: render.yaml runs gthread workers
+# with four threads and sets DB_POOL_SIZE=4 / DB_MAX_OVERFLOW=6 to match,
+# which is the arithmetic in the correction below applied to four
+# concurrent requests.
 #
 # One correction to the arithmetic above, since it is the kind of thing that
 # goes stale quietly. A request on a rate-limited route now needs *two*

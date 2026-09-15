@@ -394,6 +394,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cheap "has anything actually changed" key, so a poll that finds
     // nothing new does not redraw the thread under someone's cursor.
     let threadSignature = '';
+    // Whether the thread has messages older than the first one held. The
+    // server sends the newest page on open; this is what draws the "earlier
+    // messages" control at the top and what that control asks for.
+    let threadHasMore = false;
 
     function signatureFor(messages, open) {
         const last = messages[messages.length - 1];
@@ -695,6 +699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (openThreadId === null) return;
         const data = await window.api(`/api/proposals/${openThreadId}/messages`);
         threadMessages = data.messages || [];
+        threadHasMore = Boolean(data.has_more);
         threadSignature = signatureFor(threadMessages, data.open);
         renderThread(threadMessages);
         paintThreadOpenState(data.open);
@@ -727,6 +732,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             meetingSubmit.disabled = false;
         }
+    });
+
+    // Older history, a page at a time, keeping the reader's place: the
+    // newly inserted messages land above the viewport, so the scroll
+    // offset is moved down by exactly the height they added.
+    messageThread.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-earlier]');
+        if (!btn || openThreadId === null || !threadMessages.length) return;
+        const id = openThreadId;
+        const oldest = threadMessages[0].id;
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+        let data;
+        try {
+            data = await window.api(
+                `/api/proposals/${id}/messages?before=${oldest}`);
+        } catch (error) {
+            btn.disabled = false;
+            btn.textContent = 'Show earlier messages';
+            window.toast(error.message || 'Could not load those.', 'error');
+            return;
+        }
+        if (openThreadId !== id) return;
+        const heightBefore = messageThread.scrollHeight;
+        const scrollBefore = messageThread.scrollTop;
+        threadMessages = (data.messages || []).concat(threadMessages);
+        threadHasMore = Boolean(data.has_more);
+        threadSignature = signatureFor(threadMessages, messageClosed.hidden);
+        renderThread(threadMessages, { keepScroll: true });
+        messageThread.scrollTop =
+            scrollBefore + (messageThread.scrollHeight - heightBefore);
     });
 
     messageThread.addEventListener('click', async (e) => {
@@ -782,7 +818,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         messages.forEach((m) => {
             if (m.kind === 'meeting' && m.meeting) newestFor.set(m.meeting.id, m.id);
         });
-        messageThread.innerHTML = messages.map((m) => `
+        const earlier = threadHasMore
+            ? '<button type="button" class="btn-ghost thread-earlier" '
+              + 'data-earlier>Show earlier messages</button>'
+            : '';
+        messageThread.innerHTML = earlier + messages.map((m) => `
             <div class="message${m.mine ? ' mine' : ''}${
                 m.kind === 'meeting' ? ' is-meeting' : ''}">
                 <p class="message-meta">
@@ -827,6 +867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         messageThread.removeAttribute('aria-busy');
         threadMessages = data.messages || [];
+        threadHasMore = Boolean(data.has_more);
         threadSignature = signatureFor(threadMessages, data.open);
         renderThread(threadMessages);
 
@@ -851,6 +892,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         openThreadId = null;
         threadMessages = [];
         threadSignature = '';
+        threadHasMore = false;
         window.hideDialog(messageModal);
     }
 

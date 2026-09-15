@@ -468,6 +468,17 @@
     scrollbar-color: var(--h-rule) transparent;
 }
 
+/* The way back into history, sitting above the oldest message held. Only
+   drawn while the server says there is more; see threadHasMore. */
+.thread-earlier {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.25rem;
+    padding: 0.55rem;
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--h-rule);
+}
+
 .message {
     padding: 0.7rem 0.85rem;
     border-bottom: 1px solid var(--h-rule);

@@ -519,3 +519,68 @@ def test_since_cannot_be_used_to_mark_unread_messages_read(client, login, thread
     assert body["messages"] == []
     listed = client.get("/api/proposals").get_json()["proposals"]
     assert [p for p in listed if p["id"] == pid][0]["unread_count"] == 1
+
+
+# --- Paging -----------------------------------------------------------------
+# A full fetch is the newest page of the thread, not the whole thread; the
+# rest is reached backward from the oldest id held.
+
+def test_a_long_thread_is_read_a_page_at_a_time(client, login, thread,
+                                                monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, "MESSAGE_PAGE", 3)
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    for i in range(7):
+        assert client.post(f"/api/proposals/{pid}/messages",
+                           json={"body": f"pytest m{i}"}).status_code == 201
+
+    first = client.get(f"/api/proposals/{pid}/messages").get_json()
+    assert [m["body"] for m in first["messages"]] == ["pytest m4", "pytest m5",
+                                                      "pytest m6"]
+    assert first["has_more"] is True
+
+    oldest = first["messages"][0]["id"]
+    older = client.get(
+        f"/api/proposals/{pid}/messages?before={oldest}").get_json()
+    assert [m["body"] for m in older["messages"]] == ["pytest m1", "pytest m2",
+                                                      "pytest m3"]
+    assert older["has_more"] is True
+
+    last = client.get(
+        f"/api/proposals/{pid}/messages?before={older['messages'][0]['id']}"
+    ).get_json()
+    assert [m["body"] for m in last["messages"]] == ["pytest m0"]
+    assert last["has_more"] is False
+
+    # A delta is not paged: everything since the id, however much.
+    delta = client.get(f"/api/proposals/{pid}/messages?since=0").get_json()
+    assert delta["count"] == 7
+    assert delta["has_more"] is False
+
+    # The limit is clamped, not trusted.
+    assert client.get(
+        f"/api/proposals/{pid}/messages?limit=0").get_json()["count"] == 1
+    assert client.get(
+        f"/api/proposals/{pid}/messages?limit=999").get_json()["count"] == 7
+
+
+def test_reading_history_does_not_move_the_read_marker(client, login, thread,
+                                                       monkeypatch):
+    """Paging back is not reading something new."""
+    import app as app_module
+    monkeypatch.setattr(app_module, "MESSAGE_PAGE", 2)
+    proposer, recipient, pid = thread
+
+    login(recipient)
+    for i in range(4):
+        client.post(f"/api/proposals/{pid}/messages", json={"body": f"pytest {i}"})
+    client.post("/logout")
+
+    login(proposer)
+    assert client.get("/api/me").get_json()["unread_messages"] == 4
+    page = client.get(f"/api/proposals/{pid}/messages").get_json()
+    assert client.get("/api/me").get_json()["unread_messages"] == 0
+    client.get(f"/api/proposals/{pid}/messages?before={page['messages'][0]['id']}")
+    assert client.get("/api/me").get_json()["unread_messages"] == 0

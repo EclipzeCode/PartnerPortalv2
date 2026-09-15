@@ -129,8 +129,10 @@ def reset_rate_limits():
     would silently disable eviction for everything that ran after it.
     """
     app_module._rate_sweep_after = 0.0
+    app_module.forget_read_limits()
     yield
     app_module._rate_sweep_after = 0.0
+    app_module.forget_read_limits()
     _forget_rate_limits()
 
 

@@ -25,11 +25,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // actually using (see the breakpoints in ppsearch.css). Kept even at
     // every width so a page never ends on a half-filled row: three across
     // fills two rows of three, two across fills two rows of two.
+    // Whole rows per page, and enough of them that a list of two hundred
+    // matches is a handful of pages rather than thirty-four: the cards are
+    // already in memory, so a bigger page costs nothing but scrolling.
     const PAGE_SIZES = [
-        { query: '(min-width: 64em)', size: 6 },   // 3 columns
-        { query: '(min-width: 40em)', size: 4 },   // 2 columns
+        { query: '(min-width: 64em)', size: 12 },  // 3 columns, 4 rows
+        { query: '(min-width: 40em)', size: 8 },   // 2 columns, 4 rows
     ];
-    const NARROW_PAGE_SIZE = 4;                    // 1 column
+    const NARROW_PAGE_SIZE = 6;                    // 1 column
 
     function pageSize() {
         if (showAll) return Infinity;
