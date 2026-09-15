@@ -91,6 +91,50 @@ def test_the_recipient_editing_is_a_counter_offer(client, login, pair, outbox):
     assert accepted.get_json()["proposal"]["status"] == "accepted"
 
 
+def test_an_edit_that_changes_nothing_is_not_a_counter_offer(
+        client, login, pair, outbox):
+    """A body that restates the terms as they are is refused.
+
+    It used to be accepted, and accepting it did two things nobody asked
+    for: the turn flipped to the other side, and they were emailed that the
+    terms had changed. From the recipient that made "send the same terms
+    back" indistinguishable from a real counter-offer.
+    """
+    proposer, recipient = pair
+    login(proposer)
+    proposal_id = _propose(
+        client, recipient, message="Hello", starts_on="2026-09-01",
+        proposer_quantities={"grant_writing": {"amount": 20, "unit": "hours"}},
+    ).get_json()["proposal"]["id"]
+    client.post("/logout")
+
+    login(recipient)
+    outbox.clear()
+    for body in (
+        {},
+        {"message": "Hello", "starts_on": "2026-09-01", "ends_on": "",
+         "timeline": "", "proposer_gives": ["grant_writing"],
+         "recipient_gives": ["web_development"],
+         "proposer_quantities": {"grant_writing": {"amount": 20,
+                                                   "unit": "hours"}}},
+    ):
+        response = client.patch(f"/api/proposals/{proposal_id}", json=body)
+        assert response.status_code == 400
+        assert "Nothing changed" in response.get_json()["error"]
+
+    # Still waiting on the recipient, and nobody was told anything.
+    mine = client.get(f"/api/proposals/{proposal_id}").get_json()["proposal"]
+    assert mine["awaiting_you"] is True
+    assert mine["countered"] is False
+    assert outbox == []
+
+    # A real change still goes through.
+    response = client.patch(f"/api/proposals/{proposal_id}",
+                            json={"message": "Make it December."})
+    assert response.status_code == 200
+    assert response.get_json()["proposal"]["countered"] is True
+
+
 def test_a_counter_offer_can_be_countered_back(client, login, pair):
     proposer, recipient = pair
     login(proposer)

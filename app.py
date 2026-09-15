@@ -7405,8 +7405,11 @@ def _clean_quantities(raw, slugs):
             }
         if amount <= 0 or amount > MAX_AMOUNT:
             return None, {
-                "error": f"{label_for(slug)}: enter an amount between 1 and "
-                         f"{MAX_AMOUNT:,}.",
+                # Said as the rule actually is: anything above zero, up to
+                # the ceiling. "Between 1 and" told somebody offering half
+                # a day that half was refused when it was not.
+                "error": f"{label_for(slug)}: enter an amount above 0, up "
+                         f"to {MAX_AMOUNT:,}.",
                 "field": "quantities",
             }
 
@@ -7998,6 +8001,13 @@ def update_proposal(org, db, proposal_id):
         }), 409
     mine = proposal.side_of(org.id) == Partnership.PROPOSER_SIDE
 
+    # What the terms were before this request, so a body that changes none
+    # of them can be refused below rather than treated as a counter-offer.
+    _TERM_FIELDS = ("proposer_gives", "recipient_gives", "proposer_quantities",
+                    "recipient_quantities", "timeline", "starts_on", "ends_on",
+                    "message")
+    before = {field: getattr(proposal, field) for field in _TERM_FIELDS}
+
     # The same rule create_proposal enforces, re-checked rather than assumed:
     # neither side may be committed to something it has not listed as an
     # offer, and either profile may have changed since this was sent. Which
@@ -8075,10 +8085,25 @@ def update_proposal(org, db, proposal_id):
             }), 400
         proposal.message = message or None
 
+    countered = proposal.awaits(org.id) and proposal.proposer_id != org.id
+
+    # A body that leaves every term as it was is not an edit and not a
+    # counter-offer, and used to be treated as both: the turn flipped to the
+    # other side and they were emailed that the terms had changed when
+    # nothing had. Whoever is being asked to answer and agrees with the
+    # terms has a button for that, and it is not this one.
+    if all(getattr(proposal, field) == before[field]
+           for field in _TERM_FIELDS):
+        db.rollback()
+        return jsonify({
+            "error": ("Nothing changed. If these terms are right, accept the "
+                      "proposal; to counter, change something first."
+                      if countered else "Nothing changed."),
+        }), 400
+
     # Whoever changed the terms has, by doing so, put them to the other side.
     # For the proposer correcting an unanswered proposal this is a no-op --
     # it was already the recipient's turn.
-    countered = proposal.awaits(org.id) and proposal.proposer_id != org.id
     proposal.hand_turn_to_other(org.id)
     db.commit()
 

@@ -459,6 +459,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const added = fresh.filter((m) => !known.has(m.id));
         const messages = since ? threadMessages.concat(added) : fresh;
 
+        // Every message about a meeting carries that meeting as it stands
+        // when the message is fetched. A delta fetch only brings the new
+        // messages, so the older cards for the same meeting kept saying
+        // "Waiting on them" after the reply that answered it had arrived --
+        // two cards, one meeting, two states. The newest copy is the truth
+        // for all of them.
+        const latestMeeting = new Map();
+        added.forEach((m) => {
+            if (m.meeting) latestMeeting.set(m.meeting.id, m.meeting);
+        });
+        if (latestMeeting.size) {
+            messages.forEach((m) => {
+                if (m.meeting && latestMeeting.has(m.meeting.id)) {
+                    m.meeting = latestMeeting.get(m.meeting.id);
+                }
+            });
+        }
+
         const signature = signatureFor(messages, data.open);
         // Nothing new and the thread has not opened or closed. This is the
         // overwhelmingly common outcome, and it now costs no redraw, no
@@ -1076,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 rows.push(`
                     <div class="amount-row">
                         <span class="amount-label">${esc(term.label)}</span>
-                        <input type="number" class="amount-value" min="0" step="any"
+                        <input type="number" class="amount-value" min="0.01" step="any"
                                data-side="${esc(side)}" data-slug="${esc(term.slug)}"
                                value="${term.amount ?? ''}" placeholder="—"
                                aria-label="Amount of ${esc(term.label)}">
@@ -1115,6 +1133,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             editQuantities[side][slug] = held;
         });
+    }
+
+    // The first amount that is filled in and not above zero, as
+    // {slug, input}, or null. Blank is fine.
+    function firstBadEditAmount() {
+        for (const [side, entries] of Object.entries(editQuantities)) {
+            for (const [slug, q] of Object.entries(entries)) {
+                if (!editGives[side].has(slug)) continue;
+                if (q.amount === null || q.amount === undefined || q.amount === '') continue;
+                if (Number(q.amount) > 0) continue;
+                const input = editAmountsHost && editAmountsHost.querySelector(
+                    `.amount-value[data-side="${side}"][data-slug="${slug}"]`);
+                return { slug, input: input || editSubmit };
+            }
+        }
+        return null;
     }
 
     function editQuantitiesFor(side) {
@@ -1192,6 +1226,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     + 'both sides. Pick at least one thing you will provide '
                     + 'and one thing you are asking for.';
                 editError.hidden = false;
+                return;
+            }
+
+            // Same rule the server applies to an amount: above zero. This
+            // form is novalidate, so the input's min does nothing on its own.
+            const badAmount = firstBadEditAmount();
+            if (badAmount) {
+                editError.textContent = `${editLabel(badAmount.slug)}: enter an `
+                    + 'amount above 0, or leave it blank.';
+                editError.hidden = false;
+                badAmount.input.focus();
                 return;
             }
 
@@ -1584,8 +1629,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // reader to find the thread they had just been emailed about.
     const TAB_NAMES = ['incoming', 'outgoing', 'agreed', 'closed'];
 
-    function openThreadFromHash(wanted) {
-        const proposal = proposals.find((p) => p.id === wanted);
+    async function openThreadFromHash(wanted) {
+        let proposal = proposals.find((p) => p.id === wanted);
+        if (!proposal) {
+            // The list holds everything live and only the newest slice of
+            // the archive, so a link into an older settled thread -- a
+            // message notification on a partnership that ended last year
+            // -- found nothing and said the conversation was gone. Ask for
+            // the one proposal instead; it answers 404 only if it really is.
+            try {
+                const data = await window.api(`/api/proposals/${wanted}`);
+                proposal = data.proposal;
+            } catch {
+                proposal = null;
+            }
+        }
         if (!proposal) {
             // Party to it no longer, or it was deleted with the other
             // organization's account. Saying so beats a dialog that never
@@ -1595,9 +1653,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // The thread may sit under any of the four tabs, and the one it is
         // under is the one that should be showing behind it when the dialog
-        // is closed.
+        // is closed. Pending ones split by whose turn it is, not by who
+        // sent them: a counter-offer waiting on the proposer sits under
+        // Incoming for the proposer, whatever direction it started in.
         const tabFor = {
-            pending: proposal.direction === 'incoming' ? 'incoming' : 'outgoing',
+            pending: proposal.awaiting_you ? 'incoming' : 'outgoing',
             accepted: 'agreed',
         }[proposal.status] || 'closed';
         activateTab(tabFor);

@@ -1262,7 +1262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 rows.push(`
                     <div class="amount-row">
                         <span class="amount-label">${esc(categoryLabel(slug))}</span>
-                        <input type="number" class="amount-value" min="0" step="any"
+                        <input type="number" class="amount-value" min="0.01" step="any"
                                data-side="${esc(side)}" data-slug="${esc(slug)}"
                                value="${held.amount ?? ''}" placeholder="—"
                                aria-label="Amount of ${esc(categoryLabel(slug))}">
@@ -1318,6 +1318,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // What goes on the wire: only terms with an amount actually entered.
+    // The first amount that is filled in and not above zero, as
+    // {slug, input}, or null. Blank is fine -- a term with no amount is a
+    // term nobody put a number on.
+    function firstBadAmount(held, selected) {
+        for (const [side, entries] of Object.entries(held)) {
+            for (const [slug, q] of Object.entries(entries)) {
+                if (!selected[side].has(slug)) continue;
+                if (q.amount === null || q.amount === undefined || q.amount === '') continue;
+                if (Number(q.amount) > 0) continue;
+                const input = document.querySelector(
+                    `.amount-value[data-side="${side}"][data-slug="${slug}"]`);
+                return { slug, input: input || document.body };
+            }
+        }
+        return null;
+    }
+
     function quantitiesFor(side) {
         const out = {};
         Object.entries(proposeQuantities[side]).forEach(([slug, q]) => {
@@ -1412,6 +1429,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 setProposeMessage('A partnership needs something from both '
                     + 'sides. Pick at least one thing you will provide and '
                     + 'one thing you are asking for.');
+                return;
+            }
+
+            // Same rule the server applies to an amount: above zero. The
+            // input's own min is "0.01" rather than "1" because half a day
+            // is a real quantity and a whole number is not required.
+            const badAmount = firstBadAmount(proposeQuantities, proposeSelected);
+            if (badAmount) {
+                setProposeMessage(`${categoryLabel(badAmount.slug)}: enter an `
+                    + 'amount above 0, or leave it blank.');
+                badAmount.input.focus();
                 return;
             }
 
