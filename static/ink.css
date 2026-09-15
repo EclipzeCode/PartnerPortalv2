@@ -629,7 +629,7 @@ body.ink .navbar a.active::after {
     height: 2px;
 }
 
-body.ink .navbar a.nav-auth-cta {
+body.ink .navbar .nav-auth-cta {
     border-radius: 0;
     background: var(--h-ink);
     color: var(--h-paper);
@@ -640,10 +640,18 @@ body.ink .navbar a.nav-auth-cta {
     padding: 0.65rem 1.1rem;
 }
 
-body.ink .navbar a.nav-auth-cta:hover {
+body.ink .navbar .nav-auth-cta:hover {
     background: var(--h-give);
     color: var(--h-on-give);
     box-shadow: none;
+}
+
+/* The two links inside take the pill's color, hovered or not; the plain
+   nav-link hover rule above would otherwise paint them in the accent on an
+   accent background. */
+body.ink .navbar .nav-auth-cta a,
+body.ink .navbar .nav-auth-cta a:hover {
+    color: inherit;
 }
 
 body.ink .avatar-button {

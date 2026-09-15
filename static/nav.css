@@ -179,8 +179,12 @@
     visibility: hidden;
 }
 
-/* .navbar a wins on specificity, so these are qualified to match it. */
-.navbar a.nav-auth-cta {
+/* One pill, two links: "Login" opens the sign-in form and "Create Account"
+   the sign-up one. It was a single anchor to pplogin.html, so the half that
+   said "Create Account" landed on Sign In. The links inherit the pill's
+   color and carry no padding of their own, so it still reads as one button;
+   .navbar a wins on specificity, so those are qualified to match it. */
+.navbar .nav-auth-cta {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -193,15 +197,24 @@
     transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.navbar a.nav-auth-cta:hover {
+.navbar .nav-auth-cta:hover {
     background: var(--primary-dark, #3a56d4);
-    color: var(--on-primary);
     box-shadow: 0 0.35rem 0.9rem rgba(67, 97, 238, 0.28);
+}
+
+.navbar .nav-auth-cta a,
+.navbar .nav-auth-cta a:hover {
+    padding: 0;
+    border-bottom: none;
+    color: inherit;
+    font-weight: inherit;
+    font-size: inherit;
 }
 
 /* Never underlined as the "current page", even on pplogin.html: it is a
    button, and the underline is drawn for text links in the list. */
-.navbar a.nav-auth-cta.active::after {
+.navbar .nav-auth-cta a::after,
+.navbar .nav-auth-cta a.active::after {
     display: none;
 }
 
@@ -418,7 +431,7 @@
         display: block;
     }
 
-    .navbar a.nav-auth-cta {
+    .navbar .nav-auth-cta {
         justify-content: center;
         margin: 0.9rem 0 0.4rem;
         padding: 0.8rem 1.15rem;

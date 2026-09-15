@@ -32,6 +32,14 @@ if (toSignIn) toSignIn.addEventListener('click', showLogin);
     }
 })();
 
+// The same links clicked from *this* page only change the hash, which does
+// not reload anything -- so the footer's "Get Started" and the nav's
+// "Create account" used to leave the Sign In form exactly where it was.
+window.addEventListener('hashchange', () => {
+    if (location.hash === '#signup') showRegister();
+    else if (location.hash === '' || location.hash === '#signin') showLogin();
+});
+
 // Somebody already signed in has nothing to do here. common.js has already
 // asked /api/me for the nav (the request is shared, so this costs nothing
 // extra); if it names an organization, go where a fresh sign-in would have.

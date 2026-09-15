@@ -951,19 +951,28 @@ def _start_admin_session(admin):
 
 
 def admin_required(view):
-    """Behind an admin session, and invisible without one.
+    """Behind an admin session; answers 404 without one.
 
     404 rather than 401 or 403, which is the one place this file deliberately
     lies about what exists. Every other route here answers "not found" only
-    when a thing is genuinely not there -- but an admin surface that says
-    "unauthorized" has confirmed it is an admin surface, and the whole set of
-    them can then be mapped by anybody with a wordlist. There is no link to
-    these pages, they are not in the sitemap, and robots.txt disallows them;
-    answering 404 is what makes those three consistent rather than decorative.
+    when a thing is genuinely not there -- but an API that says
+    "unauthorized" has confirmed which of its routes are admin routes, and
+    the whole set can then be mapped by anybody with a wordlist.
 
-    It also means an ordinary visitor who mistypes a URL gets the same page
-    they would get for any other mistyped URL, which is the truthful answer
-    from where they are standing.
+    What this does *not* hide is that an admin panel exists at all.
+    admin.html is served to anyone who asks for it, like every other page in
+    static/, because the admin sign-in form lives on that page and there is
+    nowhere else for it to live. So the honest description of the boundary
+    is: the page is public and inert, and everything it would draw is
+    behind this decorator. What 404 buys is that a request without a
+    session learns nothing about which routes or ids are real -- not that
+    the surface is a secret. robots.txt disallows the page and the sitemap
+    omits it so it stays out of search results, which is a courtesy to
+    crawlers rather than a control.
+
+    It also means an ordinary visitor who mistypes an /api/admin URL gets the
+    same answer they would get for any other mistyped URL, which is the
+    truthful answer from where they are standing.
     """
     @wraps(view)
     def wrapper(*args, **kwargs):
@@ -2294,9 +2303,11 @@ def _render_og_page(filename, title, description):
         f'    <meta name="twitter:image" content="{_esc_attr(image)}">'
     )
     html = html.replace("<!-- og:meta -->", tags, 1)
-    html = re.sub(
-        r"<title>.*?</title>", f"<title>{_esc_attr(title)}</title>", html, count=1,
-    )
+    # A callable replacement, not a string: re.sub reads backslash escapes
+    # in a string replacement, so an organization named "A\B Org" raised
+    # "bad escape" and took its own public page down with a 500.
+    new_title = f"<title>{_esc_attr(title)}</title>"
+    html = re.sub(r"<title>.*?</title>", lambda _m: new_title, html, count=1)
     return html
 
 
@@ -5983,10 +5994,16 @@ def mark_notifications_read(org, db):
     "everything up to here" is the only thing that can be recorded without
     inventing a table to record it in, and it is also what opening a
     panel of notifications actually means.
+
+    The list is built before the timestamp moves. Each entry's `seen` is
+    "was this here the last time the panel opened", which is what the panel
+    dims on -- and it used to be computed after the update, so every
+    informational entry came back seen on the very open that showed it for
+    the first time, and nothing in the panel was ever drawn as new.
     """
+    items, counts = _notifications_for(db, org)
     org.notifications_seen_at = datetime.now(timezone.utc)
     db.commit()
-    items, counts = _notifications_for(db, org)
     return jsonify({
         "message": "Marked read",
         "notifications": items,

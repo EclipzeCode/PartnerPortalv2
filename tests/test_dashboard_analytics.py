@@ -143,10 +143,18 @@ def test_marking_read_clears_the_news(client, login, make_org, session):
 
     marked = client.post("/api/notifications/read").get_json()
     assert marked["unseen"] == 0
-    assert all(n["seen"] for n in marked["notifications"] if not n["actionable"])
+    # The open that marks things read is the one open on which they are
+    # new: `seen` in this response says whether each entry was there the
+    # last time the panel opened, so the panel can draw the fresh ones as
+    # fresh. It used to be computed after the timestamp moved, which made
+    # every informational entry arrive already dimmed.
+    assert any(not n["seen"] for n in marked["notifications"]
+               if not n["actionable"])
 
-    # And it stays cleared on the next read.
-    assert _notifications(client)["unseen"] == 0
+    # And it stays cleared on the next read, where the same entry is old news.
+    after = _notifications(client)
+    assert after["unseen"] == 0
+    assert all(n["seen"] for n in after["notifications"] if not n["actionable"])
 
 
 def test_marking_read_does_not_clear_the_work(client, login, make_org, session):
@@ -172,6 +180,12 @@ def test_marking_read_does_not_clear_the_work(client, login, make_org, session):
     assert marked["actionable"] == before["actionable"]
     assert marked["unseen"] == 0
     actionable = [n for n in marked["notifications"] if n["actionable"]]
+    assert actionable
+
+    # Still listed, still flagged as work, and now seen.
+    after = _notifications(client)
+    assert after["actionable"] == before["actionable"]
+    actionable = [n for n in after["notifications"] if n["actionable"]]
     assert actionable and all(n["seen"] for n in actionable)
 
 
