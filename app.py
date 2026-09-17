@@ -7469,8 +7469,8 @@ def _ics_fold(line):
     return out[0] + "".join("\r\n " + part for part in out[1:])
 
 
-def _vtimezone(zone_name, year):
-    """A VTIMEZONE for `zone_name` covering `year`, built from tzdata.
+def _vtimezone(zone_name, year, last_year=None):
+    """A VTIMEZONE for `zone_name` covering `year` through `last_year`.
 
     A DTSTART;TZID= that names a zone no VTIMEZONE defines is not valid
     iCalendar, however widely clients get away with it -- so the observances
@@ -7483,9 +7483,15 @@ def _vtimezone(zone_name, year):
 
     Explicit observances, not RRULEs. A rule would claim the pattern holds
     indefinitely, and DST rules are legislation -- they change, and they have
-    changed in most of the last ten years somewhere. One year of facts is
-    what this file actually needs and all it can honestly assert.
+    changed in most of the last ten years somewhere. The years this file
+    actually touches are what it needs and all it can honestly assert.
+
+    `last_year` is inclusive and defaults to `year`. A one-off needs the
+    year it falls in; a series needs every year from its first meeting to
+    its last, or the transitions in the second year are undefined for the
+    occurrences that fall in it.
     """
+    last_year = max(year, last_year or year)
     tz = ZoneInfo(zone_name)
 
     def offset_at(moment):
@@ -7498,7 +7504,7 @@ def _vtimezone(zone_name, year):
         return f"{sign}{total // 3600:02d}{(total % 3600) // 60:02d}"
 
     start = datetime(year, 1, 1, tzinfo=timezone.utc)
-    end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    end = datetime(last_year + 1, 1, 1, tzinfo=timezone.utc)
 
     transitions = []
     probe, current = start, offset_at(start)
@@ -7670,7 +7676,16 @@ def _event_ics(event, host, viewer_id=None):
 
     zone = event.timezone if not event.all_day else None
     if zone and _known_zone(zone):
-        lines += _vtimezone(zone, event.date.year)
+        # Every year the meeting lands in: the series' last repeat, and any
+        # occurrence moved past it. One year of observances for a weekly
+        # meeting that crosses New Year left the second year's transitions
+        # undefined for the occurrences that fall in it.
+        years = [event.date.year]
+        if event.repeat_until:
+            years.append(event.repeat_until.year)
+        years += [e.date.year for e in event.exceptions
+                  if not e.cancelled and e.date is not None]
+        lines += _vtimezone(zone, event.date.year, max(years))
     else:
         zone = None
 

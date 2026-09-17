@@ -280,3 +280,29 @@ def test_the_file_is_never_cached_by_anything_in_between(client, org):
     response = client.get(f"/api/events/{body['event']['id']}.ics")
     assert response.headers["Cache-Control"] == "no-store"
     assert "attachment" in response.headers["Content-Disposition"]
+
+
+def test_a_series_that_crosses_new_year_defines_both_years(client, org):
+    """One year of observances for a weekly meeting running from November
+    into March left the second year's transitions undefined for the
+    occurrences that fall in it. The definition now spans every year the
+    series lands in."""
+    _, body = create(client, date="2026-11-03", time="15:00",
+                     timezone="America/Chicago", duration=1,
+                     repeat="weekly", repeat_until="2027-04-06")
+    calendar = ics_for(client, body["event"]["id"])
+    zone = next(c for c in calendar.walk() if c.name == "VTIMEZONE")
+    starts = sorted(
+        c.decoded("DTSTART").year
+        for c in zone.walk() if c.name in ("STANDARD", "DAYLIGHT"))
+    # 2026 opens standard, then March and November 2026, then March and
+    # November 2027: both years' transitions are there.
+    assert starts == [2026, 2026, 2026, 2027, 2027]
+
+    # And a one-off still asserts only its own year.
+    _, single = create(client, date="2026-11-03", time="15:00",
+                       timezone="America/Chicago", duration=1)
+    zone = next(c for c in ics_for(client, single["event"]["id"]).walk()
+                if c.name == "VTIMEZONE")
+    assert {c.decoded("DTSTART").year for c in zone.walk()
+            if c.name in ("STANDARD", "DAYLIGHT")} == {2026}
