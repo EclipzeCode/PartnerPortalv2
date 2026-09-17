@@ -84,6 +84,10 @@ body.ink {
 
     --h-dot: rgba(23, 25, 31, 0.13);
     --h-cell: rgba(23, 25, 31, 0.07);
+    /* The chevron every <select> draws, in the ink of its theme. A data
+       URI because a background image cannot take currentColor; the stroke
+       is --h-ink written out. */
+    --h-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2317191F' stroke-width='1.5'/%3E%3C/svg%3E");
 
     /* The footer is a dark band in BOTH themes -- that is the whole point of
        it, the same role tokens.css gives --dark. It cannot be --h-ink: that
@@ -131,6 +135,7 @@ body.ink {
 
     --h-dot: rgba(255, 255, 255, 0.09);
     --h-cell: rgba(255, 255, 255, 0.06);
+    --h-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23F3F1EC' stroke-width='1.5'/%3E%3C/svg%3E");
 
     /* Still a dark band, just one that separates from a near-black page
        rather than from cream. */
@@ -204,6 +209,141 @@ body.ink textarea:focus-visible,
 body.ink summary:focus-visible {
     outline: 2px solid var(--h-give);
     outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Native controls, drawn
+ *
+ * Every <select>, checkbox and radio on the site, in one place. Each page
+ * used to leave these to the browser and tint them with accent-color, which
+ * only recolors the browser's own painting -- a rounded, shaded control
+ * beside the square hairline ones around it read as a different app. These
+ * are the real elements with appearance:none, so keyboard, screen reader
+ * and form semantics are exactly what they were; only the painting is ours.
+ *
+ * The exclusions are the controls that are already something else: the
+ * settings switches, the category chips, the theme strip and the AM/PM
+ * toggle, whose input is an invisible hit area over a drawn thing, and the
+ * activity filter's select, which is drawn by its own wrapper. Each keeps
+ * its own rules.
+ * ------------------------------------------------------------------------- */
+
+body.ink select:not(.activity-filter select) {
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 0.92rem;
+    color: var(--h-ink);
+    background-color: var(--h-surface);
+    background-image: var(--h-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 12px 8px;
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    padding: 0.55rem 2.2rem 0.55rem 0.8rem;
+    line-height: 1.3;
+    cursor: pointer;
+    transition: border-color 0.18s ease;
+}
+
+body.ink select:not(.activity-filter select):hover {
+    border-color: var(--h-edge);
+}
+
+body.ink select:not(.activity-filter select):focus {
+    border-color: var(--h-ink);
+    box-shadow: none;
+}
+
+body.ink select:not(.activity-filter select):disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* The list itself is the browser's; this is as far into it as CSS reaches,
+   and it is enough to keep a dark theme's list from opening white. */
+body.ink select option {
+    background: var(--h-surface);
+    color: var(--h-ink);
+}
+
+/* Checkboxes and radios: the drawn box forms.css already used for one
+   dialog, applied to all of them. A radio is the same box with round
+   corners and a dot -- the one round thing this design allows, because a
+   square radio is a checkbox. */
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input),
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0;
+    flex-shrink: 0;
+    vertical-align: -0.15em;
+    background: var(--h-cell);
+    border: 1px solid var(--h-rule);
+    border-radius: 0;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
+    border-radius: 50%;
+}
+
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):hover,
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):hover {
+    border-color: var(--h-edge);
+}
+
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):checked,
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):checked {
+    background: var(--h-give);
+    border-color: var(--h-give);
+}
+
+/* The tick: two borders of an empty box, rotated. */
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input)::after {
+    content: '';
+    box-sizing: content-box;
+    position: absolute;
+    top: 0.11rem;
+    left: 0.3rem;
+    width: 0.25rem;
+    height: 0.5rem;
+    border: solid var(--h-on-give);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) scale(0.6);
+    opacity: 0;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):checked::after {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+}
+
+/* The dot. */
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input)::after {
+    content: '';
+    position: absolute;
+    inset: 0.27rem;
+    border-radius: 50%;
+    background: var(--h-on-give);
+    transform: scale(0);
+    transition: transform 0.12s ease;
+}
+
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):checked::after {
+    transform: scale(1);
+}
+
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):disabled,
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -386,6 +526,13 @@ body.ink .modal-body textarea {
     font-size: 0.92rem;
     padding: 0.7rem 0.8rem;
     transition: border-color 0.18s ease;
+}
+
+/* Room for the chevron the site-wide select rule draws; the padding above
+   is written for text inputs and would otherwise run the text under it. */
+body.ink .form-group select,
+body.ink .modal-body select {
+    padding-right: 2.2rem;
 }
 
 body.ink .form-group input:not([type="checkbox"]):not([type="radio"]):focus,
