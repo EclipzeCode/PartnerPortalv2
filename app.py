@@ -2939,10 +2939,23 @@ def login():
     # Ten rather than the twenty above: this counts one person's own typing,
     # where the connection limit has to cover a whole office sharing an
     # address.
-    wait = rate_limited("login_email", email, max_attempts=10,
-                        window_seconds=900)
+    #
+    # Keyed on the address *and* the connection, not the address alone. Per
+    # address alone it was a lockout anybody could cause: ten wrong guesses
+    # at someone else's email, from anywhere, and that organization could
+    # not sign in for fifteen minutes -- repeatable indefinitely, for the
+    # price of knowing an email. Per address-and-connection, a stranger's
+    # guessing locks the stranger out of that account and nobody else. What
+    # this gives up is the botnet case above, where each connection now gets
+    # ten tries at the account rather than sharing ten -- but the connection
+    # bucket still caps every one of them at twenty, the password rules make
+    # ten guesses worth little, and a lockout the attacker can aim at the
+    # victim is the worse of the two failures.
+    wait = rate_limited("login_email", f"{email}:{client_ip()}",
+                        max_attempts=10, window_seconds=900)
     if wait:
-        return too_many("Too many attempts for that account.", wait)
+        return too_many("Too many attempts for that account from this "
+                        "connection.", wait)
 
     db = get_db()
     try:
@@ -2971,7 +2984,7 @@ def login():
         # above covers a whole shared connection, and clearing it on a
         # successful sign-in would let anyone with one valid account reset
         # the limit protecting every other account behind the same address.
-        clear_rate_limit("login_email", email)
+        clear_rate_limit("login_email", f"{email}:{client_ip()}")
 
         _start_session(org)
         return jsonify({
@@ -3039,10 +3052,14 @@ def admin_login():
                         ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW)
     if wait:
         return too_many("Too many attempts from this connection.", wait)
-    wait = rate_limited("admin_login_email", email,
+    # Address and connection together, for the reason /login gives: keyed
+    # on the address alone, anyone who knew an admin's email could keep
+    # that admin locked out.
+    wait = rate_limited("admin_login_email", f"{email}:{client_ip()}",
                         ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW)
     if wait:
-        return too_many("Too many attempts for that account.", wait)
+        return too_many("Too many attempts for that account from this "
+                        "connection.", wait)
 
     db = get_db()
     try:
@@ -3061,7 +3078,7 @@ def admin_login():
                               admin.password_hash.encode("utf-8")):
             return invalid
 
-        clear_rate_limit("admin_login_email", email)
+        clear_rate_limit("admin_login_email", f"{email}:{client_ip()}")
         admin.last_seen_at = datetime.now(timezone.utc)
         db.commit()
         _start_admin_session(admin)
@@ -5559,7 +5576,7 @@ def create_block(org, db):
     if not valid_id(target_id):
         return jsonify({"error": "Organization not found."}), 404
     other = db.get(Organization, target_id)
-    if other is None or other.is_demo or other.claim_token is not None:
+    if other is None or other.is_demo or other.claim_token_hash is not None:
         return jsonify({"error": "Organization not found."}), 404
 
     wait = rate_limited("blocks", str(org.id), max_attempts=WRITES_PER_HOUR,
@@ -5835,20 +5852,29 @@ MAX_OUTSTANDING_INVITES = 25
 INVITES_PER_HOUR = 20
 
 
-def _invite_dict(row, base_url=""):
-    return {
+def _invite_dict(row, raw_token=None, base_url=""):
+    """An invitation as the dashboard lists it.
+
+    `claim_url` only when the caller holds the raw token -- which is only
+    at the moment it was minted. The row keeps a digest (see issue_token),
+    so a link cannot be read back out of it later; an organization that
+    needs the link again asks for a new one, which retires the old.
+    """
+    data = {
         "id": row.id,
         "name": row.name,
-        "claim_url": f"{base_url}/claim.html?token={row.claim_token}",
         "invited_at": row.invited_at.isoformat() if row.invited_at else None,
     }
+    if raw_token:
+        data["claim_url"] = f"{base_url}/claim.html?token={raw_token}"
+    return data
 
 
 def _outstanding_invites(db, org):
     """Invitations this org has sent that nobody has claimed yet."""
     return db.query(Organization).filter(
         Organization.invited_by_id == org.id,
-        Organization.claim_token.isnot(None),
+        Organization.claim_token_hash.isnot(None),
     ).order_by(Organization.invited_at.desc()).all()
 
 
@@ -5916,20 +5942,20 @@ def create_invite(org, db):
         return too_many("You have created a lot of invitations recently.",
                         wait)
 
-    # No address is collected. See the note on Organization.claim_token: the
+    # No address is collected. See the note on Organization.claim_token_hash: the
     # email column is NOT NULL and unique, so an unclaimed row needs
     # something in it, and a .invalid address (RFC 2606, reserved and
     # guaranteed never to resolve) cannot collide with anybody's real one or
     # be mistaken for a deliverable address by anything downstream. The
     # claimer replaces it with their own on the way in.
-    token = secrets.token_urlsafe(32)
+    token, digest = issue_token()
     invited = Organization(
         email=f"invite-{secrets.token_hex(8)}@invite.invalid",
         name=name,
         name_flagged=name_flagged,
         password_hash=None,
         onboarding_complete=False,
-        claim_token=token,
+        claim_token_hash=digest,
         invited_at=datetime.now(timezone.utc),
         invited_by_id=org.id,
     )
@@ -5941,7 +5967,7 @@ def create_invite(org, db):
 
     return jsonify({
         "message": "Invitation sent" if email else "Invitation created",
-        "invite": _invite_dict(invited),
+        "invite": _invite_dict(invited, raw_token=token),
         "emailed_to": email or None,
     }), 201
 
@@ -5958,7 +5984,7 @@ def revoke_invite(org, db, invite_id):
         # Only while unclaimed. Once somebody has taken it over it is their
         # account, and the organization that invited them has no more claim
         # on it than on anybody else's.
-        Organization.claim_token.isnot(None),
+        Organization.claim_token_hash.isnot(None),
     ).one_or_none()
     if invited is None:
         return jsonify({"error": "Invitation not found."}), 404
@@ -5966,6 +5992,38 @@ def revoke_invite(org, db, invite_id):
     db.delete(invited)
     db.commit()
     return jsonify({"message": "Invitation revoked"})
+
+
+@app.route("/api/invites/<int:invite_id>/link", methods=["POST"])
+@login_required
+def reissue_invite_link(org, db, invite_id):
+    """A fresh claim link for an outstanding invitation.
+
+    The only way to get the link after the moment it was made: the row
+    holds a digest, exactly as the reset and verification tokens do, so
+    the previous link cannot be read back and is retired here instead.
+    Same scope as revoking -- the sender's own, still unclaimed.
+    """
+    invited = db.query(Organization).filter(
+        Organization.id == invite_id,
+        Organization.invited_by_id == org.id,
+        Organization.claim_token_hash.isnot(None),
+    ).one_or_none()
+    if invited is None:
+        return jsonify({"error": "Invitation not found."}), 404
+
+    wait = rate_limited("invites", str(org.id), max_attempts=INVITES_PER_HOUR,
+                        window_seconds=3600)
+    if wait:
+        return too_many("You have created a lot of invitations recently.",
+                        wait)
+
+    token, invited.claim_token_hash = issue_token()
+    db.commit()
+    return jsonify({
+        "message": "New link created. The previous one no longer works.",
+        "invite": _invite_dict(invited, raw_token=token),
+    })
 
 
 @app.route("/api/invites/<token>", methods=["GET"])
@@ -5978,7 +6036,7 @@ def read_invite(token):
     db = get_db()
     try:
         invited = db.query(Organization).filter(
-            Organization.claim_token == token
+            Organization.claim_token_hash == token_digest(token)
         ).one_or_none()
         if invited is None:
             return jsonify({
@@ -6023,7 +6081,7 @@ def claim_invite(token):
     db = get_db()
     try:
         invited = db.query(Organization).filter(
-            Organization.claim_token == token
+            Organization.claim_token_hash == token_digest(token)
         ).one_or_none()
         if invited is None:
             return jsonify({
@@ -6066,7 +6124,7 @@ def claim_invite(token):
         ).decode("utf-8")
         # Spent. The link stops working the moment it is used, and the row
         # stops being an invitation and starts being an account.
-        invited.claim_token = None
+        invited.claim_token_hash = None
         # Opening a link nobody else was given is not proof of the address
         # they just typed, so this still starts unverified and gets the same
         # verification mail a signup does.

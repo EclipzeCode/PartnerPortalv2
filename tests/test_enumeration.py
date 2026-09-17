@@ -230,3 +230,28 @@ def test_a_signed_in_reader_is_limited_by_account_not_address(
     # Signing in moves the caller to its own bucket, which is untouched.
     login(reader)
     assert _profile(client, target.id).status_code == 200
+
+
+# --- The account lockout is not a weapon ------------------------------------
+
+def test_a_stranger_guessing_at_an_account_does_not_lock_its_owner_out(
+        client, make_org, clear_rate_limits):
+    """Ten wrong guesses at somebody's email used to lock that account for
+    fifteen minutes -- from anywhere, repeatably, for the price of knowing
+    the address. The per-account bucket is per connection now: the guesser
+    is refused on that account, and the owner, elsewhere, is not."""
+    org = make_org(name="pytest lockout target")
+    wrong = {"email": org.email, "password": "Wrong-guess-1!"}
+
+    attacker = {"REMOTE_ADDR": "203.0.113.9"}
+    codes = [client.post("/login", json=wrong, environ_base=attacker).status_code
+             for _ in range(11)]
+    assert codes[:10] == [401] * 10
+    assert codes[10] == 429
+
+    # The owner, from their own connection, still gets in.
+    owner = {"REMOTE_ADDR": "198.51.100.7"}
+    from conftest import PASSWORD
+    signed_in = client.post("/login", json={
+        "email": org.email, "password": PASSWORD}, environ_base=owner)
+    assert signed_in.status_code == 200, signed_in.get_data(as_text=True)

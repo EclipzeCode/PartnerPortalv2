@@ -190,3 +190,38 @@ def test_the_dashboard_points_a_claimed_profile_at_its_inviter(
     })
     assert sent.status_code == 201
     assert client.get("/api/dashboard").get_json()["invited_by"] is None
+
+
+# --- The token is a digest -------------------------------------------------
+
+def test_the_link_is_shown_once_and_the_row_keeps_only_a_digest(
+        client, login, make_org, session):
+    """Like every other single-use token here. The list cannot show the
+    link again; a new one can be minted, and it retires the old."""
+    import hashlib
+    from models import Organization
+
+    inviter = make_org(name="pytest inviter digest")
+    login(inviter)
+    made = _invite(client).get_json()["invite"]
+    token = made["claim_url"].split("token=")[1]
+
+    row = session.get(Organization, made["id"])
+    assert row.claim_token_hash == hashlib.sha256(token.encode()).hexdigest()
+    assert token not in (row.claim_token_hash or "")
+
+    listed = client.get("/api/invites").get_json()["invites"]
+    assert [i["id"] for i in listed] == [made["id"]]
+    assert "claim_url" not in listed[0]
+
+    fresh = client.post(f"/api/invites/{made['id']}/link")
+    assert fresh.status_code == 200
+    new_token = fresh.get_json()["invite"]["claim_url"].split("token=")[1]
+    assert new_token != token
+    assert client.get(f"/api/invites/{token}").status_code == 404
+    assert client.get(f"/api/invites/{new_token}").status_code == 200
+
+    # A stranger cannot mint a link for somebody else's invitation.
+    client.post("/logout")
+    login(make_org(name="pytest not the inviter"))
+    assert client.post(f"/api/invites/{made['id']}/link").status_code == 404

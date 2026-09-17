@@ -48,8 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="invite-row-main">
                     <span class="invite-row-name">${esc(inv.name)}</span>
                     <button type="button" class="invite-row-copy"
-                            data-copy="${esc(absolute(inv.claim_url))}">
-                        <i class='bx bx-copy'></i> Copy link
+                            data-relink="${esc(inv.id)}"
+                            title="The link is shown once, when it is made. This makes a new one and retires the old.">
+                        <i class='bx bx-link'></i> New link
                     </button>
                 </div>
                 <button type="button" class="invite-row-revoke"
@@ -172,9 +173,27 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBtn.addEventListener('click', () => copy(linkInput.value, copyBtn));
 
     list.addEventListener('click', async (e) => {
-        const copyTarget = e.target.closest('[data-copy]');
-        if (copyTarget) {
-            copy(copyTarget.dataset.copy, copyTarget);
+        // The server keeps a digest of the token, so a link cannot be read
+        // back after the moment it was made. This mints a fresh one --
+        // retiring whatever was sent before -- and puts it in the result
+        // box and on the clipboard, exactly as a new invitation does.
+        const relink = e.target.closest('[data-relink]');
+        if (relink) {
+            relink.disabled = true;
+            try {
+                const data = await window.api(
+                    `/api/invites/${encodeURIComponent(relink.dataset.relink)}/link`,
+                    { method: 'POST' });
+                linkInput.value = absolute(data.invite.claim_url);
+                if (sentNote) sentNote.hidden = true;
+                result.hidden = false;
+                copy(linkInput.value, copyBtn);
+                window.toast(data.message || 'New link created.');
+            } catch (error) {
+                window.toast(error.message || 'Could not make a new link.', 'error');
+            } finally {
+                relink.disabled = false;
+            }
             return;
         }
 

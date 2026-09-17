@@ -61,7 +61,11 @@ class Organization(Base):
     # avoid -- and the person doing the inviting often knows the organization
     # without knowing which address it would sign up under. The claimer
     # supplies their own on the way in.
-    claim_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # The digest of the claim link's token, never the token (see
+    # issue_token in app.py) -- the same rule the reset, verification and
+    # email-change tokens follow. Set on an invited profile and cleared when
+    # it is claimed, so "not null" means "still an invitation".
+    claim_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Who did the inviting, so the claim page can say whose invitation this is
     # -- an invitation from nobody is a signup form with extra steps. SET NULL
