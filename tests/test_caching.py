@@ -15,6 +15,8 @@ to change what the HTML asks for, or the year-long cache becomes a trap.
 
 import re
 
+import pytest
+
 import app as app_module
 
 
@@ -525,3 +527,31 @@ def test_a_stylesheet_bundle_is_served_without_comments(client):
     # ...and the unbundled sheet is untouched, for reading.
     assert "/*" in client.get("/nav.css").get_data(as_text=True)
     assert "--- " not in client.get("/nav.css").get_data(as_text=True)[:2]
+
+
+def test_a_script_bundle_is_served_without_comments(client):
+    """Same treatment for scripts, by a scanner rather than a regex. Two
+    things are pinned: the comments are gone, and what is left still
+    parses -- checked with node when one is on the PATH, since a stripper
+    that broke a string or a regex would take every page down with it."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    page = client.get("/ppdashboard.html").get_data(as_text=True)
+    name = re.search(r'src="(bundle-[0-9a-f]+\.js)"', page).group(1)
+    body = client.get("/" + name).get_data(as_text=True)
+    assert "/* --- ppdashboard.js --- */" in body
+    # Prose that only ever appears in comments.
+    assert "Wrapped: the handler receives a MouseEvent" not in body
+    # Code that lives near it does.
+    assert "addEventBtn.addEventListener" in body
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed here; the parse check needs it")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+        f.write(body)
+    result = subprocess.run([node, "--check", f.name],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

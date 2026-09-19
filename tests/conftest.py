@@ -130,9 +130,11 @@ def reset_rate_limits():
     """
     app_module._rate_sweep_after = 0.0
     app_module.forget_read_limits()
+    app_module.forget_fit_orders()
     yield
     app_module._rate_sweep_after = 0.0
     app_module.forget_read_limits()
+    app_module.forget_fit_orders()
     _forget_rate_limits()
 
 

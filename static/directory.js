@@ -130,6 +130,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         offersSelect.value = params.get('offers') || '';
         needsSelect.value = params.get('needs') || '';
         sortSelect.value = params.get('sort') === 'newest' ? 'newest' : 'name';
+        // "match" is the signed-in listing's sort. It cannot be honored
+        // here, so the page falls back to name and says so once, rather
+        // than silently showing a different order from the one the link
+        // promised.
+        const fitNote = document.getElementById('fitSortNote');
+        if (fitNote && params.get('sort') === 'match') fitNote.hidden = false;
         remoteBox.checked = params.get('remote') === '1';
         const page = parseInt(params.get('page'), 10);
         state.page = page > 1 ? page : 1;

@@ -234,3 +234,51 @@ def test_the_nav_badge_is_untouched_by_marking_read(client, login, make_org,
     before = client.get("/api/me").get_json()["pending_proposals"]
     client.post("/api/notifications/read")
     assert client.get("/api/me").get_json()["pending_proposals"] == before
+
+
+def test_an_informational_entry_can_be_dismissed_and_stays_gone(
+        client, login, make_org, session):
+    """News can be cleared one entry at a time. Work cannot: an entry
+    waiting on this organization is refused, and the list is what says
+    which is which."""
+    from datetime import datetime, timezone
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    session.add_all([
+        # Waiting on me: actionable, cannot be dismissed.
+        Partnership(
+            proposer_id=them.id, recipient_id=me.id,
+            status=Partnership.PENDING,
+            proposer_gives=["web_development"], recipient_gives=["mentors"],
+            proposer_name=them.name, recipient_name=me.name),
+        # My proposal, declined: news.
+        Partnership(
+            proposer_id=me.id, recipient_id=them.id,
+            status=Partnership.DECLINED,
+            responded_at=datetime.now(timezone.utc),
+            proposer_gives=["mentors"], recipient_gives=["web_development"],
+            proposer_name=me.name, recipient_name=them.name),
+    ])
+    session.commit()
+    login(me)
+
+    items = _notifications(client)["notifications"]
+    news = next(i for i in items if i["kind"] == "proposal_declined")
+    work = next(i for i in items if i["kind"] == "proposal_received")
+    assert news["key"] and work["key"]
+
+    refused = client.post("/api/notifications/dismiss", json={"key": work["key"]})
+    assert refused.status_code == 409
+
+    assert client.post("/api/notifications/dismiss",
+                       json={"key": news["key"]}).status_code == 200
+    after = _notifications(client)["notifications"]
+    assert news["key"] not in {i["key"] for i in after}
+    assert work["key"] in {i["key"] for i in after}
+    # Persisted on the row, not just this read.
+    session.refresh(me)
+    assert news["key"] in me.dismissed_notifications
+
+    assert client.post("/api/notifications/dismiss",
+                       json={"key": "nonsense"}).status_code == 400

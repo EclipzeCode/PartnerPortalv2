@@ -205,11 +205,20 @@
                         <i class='bx ${esc(icon)}' aria-hidden="true"></i>
                         <span class="notify-text">${esc(text)}</span>
                         <span class="notify-when">${esc(ago(item.at))}</span>`;
+            // News can be cleared one entry at a time; work cannot -- an
+            // entry waiting on this organization stays until it is
+            // answered, so it gets no dismiss control.
+            const dismiss = !item.actionable && item.key
+                ? `<button type="button" class="notify-dismiss"
+                           data-dismiss="${esc(item.key)}"
+                           aria-label="Dismiss: ${esc(text)}">&times;</button>`
+                : '';
             return `
-                <li class="${classes}">
+                <li class="${classes}" data-key="${esc(item.key || '')}">
                     ${href
                         ? `<a href="${esc(href)}">${body}</a>`
                         : `<span class="notify-plain">${body}</span>`}
+                    ${dismiss}
                 </li>`;
         }).join('');
     }
@@ -309,7 +318,27 @@
         // thread opened from here, closed, and clicked again did nothing.
         // Dispatching the event by hand makes the second click work like the
         // first; every other case is left to the browser.
-        list.addEventListener('click', (e) => {
+        list.addEventListener('click', async (e) => {
+            const dismiss = e.target.closest('button[data-dismiss]');
+            if (dismiss) {
+                e.stopPropagation();
+                const row = dismiss.closest('li');
+                dismiss.disabled = true;
+                try {
+                    await window.api('/api/notifications/dismiss',
+                                     { method: 'POST', body: { key: dismiss.dataset.dismiss } });
+                } catch (error) {
+                    dismiss.disabled = false;
+                    window.toast(error.message || 'Could not dismiss that.', 'error');
+                    return;
+                }
+                row.remove();
+                if (!list.querySelector('li')) {
+                    list.innerHTML = '<li class="notify-empty">Nothing new. '
+                        + 'Proposals and replies show up here.</li>';
+                }
+                return;
+            }
             const link = e.target.closest('a[href]');
             if (!link) return;
             setOpen(false);

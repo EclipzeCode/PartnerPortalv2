@@ -134,6 +134,18 @@
             <a class="btn-ghost" href="ppsearch.html">Go to your matches</a>
         </div>
 
+        <!-- A link that asked for the fit sort, opened signed out. The
+             public listing cannot rank -- fit is a comparison with the
+             viewer's own profile -- so it is shown by name instead, and
+             this says why. Same shape as the note above; directory.js
+             unhides it only when the URL carried sort=match. -->
+        <div class="dir-signedin" id="fitSortNote" hidden>
+            <i class='bx bx-info-circle' aria-hidden="true"></i>
+            <span>This link was sorted by fit. Fit is measured against your
+                  own profile, so signed out the list is shown by name.</span>
+            <a class="btn-ghost" href="pplogin.html?next=ppsearch.html%3Fview%3Dbrowse%26sort%3Dmatch">Sign in to see it ranked</a>
+        </div>
+
         <form class="dir-controls" id="dirControls" role="search"
               aria-label="Search the directory">
             <div class="dir-search">

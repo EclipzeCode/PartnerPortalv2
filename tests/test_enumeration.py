@@ -255,3 +255,37 @@ def test_a_stranger_guessing_at_an_account_does_not_lock_its_owner_out(
     signed_in = client.post("/login", json={
         "email": org.email, "password": PASSWORD}, environ_base=owner)
     assert signed_in.status_code == 200, signed_in.get_data(as_text=True)
+
+
+def test_an_account_without_a_password_can_set_one_through_the_reset_link(
+        client, make_org, session, link_token, outbox):
+    """There was no way in: the reset link skipped a row with no hash, and the
+    in-app routes told it to contact a support desk that does not exist.
+    The reset handler already writes a fresh hash, so the link is offered."""
+    org = make_org()
+    org.password_hash = None
+    session.commit()
+    outbox.clear()
+    assert client.post("/forgot-password", json={"email": org.email}).status_code == 200
+    token = link_token('notify_password_reset')
+    response = client.post("/api/reset-password", json={
+        "token": token, "password": "Fresh-start-2026!x"})
+    assert response.status_code == 200
+    session.refresh(org)
+    assert org.password_hash is not None
+    client.post("/logout")
+    assert client.post("/login", json={
+        "email": org.email, "password": "Fresh-start-2026!x"}).status_code == 200
+
+
+def test_an_unclaimed_invitation_still_gets_no_reset_mail(
+        client, make_org, session, outbox):
+    """Its own link is the way in, and its placeholder address is not one
+    mail can reach -- and answering differently would say the row exists."""
+    org = make_org(onboarding_complete=False, claim_token_hash="0" * 64)
+    org.password_hash = None
+    session.commit()
+    outbox.clear()
+    response = client.post("/forgot-password", json={"email": org.email})
+    assert response.status_code == 200
+    assert "notify_password_reset" not in [name for name, _, _ in outbox]

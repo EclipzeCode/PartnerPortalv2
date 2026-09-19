@@ -45,8 +45,8 @@ from units import (
     default_unit_for,
 )
 from matching import (
-    MATCH_LIMIT, find_matches_with_examples, match_overview,
-    rank_directory, score_pair,
+    MATCH_LIMIT, find_matches_with_examples, hydrate_in_order,
+    match_overview, rank_directory_order, score_pair,
 )
 from moderation import screen_name
 from models import (
@@ -901,14 +901,14 @@ def screened_name(name):
 def _no_password_message(what):
     """The refusal a passwordless account gets from `what`, with somewhere to go.
 
-    "Please contact support" pointed at nothing: there is no support route
-    beyond the homepage form, and that form is delivered by mail. The address
-    is named when one is configured, as screened_name does for the same
-    reason.
+    "Please contact support" pointed at nothing. The reset link is the way
+    to set a password on an account that has none (see forgot_password), so
+    that is what this names; the contact address follows when one is
+    configured, as screened_name does for the same reason.
     """
-    where = (f"You can reach us at {CONTACT_EMAIL}." if CONTACT_EMAIL
-             else "Use the contact form on the home page.")
-    return f"This account has no password set, so it cannot {what} from here. {where}"
+    return (f"This account has no password set, so it cannot {what} from "
+            f"here. Use \"Forgot password?\" on the sign-in page to set one"
+            + (f", or reach us at {CONTACT_EMAIL}." if CONTACT_EMAIL else "."))
 
 
 def client_ip():
@@ -1590,11 +1590,8 @@ def _register_all_bundles():
 # wire, but the browser still parses every byte, and a comment is the one
 # part of a stylesheet that can be dropped with no change in meaning.
 #
-# CSS only, on purpose. Stripping JavaScript safely means tokenizing it --
-# a `//` inside a string, a template literal or a regex is not a comment,
-# and password-field.js has a regex with a backtick in it -- and a stripper
-# that is wrong once takes the whole bundle down. CSS comments cannot nest
-# and cannot appear inside a string in any file here, so this one is safe.
+# CSS comments cannot nest and do not appear inside a string in any file
+# here, so a regex is enough for these. Scripts get the scanner below.
 _CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 
@@ -1602,6 +1599,235 @@ _BLANK_RUN_RE = re.compile(r"\n{3,}")
 def _strip_css_comments(css):
     """`css` without its comments, and without the blank runs they leave."""
     return _BLANK_RUN_RE.sub("\n\n", _CSS_COMMENT_RE.sub("", css))
+
+
+# The same for scripts, which needs more than a regex. A `//` inside a string,
+# a template literal or a regex literal is not a comment -- password-field.js
+# has a regex with a backtick in it -- so the scanner below tracks all three
+# and decides regex-versus-division from the previous significant token, the
+# way most tooling does. Two safeguards make it safe to leave on: anywhere it
+# cannot decide it returns the source untouched, and every result is checked
+# by _only_comments_removed before it is used.
+_JS_REGEX_PRECEDERS = set("(,=:[!&|?{};+-*%<>~^")
+_JS_KEYWORDS_BEFORE_REGEX = {"return", "typeof", "instanceof", "in", "of", "new",
+                          "delete", "void", "throw", "case", "do", "else"}
+_JS_WORD_RE = re.compile(r"[A-Za-z_$][\w$]*")
+
+
+def _scan_js_without_comments(src):
+    """`src` without its comments, or `src` unchanged if unsure.
+
+    A small scanner, not a parser: it tracks strings, template literals
+    (with nested ${...}), regex literals and comments, and copies through
+    everything but the comments. Regex-versus-division is decided the way
+    most tooling does, by the previous significant token; anywhere the
+    scanner cannot decide it gives up and returns the source untouched,
+    because a stripper that is wrong once takes the whole bundle down.
+    """
+    out = []
+    i = 0
+    n = len(src)
+    # Stack of template-literal nesting: each entry is the brace depth at
+    # which the current ${ } expression closes back into the template.
+    tpl_stack = []
+    brace_depth = 0
+    last_sig = ""       # last significant character or word
+
+    def prev_allows_regex():
+        if not last_sig:
+            return True
+        if last_sig in _JS_KEYWORDS_BEFORE_REGEX:
+            return True
+        if _JS_WORD_RE.fullmatch(last_sig):
+            return False        # identifier / number / keyword like `this`
+        return last_sig[-1] in _JS_REGEX_PRECEDERS or last_sig[-1] in "\n"
+
+    def note(tok):
+        nonlocal last_sig
+        last_sig = tok
+
+    while i < n:
+        c = src[i]
+        two = src[i:i + 2]
+
+        # --- comments -------------------------------------------------
+        if two == "//":
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if two == "/*":
+            j = src.find("*/", i + 2)
+            if j < 0:
+                return src
+            # Keep a newline if the comment spanned lines, so line-based
+            # constructs (ASI) are not glued together.
+            if "\n" in src[i:j]:
+                out.append("\n")
+            i = j + 2
+            continue
+
+        # --- strings --------------------------------------------------
+        if c in "'\"":
+            j = i + 1
+            while j < n and src[j] != c:
+                if src[j] == "\\":
+                    j += 1
+                elif src[j] == "\n":
+                    return src
+                j += 1
+            if j >= n:
+                return src
+            out.append(src[i:j + 1])
+            note('"')
+            i = j + 1
+            continue
+
+        # --- template literals ---------------------------------------
+        if c == "`":
+            j = i + 1
+            while j < n:
+                ch = src[j]
+                if ch == "\\":
+                    j += 2
+                    continue
+                if ch == "`":
+                    break
+                if src[j:j + 2] == "${":
+                    break
+                j += 1
+            if j >= n:
+                return src
+            if src[j] == "`":
+                out.append(src[i:j + 1])
+                note('"')
+                i = j + 1
+            else:
+                out.append(src[i:j + 2])
+                tpl_stack.append(brace_depth)
+                brace_depth += 1
+                note("{")
+                i = j + 2
+            continue
+
+        if c == "}" and tpl_stack and brace_depth - 1 == tpl_stack[-1]:
+            # Back into the template text.
+            tpl_stack.pop()
+            brace_depth -= 1
+            j = i + 1
+            while j < n:
+                ch = src[j]
+                if ch == "\\":
+                    j += 2
+                    continue
+                if ch == "`":
+                    break
+                if src[j:j + 2] == "${":
+                    break
+                j += 1
+            if j >= n:
+                return src
+            if src[j] == "`":
+                out.append(src[i:j + 1])
+                note('"')
+                i = j + 1
+            else:
+                out.append(src[i:j + 2])
+                tpl_stack.append(brace_depth)
+                brace_depth += 1
+                note("{")
+                i = j + 2
+            continue
+
+        # --- regex literals -------------------------------------------
+        if c == "/" and prev_allows_regex():
+            j = i + 1
+            in_class = False
+            while j < n:
+                ch = src[j]
+                if ch == "\\":
+                    j += 2
+                    continue
+                if ch == "\n":
+                    return src
+                if in_class:
+                    if ch == "]":
+                        in_class = False
+                elif ch == "[":
+                    in_class = True
+                elif ch == "/":
+                    break
+                j += 1
+            if j >= n:
+                return src
+            j += 1
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            out.append(src[i:j])
+            note('"')
+            i = j
+            continue
+
+        # --- everything else -----------------------------------------
+        if c == "{":
+            brace_depth += 1
+        elif c == "}":
+            brace_depth -= 1
+        m = _JS_WORD_RE.match(src, i)
+        if m:
+            out.append(m.group(0))
+            note(m.group(0))
+            i = m.end()
+            continue
+        out.append(c)
+        if not c.isspace():
+            note(c)
+        elif c == "\n" and last_sig and last_sig[-1] not in _JS_REGEX_PRECEDERS:
+            # A newline after a complete expression: what follows on the
+            # next line may start with a regex literal.
+            note("\n")
+        i += 1
+
+    return "".join(out)
+
+
+def _only_comments_removed(src, out):
+    """Whether `out` is `src` with nothing but comments taken out.
+
+    The post-condition that makes the scanner above safe to run on files it
+    has never seen: it walks both strings together and refuses the result
+    the moment a removed span is not a comment. Cheap -- linear in the file
+    -- and what turns "probably right" into "right or untouched".
+    """
+    i = j = 0
+    while i < len(src):
+        if j < len(out) and src[i] == out[j]:
+            i += 1
+            j += 1
+            continue
+        if src.startswith("//", i):
+            k = src.find("\n", i)
+            i = len(src) if k < 0 else k
+            continue
+        if src.startswith("/*", i):
+            k = src.find("*/", i)
+            if k < 0:
+                return False
+            k += 2
+            if "\n" in src[i:k]:
+                if j >= len(out) or out[j] != "\n":
+                    return False
+                j += 1
+            i = k
+            continue
+        return False
+    return j == len(out)
+
+
+def _strip_js_comments(src):
+    """`src` without its comments, or `src` unchanged if that cannot be
+    shown to be all that changed."""
+    out = _scan_js_without_comments(src)
+    return out if _only_comments_removed(src, out) else src
 
 
 def _bundle_body(members):
@@ -1624,8 +1850,7 @@ def _bundle_body(members):
     parts = []
     for name in members:
         body, _ = _stamped_page(name, pattern)
-        if is_css:
-            body = _strip_css_comments(body)
+        body = _strip_css_comments(body) if is_css else _strip_js_comments(body)
         # Named in a comment so the bundle can be read in devtools and the
         # rule you are looking at can be traced back to a file.
         parts.append(f"/* --- {name} --- */\n{body}")
@@ -3652,11 +3877,15 @@ def forgot_password():
         org = db.query(Organization).filter(
             Organization.email == email
         ).one_or_none()
-        # No password_hash means there is nothing to reset -- a pre-created
-        # profile nobody has claimed, the same case /register's password
-        # check protects against from the other direction. Silently doing
-        # nothing keeps this indistinguishable from "no such account".
-        if org is not None and org.password_hash is not None:
+        # An account with no password is offered one through the same link
+        # -- it is the only way back in for a row that lost its hash, and
+        # the reset handler already writes a fresh one. What is still turned
+        # away silently: an unclaimed invitation, which has its own link and
+        # whose placeholder address cannot receive mail anyway, and a seeded
+        # example, which nobody owns. Silence keeps both indistinguishable
+        # from "no such account".
+        if (org is not None and org.claim_token_hash is None
+                and not org.is_demo):
             reset_raw, org.password_reset_token_hash = issue_token()
             org.password_reset_sent_at = datetime.now(timezone.utc)
             db.commit()
@@ -4819,6 +5048,22 @@ def _directory_paging(args, max_page_size=None):
     return per_page, max(1, page)
 
 
+# How long a viewer's ranked directory order is kept, and the arguments
+# that shape it. See _directory_by_fit.
+FIT_ORDER_TTL = 30
+FIT_ORDER_CACHE_MAX = 256
+_FIT_ORDER_ARGS = frozenset({"q", "offers", "needs", "type", "location",
+                             "remote", "focus", "include_examples"})
+_fit_order_cache = {}
+_fit_order_lock = threading.Lock()
+
+
+def forget_fit_orders():
+    """Drop every cached directory order. For the test suite."""
+    with _fit_order_lock:
+        _fit_order_cache.clear()
+
+
 def _directory_by_fit(db, org, args):
     """The directory ordered by how well each organization fits `org`.
 
@@ -4837,28 +5082,59 @@ def _directory_by_fit(db, org, args):
     better partner".
     """
     per_page, page = _directory_paging(args)
+    conditions = _directory_filters(args, org.id, viewer_id=org.id)
 
-    rows = db.execute(
-        select(
-            Organization.id,
-            Organization.name,
-            Organization.needs,
-            Organization.offers,
-            Organization.focus_areas,
-            Organization.location,
-            Organization.remote_friendly,
-            Organization.organization_type,
-        ).where(*_directory_filters(args, org.id, viewer_id=org.id))
-    ).all()
+    # The ranked order, kept for a short while per viewer and filter set.
+    #
+    # Ranking means selecting every organization that passes the filters
+    # and scoring each one against the viewer, and it was done again for
+    # every page turned -- the same set, the same scores, a page at a time.
+    # The order is now computed once and paged from memory for
+    # FIT_ORDER_TTL seconds. What can go stale inside that window is small
+    # and bounded: an organization that joined, or edited its needs and
+    # offers, is not in this viewer's fit order until it expires (it is in
+    # every other sort at once); one hidden or blocked since is dropped at
+    # hydration, because hydrate_in_order re-applies the filters. The
+    # viewer's own edits invalidate it immediately through updated_at in
+    # the key -- scores are a function of both profiles, and this one is
+    # the half they can change.
+    key = (org.id, org.updated_at.isoformat() if org.updated_at else None,
+           tuple(sorted((k, v) for k, v in args.items()
+                        if k in _FIT_ORDER_ARGS)))
+    now = time.monotonic()
+    with _fit_order_lock:
+        hit = _fit_order_cache.get(key)
+        if hit and hit[0] > now:
+            ordered = hit[1]
+        else:
+            ordered = None
+    if ordered is None:
+        rows = db.execute(
+            select(
+                Organization.id,
+                Organization.name,
+                Organization.needs,
+                Organization.offers,
+                Organization.focus_areas,
+                Organization.location,
+                Organization.remote_friendly,
+                Organization.organization_type,
+            ).where(*conditions)
+        ).all()
+        ordered = rank_directory_order(org, rows)
+        with _fit_order_lock:
+            if len(_fit_order_cache) >= FIT_ORDER_CACHE_MAX:
+                _fit_order_cache.clear()
+            _fit_order_cache[key] = (now + FIT_ORDER_TTL, ordered)
 
-    total = len(rows)
+    total = len(ordered)
     pages = max(1, -(-total // per_page))
     # Clamped for the same reason the SQL path clamps: a stale page number
     # should land on the last page with rows on it.
     page = min(page, pages)
 
-    found, _ = rank_directory(db, org, rows,
-                              offset=(page - 1) * per_page, limit=per_page)
+    start = (page - 1) * per_page
+    found = hydrate_in_order(db, ordered[start:start + per_page], *conditions)
     return found, {
         "total": total,
         "page": page,
@@ -6222,6 +6498,20 @@ def _unread_by(org_id):
     )
 
 
+def _notification_key(kind, proposal_id, at):
+    """The identity of one entry: what happened, to which partnership, when.
+
+    Stable across reads because every part of it is -- the kind is decided
+    by the row's status, the id is the row's, and the timestamp is the
+    column that recorded the event. That is what lets a dismissal survive
+    without a row of its own; see Organization.dismissed_notifications.
+    """
+    return f"{kind}:{proposal_id}:{at.isoformat()}"
+
+
+_NOTIFICATION_KEY_RE = re.compile(r"^[a-z_]+:\d+:\d{4}-\d{2}-\d{2}T[0-9:.+\-]+$")
+
+
 def _notification_rows(db, org, since, thread_ids):
     """The partnerships that could put something in `org`'s list.
 
@@ -6309,6 +6599,7 @@ def _notifications_for(db, org):
     """
     since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
     seen_at = org.notifications_seen_at
+    dismissed = set(org.dismissed_notifications or [])
 
     # Unread messages, one entry per thread rather than one per message: a
     # conversation is one thing that happened, and six lines saying the same
@@ -6342,8 +6633,15 @@ def _notifications_for(db, org):
         # with the list it opens, since the count is taken from these items.
         if not actionable and at < since:
             return
+        # Cleared by hand. Only news can be; work stays until it is done,
+        # which is also why the key is checked after the actionable test
+        # above rather than before it.
+        key = _notification_key(kind, proposal.id, at)
+        if not actionable and key in dismissed:
+            return
         entry = {
             "kind": kind,
+            "key": key,
             "at": at.isoformat(),
             "counterpart": proposal.counterpart_party(org.id).get("name"),
             "proposal_id": proposal.id,
@@ -6513,6 +6811,52 @@ def mark_notifications_read(org, db):
         # everything informational in the list.
         "unseen": 0,
     })
+
+
+@app.route("/api/notifications/dismiss", methods=["POST"])
+@login_required
+def dismiss_notification(org, db):
+    """Take one informational entry off the list for good.
+
+    The entry is named by its key (see _notification_key); nothing else is
+    sent because nothing else is needed. Something still waiting on this
+    organization cannot be dismissed -- it is not a message to be cleared
+    but work to be done -- so a key that names an actionable entry is
+    refused, and one that names nothing in the current list is accepted
+    quietly: the panel may simply be a poll behind.
+
+    The list of dismissed keys is pruned to the notification window while
+    it is here, since anything older is out of the list already.
+    """
+    data = request.get_json(silent=True) or {}
+    key = str(data.get("key") or "").strip()
+    if not key or len(key) > 120 or not _NOTIFICATION_KEY_RE.match(key):
+        return jsonify({"error": "Which notification is this?"}), 400
+
+    items, _ = _notifications_for(db, org)
+    current = {item["key"]: item for item in items}
+    if key in current and current[key]["actionable"]:
+        return jsonify({
+            "error": "That one is waiting on you, so it stays until it is "
+                     "answered.",
+        }), 409
+
+    since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
+    kept = []
+    for held in (org.dismissed_notifications or []):
+        try:
+            at = datetime.fromisoformat(held.split(":", 2)[2])
+        except (ValueError, IndexError):
+            continue
+        if at >= since:
+            kept.append(held)
+    if key not in kept:
+        kept.append(key)
+    # Rebound, not appended in place: a JSONB column is a mutable object the
+    # session does not watch (see update_settings).
+    org.dismissed_notifications = kept
+    db.commit()
+    return jsonify({"message": "Dismissed", "key": key})
 
 
 # --- Dashboard --------------------------------------------------------------
@@ -7532,9 +7876,9 @@ def _vtimezone(zone_name, year, last_year=None):
     iCalendar, however widely clients get away with it -- so the observances
     are emitted rather than assumed.
 
-    The transitions are found by walking the year a day at a time and
-    bisecting whichever day the offset changes on, because zoneinfo exposes
-    no transition list. A year is 365 offset lookups and at most a couple of
+    The transitions are found by walking the year a week at a time and
+    bisecting whichever week the offset changes in, because zoneinfo exposes
+    no transition list. A year is ~53 offset lookups and at most a couple of
     bisections; this runs on an explicit download, not on the dashboard.
 
     Explicit observances, not RRULEs. A rule would claim the pattern holds
@@ -7562,10 +7906,16 @@ def _vtimezone(zone_name, year, last_year=None):
     start = datetime(year, 1, 1, tzinfo=timezone.utc)
     end = datetime(last_year + 1, 1, 1, tzinfo=timezone.utc)
 
+    # Stepped a week at a time rather than a day: 53 lookups a year instead
+    # of 365, and the bisection below still finds the exact second. What
+    # the coarser step assumes is that no zone changes offset twice inside
+    # seven days, which holds for every zone in tzdata -- the closest pairs
+    # (Morocco around Ramadan) are weeks apart. A week that contained two
+    # changes would be read as one, or as none if they cancelled out.
     transitions = []
     probe, current = start, offset_at(start)
     while probe < end:
-        nxt = min(probe + timedelta(days=1), end)
+        nxt = min(probe + timedelta(days=7), end)
         if offset_at(nxt) != current:
             low, high = probe, nxt
             while high - low > timedelta(seconds=1):

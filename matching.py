@@ -648,15 +648,48 @@ def rank_directory(session, me, rows, *, offset=0, limit=None):
     and it is what makes sorting the whole filtered directory by fit
     affordable enough to offer at all.
     """
-    def entry(them):
-        score, mutual, *_ = rank_pair(me, them)
-        return mutual, score, them.name, them
-
-    ordered = sorted((entry(them) for them in rows),
-                     key=lambda r: _rank_key(r[:3]))
+    ordered = rank_directory_order(me, rows)
     total = len(ordered)
     page = ordered[offset:] if limit is None else ordered[offset:offset + limit]
-    return _hydrate(session, [r[3] for r in page]), total
+    return hydrate_in_order(session, page), total
+
+
+def rank_directory_order(me, rows):
+    """The ids of `rows`, in the order rank_directory would page them.
+
+    The ranking without the fetch, for a caller that wants to keep the
+    order and hydrate a page of it later -- the directory caches this for a
+    few seconds (see _directory_by_fit in app.py) so that turning pages does
+    not re-rank the whole filtered set each time.
+    """
+    def entry(them):
+        score, mutual, *_ = rank_pair(me, them)
+        return mutual, score, them.name, them.id
+
+    return [r[3] for r in sorted((entry(them) for them in rows),
+                                 key=lambda r: _rank_key(r[:3]))]
+
+
+def hydrate_in_order(session, ids, *conditions):
+    """Full organizations for `ids`, in that order, that still meet `conditions`.
+
+    The same one-query fetch _hydrate makes, taking ids rather than rows so
+    a cached order can be paged, and taking extra WHERE conditions so a
+    page served from a cached order still answers the filters as they stand
+    now: an organization hidden or blocked since the order was computed is
+    left out of the page rather than shown for the life of the cache.
+    """
+    from models import Organization
+
+    if not ids:
+        return []
+    found = {
+        org.id: org
+        for org in session.query(Organization).filter(
+            Organization.id.in_(list(ids)), *conditions
+        ).all()
+    }
+    return [found[i] for i in ids if i in found]
 
 
 def match_overview(session, me, top=5):

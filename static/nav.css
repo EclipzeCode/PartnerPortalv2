@@ -770,3 +770,53 @@
     height: 0.6rem;
     border-radius: 4px;
 }
+
+/* --- Dismissing one entry --------------------------------------------------
+   An × on the right of an informational row, drawn by notifications.js and
+   absent on anything actionable. The row becomes the positioning context
+   so the button can sit over the link's padding without joining its grid;
+   the link keeps room for it on the right. Quiet until the row is hovered
+   or the button itself is focused, so a list of news does not read as a
+   column of crosses. */
+.notify-list li {
+    position: relative;
+}
+
+.notify-list li:has(.notify-dismiss) a,
+.notify-list li:has(.notify-dismiss) .notify-plain {
+    padding-right: 2.4rem;
+}
+
+.nav-notify .notify-dropdown .notify-dismiss {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    width: 1.6rem;
+    height: 1.6rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    background: none;
+    color: var(--h-ink-soft);
+    font: 1.1rem/1 var(--h-sans);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease, border-color 120ms ease;
+}
+
+.notify-list li:hover .notify-dismiss,
+.notify-list li:focus-within .notify-dismiss {
+    opacity: 1;
+}
+
+.nav-notify .notify-dropdown .notify-dismiss:hover,
+.nav-notify .notify-dropdown .notify-dismiss:focus-visible {
+    border-color: var(--h-rule);
+    color: var(--h-ink);
+    outline: none;
+}
+
+@media (hover: none) {
+    /* No hover to reveal it on a touch screen, so it is simply there. */
+    .notify-list li .notify-dismiss { opacity: 1; }
+}

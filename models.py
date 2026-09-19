@@ -342,6 +342,21 @@ class Organization(Base):
         DateTime(timezone=True)
     )
 
+    # Individual entries this organization has dismissed from the list.
+    #
+    # The list is derived, not stored (see _notifications_for in app.py), so
+    # there is no row to delete when somebody clears one entry. What there
+    # is, is an identity: every entry is one kind of thing that happened to
+    # one partnership at one moment, and "kind:proposal_id:timestamp" names
+    # it exactly. Those names are kept here and the entry is left out on the
+    # next read. Only informational entries can be dismissed -- something
+    # still waiting on this organization stays until it is answered -- and
+    # the endpoint prunes names older than the list's own window, so this
+    # never grows past a couple of months of news.
+    dismissed_notifications: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+
     # --- Moderation --------------------------------------------------------
     # When an admin took this organization out of the directory, if they did.
     #

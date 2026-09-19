@@ -169,3 +169,40 @@ def test_the_page_number_is_clamped_not_refused(client, make_org, login):
 def test_match_is_a_recognized_sort(client):
     """Guards the constant the routing reads."""
     assert "match" in app_module.DIRECTORY_SORTS
+
+
+def test_a_cached_order_still_drops_what_the_filters_now_exclude(
+        client, make_org, login, session):
+    """The ranked order is kept for a few seconds per viewer and filter set
+    (see _directory_by_fit). A page served from it still answers the filters
+    as they stand: an organization hidden since the order was computed is
+    left out rather than shown for the life of the cache, and the viewer's
+    own edit throws the order away."""
+    from datetime import datetime, timezone
+    me = make_org(name="pytest-fitcache me", needs=NEEDS, offers=OFFERS)
+    strong = make_org(name="pytest-fitcache strong",
+                      needs=OFFERS, offers=NEEDS)
+    make_org(name="pytest-fitcache weak", needs=["legal"], offers=["mentors"])
+    login(me)
+
+    first = _browse(client, q="pytest-fitcache")
+    assert first["organizations"][0]["id"] == strong.id
+    assert app_module._fit_order_cache, "the order should now be cached"
+
+    strong.hidden_at = datetime.now(timezone.utc)
+    session.commit()
+    again = _browse(client, q="pytest-fitcache")
+    assert strong.id not in [o["id"] for o in again["organizations"]]
+    # Served from the cache: the total still counts the row the order held.
+    assert again["total"] == first["total"]
+
+    # The viewer's own profile changing is a new order. updated_at is set
+    # by hand here because the suite runs inside one transaction and
+    # Postgres's now() -- what onupdate writes -- is the transaction's start
+    # time, so the column would not move on its own the way it does for a
+    # real request.
+    me.needs = ["legal"]
+    me.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    fresh = _browse(client, q="pytest-fitcache")
+    assert fresh["total"] == first["total"] - 1
