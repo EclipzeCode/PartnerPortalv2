@@ -1907,17 +1907,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 + 'Sharing its link is what puts it in front of people — the '
                 + 'Copy link button is on the profile itself.');
         }
+        // The window is whatever the server counted over, which the payload
+        // says (VIEW_SERIES_CHOICES in app.py); it is not always thirty.
+        const days = Number(s.profile_views_days) || 30;
+        // Against the same length of time before it, when there is one to
+        // compare against. The chart on the analytics page draws both;
+        // here it is one line, and only when it has something to say.
+        const prior = Number(s.profile_views_prior);
+        const change = prior > 0
+            ? `${recent >= prior ? '+' : '−'}${
+                Math.abs(Math.round(((recent - prior) / prior) * 100))}% on the ${
+                days} days before`
+            : '';
         return `
             <div class="stat-detail-grid">
                 ${field('All time', String(total))}
-                ${field('Last 30 days', String(recent))}
+                ${field(`Last ${days} days`, String(recent))}
+                ${field('Change', change)}
             </div>
             <p class="stat-detail-note">
                 Counted once per visitor per day, so a reload is not a second
                 view. Your own visits are not counted. Who looked is not
                 recorded — most people opening a public profile are not signed
                 in, so there is no one to name.
-            </p>`;
+            </p>
+            <div class="stat-detail-actions">
+                <a class="btn-ghost" href="analytics.html">
+                    <i class='bx bx-line-chart'></i> Day by day, in Analytics
+                </a>
+            </div>`;
     }
 
     function renderStat() {
