@@ -888,10 +888,12 @@ function refreshNavCountsIfStale() {
 // site rather than on one panel somebody deliberately opened.
 //
 // Not SSE, which would be the obvious answer and is the wrong one here.
-// gunicorn runs sync workers (see render.yaml), and a sync worker serves one
-// request at a time: two visitors holding a stream open would occupy both
-// workers and the site would stop answering anybody. That is a change to the
-// worker class, not a change to this file.
+// gunicorn runs two threaded workers with four threads each (see
+// render.yaml), so eight requests can be in flight across the site. A
+// stream holds one of those slots for as long as the tab is open: eight
+// visitors with a dashboard open would take every slot and the site would
+// stop answering anybody. Streaming needs an async worker class, which is
+// a deployment change, not a change to this file.
 const NAV_POLL_MS = 60000;
 let navPollTimer = null;
 
