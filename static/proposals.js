@@ -1372,6 +1372,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // was looked at from one that was worked on.
     let editOpenedAs = '';
 
+    // Same protection the propose form has: a tab closed over a half-written
+    // counter-offer gets the browser's leave-page question.
+    if (window.guardUnsaved) {
+        window.guardUnsaved(() => Boolean(editing) && editSnapshot() !== editOpenedAs);
+    }
+
     function editSnapshot() {
         return JSON.stringify({
             gives: [...editGives.proposer].sort(),

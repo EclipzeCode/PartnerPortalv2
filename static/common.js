@@ -1034,6 +1034,34 @@ function wireAccountMenu() {
     }
 }
 
+// --- Leaving with work unsaved --------------------------------------------
+// The dialogs that hold typing ask before discarding it on Escape or a
+// backdrop click; a tab closed or a link followed skipped straight past
+// that. Pages register a predicate for each such form, and the browser's
+// own leave-page prompt is shown while any of them says there is something
+// to lose. The browser decides the wording; all a page can do is ask.
+const unsavedChecks = new Set();
+
+window.guardUnsaved = function guardUnsaved(isDirty) {
+    unsavedChecks.add(isDirty);
+    return () => unsavedChecks.delete(isDirty);
+};
+
+window.addEventListener('beforeunload', (e) => {
+    let dirty = false;
+    unsavedChecks.forEach((check) => {
+        try {
+            if (check()) dirty = true;
+        } catch {
+            // A predicate that throws has nothing to protect.
+        }
+    });
+    if (!dirty) return;
+    e.preventDefault();
+    // Older engines read this rather than the call above.
+    e.returnValue = '';
+});
+
 // --- Confirmation dialog -----------------------------------------------
 // A yes/no question in the site's own dialog, in place of window.confirm().
 // Three places reached for the browser's box -- blocking an organization,

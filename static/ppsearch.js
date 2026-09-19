@@ -1289,6 +1289,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return proposeModal && proposeModal.classList.contains('active')
             && proposeSnapshot() !== proposeOpenedAs;
     }
+    // Closing the tab with a half-written proposal gets the same question a
+    // backdrop click does -- from the browser, which is the only thing that
+    // can ask it there.
+    if (window.guardUnsaved) window.guardUnsaved(proposeIsDirty);
 
     function unitSelect(side, slug, chosen) {
         const options = unitOptions.map((u) => {
