@@ -174,3 +174,30 @@ def test_proposal_message_is_capped(client, make_org, login):
     response = _propose(client, recipient, message="m" * 5000)
     assert response.status_code == 400
     assert response.get_json()["field"] == "message"
+
+
+def test_a_personal_meeting_description_is_capped(client, make_org, login):
+    """The same ceiling a shared meeting has always had.
+
+    A meeting arranged in a thread was capped at 4000 characters; one added
+    on the dashboard had no cap at all, on create or on edit.
+    """
+    org = make_org()
+    login(org)
+    meeting = {"title": "Sync", "partner": "Someone", "date": "2026-10-01",
+               "time": "10:00"}
+
+    too_long = client.post("/api/events", json={
+        **meeting, "description": "d" * 4001})
+    assert too_long.status_code == 400
+    assert too_long.get_json()["field"] == "description"
+
+    created = client.post("/api/events", json={
+        **meeting, "description": "d" * 4000})
+    assert created.status_code == 201
+    event_id = created.get_json()["event"]["id"]
+
+    edited = client.patch(f"/api/events/{event_id}", json={
+        "description": "d" * 4001})
+    assert edited.status_code == 400
+    assert edited.get_json()["field"] == "description"

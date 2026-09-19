@@ -7263,6 +7263,10 @@ def _event_duration(raw):
 # series actually runs.
 EVENT_EXPAND_DAYS = 365
 
+# The most a meeting's description may hold, personal or shared. One number
+# for both so the two forms cannot disagree about it.
+MAX_EVENT_DESCRIPTION = 4000
+
 # And how far back. A standing meeting that has been running since January is
 # one standing meeting, not thirty cards of history: what the calendar is
 # being asked is when it happens next. A fortnight keeps the most recent one
@@ -7451,9 +7455,18 @@ def create_event(org, db):
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
 
     # Length caps match the columns, so an over-long field is a 400 here
-    # rather than a DataError from the driver further down.
+    # rather than a DataError from the driver further down. The description
+    # is Text and has no column width to overflow; it is capped at what a
+    # shared meeting's is (see _meeting_fields), because a personal meeting
+    # had none at all.
     if len(title) > 200 or len(partner) > 255 or len(location) > 255:
         return jsonify({"error": "That is longer than this field allows."}), 400
+    if len(description) > MAX_EVENT_DESCRIPTION:
+        return jsonify({
+            "error": f"Keep the description under {MAX_EVENT_DESCRIPTION} "
+                     f"characters.",
+            "field": "description",
+        }), 400
 
     # The browser sends its own zone. An unrecognized one is dropped rather
     # than refused: the meeting is the thing being saved, and a browser
@@ -7755,7 +7768,14 @@ def update_event(org, db, event_id):
         event.location = location or None
 
     if "description" in data:
-        event.description = (data.get("description") or "").strip() or None
+        description = (data.get("description") or "").strip()
+        if len(description) > MAX_EVENT_DESCRIPTION:
+            return jsonify({
+                "error": f"Keep the description under {MAX_EVENT_DESCRIPTION} "
+                         f"characters.",
+                "field": "description",
+            }), 400
+        event.description = description or None
 
     # The repeat rule, which is the whole series.
     #
@@ -9717,7 +9737,8 @@ def _meeting_fields(data, *, partial=False):
     if "timezone" in data or not partial:
         fields["timezone"] = _known_zone(data.get("timezone"))
 
-    for key, limit in (("location", 255), ("description", 4000)):
+    for key, limit in (("location", 255),
+                       ("description", MAX_EVENT_DESCRIPTION)):
         if key in data or not partial:
             value = (data.get(key) or "").strip()
             if len(value) > limit:
