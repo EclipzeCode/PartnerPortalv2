@@ -977,6 +977,17 @@ def _start_session(org):
     csrf_token()
 
 
+def _end_org_session():
+    """Forget the organization half of the session and nothing else.
+
+    Sign-out, account deletion and a refused cookie all end here rather than
+    at session.clear(): an admin signed in on the same browser keeps their
+    session, because the two logins are independent (see _start_session).
+    """
+    session.pop("org_id", None)
+    session.pop("epoch", None)
+
+
 def _end_other_sessions(org):
     """Revoke every session on this account except the one making the call.
 
@@ -1078,9 +1089,12 @@ def login_required(view):
         try:
             org = current_org(db)
             if org is None:
-                # Clear a cookie pointing at a deleted row so the client is
-                # not stuck in a logged-in-but-broken state.
-                session.clear()
+                # Drop a cookie pointing at a deleted or revoked row so the
+                # client is not stuck in a logged-in-but-broken state. Only
+                # the organization's keys: the nav polls /api/me on every
+                # page, and an admin browsing the site with no organization
+                # signed in was being signed out of the panel by each poll.
+                _end_org_session()
                 return jsonify({"error": "Please log in."}), 401
             return view(org, db, *args, **kwargs)
         finally:
@@ -3821,8 +3835,7 @@ def logout():
     of the mistake admin_logout avoids. Popping just the org keys leaves the
     admin session and the CSRF token where they were.
     """
-    session.pop("org_id", None)
-    session.pop("epoch", None)
+    _end_org_session()
     return jsonify({"message": "Signed out"}), 200
 
 
@@ -4636,7 +4649,12 @@ def delete_account(org, db):
     _detach_partnerships(db, org)
     db.delete(org)
     db.commit()
-    session.clear()
+    # The organization's half of the session only, as logout does. An
+    # admin signed in on the same browser keeps their session: the two
+    # logins are independent (see _start_session), and clearing everything
+    # here was signing the admin out as a side effect of an organization
+    # closing its account.
+    _end_org_session()
     return jsonify({"message": "Account deleted"}), 200
 
 

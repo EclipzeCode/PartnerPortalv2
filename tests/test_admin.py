@@ -128,6 +128,21 @@ def test_the_two_sessions_are_independent(client, make_admin, admin_login,
     assert client.get("/api/me").status_code == 200
 
 
+def test_an_organization_deleting_itself_leaves_the_admin_signed_in(
+        client, make_admin, admin_login, make_org, login):
+    """Deleting the account used to clear the whole session, admin and all."""
+    from conftest import PASSWORD
+    org = make_org()
+    login(org)
+    admin_login(make_admin())
+
+    response = client.delete("/api/account", json={"password": PASSWORD})
+    assert response.status_code == 200
+
+    assert client.get("/api/me").status_code == 401
+    assert client.get("/api/admin/overview").status_code == 200
+
+
 def test_changing_the_password_ends_the_admin_session(
         client, session, make_admin, admin_login):
     """The same revocation organizations have, where it matters most."""
