@@ -442,32 +442,15 @@ def _candidates(session, me, *, demo=False):
     return session.execute(stmt.where(or_(*_present(they_give, i_give)))).all()
 
 
-def _hydrate(session, rows):
-    """The full organizations for `rows`, in the order given.
-
-    One query for the whole page rather than one per row, and only for the
-    ones that survived ranking -- which is the entire point of ranking on
-    nine narrow columns first. `in_` on a primary key, so the database does the
-    cheapest thing it knows how to do.
-    """
-    from models import Organization
-
-    if not rows:
-        return []
-    ids = [row.id for row in rows]
-    found = {
-        org.id: org
-        for org in session.query(Organization).filter(
-            Organization.id.in_(ids)
-        ).all()
-    }
-    # Missing means deleted between the two queries, which is a row that
-    # should not be in the results anyway.
-    return [found[i] for i in ids if i in found]
-
-
 def _entry(me, them):
     """One organization as a match list reads it: card fields, score, reasons.
+
+    `them` is a candidate row, not an Organization. The nine columns
+    _candidates selects are every one this reads and every one score_pair
+    reads, so the second query that used to fetch the full rows for the
+    survivors -- description, notes, links, preferences, for up to two
+    hundred of them on every visit to Search -- was fetching nothing this
+    went on to use.
 
     Deliberately not public_dict(). /api/matches returns up to MATCH_LIMIT of
     these on every visit to Search, and the full profile carried a
@@ -581,8 +564,7 @@ def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False,
     """
     ranked, mutual_total = _rank(me, _candidates(session, me, demo=demo_only),
                                  mutual_only=mutual_only)
-    entries = [_entry(me, org)
-               for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
+    entries = [_entry(me, r[3]) for r in ranked[:limit]]
     return entries, len(ranked), mutual_total
 
 
@@ -610,16 +592,12 @@ def find_matches_with_examples(session, me, *, mutual_only=False,
     demo = [r for r in rows if r.is_demo]
 
     ranked, mutual_total = _rank(me, real, mutual_only=mutual_only)
-    matches = [_entry(me, org)
-               for org in _hydrate(session, [r[3] for r in ranked[:limit]])]
+    matches = [_entry(me, r[3]) for r in ranked[:limit]]
 
     examples = []
     if not matches:
         demo_ranked, _ = _rank(me, demo, mutual_only=mutual_only)
-        examples = [
-            _entry(me, org)
-            for org in _hydrate(session, [r[3] for r in demo_ranked[:limit]])
-        ]
+        examples = [_entry(me, r[3]) for r in demo_ranked[:limit]]
 
     return matches, len(ranked), mutual_total, examples
 
@@ -643,10 +621,10 @@ def rank_directory(session, me, rows, *, offset=0, limit=None):
     mutual, so _rank_key already puts them behind everything that scored.
 
     `rows` are the narrow rows the caller selected, not full organizations.
-    Only the page that survives paging is fetched in full, which is the same
-    bargain _candidates and _hydrate strike everywhere else in this file --
-    and it is what makes sorting the whole filtered directory by fit
-    affordable enough to offer at all.
+    Only the page that survives paging is fetched in full -- the directory
+    renders public_dict(), which needs the whole row, where a match card
+    does not -- and that is what makes sorting the whole filtered directory
+    by fit affordable enough to offer at all.
     """
     ordered = rank_directory_order(me, rows)
     total = len(ordered)
@@ -673,8 +651,8 @@ def rank_directory_order(me, rows):
 def hydrate_in_order(session, ids, *conditions):
     """Full organizations for `ids`, in that order, that still meet `conditions`.
 
-    The same one-query fetch _hydrate makes, taking ids rather than rows so
-    a cached order can be paged, and taking extra WHERE conditions so a
+    One query for the whole page, taking ids rather than rows so a cached
+    order can be paged, and taking extra WHERE conditions so a
     page served from a cached order still answers the filters as they stand
     now: an organization hidden or blocked since the order was computed is
     left out of the page rather than shown for the life of the cache.
@@ -740,6 +718,5 @@ def match_overview(session, me, top=5):
     else:
         ranked, _ = _rank(me, _candidates(session, me))
 
-    best = [_entry(me, org)
-            for org in _hydrate(session, [r[3] for r in ranked[:top]])]
+    best = [_entry(me, r[3]) for r in ranked[:top]]
     return total, mutual_count, best
