@@ -555,3 +555,18 @@ def test_a_script_bundle_is_served_without_comments(client):
     result = subprocess.run([node, "--check", f.name],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_the_category_count_in_the_copy_is_the_real_one(client):
+    """Both pages that name the size of the vocabulary get it from
+    categories.py, not from a number typed into the markup.
+
+    The help page said "about thirty" while the home page said 33, because
+    only one of them was being filled in."""
+    import re
+    from categories import CATEGORY_TOTAL
+    for path in ("/index.html", "/pphelp.html"):
+        html = client.get(path).get_data(as_text=True)
+        found = re.findall(r"<span data-category-total>(\d+)</span>", html)
+        assert found, path
+        assert all(int(n) == CATEGORY_TOTAL for n in found), (path, found)

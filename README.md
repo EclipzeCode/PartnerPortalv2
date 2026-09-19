@@ -11,7 +11,7 @@ to trade resources with each other.
 ## How it works
 
 1. **Onboarding** — an organization says what it needs and what it can offer,
-   choosing from a shared vocabulary of ~30 categories.
+   choosing from a shared vocabulary of 33 categories.
 2. **Matching** — every other organization is ranked by how well the two
    profiles fit *in both directions*. An org that offers what you need **and**
    needs what you offer is a two-way match and ranks far above one that only

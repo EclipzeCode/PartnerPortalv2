@@ -1345,7 +1345,7 @@ _CATEGORY_TOTAL_RE = re.compile(r"(<span data-category-total>)\d+(</span>)")
 
 def _fill_constants(filename, html):
     """`html` with the figures the markup leaves to the server written in."""
-    if filename == "index.html":
+    if filename in ("index.html", "pphelp.html"):
         html = _CATEGORY_TOTAL_RE.sub(rf"\g<1>{CATEGORY_TOTAL}\g<2>", html)
     return html
 
