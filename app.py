@@ -898,6 +898,19 @@ def screened_name(name):
     return problem, flagged
 
 
+def _no_password_message(what):
+    """The refusal a passwordless account gets from `what`, with somewhere to go.
+
+    "Please contact support" pointed at nothing: there is no support route
+    beyond the homepage form, and that form is delivered by mail. The address
+    is named when one is configured, as screened_name does for the same
+    reason.
+    """
+    where = (f"You can reach us at {CONTACT_EMAIL}." if CONTACT_EMAIL
+             else "Use the contact form on the home page.")
+    return f"This account has no password set, so it cannot {what} from here. {where}"
+
+
 def client_ip():
     # request.remote_addr, corrected for Render's proxy by ProxyFix above.
     return request.remote_addr or "unknown"
@@ -1572,6 +1585,25 @@ def _register_all_bundles():
             continue
 
 
+# The stylesheets here are mostly prose: the dashboard bundle was ~180KB of
+# CSS of which well under half was rules. gzip closes most of that gap on the
+# wire, but the browser still parses every byte, and a comment is the one
+# part of a stylesheet that can be dropped with no change in meaning.
+#
+# CSS only, on purpose. Stripping JavaScript safely means tokenizing it --
+# a `//` inside a string, a template literal or a regex is not a comment,
+# and password-field.js has a regex with a backtick in it -- and a stripper
+# that is wrong once takes the whole bundle down. CSS comments cannot nest
+# and cannot appear inside a string in any file here, so this one is safe.
+_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_BLANK_RUN_RE = re.compile(r"\n{3,}")
+
+
+def _strip_css_comments(css):
+    """`css` without its comments, and without the blank runs they leave."""
+    return _BLANK_RUN_RE.sub("\n\n", _CSS_COMMENT_RE.sub("", css))
+
+
 def _bundle_body(members):
     """The members, stamped and concatenated, in order.
 
@@ -1592,6 +1624,8 @@ def _bundle_body(members):
     parts = []
     for name in members:
         body, _ = _stamped_page(name, pattern)
+        if is_css:
+            body = _strip_css_comments(body)
         # Named in a comment so the bundle can be read in devtools and the
         # rule you are looking at can be traced back to a file.
         parts.append(f"/* --- {name} --- */\n{body}")
@@ -3847,102 +3881,49 @@ def resend_verification(org, db):
 @app.route("/api/me", methods=["GET"])
 @login_required
 def get_me(org, db):
-    # verification_required travels with the payload so the pages that prompt
-    # for verification can say what not verifying actually costs, and stay
-    # truthful when the gate is switched on or off. Server config, not a
-    # property of the org, so it sits beside the organization rather than in
-    # private_dict.
-    #
-    # pending_proposals and the unread counts are what the nav badge
-    # (common.js) reads. Every page already calls /api/me to resolve the
-    # signed-in state, so folding them in here costs one indexed query,
-    # rather than a second request to /api/proposals' much heavier full-list
-    # payload on every page load just to find out whether anything is
-    # waiting. One query, not two: this is the most-called route there is
-    # (every page, and again every minute the nav polls), and the pending
-    # count and the two unread counts are independent scalars that ride in
-    # one SELECT as three subqueries.
-    #
-    # Two unread numbers because two callers ask different questions. "You
-    # have unread messages" is a count of messages. The nav badge is a count
-    # of *things waiting on you*, and the notification list under it
-    # deliberately collapses a conversation into one entry -- so the badge
-    # counts threads, or it says 6 over a panel that lists 1.
-    # Pending proposals whose answer is this organization's: the ones sent
-    # to it that it has not countered, and the ones it sent that came back
-    # countered. `awaiting_side` names the party; this resolves it.
-    pending_q = (
-        select(func.count(Partnership.id))
-        .where(Partnership.status == Partnership.PENDING,
-               _awaiting(org.id))
-    ).scalar_subquery()
-    unread_base = (
-        select(Message.id, Message.partnership_id)
-        .join(Partnership, Message.partnership_id == Partnership.id)
-        .where(_unread_by(org.id))
-    ).subquery()
-    # The third kind of thing waiting on you: a live partnership the other
-    # side has marked complete and you have not. _notifications_for counts
-    # it as actionable, and the badge is meant to be the same number as that
-    # list -- without this here the dot read one figure until the panel
-    # opened and another after.
-    mine_completed = case(
-        (Partnership.proposer_id == org.id, Partnership.proposer_completed_at),
-        else_=Partnership.recipient_completed_at,
-    )
-    theirs_completed = case(
-        (Partnership.proposer_id == org.id, Partnership.recipient_completed_at),
-        else_=Partnership.proposer_completed_at,
-    )
-    awaiting_q = (
-        select(func.count(Partnership.id))
-        .where(or_(Partnership.proposer_id == org.id,
-                   Partnership.recipient_id == org.id),
-               Partnership.status == Partnership.ACCEPTED,
-               theirs_completed.isnot(None),
-               mine_completed.is_(None))
-    ).scalar_subquery()
-    # Shared meetings waiting on this organization's answer, which the
-    # notification list counts as actionable too.
-    meetings_q = (
-        select(func.count(Event.id))
-        .where(Event.share_status == Event.PROPOSED,
-               Event.awaiting_id == org.id)
-    ).scalar_subquery()
-    pending_proposals, unread_messages, unread_threads, awaiting, meetings = (
-        db.execute(select(
-            pending_q,
-            select(func.count(unread_base.c.id)).scalar_subquery(),
-            select(func.count(func.distinct(unread_base.c.partnership_id)))
-            .scalar_subquery(),
-            awaiting_q,
-            meetings_q,
-        )).one())
-    # The badge, from the same function that draws the panel, so the two
-    # can never disagree: a count of entries newer than the last time the
-    # panel was opened. Two extra queries on the most-called route; they
-    # are the same two the panel runs, and the alternative was a SQL
-    # restatement of the panel's rules that had already drifted once.
+    """The signed-in organization, and what is waiting on it.
+
+    verification_required travels with the payload so the pages that prompt
+    for verification can say what not verifying actually costs, and stay
+    truthful when the gate is switched on or off. Server config, not a
+    property of the org, so it sits beside the organization rather than in
+    private_dict.
+
+    The counts are what the nav badge reads, and this is the most-called
+    route there is -- every page, and again every minute the nav polls. They
+    used to come from a five-subquery SELECT here *and* from
+    _notifications_for, which was run in full afterward for the two figures
+    the badge actually shows; the first was a SQL restatement of what the
+    second already had in hand. Now every number comes from the notification
+    pass, which loads exactly the rows that can be waiting on this
+    organization and nothing else. One source, so the badge, the panel's
+    header and these fields cannot disagree.
+    """
     _, counts = _notifications_for(db, org)
 
     return jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
-        "pending_proposals": pending_proposals,
-        "unread_messages": unread_messages,
-        # What the nav badge adds to pending_proposals. One per conversation,
-        # matching how the notification list counts the same thing -- see
-        # the note above. unread_messages stays beside it because it
-        # is a different and equally true number, and the two are told apart
-        # by name rather than by whichever caller happened to read it.
-        "unread_threads": unread_threads,
-        "awaiting_completion": awaiting,
-        "awaiting_meetings": meetings,
+        # Pending proposals whose answer is this organization's: the ones
+        # sent to it that it has not countered, and the ones it sent that
+        # came back countered.
+        "pending_proposals": counts["pending_proposals"],
+        # Two unread numbers because two callers ask different questions.
+        # "You have unread messages" is a count of messages; the panel
+        # collapses a conversation into one entry, so the badge counts
+        # threads, or it says 6 over a panel that lists 1.
+        "unread_messages": counts["unread_messages"],
+        "unread_threads": counts["unread_threads"],
+        # A live partnership the other side has marked complete and this
+        # one has not, and shared meetings waiting on this side's answer.
+        "awaiting_completion": counts["awaiting_completion"],
+        "awaiting_meetings": counts["awaiting_meetings"],
         # What the panel would count: the work still waiting, and what is
         # new since it was last opened. The dot shows `unseen`.
         "actionable": counts["actionable"],
         "unseen": counts["unseen"],
     })
+
 
 
 # --- Account settings -------------------------------------------------------
@@ -4082,10 +4063,7 @@ def change_password(org, db):
         # Cannot happen through the normal session path -- both /register and
         # /login require a password to reach this point -- but guarded the
         # same way /api/account guards it, rather than assumed away.
-        return jsonify({
-            "error": "This account has no password set. Please contact "
-                     "support.",
-        }), 400
+        return jsonify({"error": _no_password_message("change it")}), 400
 
     if len(current_password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
         current_password.encode("utf-8"), org.password_hash.encode("utf-8")
@@ -4216,8 +4194,7 @@ def change_email(org, db):
 
     if not org.password_hash:
         return jsonify({
-            "error": "This account has no password set. Please contact "
-                     "support.",
+            "error": _no_password_message("change its email"),
             "field": "password",
         }), 400
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
@@ -4417,10 +4394,7 @@ def delete_account(org, db):
     if not org.password_hash:
         # A profile pre-created for an org that never claimed it. There is no
         # password to check, so there is no safe way to honor this here.
-        return jsonify({
-            "error": "This account has no password set, so it cannot be "
-                     "deleted from here. Please contact support.",
-        }), 400
+        return jsonify({"error": _no_password_message("be deleted")}), 400
 
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES or not bcrypt.checkpw(
         password.encode("utf-8"), org.password_hash.encode("utf-8")
@@ -6457,6 +6431,22 @@ def _notifications_for(db, org):
     counts = {
         "actionable": sum(1 for i in items if i["actionable"]),
         "unseen": sum(1 for i in items if not i["seen"]),
+        # The badge's own figures, from the same rows -- see get_me. `rows`
+        # holds every pending proposal awaiting this org and every accepted
+        # partnership the other side has finished, at any age, because both
+        # are actionable and actionable ignores the window.
+        "pending_proposals": sum(
+            1 for p in rows
+            if p.status == Partnership.PENDING and p.awaits(org.id)),
+        "awaiting_completion": sum(
+            1 for p in rows
+            if p.status == Partnership.ACCEPTED
+            and p.counterpart_completed_at(org.id) is not None
+            and p.completed_at_for(org.id) is None),
+        "awaiting_meetings": sum(
+            1 for event in pending_meetings if event.partnership is not None),
+        "unread_threads": len(unread),
+        "unread_messages": sum(count for _, count, _ in unread),
     }
 
     # The limit is on how long the list is to read, and history is what it is

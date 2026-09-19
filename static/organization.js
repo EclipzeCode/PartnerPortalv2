@@ -33,6 +33,18 @@
     let org;
     try {
         const res = await publicRequest;
+        if (res.status === 429 && window.paintRetryAfter) {
+            // Limited per address for anonymous readers, and an office
+            // shares one. Count the wait down and offer a retry, rather
+            // than reporting a profile that exists as missing.
+            let body = null;
+            try { body = await res.json(); } catch { /* no body */ }
+            const error = Object.assign(
+                new Error((body && body.error) || 'Too many requests.'),
+                { status: 429, data: body });
+            window.paintRetryAfter(card, error, () => location.reload());
+            return;
+        }
         if (!res.ok) throw new Error('not found');
         org = (await res.json()).organization;
     } catch {

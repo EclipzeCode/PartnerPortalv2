@@ -108,3 +108,48 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(() => {});
 });
+
+
+// --- Rate-limit countdown ---------------------------------------------------
+// A 429 carries `retry_after` in seconds (see too_many in app.py), and the
+// two public pages showed only its sentence: "Try again in about a minute"
+// with nothing to press when the minute was up. This fills `host` with the
+// message, a live countdown, and a Retry button that enables itself when
+// the wait is over -- or immediately, for anyone who would rather find out.
+window.paintRetryAfter = function paintRetryAfter(host, error, retry) {
+    const seconds = Number(error && error.data && error.data.retry_after) || 0;
+    const message = String((error && error.message) || 'Too many requests.')
+        .replace(/\s*Try again .*$/, '').replace(/[.\s]*$/, '.');
+    host.innerHTML = `
+        <div class="retry-after">
+            <i class='bx bx-time-five' aria-hidden="true"></i>
+            <p>${window.escapeHtml(message)}</p>
+            <p class="retry-after-wait" role="timer" aria-live="off"></p>
+            <button type="button" class="btn-ghost" data-retry>Try again</button>
+        </div>`;
+    // The markup above carries no text from the server: `message` went
+    // through escapeHtml, and everything else is written here.
+    const wait = host.querySelector('.retry-after-wait');
+    const button = host.querySelector('[data-retry]');
+    let left = seconds;
+    const paint = () => {
+        if (left <= 0) {
+            wait.textContent = 'You can try again now.';
+            return;
+        }
+        const m = Math.floor(left / 60);
+        const s = left % 60;
+        wait.textContent = 'You can try again in '
+            + (m ? `${m} min ${String(s).padStart(2, '0')} sec` : `${s} sec`) + '.';
+    };
+    paint();
+    const timer = setInterval(() => {
+        left -= 1;
+        paint();
+        if (left <= 0) clearInterval(timer);
+    }, 1000);
+    button.addEventListener('click', () => {
+        clearInterval(timer);
+        retry();
+    }, { once: true });
+};

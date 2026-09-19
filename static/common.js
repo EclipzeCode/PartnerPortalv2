@@ -1038,3 +1038,4 @@ window.confirmDialog = function confirmDialog({
                           () => answer(false));
     });
 };
+

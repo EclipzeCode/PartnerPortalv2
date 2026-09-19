@@ -255,11 +255,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             if (mine !== generation) return;
             grid.removeAttribute('aria-busy');
-            grid.innerHTML = `
-                <div class="dir-empty">
-                    <i class='bx bx-error-circle' aria-hidden="true"></i>
-                    <p>${esc(error.message)}</p>
-                </div>`;
+            if (error.status === 429 && window.paintRetryAfter) {
+                // The public directory is limited per address, and an office
+                // or a library shares one. Say how long, count it down, and
+                // offer the retry here rather than leaving a dead page.
+                window.paintRetryAfter(grid, error, () => load({ scroll }));
+            } else {
+                grid.innerHTML = `
+                    <div class="dir-empty">
+                        <i class='bx bx-error-circle' aria-hidden="true"></i>
+                        <p>${esc(error.message)}</p>
+                    </div>`;
+            }
             countLine.textContent = '';
             pager.hidden = true;
             return;

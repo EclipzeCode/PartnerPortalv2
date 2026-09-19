@@ -126,10 +126,6 @@
             ${partyBlock(partnership.parties[1])}
         </div>
 
-        ${partnership.message
-            ? `<blockquote class="agreement-message">${esc(partnership.message)}</blockquote>`
-            : ''}
-
         <p class="agreement-note">
             Both organizations confirmed these terms through PartnerPortal.
             This summary is a record of what each side agreed to provide; it is

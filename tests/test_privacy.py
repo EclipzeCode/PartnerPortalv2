@@ -112,3 +112,39 @@ def test_the_private_payload_never_carries_the_password_hash(client, login, make
         body = client.get(path).get_data(as_text=True)
         assert "password_hash" not in body, path
         assert "$2b$" not in body, path
+
+
+def test_the_public_summary_carries_neither_side_s_notes(client, login, make_org):
+    """The accept dialog promises the shareable page holds both names and the
+    terms. The proposer's cover message is written to the other organization
+    while asking them for something, and it was being published to whoever
+    held the link."""
+    proposer = make_org(name="pytest-summary Proposer",
+                        needs=["web_development"], offers=["grant_writing"])
+    recipient = make_org(name="pytest-summary Recipient",
+                         needs=["grant_writing"], offers=["web_development"])
+    login(proposer)
+    pid = client.post("/api/proposals", json={
+        "recipient_id": recipient.id,
+        "proposer_gives": ["grant_writing"],
+        "recipient_gives": ["web_development"],
+        "message": "pytest: honestly we are struggling this quarter",
+    }).get_json()["proposal"]["id"]
+    client.post("/logout")
+    login(recipient)
+    token = client.post(f"/api/proposals/{pid}/accept", json={
+        "message": "pytest: happy to help",
+    }).get_json()["proposal"]["share_token"]
+    client.post("/logout")
+
+    summary = client.get(f"/api/partnerships/{token}").get_json()["partnership"]
+    assert "message" not in summary
+    assert "response_message" not in summary
+    flat = str(summary)
+    assert "struggling" not in flat
+    assert "happy to help" not in flat
+    # The parties still see both.
+    login(proposer)
+    mine = client.get(f"/api/proposals/{pid}").get_json()["proposal"]
+    assert "struggling" in mine["message"]
+    assert "happy to help" in mine["response_message"]

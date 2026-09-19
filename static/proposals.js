@@ -496,12 +496,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         // badge in the nav and the count on the card are both stale now.
         if (window.refreshNavCounts) window.refreshNavCounts();
 
-        // Refreshed before the open/closed notice is painted, not after: if
-        // the proposal settled while this thread was on screen, that notice
-        // names the status, and `proposals` is still holding the previous
-        // one until this resolves -- so painting first said "this proposal
-        // was pending, so the conversation is closed".
-        await load();
+        // The whole proposals list -- every card with its counterpart's
+        // full profile -- used to be refetched on every poll that saw a new
+        // message. What a new message changes on the card is two numbers,
+        // and both are known here: the total grew by what arrived, and the
+        // unread count is zero because reading the thread is what marked
+        // them read. So the card is updated in place, and the list is only
+        // refetched when the thread opened or closed -- the proposal's
+        // status moved, and the closed notice names it.
+        const wasOpen = messageClosed.hidden;
+        const proposal = proposals.find((p) => p.id === id);
+        if (proposal && !since) {
+            proposal.message_count = messages.length;
+            proposal.unread_count = 0;
+        } else if (proposal) {
+            proposal.message_count = (proposal.message_count || 0) + added.length;
+            proposal.unread_count = 0;
+        }
+        if (wasOpen !== Boolean(data.open)) {
+            // Refreshed before the notice is painted, not after: the notice
+            // names the status, and `proposals` holds the previous one until
+            // this resolves.
+            await load();
+        } else {
+            render();
+        }
         paintThreadOpenState(data.open);
     }
 

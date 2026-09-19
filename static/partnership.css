@@ -293,19 +293,6 @@ body {
 }
 
 /* ------------------------------------------------------------------------- *
- * What one of them wrote
- * ------------------------------------------------------------------------- */
-
-.agreement-message {
-    padding: 0.3rem 0 0.3rem 1rem;
-    border-left: 2px solid var(--h-rule);
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: var(--h-ink-soft);
-    margin-bottom: 1.75rem;
-}
-
-/* ------------------------------------------------------------------------- *
  * The disclaimer, and the states before the record loads
  * ------------------------------------------------------------------------- */
 

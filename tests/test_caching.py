@@ -509,3 +509,19 @@ def test_the_public_categories_response_never_sets_a_cookie(client):
     assert response.status_code == 200
     assert "public" in response.headers["Cache-Control"]
     assert "Set-Cookie" not in response.headers
+
+
+def test_a_stylesheet_bundle_is_served_without_comments(client):
+    """The stylesheets are mostly prose. A bundle drops the comments, which
+    the browser would otherwise parse and discard; the member markers stay
+    so a rule can still be traced to its file in devtools."""
+    page = client.get("/ppdashboard.html").get_data(as_text=True)
+    name = re.search(r'href="(bundle-[0-9a-f]+\.css)"', page).group(1)
+    body = client.get("/" + name).get_data(as_text=True)
+    comments = re.findall(r"/\*.*?\*/", body, re.DOTALL)
+    assert comments, "the member markers should still be there"
+    assert all(c.startswith("/* --- ") for c in comments), (
+        "a comment that is not a member marker survived")
+    # ...and the unbundled sheet is untouched, for reading.
+    assert "/*" in client.get("/nav.css").get_data(as_text=True)
+    assert "--- " not in client.get("/nav.css").get_data(as_text=True)[:2]

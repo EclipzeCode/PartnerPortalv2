@@ -1217,7 +1217,12 @@ class Partnership(Base):
             "starts_on": self.starts_on.isoformat() if self.starts_on else None,
             "ends_on": self.ends_on.isoformat() if self.ends_on else None,
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
-            "message": self.message,
+            # Not the cover message. It is written to one organization while
+            # asking them for something -- "we are short on volunteers this
+            # quarter" -- and this page is read by funders and boards with
+            # no stake in either side. The accept dialog promises the summary
+            # carries the names and the terms; that is what it carries. The
+            # reply is likewise between the two of them.
             # The reason the row outlives its parties. A funder holding this
             # link can still read what was agreed after either organization
             # has closed its account -- which is what deleting one used to

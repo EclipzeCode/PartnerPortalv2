@@ -1207,3 +1207,39 @@ body.ink .footer-bottom {
     line-height: 1.45;
     text-align: center;
 }
+
+/* --- Rate-limit countdown ---------------------------------------------------
+   Drawn by base.js's paintRetryAfter() into whatever a page was about to
+   fill -- the directory grid, a profile card -- when the server answered
+   429. Lives here because it can land on any page that reads publicly. */
+.retry-after {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 3rem 1rem;
+    text-align: center;
+    color: var(--h-ink-soft);
+}
+
+.retry-after > i {
+    font-size: 1.75rem;
+    color: var(--h-take, currentColor);
+}
+
+.retry-after p {
+    margin: 0;
+    max-width: 34rem;
+    line-height: 1.6;
+}
+
+.retry-after .retry-after-wait {
+    font-family: var(--h-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.retry-after .btn-ghost {
+    margin-top: 0.5rem;
+}
