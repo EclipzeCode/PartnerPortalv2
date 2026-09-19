@@ -284,6 +284,47 @@ def test_an_informational_entry_can_be_dismissed_and_stays_gone(
                        json={"key": "nonsense"}).status_code == 400
 
 
+def test_everything_dismissable_can_go_at_once(client, login, make_org, session):
+    """The panel's Clear: every piece of news in one request, and the work
+    exactly where it was."""
+    from datetime import datetime, timedelta, timezone
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    other = make_org(offers=["web_development"], needs=["mentors"])
+    now = datetime.now(timezone.utc)
+    session.add_all([
+        Partnership(
+            proposer_id=them.id, recipient_id=me.id, status=Partnership.PENDING,
+            proposer_gives=["web_development"], recipient_gives=["mentors"],
+            proposer_name=them.name, recipient_name=me.name),
+        Partnership(
+            proposer_id=me.id, recipient_id=them.id, status=Partnership.DECLINED,
+            responded_at=now,
+            proposer_gives=["mentors"], recipient_gives=["web_development"],
+            proposer_name=me.name, recipient_name=them.name),
+        Partnership(
+            proposer_id=me.id, recipient_id=other.id, status=Partnership.WITHDRAWN,
+            responded_at=now - timedelta(days=1),
+            proposer_gives=["mentors"], recipient_gives=["web_development"],
+            proposer_name=me.name, recipient_name=other.name),
+    ])
+    session.commit()
+    login(me)
+
+    before = _notifications(client)["notifications"]
+    news = {i["key"] for i in before if not i["actionable"]}
+    work = {i["key"] for i in before if i["actionable"]}
+    assert len(news) == 1 and len(work) == 1   # the withdrawal is mine, not news
+
+    cleared = client.post("/api/notifications/dismiss", json={"all": True})
+    assert cleared.status_code == 200
+    assert set(cleared.get_json()["keys"]) == news
+
+    after = {i["key"] for i in _notifications(client)["notifications"]}
+    assert after == work
+
+
 # --- The poll ----------------------------------------------------------------
 # The nav asks /api/me every minute per visible tab. Nearly every ask finds
 # nothing changed, and used to pay for the full notification build anyway.

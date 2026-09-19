@@ -6991,16 +6991,24 @@ def dismiss_notification(org, db):
     """
     data = request.get_json(silent=True) or {}
     key = str(data.get("key") or "").strip()
-    if not key or len(key) > 120 or not _NOTIFICATION_KEY_RE.match(key):
+    everything = data.get("all") is True
+    if not everything and (
+            not key or len(key) > 120 or not _NOTIFICATION_KEY_RE.match(key)):
         return jsonify({"error": "Which notification is this?"}), 400
 
     items, _ = _notifications_for(db, org)
     current = {item["key"]: item for item in items}
-    if key in current and current[key]["actionable"]:
-        return jsonify({
-            "error": "That one is waiting on you, so it stays until it is "
-                     "answered.",
-        }), 409
+    if everything:
+        # Every entry that can be dismissed, as the panel shows them now.
+        # The work stays, for the same reason it stays one at a time.
+        keys = [item["key"] for item in items if not item["actionable"]]
+    else:
+        if key in current and current[key]["actionable"]:
+            return jsonify({
+                "error": "That one is waiting on you, so it stays until it "
+                         "is answered.",
+            }), 409
+        keys = [key]
 
     since = datetime.now(timezone.utc) - NOTIFICATION_WINDOW
     kept = []
@@ -7011,13 +7019,15 @@ def dismiss_notification(org, db):
             continue
         if at >= since:
             kept.append(held)
-    if key not in kept:
-        kept.append(key)
+    for key in keys:
+        if key not in kept:
+            kept.append(key)
     # Rebound, not appended in place: a JSONB column is a mutable object the
     # session does not watch (see update_settings).
     org.dismissed_notifications = kept
     db.commit()
-    return jsonify({"message": "Dismissed", "key": key})
+    return jsonify({"message": "Dismissed", "keys": keys,
+                    "key": keys[0] if len(keys) == 1 else None})
 
 
 # --- Dashboard --------------------------------------------------------------

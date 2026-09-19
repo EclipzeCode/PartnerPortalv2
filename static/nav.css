@@ -724,6 +724,32 @@
     gap: 1rem;
 }
 
+.notify-head-side {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* The one control in the head. Text, not a button face: it sits in a
+   row of small caps and should read as one more of them. */
+.notify-clear {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--h-dim);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.notify-clear:hover,
+.notify-clear:focus-visible {
+    color: var(--h-ink);
+}
+
 /* "2 waiting on you" in the panel header: the work count, which the dot on
    the bell no longer carries. */
 .notify-waiting {

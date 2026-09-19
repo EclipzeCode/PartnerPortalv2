@@ -119,10 +119,16 @@
                  role="region" aria-label="Notifications">
                 <div class="notify-head">
                     <span>Notifications</span>
-                    <!-- The work still waiting, as words. The dot on the
-                         bell is only what is new since the panel was last
-                         opened; this is what has not been answered. -->
-                    <span class="notify-waiting" id="notifyWaiting" hidden></span>
+                    <span class="notify-head-side">
+                        <!-- The work still waiting, as words. The dot on the
+                             bell is only what is new since the panel was last
+                             opened; this is what has not been answered. -->
+                        <span class="notify-waiting" id="notifyWaiting" hidden></span>
+                        <!-- Clears every entry that can be cleared. Shown
+                             only while there is one; the work stays. -->
+                        <button type="button" class="notify-clear" id="notifyClear"
+                                hidden>Clear</button>
+                    </span>
                 </div>
                 <ul class="notify-list" id="notifyList">${SKELETON_ROWS}</ul>
                 <!-- The list arrives after the panel opens, so opening it
@@ -148,6 +154,8 @@
     function render(list, items, actionable) {
         const waiting = document.getElementById('notifyWaiting');
         const status = document.getElementById('notifyStatus');
+        const clear = document.getElementById('notifyClear');
+        if (clear) clear.hidden = !items.some((item) => !item.actionable && item.key);
         if (status) {
             status.textContent = items.length === 0
                 ? 'No new notifications.'
@@ -290,6 +298,28 @@
                 fetching = false;
             }
         };
+
+        const clear = document.getElementById('notifyClear');
+        clear.addEventListener('click', async () => {
+            clear.disabled = true;
+            try {
+                await window.api('/api/notifications/dismiss',
+                                 { method: 'POST', body: { all: true } });
+            } catch (error) {
+                clear.disabled = false;
+                window.toast(error.message || 'Could not clear these.', 'error');
+                return;
+            }
+            clear.disabled = false;
+            // What is left is the work, which the server keeps and is still
+            // the list as it stands: drawn again rather than guessed at.
+            list.querySelectorAll('li:not(.is-actionable)').forEach((row) => row.remove());
+            clear.hidden = true;
+            if (!list.querySelector('li')) {
+                list.innerHTML = '<li class="notify-empty">Nothing new. '
+                    + 'Proposals and replies show up here.</li>';
+            }
+        });
 
         toggle.addEventListener('click', (e) => {
             // Without this the document listener below sees the same click
