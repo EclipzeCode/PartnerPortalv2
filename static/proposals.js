@@ -20,6 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // holding so the tab can offer the rest rather than quietly stopping.
     let archiveLimit = 0;
     let archiveHasMore = false;
+    // The archive size the last request asked for, or 0 for the server's
+    // default. Every refresh re-asks for it: load() runs after opening a
+    // thread, answering a proposal, a hash change -- and each of those used
+    // to send no archive size at all, so "Show older" was undone by the
+    // next thing the reader did. Kept apart from archiveLimit, which is
+    // what came back and can be smaller than what was asked for.
+    let archiveRequested = 0;
     // What the modal will do on confirm: { id, action, verb }
     let pending = null;
 
@@ -49,8 +56,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function load({ archive } = {}) {
         list.setAttribute('aria-busy', 'true');
         if (!loadedOnce) renderSkeletonRows();
+        if (archive) archiveRequested = archive;
         try {
-            const query = archive ? `?archive_limit=${archive}` : '';
+            const query = archiveRequested
+                ? `?archive_limit=${archiveRequested}` : '';
             const data = await window.api(`/api/proposals${query}`);
             proposals = data.proposals || [];
             archiveLimit = data.archive_shown || 0;
