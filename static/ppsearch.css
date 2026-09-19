@@ -344,6 +344,27 @@
     border-right: none;
 }
 
+/* A first row that is not full. The table treatment above assumes the
+   empty cells are a partial *last* row under full ones; with one or two
+   results they are most of the box, and the container's border draws a
+   wide empty frame around a card or two in its corner. So when the grid
+   holds fewer cards than a row, the frame comes off and each card carries
+   its own edges instead -- the result looks like what it is, a card or a
+   pair, rather than a table with nothing in it. Skeletons and the empty
+   state are left alone: the first is a full page and the second is not a
+   card. */
+.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) {
+    border: none;
+}
+
+.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) > .partner-card {
+    border: 1px solid var(--h-edge);
+}
+
+.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) > .partner-card + .partner-card {
+    border-left: none;
+}
+
 .partner-card:hover {
     background: var(--h-paper);
 }
@@ -1399,6 +1420,28 @@ body.ink .category-chip.checked {
     /* The last column moved, so the dropped border has to move with it. */
     .partner-card:nth-child(3n) { border-right: 1px solid var(--h-rule); }
     .partner-card:nth-child(2n) { border-right: none; }
+
+    /* Two across: only a lone card is a short row. */
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(2))) {
+        border: none;
+    }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(2))) > .partner-card {
+        border: 1px solid var(--h-edge);
+    }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) {
+        border: 1px solid var(--h-edge);
+    }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) > .partner-card {
+        border: none;
+        border-bottom: 1px solid var(--h-rule);
+    }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) > .partner-card:nth-child(2n + 1) {
+        border-right: 1px solid var(--h-rule);
+    }
 }
 
 @media (max-width: 48em) {
@@ -1521,8 +1564,18 @@ body.ink .category-chip.checked {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    /* One column: every card is the last one in its row. */
+    /* One column: every card is the last one in its row, and every row is
+       full, so the table frame is always right. */
     .partner-card { border-right: none; }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child) {
+        border: 1px solid var(--h-edge);
+    }
+
+    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child) > .partner-card {
+        border: none;
+        border-bottom: 1px solid var(--h-rule);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
