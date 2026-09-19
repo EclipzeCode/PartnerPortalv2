@@ -683,7 +683,7 @@ window.forgetSession = function forgetSession() {
 // The markup ships the signed-out destination, so a crawler and a visitor
 // with no JavaScript both get the page that works without an account; being
 // signed in is what upgrades it.
-function routeSessionLinks(signedIn) {
+function routeSessionLinks(signedIn, me = null) {
     document.querySelectorAll(
         'a[href="ppsearch.html"], a[href="directory.html"]'
     ).forEach((link) => {
@@ -719,8 +719,30 @@ function routeSessionLinks(signedIn) {
         (item || link).hidden = signedIn;
     });
 
+    // The sign-up calls to action. The href used to be rewritten to the
+    // onboarding form and the label left alone, so a signed-in visitor on
+    // the home page was offered "Get matched free" and "Create Account"
+    // for the account they were signed in with -- and a finished profile
+    // was sent to its own edit form. Now the label says where the button
+    // goes: the dashboard once the profile is done, the form until it is.
+    // The footer's copies are hidden instead, since the same column
+    // already carries Dashboard.
+    const done = Boolean(me && me.onboarding_complete);
+    const destination = done ? 'ppdashboard.html' : 'onboarding.html';
+    const label = done ? 'Go to your dashboard' : 'Finish your profile';
     document.querySelectorAll('a[href="pplogin.html#signup"]').forEach((link) => {
-        if (signedIn) link.href = 'onboarding.html';
+        if (!signedIn) return;
+        const item = link.closest('footer li');
+        if (item) {
+            item.hidden = true;
+            return;
+        }
+        link.href = destination;
+        // Only a control that is nothing but its label: a link inside a
+        // sentence keeps its words and just goes somewhere useful.
+        if (link.classList.contains('btn-primary') || link.classList.contains('btn-ghost')) {
+            link.textContent = label;
+        }
     });
 }
 
@@ -772,7 +794,7 @@ async function updateNavForSession() {
     set('accountEmail', me.email || '');
 
     slot.dataset.state = 'in';
-    routeSessionLinks(true);
+    routeSessionLinks(true, me);
     wireAccountMenu();
     // Built here rather than in fifteen page templates; see notifications.js.
     // Only for a signed-in visitor, which is the state this branch is.
