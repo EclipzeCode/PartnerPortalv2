@@ -552,6 +552,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // the ones you actually arrange meetings with. Listing only top matches
     // left the dropdown empty -- and the form unsubmittable, since the field
     // is required -- for any org whose partners were all already agreed.
+    //
+    // The "Someone else" sentinel is declared before the block that appends
+    // it: a `const` read ahead of its declaration throws, and this one used
+    // to sit below, which took the rest of the page down with it.
+    const OTHER_PARTNER = 'other:';
     const partnerSelect = document.getElementById('eventPartner');
     if (partnerSelect) {
         partnerSelect.innerHTML = '<option value="">Select a partner</option>';
@@ -591,7 +596,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         partnerSelect.addEventListener('change', syncOtherPartner);
     }
 
-    const OTHER_PARTNER = 'other:';
     const otherGroup = document.getElementById('eventPartnerOtherGroup');
     const otherInput = document.getElementById('eventPartnerOther');
 
