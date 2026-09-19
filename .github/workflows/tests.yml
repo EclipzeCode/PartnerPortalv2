@@ -6,6 +6,28 @@ on:
   pull_request:
 
 jobs:
+  # The browser scripts. There is no build step and no test runner for them,
+  # which is how a `const` read before its own declaration shipped in
+  # ppdashboard.js and took the dashboard down for six days: not a syntax
+  # error, so nothing short of loading the page would have said so. Two
+  # checks, neither needing anything installed in the repo: `node --check`
+  # for syntax, and one ESLint rule (see eslint.config.js) for exactly that
+  # class of ReferenceError.
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax
+        run: for f in static/*.js; do node --check "$f" || exit 1; done
+
+      - name: Use before define
+        run: npx --yes eslint@9 static/*.js
+
   pytest:
     runs-on: ubuntu-latest
 
