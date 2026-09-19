@@ -32,6 +32,7 @@ ADMIN_ROUTES = [
     ("get", "/api/admin/overview"),
     ("post", "/api/admin/contact-messages/1/handled"),
     ("post", "/api/admin/reports/1/handled"),
+    ("get", "/api/admin/reports/1/thread"),
     ("delete", "/api/admin/organizations/1/flag"),
     ("post", "/api/admin/organizations/1/hidden"),
 ]
@@ -366,3 +367,81 @@ def test_the_panel_is_kept_out_of_every_index(client):
     assert "Disallow: /admin.html" in client.get("/robots.txt").get_data(as_text=True)
     assert "admin.html" not in client.get("/sitemap.xml").get_data(as_text=True)
     assert 'content="noindex' in client.get("/admin.html").get_data(as_text=True)
+
+
+# --- Reading a reported conversation -----------------------------------------
+
+def _reported_thread(client, login, make_org):
+    """Two organizations, a proposal, two messages, and a report on it.
+    Returns (reporter, reported, report id, proposal id)."""
+    from models import ThreadReport
+    reporter = make_org(offers=["mentors"], needs=["web_development"])
+    reported = make_org(offers=["web_development"], needs=["mentors"])
+    login(reported)
+    pid = client.post("/api/proposals", json={
+        "recipient_id": reporter.id,
+        "proposer_gives": ["web_development"], "recipient_gives": ["mentors"],
+    }).get_json()["proposal"]["id"]
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "Pay us first."})
+    client.post("/logout")
+    login(reporter)
+    client.post(f"/api/proposals/{pid}/messages", json={"body": "That is not how this works."})
+    assert client.post(f"/api/proposals/{pid}/report",
+                       json={"reason": "Asking for money up front."}).status_code == 201
+    client.post("/logout")
+    return reporter, reported, pid
+
+
+def test_an_admin_can_read_the_conversation_a_report_names(
+        client, session, make_admin, admin_login, make_org, login):
+    from models import AdminAction, ThreadReport
+    reporter, reported, pid = _reported_thread(client, login, make_org)
+    report = session.query(ThreadReport).filter(
+        ThreadReport.partnership_id == pid).one()
+
+    admin = make_admin()
+    admin_login(admin)
+    response = client.get(f"/api/admin/reports/{report.id}/thread")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert [m["body"] for m in data["messages"]] == [
+        "Pay us first.", "That is not how this works."]
+    assert [m["sender_name"] for m in data["messages"]] == [
+        reported.name, reporter.name]
+    assert data["partnership"]["id"] == pid
+    assert data["report"]["reason"] == "Asking for money up front."
+
+    # Reading is an action, and is in the log as one.
+    logged = session.query(AdminAction).filter(
+        AdminAction.action == "read_reported_thread",
+        AdminAction.target_id == report.id).one()
+    assert logged.admin_email == admin.email
+    assert logged.detail["partnership_id"] == pid
+
+
+def test_a_report_is_the_only_way_to_a_thread(
+        client, session, make_admin, admin_login, make_org, login):
+    """No route serves a thread by partnership id to an admin: the report is
+    the key, and a report id that names no report is a 404."""
+    reporter, reported, pid = _reported_thread(client, login, make_org)
+    admin_login(make_admin())
+    assert client.get(f"/api/admin/reports/999999/thread").status_code == 404
+    assert client.get(f"/api/proposals/{pid}/messages").status_code == 401
+
+
+def test_a_report_on_a_deleted_conversation_says_so(
+        client, session, make_admin, admin_login, make_org, login):
+    from models import ThreadReport
+    reporter, reported, pid = _reported_thread(client, login, make_org)
+    report = session.query(ThreadReport).filter(
+        ThreadReport.partnership_id == pid).one()
+    # The proposal goes with the proposer's account (it was never accepted).
+    login(reported)
+    from conftest import PASSWORD
+    assert client.delete("/api/account", json={"password": PASSWORD}).status_code == 200
+    client.post("/logout")
+
+    admin_login(make_admin())
+    session.expire_all()
+    response = client.get(f"/api/admin/reports/{report.id}/thread")
+    assert response.status_code == 410

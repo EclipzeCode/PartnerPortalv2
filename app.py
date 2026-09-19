@@ -3635,6 +3635,53 @@ def admin_handle_report(admin, db, report_id):
     return jsonify({"message": "Saved", "report": row.to_dict()})
 
 
+@app.route("/api/admin/reports/<int:report_id>/thread", methods=["GET"])
+@admin_required
+def admin_report_thread(admin, db, report_id):
+    """The conversation a report is about, for the person judging it.
+
+    The only way into a thread from outside it, and deliberately narrow: a
+    report names one partnership, and this serves that partnership's
+    messages to an admin who is looking at that report -- not any thread by
+    id. The report is what the two parties were told would be looked at
+    ("Somebody will look at the conversation"), and the privacy page says
+    the same. Every read is recorded in the audit log like every other
+    admin action, because reading is an action here.
+    """
+    report = db.get(ThreadReport, report_id)
+    if report is None:
+        return jsonify({"error": "Report not found."}), 404
+    if report.partnership_id is None:
+        return jsonify({
+            "error": "The conversation this report was about has been "
+                     "deleted with one of the organizations.",
+        }), 410
+
+    messages = db.query(Message).options(
+        joinedload(Message.sender).load_only(Organization.id, Organization.name)
+    ).filter(
+        Message.partnership_id == report.partnership_id
+    ).order_by(Message.created_at, Message.id).all()
+    proposal = db.get(Partnership, report.partnership_id)
+
+    record_admin_action(
+        db, admin, "read_reported_thread",
+        target_type="thread_report", target_id=report.id,
+        partnership_id=report.partnership_id, reported=report.reported_name)
+    db.commit()
+
+    return jsonify({
+        "report": report.to_dict(),
+        "partnership": {
+            "id": report.partnership_id,
+            "status": proposal.status if proposal else None,
+            "proposer": proposal.proposer_party() if proposal else None,
+            "recipient": proposal.recipient_party() if proposal else None,
+        },
+        "messages": [m.to_dict() for m in messages],
+    })
+
+
 @app.route("/api/admin/organizations/<int:org_id>/flag", methods=["DELETE"])
 @admin_required
 def admin_clear_flag(admin, db, org_id):

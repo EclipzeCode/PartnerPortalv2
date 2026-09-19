@@ -86,11 +86,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             </article>`;
     }
 
-    // A reported thread. The admin cannot read the thread from here -- the
-    // messages are between two organizations and the admin API does not
-    // serve them -- so the row carries what the reporter said and who the
-    // two parties are, with the reported organization's profile a click
-    // away and the hide control on the flagged/hidden rows for what follows.
+    // A reported thread: what the reporter said, who the two parties are,
+    // the reported organization's profile a click away, and the conversation
+    // itself behind a control -- fetched when asked for, because each read
+    // is logged and a row should not log one by being scrolled past. The
+    // hide control lives on the flagged/hidden rows for what follows.
     function reportRow(r) {
         const profile = r.reported_id
             ? `<a href="organization.html?id=${encodeURIComponent(r.reported_id)}"
@@ -111,10 +111,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <p class="admin-dim">${esc(when(r.created_at))} &middot; ${profile}</p>
               </div>
               <div class="admin-row-actions">
+                ${r.partnership_id
+                    ? `<button type="button" class="btn-ghost"
+                               data-read-thread="${r.id}"
+                               aria-expanded="false">Read the conversation</button>`
+                    : ''}
                 <button type="button" class="btn-ghost"
                         data-handle-report="${r.id}">Mark handled</button>
               </div>
+              <div class="admin-thread" data-thread-for="${r.id}" hidden></div>
             </article>`;
+    }
+
+    // The messages under a report, once fetched. Plain text throughout: the
+    // bodies are what two organizations wrote to each other.
+    function threadMarkup(data) {
+        const p = data.partnership || {};
+        const names = [p.proposer, p.recipient]
+            .filter(Boolean).map((party) => esc(party.name)).join(' and ');
+        const head = `<p class="admin-dim">Proposal #${esc(p.id)} between ${names}${
+            p.status ? ` &middot; ${esc(p.status)}` : ''}</p>`;
+        if (!data.messages.length) {
+            return head + '<p class="admin-dim">No messages were written in it.</p>';
+        }
+        return head + `<ol class="admin-thread-list">${data.messages.map((m) => `
+            <li class="${m.kind === 'meeting' ? 'is-meeting' : ''}">
+              <span class="admin-thread-who">${esc(m.sender_name)}${
+                  m.sender_deleted ? ' <span class="admin-dim">(account closed)</span>' : ''}</span>
+              <span class="admin-dim">${esc(when(m.created_at))}</span>
+              <p>${esc(m.body)}</p>
+            </li>`).join('')}</ol>`;
     }
 
     function orgRow(org, kind) {
@@ -532,12 +558,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    panel.addEventListener('click', (e) => {
+    panel.addEventListener('click', async (e) => {
         const handle = e.target.closest('[data-handle]');
         if (handle) {
             return act(() => call(
                 `/api/admin/contact-messages/${handle.dataset.handle}/handled`,
                 { method: 'POST', body: { handled: true } }));
+        }
+
+        const read = e.target.closest('[data-read-thread]');
+        if (read) {
+            const id = read.dataset.readThread;
+            const host = document.querySelector(`[data-thread-for="${id}"]`);
+            if (!host) return;
+            if (!host.hidden) {
+                host.hidden = true;
+                read.setAttribute('aria-expanded', 'false');
+                read.textContent = 'Read the conversation';
+                return;
+            }
+            // Fetched again on each open rather than kept: each read is an
+            // audit entry, and the log should say how many times.
+            read.disabled = true;
+            try {
+                const data = await window.api(`/api/admin/reports/${id}/thread`);
+                host.innerHTML = threadMarkup(data);
+                host.hidden = false;
+                read.setAttribute('aria-expanded', 'true');
+                read.textContent = 'Hide the conversation';
+            } catch (error) {
+                window.toast(error.message || 'Could not load the conversation.', 'error');
+            } finally {
+                read.disabled = false;
+            }
+            return;
         }
 
         const report = e.target.closest('[data-handle-report]');
