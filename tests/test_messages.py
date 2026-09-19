@@ -584,3 +584,40 @@ def test_reading_history_does_not_move_the_read_marker(client, login, thread,
     assert client.get("/api/me").get_json()["unread_messages"] == 0
     client.get(f"/api/proposals/{pid}/messages?before={page['messages'][0]['id']}")
     assert client.get("/api/me").get_json()["unread_messages"] == 0
+
+
+# --- What a page costs --------------------------------------------------------
+
+def test_reading_a_thread_does_not_grow_with_its_length(client, login, thread):
+    """One page of messages is a fixed number of statements, however long.
+
+    Message.sender is lazy="joined" and to_dict() reads a name and a null
+    check off it; the list narrows that join to id and name. Should a
+    column outside that set ever be read per message, SQLAlchemy would go
+    back for it once per row, and this is what would say so.
+    """
+    from sqlalchemy import event
+    from db import engine
+
+    proposer, recipient, pid = thread
+    login(proposer)
+    for i in range(12):
+        client.post(f"/api/proposals/{pid}/messages", json={"body": f"m{i}"})
+
+    statements = []
+    def count(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        assert client.get(f"/api/proposals/{pid}/messages").status_code == 200
+        first = len(statements)
+        statements.clear()
+        for i in range(12):
+            client.post(f"/api/proposals/{pid}/messages", json={"body": f"n{i}"})
+        statements.clear()
+        assert client.get(f"/api/proposals/{pid}/messages").status_code == 200
+        second = len(statements)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
+    assert second == first, (first, second)

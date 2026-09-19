@@ -29,7 +29,7 @@ from flask import (
 
 from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, lazyload
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
@@ -2798,7 +2798,9 @@ def partnership_page():
     if token:
         db = get_db()
         try:
-            proposal = db.query(Partnership).filter(
+            proposal = db.query(Partnership).options(
+                *_party_summary_only()
+            ).filter(
                 Partnership.share_token == token
             ).one_or_none()
             if proposal is not None and proposal.status in Partnership.PUBLIC:
@@ -4698,7 +4700,7 @@ def _detach_partnerships(db, org):
     both left, which nobody remains to be accountable for or to ask to take
     it down -- the record survives while there is still a party to it.
     """
-    rows = db.query(Partnership).filter(
+    rows = db.query(Partnership).options(*_no_parties()).filter(
         or_(Partnership.proposer_id == org.id,
             Partnership.recipient_id == org.id)
     ).all()
@@ -5852,7 +5854,7 @@ def _settle_pending_between(db, blocker, blocked_id, now):
     mailed -- the other side sees a settled proposal, which is what it
     would see if the blocker had pressed the button.
     """
-    pending = db.query(Partnership).filter(
+    pending = db.query(Partnership).options(*_no_parties()).filter(
         Partnership.status == Partnership.PENDING,
         or_(and_(Partnership.proposer_id == blocker.id,
                  Partnership.recipient_id == blocked_id),
@@ -6600,6 +6602,30 @@ def _notification_rows(db, org, since, thread_ids):
             Partnership.recipient_id == org.id),
         or_(*reasons),
     ).all()
+
+
+def _party_summary_only():
+    """Load each party as the four columns _party() reads, and no more.
+
+    Partnership.proposer and .recipient are lazy="joined", which is right
+    for the proposal lists -- to_dict() renders the counterpart's whole
+    profile -- and wrong for a page that names two organizations: the join
+    was hauling in both rows' descriptions, notes, links and preferences to
+    print a name, a type and a town.
+    """
+    return (
+        joinedload(Partnership.proposer).load_only(
+            Organization.id, Organization.name,
+            Organization.organization_type, Organization.location),
+        joinedload(Partnership.recipient).load_only(
+            Organization.id, Organization.name,
+            Organization.organization_type, Organization.location),
+    )
+
+
+def _no_parties():
+    """Skip the party join for a query that only moves the row itself."""
+    return (lazyload(Partnership.proposer), lazyload(Partnership.recipient))
 
 
 def _party_names_only():
@@ -8567,7 +8593,9 @@ def create_proposal(org, db):
     # Settled partnerships are deliberately not in the way. Completing one
     # and agreeing another is the product working; it is only the live ones
     # that have to be singular.
-    live = db.query(Partnership).filter(
+    # Two columns, not the row: this decides a refusal and reads nothing
+    # else, and the full row arrives with both parties joined.
+    live = db.query(Partnership.status, Partnership.recipient_id).filter(
         or_(
             and_(Partnership.proposer_id == org.id,
                  Partnership.recipient_id == recipient.id),
@@ -9594,7 +9622,13 @@ def list_messages(org, db, proposal_id):
         limit = MESSAGE_PAGE
     limit = max(1, min(limit, MESSAGE_PAGE_MAX))
 
-    query = db.query(Message).filter(Message.partnership_id == proposal.id)
+    # The sender is lazy="joined" and to_dict() reads two things off it:
+    # whether it is still there, and its name. Joining the whole
+    # organization -- description, notes, links, preferences -- once per
+    # message made a page of a hundred messages a hundred profiles wide.
+    query = db.query(Message).options(
+        joinedload(Message.sender).load_only(Organization.id, Organization.name)
+    ).filter(Message.partnership_id == proposal.id)
     if since is not None:
         query = query.filter(Message.id > since)
         rows = query.order_by(Message.created_at, Message.id).all()
@@ -10095,7 +10129,9 @@ def public_partnership(token):
     """
     db = get_db()
     try:
-        proposal = db.query(Partnership).filter(
+        proposal = db.query(Partnership).options(
+            *_party_summary_only()
+        ).filter(
             Partnership.share_token == token
         ).one_or_none()
         # Completed and ended agreements still resolve. The link was shared
