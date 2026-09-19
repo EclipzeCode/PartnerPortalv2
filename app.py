@@ -5551,6 +5551,7 @@ def _record_profile_view(db, target):
             return
 
         db.add(ProfileView(organization_id=target.id, viewer_key=key))
+        _sweep_profile_views(db)
         db.commit()
     except Exception:
         db.rollback()
@@ -5571,6 +5572,48 @@ VIEW_SERIES_DAYS = 30
 # which a directory this size says anything at all.
 VIEW_SERIES_CHOICES = (7, 30, 90)
 
+# How long a raw view row is kept. The longest series is 90 days and is
+# drawn beside the 90 days before it, in the viewer's own timezone -- which
+# can reach a day either side of UTC -- so anything older than this cannot
+# appear on any chart. It is still counted: the sweep below adds what it
+# deletes to profile_view_archive, and the all-time figure reads both.
+VIEW_RETENTION_DAYS = 2 * max(VIEW_SERIES_CHOICES) + 2
+VIEW_SWEEP_INTERVAL = 3600
+
+_view_sweep_after = 0.0
+_view_sweep_lock = threading.Lock()
+
+# Delete and count in one statement, so a row cannot be deleted without
+# being counted or counted without being deleted.
+_VIEW_SWEEP = text("""
+WITH old AS (
+    DELETE FROM profile_views
+     WHERE viewed_at < now() - make_interval(days => :keep)
+    RETURNING organization_id
+)
+INSERT INTO profile_view_archive (organization_id, counted)
+SELECT organization_id, count(*) FROM old GROUP BY organization_id
+ON CONFLICT (organization_id) DO UPDATE
+   SET counted = profile_view_archive.counted + EXCLUDED.counted
+""")
+
+
+def _sweep_profile_views(db):
+    """Prune raw rows nothing can draw any more, keeping their count.
+
+    On a timer, like the rate-limit sweep and for the same reason: it is a
+    table-wide DELETE, and a view is the common case that should not pay
+    for it. Process-local, so two workers may both sweep; the second finds
+    nothing to do.
+    """
+    global _view_sweep_after
+    now = time.monotonic()
+    with _view_sweep_lock:
+        if now < _view_sweep_after:
+            return
+        _view_sweep_after = now + VIEW_SWEEP_INTERVAL
+    db.execute(_VIEW_SWEEP, {"keep": VIEW_RETENTION_DAYS})
+
 
 # The daily series and the all-time total, in one round trip.
 #
@@ -5586,7 +5629,9 @@ SELECT date(viewed_at AT TIME ZONE :zone) AS day, count(*) AS n
  WHERE organization_id = :org_id AND viewed_at >= :since
  GROUP BY 1
 UNION ALL
-SELECT NULL AS day, count(*) AS n
+SELECT NULL AS day,
+       count(*) + coalesce((SELECT counted FROM profile_view_archive
+                             WHERE organization_id = :org_id), 0) AS n
   FROM profile_views
  WHERE organization_id = :org_id
 """)

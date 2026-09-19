@@ -148,3 +148,45 @@ def test_two_simultaneous_views_from_one_visitor_count_once(client, make_org,
     views = session.query(ProfileView).filter(
         ProfileView.organization_id == target.id).count()
     assert views == 1
+
+
+def test_old_views_are_pruned_but_still_counted(session, client, login, make_org):
+    """A raw row outlives its usefulness once no chart can reach it. The
+    all-time figure must not notice it going."""
+    from datetime import datetime, timedelta, timezone
+
+    from models import ProfileView, ProfileViewArchive
+
+    me = make_org(needs=["web_development"], offers=["grant_writing"])
+    viewer = make_org(needs=["grant_writing"], offers=["web_development"])
+    long_ago = datetime.now(timezone.utc) - timedelta(
+        days=app_module.VIEW_RETENTION_DAYS + 30)
+    for i in range(3):
+        session.add(ProfileView(organization_id=me.id, viewer_key=f"old-{i}",
+                                viewed_at=long_ago - timedelta(days=i)))
+    session.add(ProfileView(organization_id=me.id, viewer_key="recent",
+                            viewed_at=datetime.now(timezone.utc) - timedelta(days=2)))
+    session.commit()
+
+    login(me)
+    assert _views(client) == 4
+    client.post("/logout")
+
+    # A view is what runs the sweep; the timer is reset so this one does.
+    app_module._view_sweep_after = 0.0
+    login(viewer)
+    client.get(f"/api/organizations/{me.id}/public")
+    client.post("/logout")
+
+    login(me)
+    assert _views(client) == 5
+    raw = session.query(ProfileView).filter(
+        ProfileView.organization_id == me.id).count()
+    assert raw == 2
+    archived = session.get(ProfileViewArchive, me.id)
+    assert archived is not None and archived.counted == 3
+
+    # The series draws from what is left: the recent row and the view that
+    # ran the sweep, and none of the ancient ones.
+    stats = client.get("/api/dashboard?days=7").get_json()["stats"]
+    assert sum(p["count"] for p in stats["profile_views_series"]) == 2

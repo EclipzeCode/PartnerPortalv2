@@ -2126,6 +2126,29 @@ class ProfileView(Base):
         return f"<ProfileView org={self.organization_id} at={self.viewed_at}>"
 
 
+class ProfileViewArchive(Base):
+    """How many of an organization's profile views have been pruned.
+
+    profile_views keeps a raw row per view for as long as the dashboard can
+    draw a series from it (see VIEW_RETENTION_DAYS in app.py) and no longer.
+    The rows that age out are counted into here on their way out, so the
+    all-time total is this plus whatever raw rows remain. One row per
+    organization, created the first time anything of theirs is pruned.
+    """
+
+    __tablename__ = "profile_view_archive"
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    counted: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+
+    def __repr__(self):
+        return f"<ProfileViewArchive org={self.organization_id} {self.counted}>"
+
+
 class ContactMessage(Base):
     """A message from the homepage form.
 
