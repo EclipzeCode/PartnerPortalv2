@@ -649,8 +649,15 @@ function routeSessionLinks(signedIn) {
     // The footer carries the same link under "Account", and it stayed put
     // for signed-out visitors after the nav's copy was hidden. The list item
     // goes with it there, so the column does not keep an empty bullet.
-    document.querySelectorAll('a[href="ppdashboard.html"]')
-        .forEach((link) => {
+    //
+    // Scoped to the nav and the footer. The 404 page mentions the dashboard
+    // in a sentence ("They are on your <a>dashboard</a>."), and hiding that
+    // link too left the sentence ending in "your ." -- a page-body link is
+    // a pointer to be followed, and signed out it lands on the login page
+    // with ?next= set, which is the right answer there.
+    document.querySelectorAll(
+        '.navbar a[href="ppdashboard.html"], footer a[href="ppdashboard.html"]'
+    ).forEach((link) => {
             const item = link.closest('li');
             (item || link).hidden = !signedIn;
         });

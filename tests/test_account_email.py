@@ -164,3 +164,38 @@ def test_it_is_rate_limited(link_token, client, login, make_org):
     for i in range(5):
         _request(client, email=f"pytest-move{i}@example.com")
     assert _request(client, email="pytest-move9@example.com").status_code == 429
+
+
+def test_a_contact_address_that_was_the_login_follows_it(
+        link_token, client, login, make_org, session):
+    """Onboarding fills contact_email with the login address when the field
+    is left blank, so for most organizations the two are one string -- and
+    the change used to leave the profile pointing partners at the address
+    the account had just moved away from."""
+    org = make_org()
+    org.contact_email = org.email
+    session.commit()
+    login(org)
+    _request(client)
+    token = link_token('notify_email_change_requested')
+    client.post("/logout")
+
+    assert client.post("/api/account/email/confirm",
+                       json={"token": token}).status_code == 200
+    session.refresh(org)
+    assert org.contact_email == NEW
+
+
+def test_a_contact_address_chosen_on_purpose_stays(
+        link_token, client, login, make_org, session):
+    org = make_org(contact_email="pytest-program-officer@example.com")
+    login(org)
+    _request(client)
+    token = link_token('notify_email_change_requested')
+    client.post("/logout")
+
+    assert client.post("/api/account/email/confirm",
+                       json={"token": token}).status_code == 200
+    session.refresh(org)
+    assert org.email == NEW
+    assert org.contact_email == "pytest-program-officer@example.com"

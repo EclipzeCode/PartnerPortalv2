@@ -233,3 +233,40 @@ def test_a_meeting_needs_the_same_things_a_private_one_does(client, login, threa
                           json={"title": "Open day", "date": "2027-04-01", "all_day": True})
     assert all_day.status_code == 201
     assert all_day.get_json()["meeting"]["all_day"] is True
+
+
+@pytest.mark.parametrize("settle, who", [("decline", "recipient"),
+                                         ("withdraw", "proposer")])
+def test_settling_the_proposal_withdraws_its_proposed_meetings(
+        client, login, thread, settle, who):
+    """A proposed meeting is a question asked inside the conversation, so it
+    goes when the conversation does. It used to stay: on both dashboards as
+    "waiting on you", as an actionable bell entry indefinitely, and still
+    answerable from a thread every other route said was closed."""
+    proposer, recipient, pid = thread
+
+    login(proposer)
+    mid = client.post(f"/api/proposals/{pid}/meetings",
+                      json=MEETING).get_json()["meeting"]["id"]
+    client.post("/logout")
+
+    actor = recipient if who == "recipient" else proposer
+    login(actor)
+    assert client.post(f"/api/proposals/{pid}/{settle}").status_code == 200
+    client.post("/logout")
+
+    # Gone from both calendars, and no longer counted against anybody.
+    for org in (proposer, recipient):
+        login(org)
+        assert mid not in [e["id"] for e in _dashboard_events(client)]
+        me = client.get("/api/me").get_json()
+        assert me["awaiting_meetings"] == 0
+        kinds = [n["kind"] for n in
+                 client.get("/api/notifications").get_json()["notifications"]]
+        assert "meeting_proposed" not in kinds
+        client.post("/logout")
+
+    # And it cannot be answered from the closed thread.
+    login(recipient)
+    assert client.post(
+        f"/api/proposals/{pid}/meetings/{mid}/accept").status_code == 409

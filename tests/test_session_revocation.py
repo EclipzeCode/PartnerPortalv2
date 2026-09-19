@@ -146,3 +146,19 @@ def test_the_stored_digest_is_not_itself_a_token(client, make_org, session,
         "token": stored,
         "password": "Should-Not-Work-9!",
     }).status_code == 404
+
+
+def test_an_overlong_new_password_is_refused_not_crashed(client, make_org, login):
+    """bcrypt 5 raises on anything over 72 bytes rather than truncating, and
+    the new password used to be compared against the current hash before
+    its length was checked -- a 500 for whoever picked a long passphrase."""
+    org = make_org()
+    login(org)
+    response = client.post("/api/account/password", json={
+        "current_password": "Test1234!verify",
+        "new_password": "Aa1!" + "x" * 80,
+    })
+    assert response.status_code == 400
+    body = response.get_json()
+    assert body["field"] == "new_password"
+    assert "72 bytes" in body["error"]

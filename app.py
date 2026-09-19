@@ -4089,15 +4089,20 @@ def change_password(org, db):
             "field": "current_password",
         }), 403
 
+    # The rules before the comparison, not after. bcrypt refuses anything
+    # over 72 bytes outright (a ValueError, not a truncation, since 5.0), so
+    # comparing an unchecked new password against the current hash turned a
+    # long passphrase into a 500 -- on the one route that checked length
+    # last. password_problem is what enforces MAX_PASSWORD_BYTES.
+    problem = password_problem(new_password, email=org.email, name=org.name)
+    if problem:
+        return jsonify({"error": problem, "field": "new_password"}), 400
+
     if bcrypt.checkpw(new_password.encode("utf-8"), org.password_hash.encode("utf-8")):
         return jsonify({
             "error": "That is your current password. Choose a different one.",
             "field": "new_password",
         }), 400
-
-    problem = password_problem(new_password, email=org.email, name=org.name)
-    if problem:
-        return jsonify({"error": problem, "field": "new_password"}), 400
 
     # The current password was right, so the attempts spent getting here were
     # this account's owner. Refunded, or somebody who mistypes their old
@@ -4334,6 +4339,15 @@ def confirm_email_change():
 
         previous = org.email
         org.email = org.pending_email
+        # The profile's contact address follows. Onboarding fills it with
+        # the login address whenever the field is left blank (see
+        # save_onboarding), so for most organizations the two are the same
+        # string -- and leaving it behind meant partners went on seeing, and
+        # mailing, an address the account had just moved away from. Only
+        # when it was the login address, though: one typed in deliberately
+        # (a shared inbox, a program officer) is a separate choice and stays.
+        if not org.contact_email or org.contact_email.lower() == previous.lower():
+            org.contact_email = org.email
         # Opening a link sent to this address is exactly what verification
         # asks for, so it arrives verified rather than needing a second
         # round trip to prove the same thing.
@@ -5525,6 +5539,27 @@ def _thread_open(db, proposal):
 _THREAD_CLOSED = "This conversation is closed."
 
 
+def _cancel_proposed_meetings(db, partnership_ids, by_id):
+    """Withdraw every shared meeting still awaiting an answer on these threads.
+
+    A proposed meeting is a question asked inside a conversation, and it
+    has to die with the conversation: declining, withdrawing, ending or
+    blocking all close the thread it would be answered in. Left alone it
+    went on showing on both dashboards as "waiting on you", stayed an
+    actionable bell entry indefinitely, and could still be accepted --
+    writing a message into a thread every other route said was closed.
+    Agreed meetings are deliberately untouched; see end_proposal.
+    """
+    ids = list(partnership_ids)
+    if not ids:
+        return
+    db.query(Event).filter(
+        Event.partnership_id.in_(ids),
+        Event.share_status == Event.PROPOSED,
+    ).update({"share_status": Event.CANCELLED, "cancelled_by_id": by_id,
+              "awaiting_id": None}, synchronize_session=False)
+
+
 def _settle_pending_between(db, blocker, blocked_id, now):
     """Close any pending proposal between the two, from the blocker's side.
 
@@ -5545,13 +5580,7 @@ def _settle_pending_between(db, blocker, blocked_id, now):
                            if proposal.proposer_id == blocker.id
                            else Partnership.DECLINED)
         proposal.responded_at = now
-    if pending:
-        db.query(Event).filter(
-            Event.partnership_id.in_([p.id for p in pending]),
-            Event.share_status == Event.PROPOSED,
-        ).update({"share_status": Event.CANCELLED,
-                  "cancelled_by_id": blocker.id, "awaiting_id": None},
-                 synchronize_session=False)
+    _cancel_proposed_meetings(db, [p.id for p in pending], blocker.id)
 
 
 @app.route("/api/blocks", methods=["GET"])
@@ -8695,6 +8724,9 @@ def decline_proposal(org, db, proposal_id):
     proposal.status = Partnership.DECLINED
     proposal.responded_at = datetime.now(timezone.utc)
     proposal.response_message = response_message or None
+    # The thread closes with the answer, and anything still waiting in it
+    # goes too -- see _cancel_proposed_meetings.
+    _cancel_proposed_meetings(db, [proposal.id], org.id)
     db.commit()
 
     notify_proposal_responded(proposal, org)
@@ -8721,6 +8753,7 @@ def withdraw_proposal(org, db, proposal_id):
 
     proposal.status = Partnership.WITHDRAWN
     proposal.responded_at = datetime.now(timezone.utc)
+    _cancel_proposed_meetings(db, [proposal.id], org.id)
     db.commit()
     return jsonify({
         "message": "Proposal withdrawn",
@@ -8879,11 +8912,7 @@ def end_proposal(org, db, proposal_id):
     # have already put them in calendars, and taking a meeting out of
     # somebody's day without a word is worse than showing it under an
     # ended partnership.
-    db.query(Event).filter(
-        Event.partnership_id == proposal.id,
-        Event.share_status == Event.PROPOSED,
-    ).update({"share_status": Event.CANCELLED, "cancelled_by_id": org.id,
-              "awaiting_id": None}, synchronize_session=False)
+    _cancel_proposed_meetings(db, [proposal.id], org.id)
     db.commit()
 
     notify_partnership_ended(proposal, org)
@@ -9489,6 +9518,15 @@ def _answer_meeting(org, db, proposal_id, meeting_id, *, accept):
     event = _load_shared_meeting(db, proposal, meeting_id)
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
+    # The same gate posting a message has. Answering writes a message into
+    # the thread, and a settled proposal's thread takes none.
+    if not proposal.messages_open():
+        return jsonify({
+            "error": f"This proposal was {proposal.status}, so the "
+                     f"conversation is closed.",
+        }), 409
+    if not _thread_open(db, proposal):
+        return jsonify({"error": _THREAD_CLOSED}), 409
     if event.share_status != Event.PROPOSED:
         return jsonify({"error": f"This meeting was already {event.share_status}."}), 409
     if not event.awaits(org.id):
@@ -9535,6 +9573,9 @@ def cancel_meeting(org, db, proposal_id, meeting_id):
     event = _load_shared_meeting(db, proposal, meeting_id)
     if event is None:
         return jsonify({"error": "Meeting not found."}), 404
+    # Deliberately not gated on messages_open(): an agreed meeting outlives
+    # an ended partnership (see end_proposal), and taking it back off a
+    # calendar has to stay possible after the thread has closed.
     if not event.live():
         return jsonify({"error": f"This meeting was already {event.share_status}."}), 409
 
