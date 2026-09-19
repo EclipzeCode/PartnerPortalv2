@@ -759,8 +759,27 @@
         border-top: 1px solid var(--h-rule);
     }
 
+    /* One row that scrolls sideways, rather than four tabs wrapping onto
+       two. Wrapped, the active underline sat under the first row only and
+       "Agreed / Closed" read as a second, unrelated control. The scrollbar
+       is hidden because the strip is short and the overflow is obvious
+       from the cut-off tab; the tabs stay reachable by arrow key, which
+       scroll_to focus handles. */
     .proposal-tabs {
-        gap: 1rem;
+        flex-wrap: nowrap;
+        gap: 1.25rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .proposal-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .proposal-tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     .proposal-actions .btn-primary,
