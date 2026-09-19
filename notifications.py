@@ -144,11 +144,11 @@ class _Claim:
     """
 
     __slots__ = ("id", "to_addr", "subject", "html", "text", "reply_to",
-                 "attempts")
+                 "attempts", "optional")
 
     def __init__(self, row):
         (self.id, self.to_addr, self.subject, self.html, self.text,
-         self.reply_to, self.attempts) = row
+         self.reply_to, self.attempts, self.optional) = row
 
 
 class DatabaseOutbox:
@@ -166,7 +166,7 @@ class DatabaseOutbox:
         from db import SessionLocal
         return SessionLocal()
 
-    def add(self, to_addr, subject, html, text, reply_to=None):
+    def add(self, to_addr, subject, html, text, reply_to=None, optional=False):
         """Write the message down. Returns its id."""
         from models import EmailOutbox
 
@@ -174,7 +174,7 @@ class DatabaseOutbox:
         try:
             row = EmailOutbox(
                 to_addr=to_addr, subject=subject, html=html,
-                body_text=text, reply_to=reply_to,
+                body_text=text, reply_to=reply_to, optional=optional,
                 status=EmailOutbox.QUEUED,
             )
             db.add(row)
@@ -212,7 +212,7 @@ class DatabaseOutbox:
                         LIMIT 1
                  )
              RETURNING id, to_addr, subject, html, body_text, reply_to,
-                       attempts
+                       attempts, optional
             """)).first()
             db.commit()
             return _Claim(row) if row is not None else None
@@ -324,7 +324,8 @@ _outbox = DatabaseOutbox()
 
 def _deliver(item):
     """Send one claimed message and record what happened to it."""
-    if _send(item.to_addr, item.subject, item.html, item.text, item.reply_to):
+    if _send(item.to_addr, item.subject, item.html, item.text, item.reply_to,
+             optional=item.optional):
         _outbox.delivered(item.id)
         return
 
@@ -516,7 +517,8 @@ def _config():
     }
 
 
-def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None):
+def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None,
+                     optional=False):
     """POST to Resend. Raises on non-2xx so the caller can log it."""
     payload = {
         "from": cfg["from_addr"],
@@ -525,6 +527,15 @@ def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None):
         "html": html,
         "text": text,
     }
+    # A message the recipient can switch off says so where mail clients and
+    # receiving servers look for it, not only in a line of the footer. The
+    # settings page is where the switches are, so that is where the header
+    # points; there is no one-click endpoint because the switches are per
+    # category and a click on a header cannot say which.
+    if optional:
+        payload["headers"] = {
+            "List-Unsubscribe": f"<{cfg['app_url']}/settings.html>",
+        }
     # Only the contact form sets this. The From address has to stay a verified
     # sender -- putting a visitor's address there is what gets a domain
     # rejected -- so the address they typed goes here instead, and Reply
@@ -548,7 +559,7 @@ def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _send(to_addr, subject, html, text, reply_to=None):
+def _send(to_addr, subject, html, text, reply_to=None, optional=False):
     """Deliver one message, retrying a failure that might not repeat.
 
     Runs on a delivery worker, never on the request thread. Returns whether
@@ -579,7 +590,8 @@ def _send(to_addr, subject, html, text, reply_to=None):
 
     for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
         try:
-            result = _send_via_resend(cfg, to_addr, subject, html, text, reply_to)
+            result = _send_via_resend(cfg, to_addr, subject, html, text,
+                                      reply_to, optional=optional)
             if attempt > 1:
                 log.info("email sent to %s (id=%s) on attempt %s",
                          to_addr, result.get("id"), attempt)
@@ -666,7 +678,8 @@ def _dispatch(to_addr, subject, html, text, reply_to=None, preferences=False):
         html, text = _preferences_note(html, text)
 
     try:
-        message_id = _outbox.add(to_addr, subject, html, text, reply_to)
+        message_id = _outbox.add(to_addr, subject, html, text, reply_to,
+                                 optional=preferences)
     except Exception:
         log.exception("email to %s could not be queued", to_addr)
         return None

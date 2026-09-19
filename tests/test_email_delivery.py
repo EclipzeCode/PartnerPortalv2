@@ -42,7 +42,7 @@ def _http_error(code):
 
 def _failing(times, exc, calls):
     """A sender that raises `exc` the first `times` calls, then succeeds."""
-    def send(cfg, to_addr, subject, html, text, reply_to=None):
+    def send(cfg, to_addr, subject, html, text, reply_to=None, optional=False):
         calls.append(to_addr)
         if len(calls) <= times:
             raise exc
@@ -137,7 +137,7 @@ class FakeOutbox:
         self.next_id = 1
         self.lock = __import__("threading").Lock()
 
-    def add(self, to_addr, subject, html, text, reply_to=None):
+    def add(self, to_addr, subject, html, text, reply_to=None, optional=False):
         with self.lock:
             message_id = self.next_id
             self.next_id += 1
@@ -156,7 +156,7 @@ class FakeOutbox:
                     row["attempts"] += 1
                     return notifications._Claim((
                         row["id"], row["to_addr"], row["subject"], row["html"],
-                        row["text"], row["reply_to"], row["attempts"]))
+                        row["text"], row["reply_to"], row["attempts"], False))
             return None
 
     def delivered(self, message_id):
@@ -201,7 +201,7 @@ def test_dispatch_returns_immediately_and_the_workers_deliver(
     """The point of the whole arrangement: the caller does not wait for Resend."""
     delivered = []
 
-    def send(cfg, to_addr, subject, html, text, reply_to=None):
+    def send(cfg, to_addr, subject, html, text, reply_to=None, optional=False):
         delivered.append(to_addr)
         return {"id": "ok"}
 
@@ -482,3 +482,64 @@ def test_delivered_rows_are_tidied_away_once_they_have_aged_out(store):
     store.maintain()
     assert _row(store, keep) is not None
     assert _row(store, old) is None
+
+
+# --- What goes on the wire ------------------------------------------------------
+
+def _captured_request(monkeypatch):
+    """Replace urlopen with something that records the request and answers
+    like Resend. Returns the list the requests land in."""
+    import io, json as json_module
+    seen = []
+
+    class _Response(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    def urlopen(req, timeout=None):
+        seen.append(json_module.loads(req.data.decode("utf-8")))
+        return _Response(b'{"id": "pytest-sent"}')
+
+    monkeypatch.setattr(notifications.urllib.request, "urlopen", urlopen)
+    return seen
+
+
+def test_an_optional_message_carries_a_list_unsubscribe_header(monkeypatch):
+    monkeypatch.setenv("APP_BASE_URL", "https://pp.example.org")
+    seen = _captured_request(monkeypatch)
+    assert notifications._send("a@example.com", "s", "<p>h</p>", "t",
+                               optional=True) is True
+    assert seen[0]["headers"] == {
+        "List-Unsubscribe": "<https://pp.example.org/settings.html>"}
+
+
+def test_a_transactional_message_does_not(monkeypatch):
+    seen = _captured_request(monkeypatch)
+    assert notifications._send("a@example.com", "s", "<p>h</p>", "t") is True
+    assert "headers" not in seen[0]
+
+
+def test_the_flag_survives_the_outbox(session):
+    """The header is decided when the message is queued and applied when it
+    is sent, which may be another process later; the row carries it."""
+    from models import EmailOutbox
+    # The outbox directly, not _dispatch: that wakes the delivery threads,
+    # which would claim these rows before this test could.
+    row_id = notifications._outbox.add("a@example.com", "s", "<p>h</p>", "t",
+                                       optional=True)
+    plain_id = notifications._outbox.add("a@example.com", "s", "<p>h</p>", "t")
+    assert session.get(EmailOutbox, row_id).optional is True
+    assert session.get(EmailOutbox, plain_id).optional is False
+    # Claimed in queue order, behind whatever else the database holds.
+    by_id = {}
+    for _ in range(200):
+        claimed = notifications._outbox.claim()
+        if claimed is None:
+            break
+        by_id[claimed.id] = claimed
+        if row_id in by_id and plain_id in by_id:
+            break
+    assert by_id[row_id].optional is True
+    assert by_id[plain_id].optional is False

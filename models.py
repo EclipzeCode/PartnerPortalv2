@@ -2557,6 +2557,14 @@ class EmailOutbox(Base):
     body_text: Mapped[str] = mapped_column(Text, nullable=False)
     reply_to: Mapped[str | None] = mapped_column(String(255))
 
+    # Whether the recipient could have switched this message off in Settings.
+    # Those carry a List-Unsubscribe header pointing there; the transactional
+    # ones -- verification, resets, security notices -- do not, because
+    # there is nothing to unsubscribe from.
+    optional: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text(f"'{QUEUED}'")
     )
