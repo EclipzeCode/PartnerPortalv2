@@ -46,10 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target === modal) close();
     });
 
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && modal.classList.contains('active')) close();
-    });
-
     // The form carries no message element in the markup, so one is created on
     // first use and reused after that.
     function setMessage(text, kind = 'error') {

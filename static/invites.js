@@ -104,10 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modal.querySelector('.close-modal').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('active')) close();
-    });
-
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         setError('');

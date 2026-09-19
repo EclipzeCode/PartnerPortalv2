@@ -768,11 +768,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 closeStage();
             }
         });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && stageModal.classList.contains('active')) {
-                closeStage();
-            }
-        });
     }
 
     // --- The table toggles ------------------------------------------------

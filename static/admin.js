@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             hideReason.value = '';
             showError(hideError, '');
             hideModal.hidden = false;
-            window.showDialog(hideModal, hideReason);
+            window.showDialog(hideModal, hideReason, closeHide);
         }
     });
 

@@ -1011,9 +1011,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const title = document.getElementById('eventModalTitle');
-        if (title) title.textContent = event ? 'Edit meeting' : 'Add New Event';
+        if (title) title.textContent = event ? 'Edit meeting' : 'Add a meeting';
         if (eventSubmitBtn) {
-            eventSubmitBtn.textContent = event ? 'Save changes' : 'Save Event';
+            eventSubmitBtn.textContent = event ? 'Save changes' : 'Save meeting';
         }
 
         if (event) {
@@ -1090,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (el) el.disabled = false;
             });
         }
-        window.showDialog(modal, document.getElementById('eventTitle'));
+        window.showDialog(modal, document.getElementById('eventTitle'), closeModal);
     }
 
     function closeModal() {
@@ -1107,13 +1107,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target === modal) closeModal();
         });
     }
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape' || !modal || !modal.classList.contains('active')) return;
-        // Anything stacked on top answers Escape first.
-        const confirming = document.getElementById('confirmEventDeleteModal');
-        if (confirming && confirming.classList.contains('active')) return;
-        closeModal();
-    });
+    // Escape is common.js's: it closes whichever dialog is on top, so a
+    // confirmation stacked over this one answers first without either
+    // handler having to know about the other.
 
     // Local time; a bare "YYYY-MM-DD" is treated as UTC by Date and would
     // render as the previous day in western timezones.
@@ -1396,7 +1392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmDeleteBtn.disabled = false;
         // Focused on the confirm button, matching the account-delete dialog in
         // settings.js. Escape and Cancel are both one key away either way.
-        window.showDialog(confirmDeleteModal, confirmDeleteBtn);
+        window.showDialog(confirmDeleteModal, confirmDeleteBtn, closeDeleteConfirm);
     }
 
     function closeDeleteConfirm() {
@@ -1416,12 +1412,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmDeleteModal.addEventListener('click', (e) => {
             if (e.target === confirmDeleteModal
                 || e.target.closest('[data-cancel-event-delete]')) {
-                closeDeleteConfirm();
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && confirmDeleteModal.classList.contains('active')) {
                 closeDeleteConfirm();
             }
         });
@@ -1662,7 +1652,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Back to whichever label openModal chose: this is also
                     // the path a failed edit takes, and the form stays open.
                     eventSubmitBtn.textContent =
-                        editingEventId !== null ? 'Save changes' : 'Save Event';
+                        editingEventId !== null ? 'Save changes' : 'Save meeting';
                 }
             }
 
@@ -1964,12 +1954,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // have already happened made the list disagree with the number
             // that opened it. The card behind the dialog still keeps them.
             const events = sortedEvents().filter((ev) => !isPastEvent(ev));
-            statTitle.textContent = `${VIEW_TITLES.events} (${events.length})`;
+            // Same honesty as the matches title: the dashboard is sent the
+            // first few occurrences, and until "View all" has fetched the
+            // rest this list is a sample.
+            statTitle.textContent = eventsComplete
+                ? `${VIEW_TITLES.events} (${events.length})`
+                : `${VIEW_TITLES.events} (first ${events.length})`;
             statBody.innerHTML = events.length
                 ? `<div class="stat-list">${events.map(eventRow).join('')}</div>`
-                : emptyState('Nothing coming up. Use Add Event to schedule a '
-                    + 'meeting — anything that has already happened stays on '
-                    + 'the Upcoming Events card.');
+                : emptyState('Nothing coming up. Use Add meeting to schedule '
+                    + 'one — anything that has already happened stays on the '
+                    + 'Meetings card.');
             return;
         }
 
@@ -2019,7 +2014,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         const list = matchesFor(statView);
-        statTitle.textContent = `${VIEW_TITLES[statView]} (${list.length})`;
+        // The card counts every match; /api/matches returns the strongest
+        // fifty. When the two differ the title says so, rather than a card
+        // reading 120 opening a dialog headed 50.
+        const known = statView === 'mutual'
+            ? (dashboard.stats || {}).mutual_matches
+            : (dashboard.stats || {}).total_matches;
+        statTitle.textContent = typeof known === 'number' && known > list.length
+            ? `${VIEW_TITLES[statView]} (${list.length} of ${known})`
+            : `${VIEW_TITLES[statView]} (${list.length})`;
         statBody.innerHTML = list.length
             ? `<div class="stat-list">${list.map(matchRow).join('')}</div>`
             : emptyState(statView === 'mutual'
@@ -2064,7 +2067,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // as the control to return to. dialogOpened ignores a repeat anyway;
         // the class is what has to be there before renderStat paints.
         if (!wasOpen) {
-            window.showDialog(statModal, document.getElementById('statClose'));
+            // Escape steps back out of a detail before closing the dialog.
+            window.showDialog(statModal, document.getElementById('statClose'), () => {
+                if (statDetail) { statDetail = null; renderStat(); } else closeStat();
+            });
         }
         renderStat();
         if (view === 'matches' || view === 'mutual') ensureMatches();
@@ -2119,16 +2125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderStat();
         });
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key !== 'Escape' || !statModal.classList.contains('active')) return;
-            // The remove confirmation can be stacked on top of this dialog,
-            // and Escape belongs to whatever is on top: without this it
-            // dismissed the confirmation and stepped this dialog back out of
-            // its detail view in the same keypress.
-            if (confirmDeleteModal && confirmDeleteModal.classList.contains('active')) return;
-            // Escape steps back out of a detail before closing the dialog.
-            if (statDetail) { statDetail = null; renderStat(); } else closeStat();
-        });
     }
 
     renderSavedEvents();

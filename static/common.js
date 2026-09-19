@@ -241,6 +241,11 @@ window.toast = function toast(message, kind = 'ok') {
 
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
+    // The stack is a polite status region, which is right for "Saved" and
+    // wrong for "Could not save": an error the reader is waiting on should
+    // interrupt. Each error is its own alert, so it is announced at once
+    // without making every success one too.
+    if (kind === 'error') el.setAttribute('role', 'alert');
 
     const icon = document.createElement('i');
     icon.className = kind === 'error' ? 'bx bx-error-circle' : 'bx bx-check-circle';
@@ -403,9 +408,50 @@ function unlockScroll() {
     scrollLockBefore = null;
 }
 
-window.dialogOpened = function dialogOpened(modal, preferred) {
+// Every dialog on the site is a .modal wrapper around a [role="dialog"]
+// container whose first heading is its title. None of them said so to
+// assistive technology, so each opened as an unnamed "dialog". Named here,
+// once, from the heading that is already there.
+function labelDialog(modal) {
+    const box = modal.matches('[role="dialog"]')
+        ? modal : modal.querySelector('[role="dialog"]');
+    if (!box || box.hasAttribute('aria-labelledby') || box.hasAttribute('aria-label')) {
+        return;
+    }
+    const heading = box.querySelector('h1, h2, h3');
+    if (!heading) return;
+    if (!heading.id) {
+        heading.id = `dialog-title-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    box.setAttribute('aria-labelledby', heading.id);
+}
+
+// One Escape handler for every dialog, instead of one per dialog per page.
+// Only the dialog on top answers -- a confirmation opened over another
+// dialog closes alone, and the one underneath waits its turn -- and a page
+// that needs Escape to do something other than plain hiding (ask before
+// discarding a half-written form, step back to a list) passes that as
+// `onEscape` when it opens the dialog.
+let escapeWired = false;
+
+function wireEscape() {
+    if (escapeWired) return;
+    escapeWired = true;
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || openDialogs.size === 0) return;
+        const stack = [...openDialogs.entries()];
+        const [modal, state] = stack[stack.length - 1];
+        e.preventDefault();
+        if (typeof state.onEscape === 'function') state.onEscape();
+        else window.hideDialog(modal);
+    });
+}
+
+window.dialogOpened = function dialogOpened(modal, preferred, onEscape) {
     if (!modal || openDialogs.has(modal)) return;
     lockScroll();
+    labelDialog(modal);
+    wireEscape();
 
     const onKeydown = (e) => {
         if (e.key !== 'Tab') return;
@@ -439,7 +485,7 @@ window.dialogOpened = function dialogOpened(modal, preferred) {
 
     // Capture phase, so the trap runs before any page-level Tab handling.
     document.addEventListener('keydown', onKeydown, true);
-    openDialogs.set(modal, { opener: document.activeElement, onKeydown });
+    openDialogs.set(modal, { opener: document.activeElement, onKeydown, onEscape });
     focusInto(modal, preferred);
 };
 
@@ -463,10 +509,10 @@ window.dialogClosed = function dialogClosed(modal) {
 // once. Pages keep their own thin wrappers where they add something (the
 // search page rewrites the URL on close; the dashboard clears its pending
 // delete), and call these from them.
-window.showDialog = function showDialog(modal, preferred) {
+window.showDialog = function showDialog(modal, preferred, onEscape) {
     if (!modal) return;
     modal.classList.add('active');
-    window.dialogOpened(modal, preferred);
+    window.dialogOpened(modal, preferred, onEscape);
 };
 
 window.hideDialog = function hideDialog(modal) {
@@ -665,6 +711,14 @@ function routeSessionLinks(signedIn) {
     // "Get started" / "Create account" point at the sign-up panel, which is
     // the right first stop for a visitor and a dead end for an account that
     // already exists. Signed in, the same click means "set up my profile".
+    // The footer's "Log In" is the same dead end signed in as the nav's
+    // was, and it stayed put after the nav's copy learned to hide. Its list
+    // item goes with it, as the dashboard's does above.
+    document.querySelectorAll('footer a[href="pplogin.html"]').forEach((link) => {
+        const item = link.closest('li');
+        (item || link).hidden = signedIn;
+    });
+
     document.querySelectorAll('a[href="pplogin.html#signup"]').forEach((link) => {
         if (signedIn) link.href = 'onboarding.html';
     });
@@ -925,3 +979,62 @@ function wireAccountMenu() {
         });
     }
 }
+
+// --- Confirmation dialog -----------------------------------------------
+// A yes/no question in the site's own dialog, in place of window.confirm().
+// Three places reached for the browser's box -- blocking an organization,
+// and discarding a half-written proposal or counter-offer -- and it is the
+// one control on the site that ignores the theme, the typeface and the
+// focus handling every other dialog gets. Built on demand from the same
+// markup the static dialogs use, so forms.css styles it without knowing it
+// exists, and resolved rather than returned: callers await the answer.
+window.confirmDialog = function confirmDialog({
+    title = 'Are you sure?',
+    body = '',
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
+    danger = false,
+} = {}) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'modal confirm-dialog';
+        modal.innerHTML = `
+            <div class="modal-container" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2></h2>
+                    <button type="button" class="close-modal" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-intro"></p>
+                    <div class="form-actions">
+                        <button type="button" class="btn-ghost" data-answer="no"></button>
+                        <button type="button" class="${danger ? 'btn-danger' : 'btn-primary'}"
+                                data-answer="yes"></button>
+                    </div>
+                </div>
+            </div>`;
+        // textContent throughout: titles and bodies carry organization names.
+        modal.querySelector('h2').textContent = title;
+        modal.querySelector('.modal-intro').textContent = body;
+        modal.querySelector('[data-answer="no"]').textContent = cancelLabel;
+        modal.querySelector('[data-answer="yes"]').textContent = confirmLabel;
+        document.body.appendChild(modal);
+
+        let settled = false;
+        const answer = (yes) => {
+            if (settled) return;
+            settled = true;
+            window.hideDialog(modal);
+            modal.remove();
+            resolve(yes);
+        };
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal || e.target.closest('.close-modal')) answer(false);
+            const button = e.target.closest('[data-answer]');
+            if (button) answer(button.dataset.answer === 'yes');
+        });
+        // The safe answer takes focus first, so Enter on arrival cancels.
+        window.showDialog(modal, modal.querySelector('[data-answer="no"]'),
+                          () => answer(false));
+    });
+};

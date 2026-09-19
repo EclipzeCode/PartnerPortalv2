@@ -433,12 +433,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.hideDialog(modal);
     }
 
-    function openModals() {
-        return [confirmModal, passwordModal].filter(
-            (m) => m.classList.contains('active'),
-        );
-    }
-
     // Every Cancel button, X, and backdrop shares one path out.
     [confirmModal, passwordModal].forEach((modal) => {
         modal.addEventListener('click', (e) => {
@@ -448,11 +442,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 closeModal(modal);
             }
         });
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        openModals().forEach(closeModal);
     });
 
     // --- Delete flow -------------------------------------------------------

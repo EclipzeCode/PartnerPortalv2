@@ -743,19 +743,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // returned to whatever opened it on close.
     function openModal(modal, preferred) {
         if (!modal) return;
-        window.showDialog(modal, preferred);
+        // Escape is common.js's to handle, for whichever dialog is on top;
+        // it calls back into closeModal so the propose form still gets asked.
+        window.showDialog(modal, preferred, () => closeModal(modal));
     }
 
-    function closeModal(modal, { force = false } = {}) {
+    async function closeModal(modal, { force = false } = {}) {
         if (!modal) return;
         // The propose form is the one dialog here with typing in it worth
         // losing. A click on the backdrop or a stray Escape used to drop a
-        // half-written message and every amount with it; now it asks.
-        if (modal === proposeModal && !force && proposeIsDirty()
-                && !window.confirm(
-                    'Discard this proposal? What you have filled in will '
-                    + 'be lost.')) {
-            return;
+        // half-written message and every amount with it; now it asks -- in
+        // the site's own dialog, over this one.
+        if (modal === proposeModal && !force && proposeIsDirty()) {
+            const discard = await window.confirmDialog({
+                title: 'Discard this proposal?',
+                body: 'What you have filled in will be lost.',
+                confirmLabel: 'Discard',
+                cancelLabel: 'Keep writing',
+                danger: true,
+            });
+            if (!discard) return;
         }
         window.hideDialog(modal);
         if (modal === detailModal) writeUrl();
@@ -767,11 +774,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeModal(modal);
         });
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        document.querySelectorAll('.modal.active').forEach((m) => closeModal(m));
     });
 
     if (filterBtn) {
@@ -1518,13 +1520,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
                 closeModal(proposeModal, { force: true });
-                // Queued rather than shown: the redirect below would destroy
-                // a toast raised here before anyone could read it. common.js
-                // picks this up on the dashboard, which is the first moment
-                // there is a page around long enough to say it worked.
-                window.toastAfterRedirect(
-                    `Proposal sent to ${detailTarget.name}.`);
-                window.location.href = 'ppdashboard.html#outgoing';
+                // Stay here. This used to redirect to the dashboard, which
+                // threw away the search, the filters and the page somebody
+                // was working through to send the next one. The proposal is
+                // in the Sent tab whenever they want it; the bell and the
+                // nav count say so straight away.
+                window.toast(`Proposal sent to ${detailTarget.name}. `
+                    + 'It is in your dashboard under Sent.');
+                if (window.refreshNavCounts) window.refreshNavCounts();
+                // Drops a ?propose=1 the page arrived with, so a reload does
+                // not open the form again for a proposal already sent.
+                writeUrl();
             } catch (error) {
                 // The dates are the only fields on this form the server can
                 // reject by name, and a date problem shown at the top of a

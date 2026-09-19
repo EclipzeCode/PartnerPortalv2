@@ -609,3 +609,22 @@ button.btn-action {
     text-transform: uppercase;
     color: var(--h-dim);
 }
+
+/* --- Confirmation dialog ---------------------------------------------------
+   Built by common.js's confirmDialog() from the same markup as the static
+   dialogs above, so the chrome is theirs. Only the question itself and the
+   width need saying: a yes/no box is narrower than a form. */
+.confirm-dialog .modal-container {
+    max-width: 30rem;
+}
+
+.confirm-dialog .modal-intro {
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft, inherit);
+}
+
+.confirm-dialog .form-actions {
+    justify-content: flex-end;
+}

@@ -82,3 +82,29 @@
             .replace(/'/g, '&#39;');
     };
 })();
+
+// The two public pages -- an organization's profile and an agreement
+// summary -- carry a static bar with a "Sign in" button, because they do not
+// load common.js and the shared nav is built by it. Signed-in visitors reach
+// them constantly (the dashboard links to both), and being told to sign in
+// on a page you opened from your own dashboard reads as being signed out.
+// One request settles it: the button becomes the way back to the dashboard,
+// and "Browse organizations" becomes the signed-in listing.
+document.addEventListener('DOMContentLoaded', () => {
+    const bar = document.querySelector('.public-bar');
+    if (!bar) return;
+    window.timedFetch('/api/me', { credentials: 'same-origin' })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+            if (!data || !data.organization) return;
+            const cta = bar.querySelector('.public-cta');
+            if (cta) {
+                cta.href = 'ppdashboard.html';
+                cta.textContent = 'Dashboard';
+            }
+            bar.querySelectorAll('a[href="directory.html"]').forEach((link) => {
+                link.href = 'ppsearch.html';
+            });
+        })
+        .catch(() => {});
+});

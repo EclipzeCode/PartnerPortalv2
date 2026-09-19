@@ -816,6 +816,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Submit -----------------------------------------------------------
+  // Where to go once the form is saved.
+  //
+  // A first profile goes to Search: matches are the point of filling it in.
+  // An edit used to go there too, whatever somebody had come from -- fix a
+  // typo from Settings and land in Search. An edit now returns to the page
+  // that linked here: ?next= when the link says, otherwise the same-origin
+  // referrer, and Search only when neither names a page. Both are checked
+  // against the same shape the login page accepts, so the destination is
+  // always a page on this site.
+  const NEXT_RE = /^[a-z0-9_-]+\.html(\?[^#\s]*)?(#[a-z0-9_-]*)?$/i;
+
+  function afterSaveDestination() {
+    if (!editing) return 'ppsearch.html';
+    const next = new URLSearchParams(location.search).get('next') || '';
+    if (NEXT_RE.test(next) && !next.startsWith('onboarding.html')) return next;
+    try {
+      const from = new URL(document.referrer);
+      const page = from.pathname.replace(/^\//, '') + from.search + from.hash;
+      if (from.origin === location.origin && NEXT_RE.test(page)
+          && !/^(onboarding|pplogin)\.html/.test(page)) {
+        return page;
+      }
+    } catch {
+      // No referrer, or not a URL.
+    }
+    return 'ppsearch.html';
+  }
+
   onboardingForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -829,11 +857,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // The draft existed to survive losing the page before this point.
       clearDraft();
+      const destination = afterSaveDestination();
       showSuccess(editing
-        ? 'Profile updated. Refreshing your matches...'
+        ? (destination === 'ppsearch.html'
+            ? 'Profile updated. Refreshing your matches...'
+            : 'Profile updated. Taking you back...')
         : 'Profile saved. Finding your matches...');
       successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => { window.location.href = 'ppsearch.html'; }, 900);
+      setTimeout(() => { window.location.href = destination; }, 900);
     } catch (error) {
       // A rejected value comes back naming the column that failed; point at
       // that input rather than leaving a message at the top of a long form
@@ -886,9 +917,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   clearModal.querySelector('.close-modal').addEventListener('click', closeClearModal);
   clearModal.addEventListener('click', (e) => {
     if (e.target === clearModal) closeClearModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && clearModal.classList.contains('active')) closeClearModal();
   });
   document.getElementById('clearConfirmBtn').addEventListener('click', () => {
     doClear();

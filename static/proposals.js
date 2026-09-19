@@ -861,7 +861,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         messageError.hidden = true;
         messageBody.value = '';
 
-        window.showDialog(messageModal, messageBody);
+        window.showDialog(messageModal, messageBody, closeThread);
 
         let data;
         try {
@@ -966,11 +966,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showReportError('That organization has closed its account.');
                 return;
             }
-            if (!window.confirm(`Block ${other.name}? They will not be able to `
-                    + 'propose to you or message you again, and any proposal '
-                    + 'between you is closed. You can undo this in Settings.')) {
-                return;
-            }
+            const sure = await window.confirmDialog({
+                title: `Block ${other.name}?`,
+                body: 'They will not be able to propose to you or message you '
+                    + 'again, and any proposal between you is closed. They are '
+                    + 'not told. You can undo this in Settings.',
+                confirmLabel: 'Block',
+                danger: true,
+            });
+            if (!sure) return;
             blockOnlyBtn.disabled = true;
             try {
                 const result = await window.api('/api/blocks',
@@ -1000,11 +1004,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageModal.addEventListener('click', (e) => {
         if (e.target === messageModal) closeThread();
     });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && messageModal.classList.contains('active')) {
-            closeThread();
-        }
-    });
+    // Escape is handled once, in common.js, for whichever dialog is on top;
+    // closeThread is passed to showDialog for it to call.
 
     messageForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1335,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         buildEditPickers(proposal);
         renderEditAmounts();
 
-        window.showDialog(editModal, editStartsOn);
+        window.showDialog(editModal, editStartsOn, () => closeEdit());
         editOpenedAs = editSnapshot();
     }
 
@@ -1355,15 +1356,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function closeEdit({ force = false } = {}) {
+    async function closeEdit({ force = false } = {}) {
         if (!editing) return;
         // A backdrop click or a stray Escape used to drop a half-written
-        // counter-offer without a word; now it asks.
-        if (!force && editSnapshot() !== editOpenedAs
-                && !window.confirm(
-                    'Discard these changes? What you have filled in will '
-                    + 'be lost.')) {
-            return;
+        // counter-offer without a word; now it asks -- in the site's own
+        // dialog, which opens on top of this one and closes alone.
+        if (!force && editSnapshot() !== editOpenedAs) {
+            const discard = await window.confirmDialog({
+                title: 'Discard these changes?',
+                body: 'What you have filled in will be lost.',
+                confirmLabel: 'Discard',
+                cancelLabel: 'Keep editing',
+                danger: true,
+            });
+            if (!discard || !editing) return;
         }
         editing = null;
         window.hideDialog(editModal);
@@ -1376,11 +1382,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             .addEventListener('click', closeEdit);
         editModal.addEventListener('click', (e) => {
             if (e.target === editModal) closeEdit();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && editModal.classList.contains('active')) {
-                closeEdit();
-            }
         });
 
         editForm.addEventListener('submit', async (e) => {
@@ -1742,7 +1743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function openModal() {
         // The note, not the confirm button: this dialog is a decision, and
         // landing on the control that commits it invites a stray Enter.
-        window.showDialog(modal, respondMessage);
+        window.showDialog(modal, respondMessage, closeModal);
     }
 
     function closeModal() {
@@ -1753,9 +1754,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     respondCancel.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeModal();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
     });
 
     // --- Tabs -----------------------------------------------------------
