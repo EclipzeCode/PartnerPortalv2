@@ -6666,11 +6666,14 @@ def _notifications_for(db, org):
 
         if p.status == Partnership.PENDING and p.awaits(org.id):
             # Yours to answer: a proposal sent to you, or your own proposal
-            # sent back with different terms. Dated by the last change
-            # rather than the send for a counter, which is when it became
-            # something waiting on you.
+            # sent back with different terms. A counter is dated by the
+            # moment it was handed back -- countered_at, not updated_at,
+            # which moves on every read marker and would make a seen
+            # counter new again. The fallback covers a row countered
+            # before the column existed and not backfilled.
             add("proposal_countered" if not incoming else "proposal_received",
-                p.updated_at if not incoming else p.created_at, p,
+                (p.countered_at or p.updated_at) if not incoming
+                else p.created_at, p,
                 actionable=True, tab="incoming")
         elif not incoming and p.status == Partnership.ACCEPTED:
             add("proposal_accepted", p.responded_at, p, tab="agreed")
@@ -9014,6 +9017,12 @@ def update_proposal(org, db, proposal_id):
     # For the proposer correcting an unanswered proposal this is a no-op --
     # it was already the recipient's turn.
     proposal.hand_turn_to_other(org.id)
+    # Dated here and only here: the notification that says "suggested
+    # different terms" is keyed on this, and keying it on updated_at made
+    # every later touch of the row -- a read marker, a share link -- look
+    # like a fresh counter.
+    if countered:
+        proposal.countered_at = datetime.now(timezone.utc)
     db.commit()
 
     # The other side is told, because the thing they were asked to answer

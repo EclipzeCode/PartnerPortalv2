@@ -798,6 +798,15 @@ class Partnership(Base):
         default=RECIPIENT_SIDE,
     )
 
+    # When the terms were last handed back as a counter-offer. Written by
+    # that one act and nothing else, which is what the "suggested different
+    # terms" notification needs to be dated by: updated_at, which it used,
+    # moves whenever the row is touched -- reading the thread stamps a read
+    # marker on it -- so a counter already seen kept coming back as new.
+    countered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # --- Messages ----------------------------------------------------------
     # How far into the thread each side has read, so "how many are waiting on
     # me" is one indexed comparison rather than a read flag per message per

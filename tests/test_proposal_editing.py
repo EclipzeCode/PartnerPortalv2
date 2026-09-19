@@ -5,7 +5,11 @@ accepted partnership is a record of what two organizations agreed to and one
 of them changing it afterward would make it a claim about the other.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
+
+from models import Partnership
 
 
 @pytest.fixture
@@ -252,3 +256,47 @@ def test_a_start_with_no_end_is_accepted(client, login, pair):
     response = _propose(client, recipient, starts_on="2026-09-01")
     assert response.status_code == 201
     assert response.get_json()["proposal"]["ends_on"] is None
+
+
+def test_a_seen_counter_offer_stays_seen_when_the_row_is_touched(
+        client, login, pair, session):
+    """The "suggested different terms" entry is dated by the counter itself.
+
+    It was dated by updated_at, and updated_at moves whenever the row does:
+    opening the thread stamps a read marker on it. So a counter the proposer
+    had already looked at came back as new -- a different key, unseen again,
+    the dot on the bell relit -- every time they read a message on it.
+    """
+    proposer, recipient = pair
+    login(proposer)
+    proposal_id = _propose(client, recipient).get_json()["proposal"]["id"]
+    client.post("/logout")
+
+    login(recipient)
+    client.patch(f"/api/proposals/{proposal_id}", json={"message": "Less."})
+    client.post(f"/api/proposals/{proposal_id}/messages",
+                json={"body": "Does that work?"})
+    client.post("/logout")
+
+    login(proposer)
+    # Opening the bell marks everything seen.
+    seen = client.post("/api/notifications/read").get_json()["notifications"]
+    counter = next(n for n in seen if n["kind"] == "proposal_countered")
+
+    # Reading the thread writes the proposer's read marker onto the
+    # partnership row, which is exactly the touch that used to re-date it.
+    # The suite runs inside one transaction and Postgres's now() is fixed
+    # for a transaction, so updated_at cannot move here on its own; it is
+    # moved by hand to what a later request would have written.
+    client.get(f"/api/proposals/{proposal_id}/messages")
+    row = session.get(Partnership, proposal_id)
+    row.updated_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    session.commit()
+
+    after = client.get("/api/notifications").get_json()
+    again = next(n for n in after["notifications"]
+                 if n["kind"] == "proposal_countered")
+    assert again["key"] == counter["key"]
+    assert again["at"] == counter["at"]
+    assert again["seen"] is True
+    assert after["unseen"] == 0
