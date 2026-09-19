@@ -282,3 +282,78 @@ def test_an_informational_entry_can_be_dismissed_and_stays_gone(
 
     assert client.post("/api/notifications/dismiss",
                        json={"key": "nonsense"}).status_code == 400
+
+
+# --- The poll ----------------------------------------------------------------
+# The nav asks /api/me every minute per visible tab. Nearly every ask finds
+# nothing changed, and used to pay for the full notification build anyway.
+
+def _me(client, etag=None):
+    headers = {"If-None-Match": etag} if etag else {}
+    return client.get("/api/me", headers=headers)
+
+
+def test_an_unchanged_poll_is_a_304(client, login, make_org):
+    login(make_org())
+    first = _me(client)
+    assert first.status_code == 200
+    etag = first.headers["ETag"]
+    assert etag.startswith('W/')
+
+    again = _me(client, etag)
+    assert again.status_code == 304
+    assert again.get_data() == b""
+    assert again.headers["ETag"] == etag
+
+
+def test_the_poll_notices_a_proposal_arriving(client, login, make_org):
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    login(me)
+    etag = _me(client).headers["ETag"]
+    client.post("/logout")
+
+    login(them)
+    sent = client.post("/api/proposals", json={
+        "recipient_id": me.id,
+        "proposer_gives": ["web_development"],
+        "recipient_gives": ["mentors"],
+    })
+    assert sent.status_code == 201
+    client.post("/logout")
+
+    login(me)
+    changed = _me(client, etag)
+    assert changed.status_code == 200
+    assert changed.get_json()["pending_proposals"] == 1
+    assert changed.headers["ETag"] != etag
+
+
+def test_the_poll_notices_the_panel_being_opened(client, login, make_org, session):
+    """Opening the bell marks things seen, which changes `unseen` and so
+    must change the tag -- even though no partnership row moved."""
+    from models import Partnership
+    me = make_org(offers=["mentors"], needs=["web_development"])
+    them = make_org(offers=["web_development"], needs=["mentors"])
+    session.add(Partnership(
+        proposer_id=me.id, recipient_id=them.id, status=Partnership.DECLINED,
+        proposer_gives=["mentors"], recipient_gives=["web_development"],
+        proposer_name=me.name, recipient_name=them.name,
+        responded_at=datetime.now(timezone.utc)))
+    session.commit()
+    login(me)
+    before = _me(client)
+    assert before.get_json()["unseen"] >= 1
+    etag = before.headers["ETag"]
+
+    client.post("/api/notifications/read")
+
+    after = _me(client, etag)
+    assert after.status_code == 200
+    assert after.get_json()["unseen"] == 0
+
+    # And /api/notifications carries the same tag as /api/me for the same
+    # state, so a page holding one can ask the other with it.
+    listed = client.get("/api/notifications",
+                        headers={"If-None-Match": after.headers["ETag"]})
+    assert listed.status_code == 304

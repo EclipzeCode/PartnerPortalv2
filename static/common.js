@@ -70,7 +70,7 @@ async function rawRequest(path, opts) {
     } catch {
         // Body already consumed or the connection dropped mid-read.
     }
-    return { status: res.status, ok: res.ok, text };
+    return { status: res.status, ok: res.ok, text, etag: res.headers.get('ETag') };
 }
 
 // GET /api/me, shared for the life of the page.
@@ -88,6 +88,14 @@ async function rawRequest(path, opts) {
 // memo dies with the document, so a session that ends elsewhere is still
 // noticed on the next navigation.
 let meRequest = null;
+
+// The last full /api/me answer and the ETag the server put on it. A poll
+// sends the tag back as If-None-Match, and when nothing behind the answer
+// has moved -- which is nearly every poll -- the server says 304 and skips
+// building it. The caller then gets the answer it already had, so nothing
+// downstream has to know a poll can come back empty.
+let meEtag = null;
+let meLastData = null;
 
 // Callers that need the current answer rather than the page's first one pass
 // `fresh: true` to api(), which drops the memo and replaces it in one step --
@@ -140,6 +148,11 @@ window.api = async function api(path, options = {}) {
     const shared = path === '/api/me' && method === 'GET' && !opts.body && !opts.fresh;
     if (path === '/api/me' && opts.fresh) meRequest = null;
 
+    const isMe = path === '/api/me' && method === 'GET' && !opts.body;
+    if (isMe && meEtag && meLastData) {
+        opts.headers = { ...(opts.headers || {}), 'If-None-Match': meEtag };
+    }
+
     let result;
     if (shared) {
         if (!meRequest) meRequest = rawRequest(path, opts);
@@ -157,12 +170,29 @@ window.api = async function api(path, options = {}) {
         }
     }
 
+    // Nothing has changed since the answer this page already holds.
+    if (isMe && result.status === 304 && meLastData) {
+        return meLastData;
+    }
+
     let data = null;
     try {
         data = result.text ? JSON.parse(result.text) : null;
     } catch {
         // Non-JSON response (a proxy error page, say). Leave data null and let
         // the status drive the error message.
+    }
+
+    if (isMe) {
+        // Remembered only for a real answer. A 401 clears both, so a
+        // sign-out is not followed by a poll claiming the old session.
+        if (result.ok && data) {
+            meEtag = result.etag || null;
+            meLastData = data;
+        } else {
+            meEtag = null;
+            meLastData = null;
+        }
     }
 
     // Applied per caller, not once on the shared response: updateNavForSession

@@ -4141,9 +4141,17 @@ def get_me(org, db):
     organization and nothing else. One source, so the badge, the panel's
     header and these fields cannot disagree.
     """
+    # Answered from the cheap watermark when the caller already holds this
+    # answer -- see _activity_etag. The nav's minute-by-minute poll is
+    # almost always that caller, and it now costs the session lookup and
+    # one statement rather than the whole notification pass.
+    etag = _activity_etag(db, org)
+    if _unchanged_since(etag):
+        return _not_modified(etag)
+
     _, counts = _notifications_for(db, org)
 
-    return jsonify({
+    response = jsonify({
         "organization": org.private_dict(),
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
         # Pending proposals whose answer is this organization's: the ones
@@ -4165,6 +4173,8 @@ def get_me(org, db):
         "actionable": counts["actionable"],
         "unseen": counts["unseen"],
     })
+    response.set_etag(etag, weak=True)
+    return response
 
 
 
@@ -6782,11 +6792,68 @@ def _notifications_for(db, org):
     return keep, counts
 
 
+# What the notification list is a function of, in one statement.
+#
+# The nav asks /api/me once a minute per visible tab, and almost every one
+# of those asks finds nothing changed -- yet each ran the full notification
+# pass: three queries over the organization's partnerships, messages and
+# meetings, then the Python that sorts and windows them. This is the cheap
+# question to ask first: has anything that pass reads moved?
+#
+# Every input it has is covered. A partnership changing state, being
+# countered, or having a read marker stamped bumps its updated_at. A new
+# message -- including the entry written for every meeting step, which is
+# how meetings reach the list -- is a higher message id. What the reader
+# has seen or dismissed is on their own row, which the session lookup has
+# already loaded. And the sixty-day window is measured in days, so today's
+# date is in the key too.
+_ACTIVITY_WATERMARK = text("""
+SELECT (SELECT max(updated_at) FROM partnerships
+         WHERE proposer_id = :org_id OR recipient_id = :org_id) AS moved,
+       (SELECT max(m.id) FROM messages m
+          JOIN partnerships p ON p.id = m.partnership_id
+         WHERE p.proposer_id = :org_id OR p.recipient_id = :org_id) AS said
+""")
+
+
+def _activity_etag(db, org):
+    """An ETag for anything derived from this organization's notifications.
+
+    Weak, deliberately: two payloads with the same tag are the same answer,
+    which is the claim being made, not that they are byte-identical.
+    """
+    moved, said = db.execute(_ACTIVITY_WATERMARK, {"org_id": org.id}).one()
+    basis = "|".join(str(part) for part in (
+        org.id,
+        org.updated_at.isoformat() if org.updated_at else "",
+        org.notifications_seen_at.isoformat() if org.notifications_seen_at else "",
+        sorted(org.dismissed_notifications or []),
+        moved.isoformat() if moved else "",
+        said,
+        datetime.now(timezone.utc).date().isoformat(),
+    ))
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:32]
+
+
+def _unchanged_since(etag):
+    """Whether the caller already holds the answer `etag` names."""
+    return request.if_none_match.contains_weak(etag)
+
+
+def _not_modified(etag):
+    response = app.response_class(status=304, mimetype="application/json")
+    response.set_etag(etag, weak=True)
+    return response
+
+
 @app.route("/api/notifications", methods=["GET"])
 @login_required
 def list_notifications(org, db):
+    etag = _activity_etag(db, org)
+    if _unchanged_since(etag):
+        return _not_modified(etag)
     items, counts = _notifications_for(db, org)
-    return jsonify({
+    response = jsonify({
         "notifications": items,
         # What the nav dot reflects: things actually waiting on this
         # organization, as opposed to things it may simply not have seen yet.
@@ -6797,6 +6864,8 @@ def list_notifications(org, db):
         # cleared the other.
         **counts,
     })
+    response.set_etag(etag, weak=True)
+    return response
 
 
 @app.route("/api/notifications/read", methods=["POST"])
