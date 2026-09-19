@@ -496,3 +496,16 @@ def test_an_unknown_stylesheet_is_a_404(client):
     """The route interpolates into a path, so it is held to the same frozen
     allowlist the pages are."""
     assert client.get("/nope.css").status_code == 404
+
+
+def test_the_public_categories_response_never_sets_a_cookie(client):
+    """/api/categories is served `public, max-age=3600`. A Set-Cookie on a
+    response a shared cache may keep would hand one visitor's CSRF token to
+    the next, so the token cookie is never attached to it -- even when the
+    session holds one the browser has not been sent yet."""
+    client.get("/")   # mints a session token
+    client.delete_cookie("pp_csrf")
+    response = client.get("/api/categories")
+    assert response.status_code == 200
+    assert "public" in response.headers["Cache-Control"]
+    assert "Set-Cookie" not in response.headers

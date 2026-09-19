@@ -400,3 +400,31 @@ def test_moving_an_occurrence_into_view_from_outside_the_window(
     landed = event.occurrences(horizon, since=floor)
     assert date.today() in [o.date for o in landed]
     assert old in [o.occurs_on for o in landed]
+
+
+def test_moving_the_start_drops_exceptions_the_rule_can_no_longer_reach(
+        weekly, session):
+    """A weekly series that moves from Monday to Tuesday never lands on a
+    Monday again. An exception keyed to one became a row nothing rendered
+    and which would have silently claimed that date had the series ever
+    moved back. Unlike a shortened end date (see the test above), there is
+    nothing to wait for, so it goes with the edit."""
+    client, event, start = weekly
+    week_two = start + timedelta(weeks=1)
+    client.patch(f"/api/events/{event['id']}", json={
+        "scope": "occurrence", "occurrence": week_two.strftime("%Y-%m-%d"),
+        "time": "16:00",
+    })
+    assert session.query(EventException).filter(
+        EventException.event_id == event["id"]).count() == 1
+
+    response = client.patch(f"/api/events/{event['id']}", json={
+        "date": (start + timedelta(days=1)).strftime("%Y-%m-%d"),
+    })
+    assert response.status_code == 200
+    assert session.query(EventException).filter(
+        EventException.event_id == event["id"]).count() == 0
+    # Every occurrence now follows the series, on Tuesdays.
+    rows = _occurrences(client)
+    assert {r["time"] for r in rows} == {"14:00"}
+    assert all(not r["moved"] for r in rows)

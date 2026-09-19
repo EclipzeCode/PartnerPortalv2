@@ -319,13 +319,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : 'Search partners...';
         }
 
+        // restorePage is the ?page= the URL arrived with (see readUrl). Each
+        // view consumes it once; a later view change starts at page one.
         currentPage = 1;
         if (mode === 'browse') {
-            browseState.page = restorePage || 1;   // see readUrl
+            browseState.page = restorePage || 1;
             restorePage = 0;
             await loadBrowse();
             return;
         }
+        currentPage = restorePage || 1;
+        restorePage = 0;
         // Re-fetched on every switch back in, not just the first: scores are
         // computed against the current profile, and the shortlist is where a
         // stale one would be least obvious.
@@ -1959,6 +1963,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (viewMode === 'saved') {
         await setViewMode('saved');
     } else {
+        // Same consumption of ?page= the other two views get through
+        // setViewMode; render() clamps it if the list turns out shorter.
+        currentPage = restorePage || 1;
+        restorePage = 0;
         await loadMatches();
     }
     if (arrival.org) await openOrg(arrival.org, { propose: arrival.propose });

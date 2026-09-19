@@ -658,10 +658,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? 'Suggest a different time' : 'Propose a meeting';
         meetingSubmit.textContent = existing ? 'Suggest this time' : 'Propose';
         const zone = localZone();
+        // What actually happens: the time is stored with this zone and shown
+        // to both sides as entered, with the zone named beside it when it is
+        // not the reader's own. It is not converted, so the note must not
+        // say it is.
         document.getElementById('meetingZoneNote').textContent = zone
-            ? `Times are in ${zone}. ${
-                openThreadId !== null
-                    ? 'Your partner sees them in theirs.' : ''}`
+            ? `Times are in ${zone}. Your partner sees the same time, `
+              + 'with the zone named.'
             : '';
         syncMeetingAllDay();
         meetingForm.hidden = false;
@@ -1578,8 +1581,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (act === 'withdraw') {
             respondTerms.innerHTML =
                 `<p class="respond-note">This takes the proposal back before ` +
-                `${esc(proposal.counterpart.name)} has responded. They will no ` +
-                `longer see it, and nothing is sent to them. You can propose ` +
+                `${esc(proposal.counterpart.name)} has responded. It moves to ` +
+                `their closed list and they are not emailed. You can propose ` +
                 `again later.</p>`;
         } else {
             respondTerms.innerHTML =

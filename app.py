@@ -29,7 +29,7 @@ from flask import (
 
 from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.orm import joinedload
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
@@ -45,7 +45,7 @@ from units import (
     default_unit_for,
 )
 from matching import (
-    MATCH_LIMIT, find_matches, find_matches_with_examples, match_overview,
+    MATCH_LIMIT, find_matches_with_examples, match_overview,
     rank_directory, score_pair,
 )
 from moderation import screen_name
@@ -2169,11 +2169,10 @@ def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     # same-origin, not the browser default: the verification, password reset
-    # and email confirmation links all carry their token in the query string,
-    # and those pages load a stylesheet from Google and one from unpkg. The
-    # default policy trims the path for cross-origin requests, but saying so
-    # here means the tokens cannot reach a third party even if that default
-    # changes or a future page links out.
+    # and email confirmation links all carry their token in the query string.
+    # Every asset is self-hosted now, so nothing on those pages makes a
+    # cross-origin request today -- but saying so here means the tokens
+    # cannot reach a third party if a future page links out.
     response.headers.setdefault("Referrer-Policy", "same-origin")
     # None of these are used, and a page that never asks for a camera should
     # not be able to start.
@@ -2338,6 +2337,13 @@ def send_csrf_cookie(response):
         # Never minted on an API response. A caller that has no token is not
         # given one for free on the request that was about to use it; it is
         # told to reload, and the page load mints it.
+        #
+        # And never attached to a response marked public. /api/categories is
+        # served `public, max-age=3600` (see get_categories); a Set-Cookie on
+        # a response a shared cache may keep is one visitor's token handed
+        # to the next. The page that loaded it already carries the cookie.
+        if request.path in PUBLIC_API_PATHS:
+            return response
         token = session.get(CSRF_SESSION_KEY)
     else:
         return response
@@ -2665,9 +2671,9 @@ def get_categories():
 # the static route claims /api/contact for GET, the failure arrived as an
 # HTML 405 that common.js could not even parse into a message.
 #
-# Delivered by email rather than stored: there is no inbox in this schema and
-# no admin view to read one from, so a table would only move the messages
-# somewhere nobody looks. CONTACT_EMAIL is where they go.
+# Stored first, then delivered by email to CONTACT_EMAIL. The row is what
+# survives the provider being misconfigured; the admin panel's contact queue
+# (see _admin_sections) is where a person reads it.
 MAX_CONTACT_MESSAGE = 4000
 
 
@@ -7281,6 +7287,22 @@ def _update_one_occurrence(db, event, occurs_on, data):
     })
 
 
+def _on_rule(event, when):
+    """Whether `when` is a date `event`'s rule produces, its end date aside.
+
+    Event.lands_on with repeat_until taken out of the question: the shape of
+    the series (its start and its step) rather than how long it runs.
+    """
+    if not event.repeat:
+        return when == event.date
+    if when < event.date:
+        return False
+    if event.repeat in ("weekly", "biweekly"):
+        step = 7 if event.repeat == "weekly" else 14
+        return (when - event.date).days % step == 0
+    return when.day == event.date.day
+
+
 @app.route("/api/events/<int:event_id>", methods=["PATCH"])
 @login_required
 def update_event(org, db, event_id):
@@ -7442,6 +7464,21 @@ def update_event(org, db, event_id):
         # half-apply.
         db.rollback()
         return jsonify({"error": "Please provide " + ", ".join(problems) + "."}), 400
+
+    # An exception is keyed by the date the series lands on (see
+    # EventException.occurs_on). Moving the start, changing the rule or
+    # dropping the repeat can leave one keyed to a date the series can no
+    # longer produce -- a row nothing renders, and which would silently claim
+    # that date if the series ever moved back onto it. Those go with the edit.
+    #
+    # Only those. An exception past a *shortened* repeat_until is kept on
+    # purpose: extending the series again brings it back, and
+    # test_event_exceptions pins that. The test here is the rule alone,
+    # without the end date.
+    for exception in list(event.exceptions):
+        if not _on_rule(event, exception.occurs_on):
+            event.exceptions.remove(exception)
+            db.delete(exception)
 
     db.commit()
     return jsonify({"message": "Meeting updated", "event": event.to_dict()})

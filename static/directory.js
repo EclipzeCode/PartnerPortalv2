@@ -107,9 +107,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // The search term rides in the address bar so a filtered directory can be
     // linked to and survives a reload. replaceState rather than pushState:
     // typing a query is not six entries in the back button.
+    //
+    // The page rides along too, so opening a profile from page 2 and pressing
+    // Back lands on page 2 rather than on the first page again. Page one is
+    // the default and is left out.
     function syncUrl() {
         const params = buildParams();
-        params.delete('page');
+        if (params.get('page') === '1') params.delete('page');
         // The default sort is what the page does anyway, so naming it in the
         // address bar only makes a shared link look like it carries a
         // decision somebody made.
@@ -127,6 +131,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         needsSelect.value = params.get('needs') || '';
         sortSelect.value = params.get('sort') === 'newest' ? 'newest' : 'name';
         remoteBox.checked = params.get('remote') === '1';
+        const page = parseInt(params.get('page'), 10);
+        state.page = page > 1 ? page : 1;
     }
 
     // --- Rendering --------------------------------------------------------
@@ -273,6 +279,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         paintCount();
         paintPager();
+        // After the load, not before: the server clamps a stale page number
+        // to the last page with rows on it, and that is what the URL should
+        // say.
+        syncUrl();
 
         if (scroll) {
             grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -336,7 +346,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('popstate', () => {
         readUrl();
         paintFilterToggle();
-        state.page = 1;
         load();
     });
 

@@ -21,7 +21,6 @@ whoever ran it; getpass asks for it on the tty and echoes nothing.
 import argparse
 import getpass
 import sys
-from datetime import datetime, timezone
 
 import bcrypt
 
@@ -79,7 +78,7 @@ def create_admin(email, name):
                 password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
         ))
         db.commit()
-        print(f"Created. Sign in at /admin.html")
+        print("Created. Sign in at /admin.html")
         return 0
     finally:
         db.close()

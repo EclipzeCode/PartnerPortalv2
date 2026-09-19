@@ -701,11 +701,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     /** Which proposals belong to a stage, by the same test the counts use. */
     function proposalsIn(step) {
         const all = proposals || [];
+        // awaiting_you, not direction: the server's awaiting_you / sent_pending
+        // counts split pending proposals by whose turn it is, and a proposal
+        // of yours that came back countered is waiting on you. Splitting by
+        // direction here put it in the other stage from the one the donut
+        // counted it in.
         if (step === 1) {
-            return all.filter((p) => p.direction === 'outgoing' && p.status === 'pending');
+            return all.filter((p) => p.status === 'pending' && !p.awaiting_you);
         }
         if (step === 2) {
-            return all.filter((p) => p.direction === 'incoming' && p.status === 'pending');
+            return all.filter((p) => p.status === 'pending' && p.awaiting_you);
         }
         if (step === 3) return all.filter((p) => p.status === 'accepted');
         return all.filter((p) => p.status === 'completed');
