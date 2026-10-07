@@ -144,6 +144,17 @@ body.home .hero-title em {
     color: var(--h-give);
 }
 
+/* One line under the headline saying who this is for and what it does. The
+   headline alone ("find an organization that needs what yours already has")
+   does not say it is organizations trading with each other. */
+body.home .hero-sub {
+    max-width: 34rem;
+    margin: -0.5rem 0 1.75rem;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--h-dim);
+}
+
 body.home .hero-buttons {
     display: flex;
     flex-wrap: wrap;
@@ -972,6 +983,7 @@ body.home .bridge-foot {
 }
 
 body.home .hero-badge,
+body.home .hero-sub,
 body.home .hero-buttons,
 body.home .hero-stats,
 body.home .hero-visual {
@@ -983,6 +995,7 @@ body.home .hero-badge { animation-delay: 0.05s; }
    the two are the point of the screen, and staggering them by half a second
    reads as the page still loading. */
 body.home .hero-visual { animation-delay: 0.34s; }
+body.home .hero-sub { animation-delay: 0.44s; }
 body.home .hero-buttons { animation-delay: 0.52s; }
 body.home .hero-stats { animation-delay: 0.62s; }
 
@@ -1124,6 +1137,7 @@ body.home .hero-lede.pending .lede-text {
     /* The hero's arrival, the word stagger and the lede's reveal. All three
        are decorative, and all three land where they were going. */
     body.home .hero-badge,
+    body.home .hero-sub,
     body.home .hero-buttons,
     body.home .hero-stats,
     body.home .hero-visual,
