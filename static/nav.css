@@ -46,6 +46,16 @@
     white-space: nowrap;
 }
 
+/* The wordmark is one SVG -- the mark and the lettering as outlines, so it
+   does not wait on a webfont or reflow when one arrives. currentColor
+   throughout, so it inherits the theme the way the text logo did. Sized by
+   height; the width follows the viewBox. */
+.logo img {
+    display: block;
+    height: 1.5em;
+    width: auto;
+}
+
 .navbar {
     display: flex;
     align-items: center;
