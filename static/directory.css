@@ -128,13 +128,17 @@
     border: 1px solid var(--h-rule);
     border-radius: 5px;
     padding: .5rem .7rem;
+    /* A fixed share of the row rather than the width of the current choice,
+       so picking a longer option does not shove the rest along. */
+    flex: 1 1 9rem;
     max-width: 14rem;
 }
 
 /* This page is the one softened surface in the design, so its controls keep
    a corner. Qualified with body.ink to outrank the site-wide select and
    checkbox rules in ink.css, which draw everything else square. */
-body.ink .dir-filters select {
+body.ink .dir-filters select,
+body.ink .dir-filters select::picker(select) {
     border-radius: 5px;
 }
 
@@ -192,18 +196,6 @@ body.ink .dir-remote input[type="checkbox"] {
 
 .dir-card:nth-child(3n) {
     border-right: none;
-}
-
-.dir-demo {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: .7rem;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--h-take);
-    margin: 0;
 }
 
 .dir-name {
@@ -420,7 +412,7 @@ body.ink .dir-remote input[type="checkbox"] {
     background: var(--h-give);
     color: var(--h-surface);
     font-family: var(--h-mono);
-    font-size: .68rem;
+    font-size: 0.72rem;
     line-height: 1;
 }
 

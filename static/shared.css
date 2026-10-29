@@ -40,44 +40,6 @@
     color: #ffffff;
 }
 
-.footer-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    gap: 2.5rem;
-    max-width: 75rem;
-    margin: 0 auto 2.5rem;
-}
-
-.footer-brand-name {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #ffffff;
-    margin-bottom: 0.75rem;
-    display: block;
-}
-
-.footer-tagline {
-    max-width: 21.25rem;
-    color: #9aa0bd;
-}
-
-.footer-col h4 {
-    color: #ffffff;
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-}
-
-.footer-col ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.footer-col li {
-    margin-bottom: 0.6rem;
-}
-
 .footer-bottom {
     max-width: 75rem;
     margin: 0 auto;
@@ -92,9 +54,8 @@
     font-size: 0.875rem;
 }
 
-/* Condensed footer for auth pages. The full three-column footer is 330px tall,
-   which forced ~250px of scrolling on the login page and dragged the login card
-   up behind the fixed header. This variant keeps the page a single screen. */
+/* One line: the copyright and three links. The header already carries the
+   account links, so the footer does not repeat them. */
 .site-footer.compact {
     padding: 1.25rem 8%;
 }
@@ -137,15 +98,6 @@ textarea:focus-visible {
 
     .site-footer {
         padding: 2.5rem 6% 1.5rem;
-    }
-
-    .footer-grid {
-        grid-template-columns: 1fr;
-        gap: 1.75rem;
-    }
-
-    .footer-tagline {
-        max-width: 100%;
     }
 
     .footer-bottom {

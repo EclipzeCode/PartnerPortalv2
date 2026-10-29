@@ -60,13 +60,6 @@ Create the schema:
 alembic upgrade head
 ```
 
-Optionally load a dozen fictional organizations, built to demonstrate two-way
-matches:
-
-```bash
-python seed.py
-```
-
 Then start the server and open <http://127.0.0.1:5001>:
 
 ```bash
@@ -133,7 +126,6 @@ there rather than on someone's first deploy.
 | `moderation.py` | Blocking inappropriate organization names |
 | `notifications.py` | Transactional email, and the dry-run fallback without a key |
 | `db.py` | Engine and session setup |
-| `seed.py` | Demo organizations |
 | `migrations/` | Alembic migrations — the schema's source of truth |
 | `static/` | The entire frontend — HTML, CSS, JS, and the link-preview card |
 | `tests/` | pytest suite — see below |

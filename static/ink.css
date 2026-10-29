@@ -268,6 +268,78 @@ body.ink select option {
     color: var(--h-ink);
 }
 
+/* Where the browser lets the open list be styled too (customizable select),
+   it is drawn as one of ours: a hairline panel, roomy rows, the accent on
+   the chosen one. Elsewhere the native list above still applies. The
+   chevron stays the background image, so the built-in picker icon goes.
+   !important because four page stylesheets set appearance: none on their
+   own selects at higher specificity, and this has to win over every one. */
+@supports (appearance: base-select) {
+    body.ink select,
+    body.ink select::picker(select) {
+        appearance: base-select !important;
+    }
+
+    body.ink select::picker-icon {
+        display: none;
+    }
+
+    body.ink select::picker(select) {
+        margin-top: 4px;
+        padding: 0.3rem;
+        min-width: anchor-size(width);
+        max-height: min(22rem, 60vh);
+        overflow-y: auto;
+        background: var(--h-surface);
+        color: var(--h-ink);
+        border: 1px solid var(--h-edge);
+        border-radius: 0;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    }
+
+    body.ink select option {
+        padding: 0.55rem 0.75rem;
+        font-family: var(--h-sans);
+        font-size: 0.9rem;
+        letter-spacing: normal;
+        text-transform: none;
+        line-height: 1.35;
+        cursor: pointer;
+    }
+
+    body.ink select option:hover,
+    body.ink select option:focus-visible {
+        background: var(--h-paper);
+        outline: none;
+    }
+
+    body.ink select option:checked {
+        color: var(--h-give);
+        font-weight: 500;
+    }
+
+    body.ink select option::checkmark {
+        display: none;
+    }
+
+    /* The group heading is drawn from the optgroup's own font, so it is
+       set here and the options under it put theirs back. */
+    body.ink select optgroup {
+        padding: 0.5rem 0 0 0.75rem;
+        font-family: var(--h-mono);
+        font-size: 0.7rem;
+        font-weight: normal;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--h-dim);
+    }
+
+    body.ink select optgroup option {
+        margin-left: -0.75rem;
+        color: var(--h-ink);
+    }
+}
+
 /* Checkboxes and radios: the drawn box forms.css already used for one
    dialog, applied to all of them. A radio is the same box with round
    corners and a dot -- the one round thing this design allows, because a
@@ -396,7 +468,7 @@ body.ink .skeleton-dot {
 
 body.ink .eyebrow {
     font-family: var(--h-mono);
-    font-size: 0.6875rem;
+    font-size: 0.72rem;
     font-weight: 500;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -567,7 +639,7 @@ body.ink .modal-body textarea::placeholder {
 body.ink .form-group > label:not(.checkbox-label):not(.category-chip) {
     display: block;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -596,7 +668,7 @@ body.ink .form-group textarea.input-error {
 
 body.ink .field-error {
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.03em;
     color: var(--h-danger);
 }
@@ -631,7 +703,7 @@ body.ink .category-group + .category-group {
 
 body.ink .category-group h4 {
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -676,7 +748,7 @@ body.ink .picker-count {
     display: block;
     margin-top: 0.45rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -781,7 +853,7 @@ body.ink .header {
 
 .public-links a {
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--h-ink-soft);
@@ -941,7 +1013,7 @@ body.ink .account-identity .account-name {
 
 body.ink .account-identity .account-email {
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     color: var(--h-dim);
 }
 
@@ -1044,35 +1116,7 @@ body.ink .site-footer {
     background: var(--h-footer);
     color: var(--h-on-footer);
     border-top: none;
-    padding: clamp(2.5rem, 6vh, 4rem) clamp(1.25rem, 5vw, 6rem) 1.5rem;
-}
-
-body.ink .site-footer .footer-grid {
-    max-width: 78rem;
-    margin: 0 auto;
-}
-
-body.ink .footer-brand-name {
-    font-family: var(--h-serif);
-    font-weight: 400;
-    font-size: 1.5rem;
-    color: var(--h-on-footer);
-}
-
-body.ink .footer-tagline {
-    font-size: 0.87rem;
-    line-height: 1.6;
-    color: color-mix(in srgb, var(--h-on-footer) 62%, transparent);
-    max-width: 34ch;
-}
-
-body.ink .footer-col h4 {
-    font-family: var(--h-mono);
-    font-size: 0.62rem;
-    font-weight: 500;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: color-mix(in srgb, var(--h-on-footer) 52%, transparent);
+    padding: 1.5rem clamp(1.25rem, 5vw, 6rem);
 }
 
 body.ink .site-footer a {
@@ -1087,9 +1131,8 @@ body.ink .site-footer a:hover {
 body.ink .footer-bottom {
     max-width: 78rem;
     margin: 0 auto;
-    border-top: 1px solid color-mix(in srgb, var(--h-on-footer) 18%, transparent);
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.06em;
     color: color-mix(in srgb, var(--h-on-footer) 52%, transparent);
 }
@@ -1158,7 +1201,7 @@ body.ink .footer-bottom {
     gap: 0.3rem;
     margin: 0.35rem 0 0;
     font-family: var(--h-mono, ui-monospace, monospace);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     color: var(--h-danger, var(--text-danger, #b42318));
 }

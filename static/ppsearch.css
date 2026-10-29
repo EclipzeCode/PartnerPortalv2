@@ -198,7 +198,7 @@
     background: var(--h-cell);
     color: var(--h-ink-soft);
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
 }
 
@@ -224,7 +224,7 @@
 
 .browse-note {
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -237,7 +237,7 @@
 
 .browse-sort span {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -256,29 +256,6 @@
 }
 
 /* --- Example banner ------------------------------------------------------- */
-
-.example-banner {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.85rem;
-    padding: 0.9rem 0 0.9rem 1rem;
-    border-left: 3px solid var(--h-take);
-    margin-bottom: 1.5rem;
-    font-size: 0.88rem;
-    line-height: 1.55;
-    color: var(--h-ink-soft);
-}
-
-.example-banner i {
-    font-size: 1.05rem;
-    color: var(--h-take);
-    flex-shrink: 0;
-}
-
-.example-banner strong {
-    font-weight: 500;
-    color: var(--h-ink);
-}
 
 /* ------------------------------------------------------------------------- *
  * The result grid
@@ -414,7 +391,7 @@
 .partner-score small {
     margin-left: 0.1rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 400;
     letter-spacing: 0;
     color: var(--h-dim);
@@ -493,30 +470,13 @@
     background: var(--h-take);
     color: var(--h-on-take);
     font-family: var(--h-mono);
-    font-size: 0.55rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
 }
 
 .mutual-badge.hidden { display: none; }
-
-.example-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.45rem;
-    border: 1px solid var(--h-rule);
-    color: var(--h-dim);
-    font-family: var(--h-mono);
-    font-size: 0.55rem;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-
-.partner-card.is-example {
-    background: var(--h-paper);
-}
 
 .partner-card h3 {
     font-family: var(--h-sans);
@@ -552,7 +512,7 @@
    takes the mono treatment rather than being bold body text. */
 .partner-card .card-line strong {
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -588,7 +548,7 @@
 .match-reasons > strong {
     display: block;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -690,7 +650,7 @@
     justify-content: flex-end;
     background: var(--h-surface);
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     letter-spacing: 0.06em;
     color: var(--h-dim);
     pointer-events: none;
@@ -790,7 +750,7 @@
 
 #pageIndicator {
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
     color: var(--h-dim);
     min-width: 8rem;
@@ -803,7 +763,7 @@
     border: 1px solid var(--h-rule);
     border-radius: 0;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -869,7 +829,7 @@
     gap: 0.6rem;
     padding: 0.8rem 0;
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -903,7 +863,7 @@
     padding: 0.1rem 0.35rem;
     background: var(--h-ink);
     color: var(--h-paper);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     letter-spacing: 0.04em;
 }
 
@@ -996,7 +956,7 @@ body.ink .category-chip.checked {
 .detail-score small {
     margin-top: 0.25rem;
     font-family: var(--h-mono);
-    font-size: 0.55rem;
+    font-size: 0.66rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -1013,7 +973,7 @@ body.ink .category-chip.checked {
 .detail-location {
     margin-top: 0.15rem;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -1036,7 +996,7 @@ body.ink .category-chip.checked {
     gap: 0.6rem;
     padding: 0.7rem 0;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1092,7 +1052,7 @@ body.ink .category-chip.checked {
 .score-total {
     padding: 0.6rem 0 0.8rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -1135,7 +1095,7 @@ body.ink .category-chip.checked {
     align-items: center;
     gap: 0.4rem;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1186,7 +1146,7 @@ body.ink .category-chip.checked {
     content: 'match';
     margin-left: 0.45rem;
     font-family: var(--h-mono);
-    font-size: 0.52rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1214,7 +1174,7 @@ body.ink .category-chip.checked {
     align-items: center;
     gap: 0.45rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1240,7 +1200,7 @@ body.ink .category-chip.checked {
     padding: 0.28rem 0.55rem;
     border: 1px solid var(--h-rule);
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-ink-soft);
 }
@@ -1295,7 +1255,7 @@ body.ink .category-chip.checked {
 
 .detail-note-status {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
 }
 
@@ -1328,23 +1288,6 @@ body.ink .category-chip.checked {
     border-color: var(--h-take);
     color: var(--h-take);
 }
-
-.detail-example-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    flex: 1 1 100%;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: var(--h-dim);
-}
-
-.detail-example-note i {
-    color: var(--h-take);
-    flex-shrink: 0;
-}
-
-.detail-example-note.hidden { display: none; }
 
 /* ------------------------------------------------------------------------- *
  * Propose dialog
@@ -1614,7 +1557,7 @@ body.ink .category-chip.checked {
 .propose-amounts h4 {
     margin: 0.75rem 0 0.4rem;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--h-label);

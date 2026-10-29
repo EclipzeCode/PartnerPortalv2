@@ -48,17 +48,14 @@ def test_a_proposal_needs_something_from_both_sides(client, login, pair):
     assert client.get("/api/proposals").get_json()["proposals"] == []
 
 
-def test_a_proposal_cannot_be_sent_to_yourself_or_an_example(
+def test_a_proposal_cannot_be_sent_to_yourself_or_an_unfinished_profile(
         client, login, pair, make_org):
     proposer, _ = pair
-    example = make_org(needs=["grant_writing"], offers=["web_development"],
-                       is_demo=True)
     unfinished = make_org(needs=["grant_writing"], offers=["web_development"],
                           onboarding_complete=False)
     login(proposer)
 
     assert _propose(client, proposer).status_code == 400
-    assert _propose(client, example).status_code == 400
     assert _propose(client, unfinished).status_code == 404
 
 

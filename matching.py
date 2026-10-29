@@ -286,7 +286,7 @@ def _present(*conditions):
     return [c for c in conditions if c is not None]
 
 
-def match_counts(session, me, *, demo=False):
+def match_counts(session, me):
     """(total, mutual) -- how many matches there are, without building any.
 
     Two numbers the dashboard leads with, and it used to get them by pulling
@@ -336,14 +336,12 @@ def match_counts(session, me, *, demo=False):
         _not_blocked_by(me),
         or_(*_present(they_give, i_give)),
     )
-    if demo is not None:
-        stmt = stmt.where(Organization.is_demo.is_(demo))
 
     total, mutual = session.execute(stmt).one()
     return total, mutual
 
 
-def _mutual_candidates(session, me, *, demo=False):
+def _mutual_candidates(session, me):
     """Only the two-way matches, as rows cheap enough to rank.
 
     The narrow half of _candidates. Ranking is mutual-first before it is
@@ -369,7 +367,6 @@ def _mutual_candidates(session, me, *, demo=False):
         Organization.location,
         Organization.remote_friendly,
         Organization.organization_type,
-        Organization.is_demo,
     ).where(
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
@@ -378,15 +375,13 @@ def _mutual_candidates(session, me, *, demo=False):
         they_give,
         i_give,
     )
-    if demo is not None:
-        stmt = stmt.where(Organization.is_demo.is_(demo))
     return session.execute(stmt).all()
 
 
-def _candidates(session, me, *, demo=False):
+def _candidates(session, me):
     """Every organization that could match `me`, as rows cheap enough to rank.
 
-    Nine columns, not the whole row. Both callers below used to
+    Eight columns, not the whole row. Both callers below used to
     `select(Organization)` -- every description, every note, every URL, every
     token column on every organization that overlaps the caller -- in order to
     compute a number and, in match_overview's case, keep five of them. On the
@@ -398,18 +393,8 @@ def _candidates(session, me, *, demo=False):
     unchanged: both only ever touch attributes, and a Row named by column has
     them. Nothing about the scoring had to learn about this.
 
-    The WHERE lived twice, once in each caller, and had already drifted --
-    find_matches filtered `is_demo.is_(demo_only)` and match_overview
-    hardcoded False. Same query now, with the one real difference as an
-    argument.
-
-    `demo` is tri-state: False for real organizations, True for the seeded
-    examples, and None for both in one pass. The last exists because the
-    matches page needs real matches and, only when there are none, the
-    examples -- and asking for those separately meant scanning and ranking
-    the whole overlapping directory twice for exactly the accounts that have
-    no matches yet, which is every account on its first visit. is_demo comes
-    back as a column so the caller can tell the two apart afterward.
+    The WHERE lived twice, once in each caller, and had already drifted.
+    Same query now.
     """
     from models import Organization
 
@@ -422,7 +407,6 @@ def _candidates(session, me, *, demo=False):
         Organization.location,
         Organization.remote_friendly,
         Organization.organization_type,
-        Organization.is_demo,
     ).where(
         Organization.id != me.id,
         Organization.onboarding_complete.is_(True),
@@ -432,8 +416,6 @@ def _candidates(session, me, *, demo=False):
         Organization.hidden_at.is_(None),
         _not_blocked_by(me),
     )
-    if demo is not None:
-        stmt = stmt.where(Organization.is_demo.is_(demo))
 
     directions = _directions(me)
     if directions is None:
@@ -445,7 +427,7 @@ def _candidates(session, me, *, demo=False):
 def _entry(me, them):
     """One organization as a match list reads it: card fields, score, reasons.
 
-    `them` is a candidate row, not an Organization. The nine columns
+    `them` is a candidate row, not an Organization. The eight columns
     _candidates selects are every one this reads and every one score_pair
     reads, so the second query that used to fetch the full rows for the
     survivors -- description, notes, links, preferences, for up to two
@@ -471,7 +453,6 @@ def _entry(me, them):
         "name": them.name,
         "organization_type": them.organization_type,
         "location": them.location,
-        "is_demo": them.is_demo,
         "offers": list(them.offers or []),
         "offers_labels": labels_for(them.offers),
         "needs_labels": labels_for(them.needs),
@@ -540,8 +521,7 @@ def _rank(me, candidates, *, mutual_only=False):
 MATCH_LIMIT = 200
 
 
-def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False,
-                 demo_only=False):
+def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False):
     """Rank other organizations as partners for `me`.
 
     Returns (matches, total, mutual_total). The last two count everything
@@ -553,53 +533,14 @@ def find_matches(session, me, limit=MATCH_LIMIT, mutual_only=False,
     considered -- everything else scores nothing, so pulling it out of the
     database would be wasted work.
 
-    Seeded example organizations are excluded by default: a real signup should
-    never be paired with something fictional. `demo_only=True` returns exactly
-    those instead, for the clearly-labeled "example matches" view shown when
-    the real directory is still small.
-
-    Ranked on nine narrow columns, then the survivors are fetched in full. The cap
+    Ranked on eight narrow columns, then the survivors are fetched in full. The cap
     is what makes that worth doing: at most `limit` organizations are ever
     hydrated, however many overlap.
     """
-    ranked, mutual_total = _rank(me, _candidates(session, me, demo=demo_only),
+    ranked, mutual_total = _rank(me, _candidates(session, me),
                                  mutual_only=mutual_only)
     entries = [_entry(me, r[3]) for r in ranked[:limit]]
     return entries, len(ranked), mutual_total
-
-
-def find_matches_with_examples(session, me, *, mutual_only=False,
-                               limit=MATCH_LIMIT):
-    """Real matches, plus the seeded examples when there are none -- one scan.
-
-    What the matches page actually asks for, and it used to ask by calling
-    find_matches twice: once for real organizations and, if that came back
-    empty, again for the demo ones. Both calls run the same overlap query and
-    rank everything it returns, so the account with nothing to show -- a new
-    signup, which is exactly who the examples are for -- paid for the whole
-    thing twice to be told so.
-
-    One pass over both cohorts, split by is_demo afterward. The examples are
-    only ranked out into entries when the real list is empty, so the common
-    case does not build prose for organizations nobody will see.
-
-    Returns (matches, total, mutual_total, examples), where the first three
-    describe the real matches exactly as find_matches does and `examples` is
-    empty whenever there is anything real to show.
-    """
-    rows = _candidates(session, me, demo=None)
-    real = [r for r in rows if not r.is_demo]
-    demo = [r for r in rows if r.is_demo]
-
-    ranked, mutual_total = _rank(me, real, mutual_only=mutual_only)
-    matches = [_entry(me, r[3]) for r in ranked[:limit]]
-
-    examples = []
-    if not matches:
-        demo_ranked, _ = _rank(me, demo, mutual_only=mutual_only)
-        examples = [_entry(me, r[3]) for r in demo_ranked[:limit]]
-
-    return matches, len(ranked), mutual_total, examples
 
 
 def rank_directory(session, me, rows, *, offset=0, limit=None):

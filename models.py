@@ -38,9 +38,9 @@ class Organization(Base):
     # --- Account -----------------------------------------------------------
     # Stored lower-cased so login is not case-sensitive.
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    # Nullable on purpose: a profile can exist before anyone owns it. That
-    # covers seeded demo orgs and lets you pre-create a profile for an org you
-    # are recruiting, which they can claim later.
+    # Nullable on purpose: a profile can exist before anyone owns it, which
+    # lets you pre-create a profile for an org you are recruiting, which they
+    # can claim later.
     password_hash: Mapped[str | None] = mapped_column(String(255))
 
     # --- Invitations -------------------------------------------------------
@@ -377,12 +377,6 @@ class Organization(Base):
     # this is a sentence for them to read rather than a note to self.
     hidden_reason: Mapped[str | None] = mapped_column(Text)
 
-    # Seeded example organizations. Kept out of real orgs' match results so a
-    # new signup is never paired with something fictional, but still shown --
-    # clearly labeled -- as example matches while the directory is small.
-    is_demo: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -496,7 +490,6 @@ class Organization(Base):
             "partnership_goals": self.partnership_goals,
             **self._link_dict(),
             "links_public": self.links_public,
-            "is_demo": self.is_demo,
         }
         # Omitted rather than sent as null, so the absence is a fact about
         # this payload rather than a claim that the organization has no
@@ -550,7 +543,6 @@ class Organization(Base):
             "needs_note": self.needs_note,
             "offers_note": self.offers_note,
             "partnership_goals": self.partnership_goals,
-            "is_demo": self.is_demo,
         }
         if self.links_public:
             data.update(self._link_dict())
@@ -997,7 +989,6 @@ class Partnership(Base):
             "website_url": None, "instagram_url": None,
             "x_url": None, "linkedin_url": None,
             "links_public": False,
-            "is_demo": False,
         }
 
     def gives_for(self, org_id):

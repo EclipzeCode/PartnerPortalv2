@@ -61,9 +61,7 @@ body.home {
 
 /* The two display elements that are not shared: the hero's headline and the
    section headings. Everything else on the page uses ink.css's primitives. */
-body.home .feature-card,
-body.home .match-demo,
-body.home .agreement {
+body.home .match-demo {
     border-radius: 0;
 }
 
@@ -203,36 +201,6 @@ body.home .lede-text em {
     color: var(--h-give);
 }
 
-/* The three facts, ruled off like a table footer. */
-body.home .hero-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    border-top: 1px solid var(--h-edge);
-}
-
-body.home .hero-stat {
-    padding: 1.15rem 1.1rem 0 0;
-}
-
-body.home .hero-stat-number {
-    font-family: var(--h-sans);
-    font-weight: 500;
-    font-size: 1.65rem;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    color: var(--h-ink);
-    margin-bottom: 0.45rem;
-}
-
-body.home .hero-stat-label {
-    font-family: var(--h-mono);
-    font-size: 0.66rem;
-    line-height: 1.5;
-    letter-spacing: 0.04em;
-    color: var(--h-dim);
-    max-width: 20ch;
-}
-
 /* ------------------------------------------------------------------------- *
  * The match panel
  *
@@ -270,7 +238,7 @@ body.home .match-demo-head {
 
 body.home .match-flag {
     font-family: var(--h-mono);
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -314,7 +282,7 @@ body.home .org-avatar {
     background: var(--h-give);
     color: var(--h-on-give);
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.04em;
 }
@@ -335,7 +303,7 @@ body.home .org-name {
 
 body.home .org-type {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -374,7 +342,7 @@ body.home .lattice-axis {
     display: flex;
     justify-content: space-between;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
     padding-top: 0.2rem;
@@ -400,7 +368,7 @@ body.home .exchange-row {
 
 body.home .exchange-dir {
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.08em;
     text-align: center;
@@ -579,194 +547,6 @@ body.home .step-text {
 body.home .step-text strong {
     font-weight: 500;
     color: var(--h-ink);
-}
-
-/* --- What makes it different: the three cells ---------------------------- */
-/* One shared grid, hairlines collapsed into a single line between cells, so
-   the three read as a table rather than three floating cards. */
-
-body.home .feature-cards {
-    display: grid;
-    gap: 1px;
-    background: var(--h-rule);
-    border: 1px solid var(--h-edge);
-}
-
-body.home .feature-card {
-    background: var(--h-surface);
-    padding: 1.5rem 1.4rem;
-}
-
-body.home .feature-icon {
-    font-size: 1.15rem;
-    color: var(--h-give);
-    margin-bottom: 0.85rem;
-    line-height: 1;
-}
-
-body.home .feature-card:nth-child(2) .feature-icon { color: var(--h-take); }
-body.home .feature-card:nth-child(3) .feature-icon { color: var(--h-seal); }
-
-body.home .feature-card h3 {
-    font-family: var(--h-sans);
-    font-size: 1rem;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    margin-bottom: 0.5rem;
-}
-
-body.home .feature-card p {
-    font-size: 0.87rem;
-    line-height: 1.6;
-    color: var(--h-ink-soft);
-}
-
-body.home .feature-card p em {
-    font-style: italic;
-    color: var(--h-ink);
-}
-
-/* --- Why this exists: the benefit list ----------------------------------- */
-
-body.home .benefit-list {
-    margin-top: 1.75rem;
-    border-top: 1px solid var(--h-edge);
-}
-
-body.home .benefit-item {
-    display: grid;
-    grid-template-columns: 4.5rem 1fr;
-    gap: 1rem;
-    align-items: baseline;
-    padding: 0.85rem 0;
-    border-bottom: 1px solid var(--h-rule);
-}
-
-body.home .benefit-number {
-    font-family: var(--h-mono);
-    font-size: 0.65rem;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--h-take);
-}
-
-body.home .benefit-text {
-    font-size: 0.9rem;
-    line-height: 1.55;
-    color: var(--h-ink-soft);
-}
-
-/* --- The agreement -------------------------------------------------------- */
-/* The second half of the product, drawn as the thing it produces. Both sides
-   listed, what each provides, and a footer that reads like a filing stamp.
-   This is where the ledger idea is most literal, and it is the right place
-   for it: this panel is standing in for an actual document. */
-
-body.home .agreement {
-    background: var(--h-surface);
-    border: 1px solid var(--h-edge);
-}
-
-body.home .agreement-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.9rem 1.35rem;
-    border-bottom: 1px solid var(--h-edge);
-}
-
-body.home .agreement-head .k {
-    font-family: var(--h-mono);
-    font-size: 0.63rem;
-    font-weight: 500;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--h-ink);
-}
-
-body.home .agreement-head .v {
-    font-family: var(--h-mono);
-    font-size: 0.6rem;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    background: var(--h-seal);
-    color: var(--h-on-seal);
-    padding: 0.25rem 0.55rem;
-    white-space: nowrap;
-}
-
-body.home .agreement-body {
-    padding: 1.35rem;
-}
-
-body.home .agreement-side + .agreement-side {
-    border-top: 1px dashed var(--h-rule);
-    margin-top: 1.1rem;
-    padding-top: 1.1rem;
-}
-
-body.home .agreement-side .who {
-    font-family: var(--h-serif);
-    font-size: 1.35rem;
-    line-height: 1.15;
-    color: var(--h-ink);
-    margin-bottom: 0.15rem;
-}
-
-body.home .agreement-side .meta {
-    font-family: var(--h-mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--h-dim);
-    margin-bottom: 0.8rem;
-}
-
-body.home .agreement-side .provides {
-    font-family: var(--h-mono);
-    font-size: 0.58rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--h-dim);
-    margin-bottom: 0.45rem;
-}
-
-body.home .agreement-side ul {
-    list-style: none;
-}
-
-body.home .agreement-side li {
-    position: relative;
-    padding: 0.28rem 0 0.28rem 1.2rem;
-    font-size: 0.88rem;
-    color: var(--h-ink-soft);
-}
-
-body.home .agreement-side li::before {
-    content: '\2014';
-    position: absolute;
-    left: 0;
-    color: var(--h-give);
-}
-
-body.home .agreement-side + .agreement-side li::before {
-    color: var(--h-take);
-}
-
-body.home .agreement-foot {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.8rem 1.35rem;
-    border-top: 1px solid var(--h-edge);
-    font-family: var(--h-mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.06em;
-    color: var(--h-dim);
 }
 
 /* --- Closing call to action ---------------------------------------------- */
@@ -951,7 +731,7 @@ body.home .bridge-foot {
     padding-top: 0.85rem;
     border-top: 1px solid var(--h-rule);
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -985,7 +765,6 @@ body.home .bridge-foot {
 body.home .hero-badge,
 body.home .hero-sub,
 body.home .hero-buttons,
-body.home .hero-stats,
 body.home .hero-visual {
     animation: hero-rise 0.85s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
@@ -997,7 +776,6 @@ body.home .hero-badge { animation-delay: 0.05s; }
 body.home .hero-visual { animation-delay: 0.34s; }
 body.home .hero-sub { animation-delay: 0.44s; }
 body.home .hero-buttons { animation-delay: 0.52s; }
-body.home .hero-stats { animation-delay: 0.62s; }
 
 /* The headline goes word by word. pp.js wraps each word and numbers it, so
    the delay is a multiplication here rather than a rule per word; a headline
@@ -1058,12 +836,6 @@ body.home .hero-lede.pending .lede-text {
         grid-template-columns: 1fr;
     }
 
-    /* The features section puts its visual first in source order so the
-       desktop layout can alternate; on one column that has to unwind or the
-       cards arrive before the heading that introduces them. */
-    body.home .features-section .visual-content { order: 2; }
-    body.home .features-section .text-content { order: 1; }
-
     body.home .section-description,
     body.home .cta-text {
         max-width: none;
@@ -1075,19 +847,6 @@ body.home .hero-lede.pending .lede-text {
        to drag a thumb. The build is the same, over less distance. */
     body.home .bridge-track {
         height: 170vh;
-    }
-
-    body.home .hero-stats {
-        grid-template-columns: 1fr;
-    }
-
-    body.home .hero-stat {
-        padding: 0.85rem 0;
-        border-bottom: 1px solid var(--h-rule);
-    }
-
-    body.home .hero-stat-label {
-        max-width: none;
     }
 
     /* Fourteen columns of matrix on a 320px screen is a 20px cell with a
@@ -1139,7 +898,6 @@ body.home .hero-lede.pending .lede-text {
     body.home .hero-badge,
     body.home .hero-sub,
     body.home .hero-buttons,
-    body.home .hero-stats,
     body.home .hero-visual,
     body.home .hero-title .rise-word > span {
         animation: none;

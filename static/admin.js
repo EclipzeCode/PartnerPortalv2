@@ -167,7 +167,6 @@ document.addEventListener('DOMContentLoaded', async () => {
               <div class="admin-row-main">
                 <p class="admin-row-title">
                   ${esc(org.name)}
-                  ${org.is_demo ? '<span class="admin-tag">example</span>' : ''}
                 </p>
                 ${meta ? `<p class="admin-dim">${meta}</p>` : ''}
                 ${org.description
@@ -618,9 +617,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hide = e.target.closest('[data-hide]');
         if (hide) {
             pendingHideId = hide.dataset.hide;
-            // From the button rather than scraped out of the row: the title
-            // also carries the "example" tag, and the dialog was naming the
-            // organization "Coders Over Borders example".
             hideWho.textContent = hide.dataset.name;
             hideReason.value = '';
             showError(hideError, '');

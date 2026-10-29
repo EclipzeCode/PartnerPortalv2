@@ -186,7 +186,7 @@
         self ? `<a class="btn-find" href="onboarding.html">
                     <i class='bx bx-edit'></i> Edit your profile
                 </a>` : '',
-        other && !org.is_demo ? `
+        other ? `
             <button type="button" class="btn-share btn-save${viewer.shortlisted ? ' saved' : ''}"
                     id="saveBtn" aria-pressed="${viewer.shortlisted ? 'true' : 'false'}">
                 <i class='bx ${viewer.shortlisted ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
@@ -200,14 +200,6 @@
     ].join('');
 
     card.innerHTML = `
-        ${org.is_demo
-            ? `<div class="org-demo-banner">
-                   <i class='bx bx-info-circle'></i>
-                   Example organization &mdash; seeded to show how PartnerPortal
-                   works. Not a real group, and not matchable.
-               </div>`
-            : ''}
-
         <header class="org-head">
             <div class="org-avatar" aria-hidden="true">${esc(initials)}</div>
             <div class="org-headings">

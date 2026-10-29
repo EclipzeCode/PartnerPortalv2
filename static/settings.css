@@ -122,7 +122,7 @@
 
 .settings-card-header h3 {
     font-family: var(--h-mono);
-    font-size: 0.6875rem;
+    font-size: 0.72rem;
     font-weight: 500;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -342,7 +342,7 @@
 
 .setting-status {
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     line-height: 1.5;
     padding-top: 0.5rem;
@@ -375,7 +375,7 @@
 
 .settings-facts dt {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -396,7 +396,7 @@
     gap: 0.35rem;
     padding: 0.22rem 0.5rem;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -487,7 +487,7 @@
     gap: 0.6rem;
     padding: 0.85rem 0;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -606,7 +606,7 @@
 
 .pw-meter-label {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -642,7 +642,7 @@
     align-items: center;
     gap: 0.5rem;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.03em;
     color: var(--h-dim);
     transition: color 0.18s ease;

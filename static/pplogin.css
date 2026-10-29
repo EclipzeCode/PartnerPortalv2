@@ -181,7 +181,7 @@
     margin-top: 0.4rem;
     margin-bottom: 1.75rem;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.06em;
     color: var(--h-dim);
 }
@@ -197,7 +197,7 @@
     display: block;
     margin-bottom: 0.3rem;
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -231,7 +231,7 @@
 .container .field-error {
     margin-top: 0.35rem;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     line-height: 1.45;
     letter-spacing: 0.03em;
     color: var(--h-danger);
@@ -294,7 +294,7 @@
     align-self: flex-end;
     margin-bottom: 0.75rem;
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     letter-spacing: 0.06em;
     color: var(--h-dim);
     text-decoration: none;
@@ -384,7 +384,7 @@
 
 .pw-meter-label {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -415,7 +415,7 @@
     align-items: center;
     gap: 0.5rem;
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     letter-spacing: 0.03em;
     color: var(--h-dim);
     transition: color 0.18s ease;

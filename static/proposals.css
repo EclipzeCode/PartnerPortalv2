@@ -44,7 +44,7 @@
     border: none;
     border-radius: 0;
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -79,7 +79,7 @@
     padding: 0.1rem 0.3rem;
     background: var(--h-ink);
     color: var(--h-paper);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.04em;
 }
@@ -127,7 +127,7 @@
 .proposal-direction {
     display: block;
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -146,7 +146,7 @@
 .proposal-meta {
     margin-top: 0.2rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.03em;
     color: var(--h-dim);
 }
@@ -157,7 +157,7 @@
     flex-shrink: 0;
     padding: 0.22rem 0.5rem;
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -214,7 +214,7 @@
     align-items: center;
     gap: 0.4rem;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -272,7 +272,7 @@
     gap: 0.4rem;
     margin-top: 0.85rem;
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -296,7 +296,7 @@
 
 .proposal-message strong {
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -334,7 +334,7 @@
    the reassurance is worth nothing on a settings page nobody opens. */
 .lifecycle-private {
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.03em;
     color: var(--h-dim);
 }
@@ -350,7 +350,7 @@
     background: var(--h-cell);
     color: var(--h-dim);
     font-family: var(--h-mono);
-    font-size: 0.55rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -388,7 +388,7 @@
     background: var(--h-take);
     color: var(--h-on-take);
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
 }
 
@@ -412,7 +412,7 @@
 .delivery-ask legend {
     padding: 0 0.4rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -510,7 +510,7 @@
 
 .message-time {
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -577,7 +577,7 @@
 .meeting-state {
     margin-left: auto;
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -650,7 +650,7 @@
 .meeting-form-zone {
     margin: 0 0 0.6rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -667,7 +667,7 @@
     border: none;
     padding: 0.25rem 0;
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -797,7 +797,7 @@
     gap: 0.35rem;
     margin: 0.25rem 0 0;
     font-family: var(--h-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }

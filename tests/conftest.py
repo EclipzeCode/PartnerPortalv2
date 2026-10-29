@@ -275,7 +275,7 @@ def make_org(session):
 
     def _make(name=None, *, needs=(), offers=(), focus_areas=(),
               location="Testville, TS", organization_type="NGO",
-              onboarding_complete=True, is_demo=False,
+              onboarding_complete=True,
               description="Created by the test suite.", **extra):
         suffix = uuid.uuid4().hex[:10]
         org = Organization(
@@ -290,7 +290,6 @@ def make_org(session):
             description=description,
             onboarding_complete=onboarding_complete,
             email_verified=True,
-            is_demo=is_demo,
             **extra,
         )
         session.add(org)

@@ -160,9 +160,9 @@ class DatabaseOutbox:
     """
 
     def _session(self):
-        # Imported here rather than at module scope: alembic and seed.py
-        # import this module's senders without ever delivering anything, and
-        # neither should pay for a database session factory to do it.
+        # Imported here rather than at module scope: alembic imports this
+        # module's senders without ever delivering anything, and should not
+        # pay for a database session factory to do it.
         from db import SessionLocal
         return SessionLocal()
 
@@ -398,8 +398,8 @@ def _worker_loop():
 def _ensure_workers():
     """Start the pool on first use.
 
-    Lazily rather than at import, so that alembic, seed.py and the test suite
-    -- none of which send anything -- do not spawn threads by importing this
+    Lazily rather than at import, so that alembic and the test suite
+    -- neither of which sends anything -- do not spawn threads by importing this
     module.
     """
     with _workers_lock:
