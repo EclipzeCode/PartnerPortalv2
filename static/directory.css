@@ -134,18 +134,6 @@
     max-width: 14rem;
 }
 
-/* This page is the one softened surface in the design, so its controls keep
-   a corner. Qualified with body.ink to outrank the site-wide select and
-   checkbox rules in ink.css, which draw everything else square. */
-body.ink .dir-filters select,
-body.ink .dir-filters select::picker(select) {
-    border-radius: 5px;
-}
-
-body.ink .dir-remote input[type="checkbox"] {
-    border-radius: 3px;
-}
-
 .dir-remote {
     display: inline-flex;
     align-items: center;

@@ -84,6 +84,11 @@ body.ink {
 
     --h-dot: rgba(23, 25, 31, 0.13);
     --h-cell: rgba(23, 25, 31, 0.07);
+    /* The outline of a form control. --h-rule is a divider, drawn to recede;
+       a box someone has to find and click needs at least 3:1 against the
+       surface, which this is in each theme. */
+    --h-control: #8F8A7D;
+    --h-control-radius: 6px;
     /* The chevron every <select> draws, in the ink of its theme. A data
        URI because a background image cannot take currentColor; the stroke
        is --h-ink written out. */
@@ -135,6 +140,7 @@ body.ink {
 
     --h-dot: rgba(255, 255, 255, 0.09);
     --h-cell: rgba(255, 255, 255, 0.06);
+    --h-control: #6C6C77;
     --h-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23F3F1EC' stroke-width='1.5'/%3E%3C/svg%3E");
 
     /* Still a dark band, just one that separates from a near-black page
@@ -188,13 +194,7 @@ body.ink .btn-secondary,
 body.ink .btn-ghost,
 body.ink .btn-danger,
 body.ink .btn-action,
-body.ink .modal-container,
-body.ink .form-group input,
-body.ink .form-group select,
-body.ink .form-group textarea,
-body.ink .modal-body input,
-body.ink .modal-body select,
-body.ink .modal-body textarea {
+body.ink .modal-container {
     border-radius: 0;
 }
 
@@ -232,33 +232,39 @@ body.ink select:not(.activity-filter select) {
     appearance: none;
     -webkit-appearance: none;
     font: inherit;
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     color: var(--h-ink);
     background-color: var(--h-surface);
     background-image: var(--h-chevron);
     background-repeat: no-repeat;
-    background-position: right 0.75rem center;
+    background-position: right 0.85rem center;
     background-size: 12px 8px;
-    border: 1px solid var(--h-rule);
-    border-radius: 0;
-    padding: 0.55rem 2.2rem 0.55rem 0.8rem;
+    border: 1px solid var(--h-control);
+    border-radius: var(--h-control-radius);
+    padding: 0.6rem 2.4rem 0.6rem 0.85rem;
     line-height: 1.3;
+    /* A long choice is cut short, not wrapped onto a second line that makes
+       one select in a row taller than the rest. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     cursor: pointer;
-    transition: border-color 0.18s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 body.ink select:not(.activity-filter select):hover {
-    border-color: var(--h-edge);
+    border-color: var(--h-ink);
 }
 
-body.ink select:not(.activity-filter select):focus {
-    border-color: var(--h-ink);
-    box-shadow: none;
+body.ink select:not(.activity-filter select):focus,
+body.ink select:not(.activity-filter select):open {
+    border-color: var(--h-give);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-give) 18%, transparent);
 }
 
 body.ink select:not(.activity-filter select):disabled {
     opacity: 0.55;
-    cursor: default;
+    cursor: not-allowed;
 }
 
 /* The list itself is the browser's; this is as far into it as CSS reaches,
@@ -269,11 +275,12 @@ body.ink select option {
 }
 
 /* Where the browser lets the open list be styled too (customizable select),
-   it is drawn as one of ours: a hairline panel, roomy rows, the accent on
-   the chosen one. Elsewhere the native list above still applies. The
-   chevron stays the background image, so the built-in picker icon goes.
-   !important because four page stylesheets set appearance: none on their
-   own selects at higher specificity, and this has to win over every one. */
+   it is drawn as one of ours: a rounded panel, roomy rows, a tinted row
+   under the pointer and a tick beside the chosen one. Elsewhere the native
+   list above still applies. The chevron stays the background image, so the
+   built-in picker icon goes. !important because four page stylesheets set
+   appearance: none on their own selects at higher specificity, and this has
+   to win over every one. */
 @supports (appearance: base-select) {
     body.ink select,
     body.ink select::picker(select) {
@@ -285,22 +292,26 @@ body.ink select option {
     }
 
     body.ink select::picker(select) {
-        margin-top: 4px;
-        padding: 0.3rem;
+        margin-top: 6px;
+        padding: 0.35rem;
         min-width: anchor-size(width);
         max-height: min(22rem, 60vh);
         overflow-y: auto;
         background: var(--h-surface);
         color: var(--h-ink);
-        border: 1px solid var(--h-edge);
-        border-radius: 0;
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+        border: 1px solid var(--h-control);
+        border-radius: 10px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
     }
 
     body.ink select option {
-        padding: 0.55rem 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.6rem 0.75rem;
+        border-radius: 6px;
         font-family: var(--h-sans);
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         letter-spacing: normal;
         text-transform: none;
         line-height: 1.35;
@@ -309,25 +320,34 @@ body.ink select option {
 
     body.ink select option:hover,
     body.ink select option:focus-visible {
-        background: var(--h-paper);
+        background: color-mix(in srgb, var(--h-give) 10%, var(--h-surface));
         outline: none;
     }
 
     body.ink select option:checked {
         color: var(--h-give);
-        font-weight: 500;
+        font-weight: 600;
     }
 
+    /* The tick holds its place on every row, so the labels line up and the
+       chosen one reads by mark as well as by color. */
     body.ink select option::checkmark {
-        display: none;
+        order: 1;
+        margin-left: auto;
+        content: '\2713';
+        color: var(--h-give);
+    }
+
+    body.ink select option:not(:checked)::checkmark {
+        visibility: hidden;
     }
 
     /* The group heading is drawn from the optgroup's own font, so it is
        set here and the options under it put theirs back. */
     body.ink select optgroup {
-        padding: 0.5rem 0 0 0.75rem;
+        padding: 0.6rem 0 0 0.75rem;
         font-family: var(--h-mono);
-        font-size: 0.7rem;
+        font-size: 0.72rem;
         font-weight: normal;
         letter-spacing: 0.1em;
         text-transform: uppercase;
@@ -340,25 +360,23 @@ body.ink select option {
     }
 }
 
-/* Checkboxes and radios: the drawn box forms.css already used for one
-   dialog, applied to all of them. A radio is the same box with round
-   corners and a dot -- the one round thing this design allows, because a
-   square radio is a checkbox. */
+/* Checkboxes and radios: a large, clearly outlined box with a soft halo on
+   hover, filled with the accent when on. The radio is the round one. */
 body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input),
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
     appearance: none;
     -webkit-appearance: none;
     position: relative;
-    width: 1.05rem;
-    height: 1.05rem;
+    width: 1.25rem;
+    height: 1.25rem;
     margin: 0;
     flex-shrink: 0;
-    vertical-align: -0.15em;
-    background: var(--h-cell);
-    border: 1px solid var(--h-rule);
-    border-radius: 0;
+    vertical-align: -0.25em;
+    background: var(--h-surface);
+    border: 1.5px solid var(--h-control);
+    border-radius: 5px;
     cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
@@ -366,11 +384,15 @@ body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
 }
 
 body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):hover,
-body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):hover {
-    border-color: var(--h-edge);
+body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):hover,
+body.ink label:hover > input[type="checkbox"]:not(.switch input):not(.category-chip input),
+body.ink label:hover > input[type="radio"]:not(.segment input):not(.meridiem-option input) {
+    border-color: var(--h-give);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--h-give) 14%, transparent);
 }
 
 body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):checked,
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):indeterminate,
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):checked {
     background: var(--h-give);
     border-color: var(--h-give);
@@ -381,15 +403,15 @@ body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input)::af
     content: '';
     box-sizing: content-box;
     position: absolute;
-    top: 0.11rem;
-    left: 0.3rem;
-    width: 0.25rem;
-    height: 0.5rem;
+    top: 0.12rem;
+    left: 0.36rem;
+    width: 0.28rem;
+    height: 0.56rem;
     border: solid var(--h-on-give);
-    border-width: 0 1.5px 1.5px 0;
-    transform: rotate(45deg) scale(0.6);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0.5);
     opacity: 0;
-    transition: opacity 0.12s ease, transform 0.12s ease;
+    transition: opacity 0.12s ease, transform 0.15s ease;
 }
 
 body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):checked::after {
@@ -397,15 +419,26 @@ body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):che
     transform: rotate(45deg) scale(1);
 }
 
+/* Some on, some off: a bar instead of a tick. */
+body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):indeterminate::after {
+    top: 50%;
+    left: 50%;
+    width: 0.6rem;
+    height: 0;
+    border-width: 0 0 2px 0;
+    transform: translate(-50%, -50%);
+    opacity: 1;
+}
+
 /* The dot. */
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input)::after {
     content: '';
     position: absolute;
-    inset: 0.27rem;
+    inset: 0.28rem;
     border-radius: 50%;
     background: var(--h-on-give);
     transform: scale(0);
-    transition: transform 0.12s ease;
+    transition: transform 0.15s ease;
 }
 
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):checked::after {
@@ -414,8 +447,14 @@ body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):che
 
 body.ink input[type="checkbox"]:not(.switch input):not(.category-chip input):disabled,
 body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input):disabled {
-    opacity: 0.5;
-    cursor: default;
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* A label wrapping a box is all one target, and says so. */
+body.ink label:has(> input[type="checkbox"], > input[type="radio"]) {
+    cursor: pointer;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -591,8 +630,8 @@ body.ink .form-group textarea,
 body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]),
 body.ink .modal-body select,
 body.ink .modal-body textarea {
-    border-radius: 0;
-    border: 1px solid var(--h-rule);
+    border-radius: var(--h-control-radius);
+    border: 1px solid var(--h-control);
     background: var(--h-paper);
     color: var(--h-ink);
     font-size: 0.92rem;
@@ -613,10 +652,10 @@ body.ink .form-group textarea:focus,
 body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]):focus,
 body.ink .modal-body select:focus,
 body.ink .modal-body textarea:focus {
-    border-color: var(--h-ink);
-    /* forms.css puts a 3px blue halo here. The border darkening is the whole
-       signal; the focus-visible outline above covers keyboard users. */
-    box-shadow: none;
+    border-color: var(--h-give);
+    /* The same soft halo the selects and checkboxes use, in the accent
+       rather than forms.css's old brand blue. */
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-give) 18%, transparent);
 }
 
 body.ink .form-group input::placeholder,
@@ -885,6 +924,30 @@ body.ink .logo {
 
 body.ink .logo:hover {
     color: var(--h-give);
+}
+
+/* The wordmark's currentColor means nothing inside an <img>: an image is its
+   own document, so it painted black in both themes and all but vanished on
+   the dark nav. The <img> stays for its size and alt text but goes
+   transparent, and the same file is laid over it as a mask filled with the
+   link's color -- so it takes the theme's ink and the hover accent. */
+body.ink .logo {
+    position: relative;
+}
+
+body.ink .logo img {
+    opacity: 0;
+}
+
+body.ink .logo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    -webkit-mask: url("wordmark.svg") left center / contain no-repeat;
+    mask: url("wordmark.svg") left center / contain no-repeat;
+    pointer-events: none;
+    transition: background-color 0.18s ease;
 }
 
 body.ink .navbar a {
