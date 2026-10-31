@@ -1,8 +1,11 @@
-The typeface in this directory are licensed under the
+The typeface in this directory, and the lettering in wordmark.svg (outlined
+from Inter Bold), are licensed under the
 SIL Open Font License, Version 1.1.
 
     Instrument Serif   Copyright (c) 2022 The Instrument Serif Project Authors
                        https://github.com/Instrument/instrument-serif
+    Inter              Copyright (c) 2016 The Inter Project Authors
+                       https://github.com/rsms/inter
 
 The full license text is available at https://openfontlicense.org and in each
 project's repository above. In summary, the OFL permits the fonts to be used,

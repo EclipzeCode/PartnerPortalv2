@@ -949,11 +949,13 @@ body.ink .logo {
     font-weight: 600;
     font-size: clamp(1.05rem, 1.6vw, 1.25rem);
     letter-spacing: -0.02em;
-    color: var(--h-ink);
+    /* The brand blue, in both themes' versions of it. */
+    color: var(--h-give);
+    transition: opacity 0.18s ease;
 }
 
 body.ink .logo:hover {
-    color: var(--h-give);
+    opacity: 0.8;
 }
 
 /* The wordmark's currentColor means nothing inside an <img>: an image is its
@@ -967,6 +969,13 @@ body.ink .logo {
 
 body.ink .logo img {
     opacity: 0;
+    height: 2.1rem;
+}
+
+@media (max-width: 26.25em) {
+    body.ink .logo img {
+        height: 1.8rem;
+    }
 }
 
 body.ink .logo::after {
