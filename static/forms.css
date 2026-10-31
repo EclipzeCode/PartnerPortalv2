@@ -239,7 +239,7 @@ button.btn-action {
     flex-shrink: 0;
     background: var(--h-cell);
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     cursor: pointer;
     transition: background 0.18s ease, border-color 0.18s ease;
 }

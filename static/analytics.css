@@ -63,6 +63,7 @@
     display: flex;
     flex-direction: column;
     background: var(--h-surface);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
     padding: 1.15rem 1.25rem 1.25rem;
 
@@ -621,7 +622,7 @@
     padding: 0.4rem 0.6rem;
     background: var(--h-ink);
     color: var(--h-paper);
-    border-radius: 0;
+    border-radius: var(--h-radius);
     font-family: var(--h-mono);
     font-size: 0.62rem;
     letter-spacing: 0.04em;
@@ -691,7 +692,7 @@
     padding: 0.3rem 0.5rem 0.3rem 0;
     background: none;
     border: none;
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-mono);
     font-size: 0.6rem;
     font-weight: 500;
@@ -980,6 +981,7 @@
     text-transform: uppercase;
     color: var(--h-dim);
     background: none;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     padding: 0.25rem 0.55rem;
     cursor: pointer;

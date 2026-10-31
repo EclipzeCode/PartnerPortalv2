@@ -216,6 +216,7 @@
     width: 2.9rem;
     height: 1.5rem;
     background: var(--h-cell);
+    border-radius: 999px;
     border: 1px solid var(--h-rule);
     transition: background 0.18s ease, border-color 0.18s ease;
 }
@@ -227,6 +228,7 @@
     left: 0.25rem;
     width: 1rem;
     height: 1rem;
+    border-radius: 50%;
     background: var(--h-dim);
     transition: transform 0.18s ease, background 0.18s ease;
 }
@@ -267,6 +269,7 @@
     display: inline-flex;
     flex-shrink: 0;
     margin-top: 0.15rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     background: var(--h-cell);
 }
@@ -713,7 +716,7 @@
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
-    border-radius: 0;
+    border-radius: var(--h-radius);
     color: transparent;
     user-select: none;
 }

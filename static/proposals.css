@@ -42,7 +42,7 @@
     padding: 0.85rem 0;
     background: none;
     border: none;
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-mono);
     font-size: 0.64rem;
     font-weight: 500;
@@ -105,6 +105,7 @@
 }
 
 .proposal-card {
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     padding: 1.15rem 1.25rem;
 }
@@ -182,6 +183,7 @@
 .status-pill.status-withdrawn,
 .status-pill.status-ended {
     background: transparent;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     color: var(--h-dim);
 }
@@ -406,6 +408,7 @@
 .delivery-ask {
     margin-top: 1rem;
     padding: 0.85rem 1rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
 }
 
@@ -463,6 +466,7 @@
     overflow-y: auto;
     padding: 0.25rem;
     margin-bottom: 1rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     scrollbar-width: thin;
     scrollbar-color: var(--h-rule) transparent;
@@ -540,6 +544,7 @@
 .meeting-card {
     margin-top: 0.55rem;
     padding: 0.75rem 0.85rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     border-left: 3px solid var(--h-give);
     background: var(--h-paper);
@@ -617,6 +622,7 @@
 /* The form that proposes one, in place of the message box while open. */
 .meeting-form {
     padding: 0.9rem 1rem 1rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     border-left: 3px solid var(--h-give);
     margin-bottom: 1rem;

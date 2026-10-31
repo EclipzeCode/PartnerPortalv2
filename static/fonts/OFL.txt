@@ -1,12 +1,8 @@
-The three typefaces in this directory are licensed under the
+The typeface in this directory are licensed under the
 SIL Open Font License, Version 1.1.
 
     Instrument Serif   Copyright (c) 2022 The Instrument Serif Project Authors
                        https://github.com/Instrument/instrument-serif
-    Space Grotesk      Copyright (c) 2020 The Space Grotesk Project Authors
-                       https://github.com/floriankarsten/space-grotesk
-    JetBrains Mono     Copyright (c) 2020 The JetBrains Mono Project Authors
-                       https://github.com/JetBrains/JetBrainsMono
 
 The full license text is available at https://openfontlicense.org and in each
 project's repository above. In summary, the OFL permits the fonts to be used,

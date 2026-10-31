@@ -79,6 +79,7 @@ body {
    drop shadow. */
 .agreement-card {
     background: var(--h-surface);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
     padding: clamp(1.75rem, 5vw, 3.25rem);
 }
@@ -116,6 +117,7 @@ body {
    failure would imply an answer it does not have. */
 .agreement-badge.ended {
     background: transparent;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     color: var(--h-dim);
 }

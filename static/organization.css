@@ -64,6 +64,7 @@ body {
 
 .org-card {
     background: var(--h-surface);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
     padding: clamp(1.75rem, 5vw, 3.25rem);
 }
@@ -146,6 +147,7 @@ body {
     gap: 0.3rem;
     margin-top: 0.7rem;
     padding: 0.2rem 0.45rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     font-family: var(--h-mono);
     font-size: 0.55rem;
@@ -247,6 +249,7 @@ body {
 /* Causes, in the third color -- not something anyone trades. */
 .org-focus-chips span {
     padding: 0.28rem 0.55rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-seal);
     color: var(--h-seal);
     font-family: var(--h-mono);
@@ -376,6 +379,7 @@ body {
     align-items: center;
     gap: 0.35rem;
     padding: 0.35rem 0.6rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     font-family: var(--h-mono);
     font-size: 0.62rem;
@@ -465,7 +469,7 @@ body {
     gap: 0.45rem;
     padding: 0.75rem 1.25rem;
     border: 1px solid var(--h-edge);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-sans);
     font-size: 0.87rem;
     font-weight: 500;

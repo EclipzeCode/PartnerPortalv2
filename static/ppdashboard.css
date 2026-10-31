@@ -145,6 +145,7 @@
     padding: 1.25rem 1.35rem;
     margin-bottom: 1.25rem;
     background: var(--h-surface);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
 }
 
@@ -233,7 +234,7 @@
     text-decoration: none;
     cursor: pointer;
     border: 1px solid var(--h-edge);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     background: var(--h-ink);
     color: var(--h-paper);
     transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
@@ -283,6 +284,7 @@
     grid-template-columns: repeat(5, 1fr);
     gap: 1px;
     background: var(--h-rule);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
     margin-bottom: 1.5rem;
 }
@@ -300,7 +302,7 @@
     padding: 0.9rem 0.5rem 1.55rem;
     background: var(--h-surface);
     border: none;
-    border-radius: 0;
+    border-radius: var(--h-radius);
     font-family: inherit;
     cursor: pointer;
     transition: background 0.18s ease;
@@ -389,6 +391,7 @@
 
 .dashboard-card {
     background: var(--h-surface);
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
     margin-bottom: 2rem;
 }
@@ -610,6 +613,7 @@
     display: inline-flex;
     align-items: center;
     padding: 0;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-rule);
     cursor: pointer;
     transition: border-color 0.18s ease;
@@ -837,7 +841,7 @@
     background: transparent;
     text-decoration: none;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     color: var(--h-dim);
     font-size: 0.8rem;
     cursor: pointer;
@@ -897,7 +901,7 @@
     place-items: center;
     background: transparent;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius);
     color: var(--h-dim);
     font-size: 1rem;
     cursor: pointer;
@@ -1035,6 +1039,7 @@
 
 .tag-chips span {
     padding: 0.28rem 0.55rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-give);
     color: var(--h-give);
     font-family: var(--h-mono);
@@ -1157,6 +1162,7 @@
 .meridiem {
     display: flex;
     margin-left: 0.15rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--ctl-border, var(--h-rule));
 }
 
@@ -1268,7 +1274,7 @@
     );
     background-size: 400% 100%;
     animation: skeleton-shimmer 1.4s ease infinite;
-    border-radius: 0;
+    border-radius: var(--h-radius);
     color: transparent;
     user-select: none;
     width: fit-content;
@@ -1291,7 +1297,7 @@
 .skeleton-dot {
     width: 1.6rem;
     height: 1.6rem;
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     flex-shrink: 0;
 }
 

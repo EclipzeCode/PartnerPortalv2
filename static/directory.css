@@ -154,7 +154,7 @@ body.ink .dir-remote input[type="checkbox"] {
 
 
 .dir-count {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--h-mono);
     font-size: .82rem;
     color: var(--h-dim);
     margin: 0 0 1.25rem;
@@ -163,17 +163,13 @@ body.ink .dir-remote input[type="checkbox"] {
 
 /* --- Grid --------------------------------------------------------------- */
 
-/* The same grid the signed-in matches page draws: cells separated by
-   hairlines inside one edged container, three across, every cell in a row
-   the same height. It was a gapped grid of rounded cards aligned to the
-   top, so a card with a long bio and one without sat side by side at
-   different heights, and the two pages read as two different products. */
+/* The same grid the signed-in matches page draws: separate cards, three
+   across, every card in a row the same height (grid rows stretch), so the
+   two pages read as one product. */
 .dir-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    background: var(--h-paper);
-    border: 1px solid var(--h-edge);
+    gap: 1rem;
 }
 
 .dir-card {
@@ -181,24 +177,17 @@ body.ink .dir-remote input[type="checkbox"] {
     flex-direction: column;
     gap: .6rem;
     background: var(--h-surface);
-    /* The grid's hairlines. The right edge is dropped on the last column
-       of each breakpoint so it does not double the container's own. */
-    border: none;
-    border-right: 1px solid var(--h-rule);
-    border-bottom: 1px solid var(--h-rule);
-    border-radius: 0;
-    padding: 1.15rem 1.25rem 1rem;
-}
-
-.dir-card:nth-child(3n) {
-    border-right: none;
+    border: 1px solid var(--h-rule);
+    border-radius: var(--h-radius);
+    box-shadow: var(--h-shadow);
+    padding: 1.25rem 1.35rem 1.1rem;
 }
 
 .dir-demo {
     display: flex;
     align-items: center;
     gap: .4rem;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--h-mono);
     font-size: .7rem;
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -254,7 +243,7 @@ body.ink .dir-remote input[type="checkbox"] {
     display: flex;
     align-items: center;
     gap: .3rem;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--h-mono);
     font-size: .7rem;
     font-weight: 500;
     text-transform: uppercase;
@@ -345,7 +334,7 @@ body.ink .dir-remote input[type="checkbox"] {
 .dir-pager button[disabled] { opacity: .45; cursor: not-allowed; }
 
 .dir-page-indicator {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--h-mono);
     font-size: .85rem;
     color: var(--h-dim);
     font-variant-numeric: tabular-nums;
@@ -426,18 +415,14 @@ body.ink .dir-remote input[type="checkbox"] {
 
 /* --- Narrow ------------------------------------------------------------- */
 
-/* Two across between phone and desktop; the dropped border moves with the
-   last column. */
+/* Two across between phone and desktop. */
 @media (max-width: 63.99em) {
     .dir-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .dir-card:nth-child(3n) { border-right: 1px solid var(--h-rule); }
-    .dir-card:nth-child(2n) { border-right: none; }
 }
 
 @media (max-width: 40em) {
     .dir-filters select { max-width: none; flex: 1 1 100%; }
     .dir-grid { grid-template-columns: minmax(0, 1fr); }
-    .dir-card { border-right: none; }
 
     /* The run of chrome above the first card, tightened.
      *

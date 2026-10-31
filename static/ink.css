@@ -44,21 +44,24 @@
 
 body.ink {
     /* --- Ground and ink ---------------------------------------------- */
-    --h-paper: #F5F2EB;
-    --h-surface: #FCFBF8;
-    --h-ink: #17191F;
-    --h-ink-soft: #43464F;
-    --h-dim: #6B6960;
+    /* A cool, quiet ground with white cards on it: the cream and the black
+       hairlines read as a print layout, and an app someone works in for an
+       hour wants less contrast at the edges and more in the content. */
+    --h-paper: #F6F7F9;
+    --h-surface: #FFFFFF;
+    --h-ink: #111827;
+    --h-ink-soft: #374151;
+    --h-dim: #5F6878;           /* 5.3:1 on --h-paper */
 
-    --h-rule: #DCD7C9;
-    --h-edge: #17191F;
+    --h-rule: #E4E7EC;
+    --h-edge: #C9CFD8;
 
     /* --- The two directions ------------------------------------------ */
     /* On the home page these mean "they give you" and "you give them". Away
        from the matrix, --h-give is simply the accent -- links, focus, the
        active state -- and --h-take is the highlight used sparingly for the
        thing on the page that wants attention. */
-    --h-give: #1E3A6E;
+    --h-give: #2747A6;          /* 7.6:1 on white */
     /* #C7522A was the first choice and is 4.02:1 on the paper -- it is used
        as a text color, not only as a fill, and failed AA there. Darkened
        until one value serves both jobs: 4.8:1 as text on the paper, 5.4:1
@@ -95,8 +98,16 @@ body.ink {
        footer painted with it flipped to a cream block with near-black text
        sitting under a near-black page. Named separately so the role and the
        ink color cannot be confused again. */
-    --h-footer: #17191F;
-    --h-on-footer: #F5F2EB;
+    --h-footer: #111827;
+    --h-on-footer: #F3F4F6;
+
+    /* --- Shape --------------------------------------------------------- */
+    --h-radius: 12px;           /* cards, panels, dialogs */
+    --h-radius-sm: 8px;         /* buttons, inputs, chips */
+    --h-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+    --h-shadow-lift: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 4px rgba(16, 24, 40, 0.04);
+    --h-shadow-float: 0 12px 32px rgba(16, 24, 40, 0.12), 0 4px 8px rgba(16, 24, 40, 0.06);
+    --h-ring: rgba(39, 71, 166, 0.18);
 
     /* --- Type -------------------------------------------------------- */
     /* Three faces, three jobs, no overlap. The serif is only ever a headline;
@@ -104,8 +115,11 @@ body.ink {
        grotesque. Keeping those roles rigid is what stops three families
        reading as clutter. */
     --h-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
-    --h-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    --h-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    --h-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    /* Labels and metadata. Was a monospace, which across ~170 call sites
+       made every page read as a terminal; the same sans with tabular
+       figures keeps numbers aligned without the typewriter texture. */
+    --h-mono: var(--h-sans);
 }
 
 /* Dark. Near-black rather than a dimmed cream -- unlit paper is a muddy
@@ -117,8 +131,8 @@ body.ink {
     --h-ink: #F3F1EC;
     --h-ink-soft: #B6B4AE;
     --h-dim: #86847E;
-    --h-rule: #2A2A2F;
-    --h-edge: #3A3A42;
+    --h-rule: #26262B;
+    --h-edge: #36363E;
 
     --h-give: #7FA0E8;
     --h-take: #E8845C;
@@ -141,6 +155,11 @@ body.ink {
        rather than from cream. */
     --h-footer: #08080A;
     --h-on-footer: #E9E7E1;
+
+    --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --h-shadow-lift: 0 6px 16px rgba(0, 0, 0, 0.45);
+    --h-shadow-float: 0 16px 40px rgba(0, 0, 0, 0.6);
+    --h-ring: rgba(127, 160, 232, 0.25);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -152,6 +171,9 @@ body.ink {
     background-color: var(--h-paper);
     color: var(--h-ink-soft);
     line-height: 1.6;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body.ink button,
@@ -178,11 +200,10 @@ body.ink select {
     color: var(--h-ink);
 }
 
-/* Square. Not a stylistic tic: the design is built out of cells and hairline
-   rules, and a rounded corner on any of it breaks the alignment the layout is
-   doing. Listed rather than applied with a universal selector so that a
-   genuinely round thing -- an avatar circle in the nav drawer, a radio -- can
-   still opt out by not being named. */
+/* One corner radius for every control, so buttons, fields and dialogs from
+   forms.css and shared.css match the cards around them. Listed rather than
+   applied with a universal selector so a genuinely round thing -- an avatar,
+   a radio -- keeps its own shape. */
 body.ink .btn-primary,
 body.ink .btn-secondary,
 body.ink .btn-ghost,
@@ -195,7 +216,7 @@ body.ink .form-group textarea,
 body.ink .modal-body input,
 body.ink .modal-body select,
 body.ink .modal-body textarea {
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
 }
 
 /* The focus ring. shared.css draws one for every page; this restates it in
@@ -240,7 +261,7 @@ body.ink select:not(.activity-filter select) {
     background-position: right 0.75rem center;
     background-size: 12px 8px;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     padding: 0.55rem 2.2rem 0.55rem 0.8rem;
     line-height: 1.3;
     cursor: pointer;
@@ -252,8 +273,8 @@ body.ink select:not(.activity-filter select):hover {
 }
 
 body.ink select:not(.activity-filter select):focus {
-    border-color: var(--h-ink);
-    box-shadow: none;
+    border-color: var(--h-give);
+    box-shadow: 0 0 0 3px var(--h-ring);
 }
 
 body.ink select:not(.activity-filter select):disabled {
@@ -284,7 +305,7 @@ body.ink input[type="radio"]:not(.segment input):not(.meridiem-option input) {
     vertical-align: -0.15em;
     background: var(--h-cell);
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: 4px;
     cursor: pointer;
     transition: background 0.18s ease, border-color 0.18s ease;
 }
@@ -369,13 +390,13 @@ body.ink .skeleton {
         var(--h-cell) 63%
     );
     background-size: 400% 100%;
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
 }
 
 /* The activity placeholder's mark. It was a circle to match the round icons
    the feed used to have; those are squares now, so this is too. */
 body.ink .skeleton-dot {
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -445,6 +466,7 @@ body.ink .btn-danger {
     line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-edge);
     background: transparent;
     color: var(--h-ink);
@@ -519,7 +541,7 @@ body.ink .form-group textarea,
 body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]),
 body.ink .modal-body select,
 body.ink .modal-body textarea {
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     background: var(--h-paper);
     color: var(--h-ink);
@@ -541,10 +563,8 @@ body.ink .form-group textarea:focus,
 body.ink .modal-body input:not([type="checkbox"]):not([type="radio"]):focus,
 body.ink .modal-body select:focus,
 body.ink .modal-body textarea:focus {
-    border-color: var(--h-ink);
-    /* forms.css puts a 3px blue halo here. The border darkening is the whole
-       signal; the focus-visible outline above covers keyboard users. */
-    box-shadow: none;
+    border-color: var(--h-give);
+    box-shadow: 0 0 0 3px var(--h-ring);
 }
 
 body.ink .form-group input::placeholder,
@@ -652,7 +672,7 @@ body.ink .category-chip {
     align-items: center;
     padding: 0.3rem 0.6rem;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-sans);
     font-size: 0.8rem;
     letter-spacing: 0;
@@ -695,17 +715,20 @@ body.ink .picker-empty {
    confirm dialog that does not clearly sit in front of everything else is the
    wrong dialog to be subtle with. */
 body.ink .modal {
-    background: rgba(17, 18, 22, 0.7);
+    background: rgba(17, 24, 39, 0.5);
+    backdrop-filter: blur(2px);
 }
 
 body.ink .modal-container {
     background: var(--h-surface);
-    border: 1px solid var(--h-edge);
-    box-shadow: none;
+    border-radius: var(--h-radius);
+    border: 1px solid var(--h-rule);
+    box-shadow: var(--h-shadow-float);
+    overflow: hidden;
 }
 
 body.ink .modal-header {
-    border-bottom: 1px solid var(--h-edge);
+    border-bottom: 1px solid var(--h-rule);
     padding: 1.1rem 1.5rem;
 }
 
@@ -726,7 +749,7 @@ body.ink .close-modal:hover {
 }
 
 body.ink .modal-footer {
-    border-top: 1px solid var(--h-edge);
+    border-top: 1px solid var(--h-rule);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -836,7 +859,7 @@ body.ink .navbar a.active::after {
 }
 
 body.ink .navbar .nav-auth-cta {
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     background: var(--h-ink);
     color: var(--h-paper);
     font-family: var(--h-mono);
@@ -861,7 +884,7 @@ body.ink .navbar .nav-auth-cta a:hover {
 }
 
 body.ink .avatar-button {
-    border-radius: 0;
+    border-radius: 50%;
     background: var(--h-give);
     color: var(--h-on-give);
     font-family: var(--h-mono);
@@ -878,10 +901,11 @@ body.ink .avatar-button[aria-expanded="true"] {
 }
 
 body.ink .account-dropdown {
-    border-radius: 0;
-    border: 1px solid var(--h-edge);
-    box-shadow: none;
+    border-radius: var(--h-radius);
+    border: 1px solid var(--h-rule);
+    box-shadow: var(--h-shadow-float);
     background: var(--h-surface);
+    overflow: hidden;
 }
 
 body.ink .navbar .account-dropdown a,
@@ -1242,4 +1266,24 @@ body.ink .footer-bottom {
 
 .retry-after .btn-ghost {
     margin-top: 0.5rem;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Cards
+ *
+ * The page's main panels sit on the ground with a soft shadow rather than a
+ * hard edge alone, so a page reads as a few surfaces instead of a grid of
+ * boxes. Each card's border and radius stay in its own stylesheet.
+ * ------------------------------------------------------------------------- */
+body.ink .dashboard-card,
+body.ink .org-card,
+body.ink .onboarding-card,
+body.ink .agreement-card,
+body.ink .analytics-grid .panel,
+body.ink .proposal-card,
+body.ink .meeting-card,
+body.ink .notfound-card,
+body.ink .error-card {
+    border-color: var(--h-rule);
+    box-shadow: var(--h-shadow);
 }

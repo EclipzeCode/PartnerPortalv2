@@ -544,7 +544,7 @@
     /* Square. The rounded rectangle it had was the odd one out in a bar of
        hard corners -- the avatar beside it is a circle on purpose, which is
        a different thing from a 6px radius that reads as an accident. */
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     background: none;
     color: var(--h-ink-soft);
     font-size: 1.15rem;

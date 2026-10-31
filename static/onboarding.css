@@ -101,6 +101,7 @@
 .progress-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+    border-radius: var(--h-radius);
   border: 1px solid var(--h-edge);
   margin-bottom: 1.5rem;
 }
@@ -241,6 +242,7 @@
   display: flex;
   flex-direction: column;
   background: var(--h-surface);
+    border-radius: var(--h-radius);
   border: 1px solid var(--h-edge);
   padding: 1.25rem 1.35rem;
 }
@@ -282,6 +284,7 @@
 
 .card-hint {
   padding: 0.2rem 0.5rem;
+    border-radius: var(--h-radius);
   border: 1px solid var(--h-rule);
   font-family: var(--h-mono);
   font-size: 0.58rem;
@@ -421,6 +424,7 @@
   max-height: 15rem;
   overflow-y: auto;
   padding: 0.8rem;
+    border-radius: var(--h-radius);
   border: 1px solid var(--h-rule);
   scrollbar-width: thin;
   scrollbar-color: var(--h-rule) transparent;
@@ -512,7 +516,7 @@
   line-height: 1.2;
   cursor: pointer;
   border: 1px solid var(--h-edge);
-  border-radius: 0;
+  border-radius: var(--h-radius-sm);
   background: var(--h-ink);
   color: var(--h-paper);
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;

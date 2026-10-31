@@ -130,7 +130,7 @@
     padding: 0.7rem 0.8rem 0.7rem 2.4rem;
     background: var(--h-surface);
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: inherit;
     font-size: 0.92rem;
     color: var(--h-ink);
@@ -165,7 +165,7 @@
     line-height: 1.2;
     cursor: pointer;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     background: transparent;
     color: var(--h-ink-soft);
     transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
@@ -248,7 +248,7 @@
     padding: 0.4rem 0.6rem;
     background: var(--h-surface);
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-sans);
     font-size: 0.83rem;
     color: var(--h-ink);
@@ -300,24 +300,15 @@
  * in half the space.
  * ------------------------------------------------------------------------- */
 
-/* The results read as one table with shared hairlines rather than as a set of
-   floating cards. The obvious way to build that -- a 1px grid gap over a
-   container painted in the rule color -- is wrong here, and visibly so: a
-   page holding four results in a three-column grid leaves two empty cells,
-   and the container paints straight through them as a large gray slab. The
-   page size is 6/4/4, so a partial last row is the normal case, not an edge
-   one.
-   The lines are drawn by the cards instead, and the container is painted in
-   the page color, so an empty cell is simply empty. */
+/* Separate cards with a gap. The page size in ppsearch.js is 6 / 4 / 4, so
+   a partial last row is normal; with a gap it is simply a shorter row. */
 .partners-grid {
     display: grid;
     /* Explicit column counts rather than auto-fill: the page size in
        ppsearch.js is 6 / 4 / 4 to match these, and it can only stay in step
        with a number of columns that is actually known. */
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    background: var(--h-paper);
-    border: 1px solid var(--h-edge);
+    gap: 1rem;
 }
 
 .partner-card {
@@ -331,42 +322,17 @@
     flex-direction: column;
     padding: 1.25rem 1.15rem;
     background: var(--h-surface);
-    /* The grid's hairlines. The right edge is dropped on the last column of
-       each breakpoint so it does not double the container's own border. */
-    border: none;
-    border-right: 1px solid var(--h-rule);
-    border-bottom: 1px solid var(--h-rule);
+    border: 1px solid var(--h-rule);
+    border-radius: var(--h-radius);
+    box-shadow: var(--h-shadow);
     cursor: pointer;
-    transition: background 0.18s ease;
-}
-
-.partner-card:nth-child(3n) {
-    border-right: none;
-}
-
-/* A first row that is not full. The table treatment above assumes the
-   empty cells are a partial *last* row under full ones; with one or two
-   results they are most of the box, and the container's border draws a
-   wide empty frame around a card or two in its corner. So when the grid
-   holds fewer cards than a row, the frame comes off and each card carries
-   its own edges instead -- the result looks like what it is, a card or a
-   pair, rather than a table with nothing in it. Skeletons and the empty
-   state are left alone: the first is a full page and the second is not a
-   card. */
-.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) {
-    border: none;
-}
-
-.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) > .partner-card {
-    border: 1px solid var(--h-edge);
-}
-
-.partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(3))) > .partner-card + .partner-card {
-    border-left: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .partner-card:hover {
-    background: var(--h-paper);
+    border-color: var(--h-edge);
+    box-shadow: var(--h-shadow-lift);
+    transform: translateY(-1px);
 }
 
 /* The card's keyboard target is the name, a real <button> inside the <h3>
@@ -390,8 +356,9 @@
 
 /* A two-way match is the thing this product is for, so it is marked on the
    card itself and not only by the badge inside it. */
-.partner-card.mutual {
-    box-shadow: inset 3px 0 0 var(--h-take);
+.partner-card.mutual,
+.partner-card.mutual:hover {
+    box-shadow: inset 3px 0 0 var(--h-take), var(--h-shadow);
 }
 
 /* --- The score ------------------------------------------------------------ */
@@ -442,7 +409,7 @@
     place-items: center;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 0;
+    border-radius: var(--h-radius);
     color: var(--h-dim);
     font-size: 0.95rem;
     cursor: pointer;
@@ -505,6 +472,7 @@
     display: inline-flex;
     align-items: center;
     padding: 0.2rem 0.45rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     color: var(--h-dim);
     font-family: var(--h-mono);
@@ -732,7 +700,9 @@
 }
 
 .partner-card.skeleton-card:hover {
-    background: var(--h-surface);
+    border-color: var(--h-rule);
+    box-shadow: var(--h-shadow);
+    transform: none;
 }
 
 .skeleton-score {
@@ -771,7 +741,7 @@
     place-items: center;
     background: transparent;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     color: var(--h-ink-soft);
     font-size: 1.05rem;
     cursor: pointer;
@@ -801,7 +771,7 @@
     padding: 0.4rem 0.8rem;
     background: transparent;
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: var(--h-mono);
     font-size: 0.62rem;
     font-weight: 500;
@@ -981,6 +951,7 @@ body.ink .category-chip.checked {
     flex-direction: column;
     align-items: center;
     padding: 0.5rem 0.75rem;
+    border-radius: var(--h-radius);
     border: 1px solid var(--h-edge);
 }
 
@@ -1238,6 +1209,7 @@ body.ink .category-chip.checked {
     align-items: center;
     gap: 0.3rem;
     padding: 0.28rem 0.55rem;
+    border-radius: var(--h-radius-sm);
     border: 1px solid var(--h-rule);
     font-family: var(--h-mono);
     font-size: 0.62rem;
@@ -1273,7 +1245,7 @@ body.ink .category-chip.checked {
     padding: 0.7rem 0.8rem;
     background: var(--h-paper);
     border: 1px solid var(--h-rule);
-    border-radius: 0;
+    border-radius: var(--h-radius-sm);
     font-family: inherit;
     font-size: 0.88rem;
     color: var(--h-ink);
@@ -1416,32 +1388,6 @@ body.ink .category-chip.checked {
     .partners-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-
-    /* The last column moved, so the dropped border has to move with it. */
-    .partner-card:nth-child(3n) { border-right: 1px solid var(--h-rule); }
-    .partner-card:nth-child(2n) { border-right: none; }
-
-    /* Two across: only a lone card is a short row. */
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(2))) {
-        border: none;
-    }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):not(:has(> :nth-child(2))) > .partner-card {
-        border: 1px solid var(--h-edge);
-    }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) {
-        border: 1px solid var(--h-edge);
-    }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) > .partner-card {
-        border: none;
-        border-bottom: 1px solid var(--h-rule);
-    }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child):has(> :nth-child(2)) > .partner-card:nth-child(2n + 1) {
-        border-right: 1px solid var(--h-rule);
-    }
 }
 
 @media (max-width: 48em) {
@@ -1562,19 +1508,6 @@ body.ink .category-chip.checked {
 @media (max-width: 39.99em) {
     .partners-grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    /* One column: every card is the last one in its row, and every row is
-       full, so the table frame is always right. */
-    .partner-card { border-right: none; }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child) {
-        border: 1px solid var(--h-edge);
-    }
-
-    .partners-grid:has(> .partner-card:not(.skeleton-card):first-child) > .partner-card {
-        border: none;
-        border-bottom: 1px solid var(--h-rule);
     }
 }
 
