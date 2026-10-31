@@ -127,17 +127,17 @@ body.ink {
     --h-mono: var(--h-sans);
 }
 
-/* Dark. Near-black rather than a dimmed cream -- unlit paper is a muddy
-   brown, and warmth is the one thing this palette cannot survive being dimmed.
-   The warmth is carried instead by the ink being bone rather than white. */
+/* Dark. A soft charcoal rather than near-black: pure black behind light
+   text is tiring for long sessions, and cards need room to sit lighter than
+   the page. */
 :root[data-theme="dark"] body.ink {
-    --h-paper: #0C0C0E;
-    --h-surface: #131316;
-    --h-ink: #F3F1EC;
-    --h-ink-soft: #B6B4AE;
-    --h-dim: #86847E;
-    --h-rule: #26262B;
-    --h-edge: #36363E;
+    --h-paper: #1A1B1F;
+    --h-surface: #232429;
+    --h-ink: #EDEEF0;
+    --h-ink-soft: #C5C7CD;
+    --h-dim: #9B9EA7;
+    --h-rule: #33353C;
+    --h-edge: #464852;
 
     --h-give: #7FA0E8;
     --h-take: #E8845C;
@@ -150,21 +150,20 @@ body.ink {
 
     --h-danger: #F08080;
     --h-on-danger: #0C0C0E;
-    --h-surface-danger: #251617;
+    --h-surface-danger: #2E2124;
 
     --h-dot: rgba(255, 255, 255, 0.09);
     --h-cell: rgba(255, 255, 255, 0.06);
-    --h-control: #6C6C77;
+    --h-control: #767983;
     --h-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23F3F1EC' stroke-width='1.5'/%3E%3C/svg%3E");
 
-    /* Still a dark band, just one that separates from a near-black page
-       rather than from cream. */
-    --h-footer: #08080A;
-    --h-on-footer: #E9E7E1;
+    /* Still a dark band, just one a step darker than the charcoal page. */
+    --h-footer: #131418;
+    --h-on-footer: #E3E4E8;
 
-    --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --h-shadow-lift: 0 6px 16px rgba(0, 0, 0, 0.45);
-    --h-shadow-float: 0 16px 40px rgba(0, 0, 0, 0.6);
+    --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --h-shadow-lift: 0 6px 16px rgba(0, 0, 0, 0.3);
+    --h-shadow-float: 0 16px 40px rgba(0, 0, 0, 0.4);
     --h-ring: rgba(127, 160, 232, 0.25);
 }
 

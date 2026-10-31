@@ -169,7 +169,7 @@
  * product ships with, rather than whatever their operating system happens to
  * be set to.
  *
- * The ground is near-black rather than navy, and the grays under it are
+ * The ground is a neutral charcoal rather than navy, and the grays are
  * neutral: a blue-tinted dark theme reads as "light theme with the lights
  * off", and the difference is most of why the first version of this felt
  * wrong. Surfaces separate by lightness alone -- page, card, sunk panel --
@@ -191,10 +191,10 @@
  * ground.
  */
 :root[data-theme="dark"] {
-    --bg: #0a0a0b;
-    --bg-light: #0a0a0b;
-    --surface: #111113;
-    --surface-sunk: #18181b;
+    --bg: #1a1b1f;
+    --bg-light: #1a1b1f;
+    --surface: #232429;
+    --surface-sunk: #2a2b31;
     --surface-veil: rgba(255, 255, 255, 0.04);
 
     /* The footer, and the panels drawn to match it. It stays a dark surface
@@ -202,13 +202,13 @@
        is navy, and against a neutral near-black page it reads as a blue
        block sitting on top of the design rather than part of it. Same role,
        restated in this palette's grays. */
-    --dark: #0f0f11;
+    --dark: #131418;
 
     --text: #fafafa;            /* 18.1:1 on --surface */
     --heading: #ffffff;
     --text-light: #9a9aa2;      /* 6.8:1 -- gray, not dimmed white */
-    --border: #27272a;
-    --border-strong: #45454e;
+    --border: #33353c;
+    --border-strong: #4a4c56;
 
     --primary: #a78bfa;         /* 6.9:1 on --surface */
     --primary-dark: #8b5cf6;
@@ -235,9 +235,9 @@
     --text-note: #d9c48f;
     --text-accent: #7dd3fc;
 
-    --track: #1f1f23;
-    --thumb: #35353c;
-    --thumb-hover: #46464f;
+    --track: #2a2b31;
+    --thumb: #464852;
+    --thumb-hover: #565964;
 
     /* Depth comes from the surface being lighter than the page, not from a
        shadow. Kept as a faint black so existing box-shadow sizes stay valid. */
@@ -247,13 +247,13 @@
     /* The two aliases pplogin.css reads. Missing them is why that page kept
        a white card and white inputs after everything else had turned. */
     --main-color: #a78bfa;
-    --bg-color: #111113;
+    --bg-color: #232429;
 
     /* The loading placeholder. A light shimmer on a dark card is a flash of
        white where content is about to be, which is worse than no placeholder
        at all. */
-    --skeleton-base: #1c1c20;
-    --skeleton-sheen: #26262c;
+    --skeleton-base: #2a2b31;
+    --skeleton-sheen: #33353c;
 
     /* The hero scene. Atmospheric perspective still runs far -> near, but
        downward into the page instead of up out of it, and tinted toward the
