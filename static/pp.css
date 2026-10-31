@@ -7,56 +7,16 @@
  *
  * --- What this is -----------------------------------------------------------
  *
- * Two ideas, held together.
- *
- * The first is the lattice. A match here is not a vibe -- it is an overlap
- * between two organizations across 33 fixed categories, scored in both
- * directions. That is a grid, so the hero draws one: a real needs-by-offers
- * matrix with the overlapping cells lit, two colors for the two directions.
- * The dot texture on the page is the same grid at rest. This is why the
- * texture is allowed to be here at all -- it is the data model, drawn, rather
- * than an atmosphere applied on top of it. It also gives the decoration a
- * natural stopping point: a dot that does not stand for a category does not
- * get drawn.
- *
- * The second is the ledger. The product does not stop at an introduction; it
- * ends in a written agreement that two organizations have both confirmed. So
- * the page is set like a document -- a serif for the headline, hairline rules
- * instead of shadows, square corners, mono for anything that is metadata.
- * That register is doing real work with this audience: a nonprofit director
- * forwarding a partnership summary to a board needs it to look like a record,
- * not like a SaaS trial.
- *
- * --- What it replaces --------------------------------------------------------
- *
- * The previous version was the stock template: Poppins, a blue-to-cyan
- * gradient wash, two blurred blobs drifting behind the hero, and soft-shadowed
- * cards at a 0.5rem radius. Every piece of that is fine on its own and the
- * combination is what every other product in the category also looks like.
- * The illustrated bridge scene went with it -- good work, but "abstract
- * metaphor rendered behind the hero" is part of the same convention, and it
- * said nothing about how matching actually works. The matrix does.
- *
- * --- The loud end -----------------------------------------------------------
- *
- * The dot texture, the 4.6rem serif and the matrix stay on this page. They do
- * not go inward -- see the register note at the top of ink.css. An
- * application page is not a brochure.
+ * One idea carries it: a match is an overlap between two organizations
+ * across a fixed set of categories, scored in both directions. The hero
+ * shows that as a real needs-by-offers matrix; everything under it is a
+ * short, calm argument for signing up -- figures, the four steps, who it is
+ * for, and one closing call to action.
  */
 
 * {
     margin: 0;
     padding: 0;
-}
-
-/* The lattice at rest, across the whole page. Faint enough to read as paper
-   stock rather than as a grid you are meant to look at -- it is the ground the
-   lit matrix in the hero sits on, and it only earns its keep by being quiet.
-   Home only: this is the one page that gets a texture. */
-body.home {
-    overflow-x: hidden;
-    background-image: radial-gradient(circle, var(--h-dot) 1px, transparent 1.1px);
-    background-size: 24px 24px;
 }
 
 /* The two display elements that are not shared: the hero's headline and the
@@ -86,21 +46,12 @@ body.home .hero {
     min-height: 100vh;
     min-height: 100svh;
     padding: clamp(6rem, 11vh, 9rem) clamp(1.25rem, 5vw, 6rem) clamp(2.5rem, 5vh, 4rem);
-    background: none;
+    /* Two soft washes in the direction colors behind the panel, fading into
+       the page. Atmosphere, kept faint enough to sit under text. */
+    background:
+        radial-gradient(circle at 85% 30%, color-mix(in srgb, var(--h-give) 9%, transparent), transparent 45%),
+        radial-gradient(circle at 10% 90%, color-mix(in srgb, var(--h-take) 6%, transparent), transparent 40%);
     overflow: hidden;
-}
-
-/* The dot field. Behind both columns, and inert -- everything above it sets
-   its own stacking context below. Sized in JS to the hero's box; the CSS here
-   only places it. */
-body.home .hero-field {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    /* Never eats a click meant for the page. */
-    pointer-events: none;
 }
 
 body.home .hero-inner {
@@ -121,7 +72,26 @@ body.home .hero-content {
 }
 
 body.home .hero-badge {
-    margin-bottom: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 1.6rem;
+    padding: 0.4rem 0.9rem 0.4rem 0.75rem;
+    border: 1px solid var(--h-rule);
+    border-radius: 999px;
+    background: var(--h-surface);
+    box-shadow: var(--h-shadow);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--h-ink-soft);
+}
+
+body.home .hero-badge-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--h-seal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-seal) 20%, transparent);
 }
 
 body.home .hero-title {
@@ -147,8 +117,8 @@ body.home .hero-title em {
    does not say it is organizations trading with each other. */
 body.home .hero-sub {
     max-width: 34rem;
-    margin: -0.5rem 0 1.75rem;
-    font-size: 1.05rem;
+    margin: 0 0 2rem;
+    font-size: 1.1rem;
     line-height: 1.6;
     color: var(--h-dim);
 }
@@ -157,48 +127,36 @@ body.home .hero-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
-    margin-bottom: 3rem;
+    margin-bottom: 1.75rem;
 }
 
-/* ------------------------------------------------------------------------- *
- * The lede
- *
- * One sentence on its own screen-width band, ruled top and bottom. Set larger
- * than body copy and well short of the page's width, because a line that runs
- * the full 78rem is a line nobody finishes.
- * ------------------------------------------------------------------------- */
-
-body.home .hero-lede {
-    padding: clamp(3.5rem, 8vh, 6rem) clamp(1.25rem, 5vw, 6rem);
-    border-top: 1px solid var(--h-rule);
-    border-bottom: 1px solid var(--h-rule);
+/* The two buttons that ask for the signup, a size up from the app's. */
+body.home .btn-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.85rem 1.4rem;
+    font-size: 0.98rem;
 }
 
-/* The page's own container, so the sentence starts on the same left edge as
-   the headline above it and the section heading below. Centering the measure
-   instead put it on a line of its own that nothing else on the page shares. */
-body.home .lede-inner {
-    max-width: 78rem;
-    margin: 0 auto;
+body.home .hero-trust {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+    font-size: 0.86rem;
+    color: var(--h-dim);
 }
 
-body.home .lede-text {
-    /* Short of the container: a line that runs the full 78rem is a line
-       nobody finishes. */
-    max-width: 40ch;
-    font-family: var(--h-serif);
-    font-size: clamp(1.5rem, 2.8vw, 2.15rem);
-    font-weight: 400;
-    line-height: 1.36;
-    letter-spacing: -0.01em;
-    color: var(--h-ink);
+body.home .hero-trust li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
-/* "and" is the whole claim -- both directions, not one -- so it is stressed
-   the way the headline stresses "already have". */
-body.home .lede-text em {
-    font-style: italic;
-    color: var(--h-give);
+body.home .hero-trust i {
+    color: var(--h-seal);
+    font-size: 1rem;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -216,8 +174,9 @@ body.home .hero-visual {
 
 body.home .match-demo {
     background: var(--h-surface);
-    border-radius: var(--h-radius);
-    border: 1px solid var(--h-edge);
+    border-radius: 16px;
+    border: 1px solid var(--h-rule);
+    box-shadow: var(--h-shadow-float);
     padding: 1.6rem 1.6rem 1.35rem;
     transition: opacity 0.35s ease;
 }
@@ -232,7 +191,7 @@ body.home .match-demo-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 1px solid var(--h-edge);
+    border-bottom: 1px solid var(--h-rule);
     padding-bottom: 0.75rem;
     margin-bottom: 1.25rem;
 }
@@ -444,12 +403,66 @@ body.home .match-dot.active {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Figures
+ *
+ * A full-width band straight under the hero: four facts about how matching
+ * works, large, with a line each. Separated by hairlines rather than boxed.
+ * ------------------------------------------------------------------------- */
+
+body.home .stats-band {
+    border-top: 1px solid var(--h-rule);
+    border-bottom: 1px solid var(--h-rule);
+    background: var(--h-surface);
+    padding: 0 clamp(1.25rem, 5vw, 6rem);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+body.home .stats-inner {
+    max-width: 78rem;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.home .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 2.25rem 1.75rem;
+}
+
+body.home .stat + .stat {
+    border-left: 1px solid var(--h-rule);
+}
+
+body.home .stat-value {
+    font-family: var(--h-serif);
+    font-size: clamp(2.4rem, 4vw, 3.2rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--h-ink);
+}
+
+body.home .stat-value small {
+    font-family: var(--h-sans);
+    font-size: 0.35em;
+    margin-left: 0.15rem;
+    color: var(--h-dim);
+}
+
+body.home .stat-label {
+    max-width: 22ch;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--h-dim);
+}
+
+/* ------------------------------------------------------------------------- *
  * Body sections
  *
- * Each is revealed by the IntersectionObserver in pp.js, which adds .active.
- * The un-revealed state is a small offset and no opacity -- if the observer
- * never fires (an old browser, a section taller than the threshold can ever
- * satisfy), the content is still on the page and still readable.
+ * Each is revealed by the IntersectionObserver in pp.js. Visible in CSS and
+ * hidden only by .pending, which pp.js adds once it has an observer in hand
+ * to take it off again -- so a script failure leaves content readable.
  * ------------------------------------------------------------------------- */
 
 body.home .about {
@@ -459,43 +472,35 @@ body.home .about {
 body.home .scroll-section {
     max-width: 78rem;
     margin: 0 auto;
-    padding: clamp(3rem, 8vh, 6rem) 0;
-    border-top: 1px solid var(--h-rule);
+    padding: clamp(4rem, 10vh, 7rem) 0 0;
     transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
-/* The un-revealed state, and the important part is which way round it is.
-   A section is visible in CSS and is hidden only by .pending, which pp.js
-   adds at runtime and only once it has an IntersectionObserver in hand to
-   take it off again. Hiding by default is how a reveal animation turns into
-   a blank page: any failure between the stylesheet loading and the observer
-   firing -- a JS error earlier in the file, an observer that never fires --
-   leaves the whole page's content on the page and invisible, and the reveal
-   is decorative while the content is the entire point. */
-body.home .scroll-section.pending {
+body.home .scroll-section.pending,
+body.home .stats-band.pending {
     opacity: 0;
     transform: translateY(1.25rem);
 }
 
-body.home .scroll-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: clamp(2.5rem, 6vw, 5rem);
-    align-items: center;
+body.home .section-head {
+    max-width: 44rem;
+    margin: 0 auto 3rem;
+    text-align: center;
 }
 
-body.home .section-subtitle {
-    margin-bottom: 1.4rem;
+body.home .section-head .eyebrow {
+    justify-content: center;
+    margin-bottom: 1rem;
 }
 
 body.home .section-title {
     font-family: var(--h-serif);
     font-weight: 400;
-    font-size: clamp(1.9rem, 3.6vw, 3rem);
-    line-height: 1.04;
+    font-size: clamp(2rem, 3.8vw, 3rem);
+    line-height: 1.06;
     letter-spacing: -0.015em;
     color: var(--h-ink);
-    margin-bottom: 1.1rem;
+    margin-bottom: 1rem;
 }
 
 body.home .section-title span {
@@ -504,85 +509,157 @@ body.home .section-title span {
 }
 
 body.home .section-description {
-    font-size: 0.98rem;
+    font-size: 1.02rem;
     line-height: 1.7;
     color: var(--h-ink-soft);
-    max-width: 46ch;
 }
 
-body.home .text-content .btn-primary {
-    margin-top: 1.75rem;
-}
+/* --- How it works ---------------------------------------------------------- */
 
-/* --- How it works: the numbered steps ------------------------------------ */
-/* Set as a ruled list rather than as four cards. Cards would have implied
-   four separate features; this is one sequence, and a numbered ledger is how
-   a sequence is written down. */
-
-body.home .steps {
-    border-top: 1px solid var(--h-edge);
-}
-
-body.home .step {
+body.home .steps,
+body.home .audience {
+    list-style: none;
     display: grid;
-    grid-template-columns: 2.6rem 1fr;
-    gap: 1rem;
-    align-items: baseline;
-    padding: 1rem 0;
-    border-bottom: 1px solid var(--h-rule);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
+}
+
+body.home .audience {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.home .step,
+body.home .audience-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1.6rem 1.5rem;
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: var(--h-radius);
+    box-shadow: var(--h-shadow);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+body.home .step:hover,
+body.home .audience-card:hover {
+    box-shadow: var(--h-shadow-lift);
+    transform: translateY(-2px);
+}
+
+body.home .step-icon,
+body.home .audience-icon {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    margin-bottom: 0.6rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--h-give) 10%, transparent);
+    color: var(--h-give);
+    font-size: 1.3rem;
 }
 
 body.home .step-index {
-    font-family: var(--h-mono);
-    font-size: 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 600;
     letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--h-dim);
 }
 
-body.home .step-text {
-    font-size: 0.95rem;
-    line-height: 1.55;
-    color: var(--h-ink-soft);
-}
-
-body.home .step-text strong {
-    font-weight: 500;
+body.home .step h3,
+body.home .audience-card h3 {
+    font-size: 1.08rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--h-ink);
 }
 
-/* --- Closing call to action ---------------------------------------------- */
-
-body.home .cta-section {
-    border-bottom: 1px solid var(--h-rule);
-    text-align: center;
+body.home .step p,
+body.home .audience-card p {
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--h-ink-soft);
 }
 
-/* The CTA reuses .scroll-content, which is a two-column grid with a large
-   gap -- collapsed to one column that gap becomes row spacing, and the
-   heading, the sentence and the buttons ended up a full 5rem apart from each
-   other. They are one block of copy; their own margins are the spacing. */
-body.home .cta-section .scroll-content {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    gap: 0;
+/* --- Who it is for ---------------------------------------------------------- */
+
+body.home .audience-card {
+    padding: 1.8rem 1.7rem;
+}
+
+body.home .audience-card:nth-child(2) .audience-icon {
+    background: color-mix(in srgb, var(--h-take) 12%, transparent);
+    color: var(--h-take);
+}
+
+body.home .audience-card:nth-child(3) .audience-icon {
+    background: color-mix(in srgb, var(--h-seal) 12%, transparent);
+    color: var(--h-seal);
+}
+
+/* An example trade at the foot of the card. */
+body.home .audience-card .audience-trade {
+    /* Label and value pairs; the two text runs become grid items of their
+       own, so each label sits beside its value on its own row. */
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 0.75rem;
+    align-items: baseline;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--h-rule);
+    font-size: 0.85rem;
+    color: var(--h-ink);
+}
+
+body.home .audience-trade span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--h-dim);
+}
+
+/* --- Closing call to action ------------------------------------------------- */
+/* The one dark panel on the page, so the ask is the last thing that stands
+   out. Painted in the footer color, which stays dark in both themes. */
+
+body.home .cta-section {
+    padding-bottom: clamp(4rem, 10vh, 7rem);
+}
+
+body.home .cta-panel {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(3rem, 7vw, 4.75rem) clamp(1.5rem, 5vw, 4rem);
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--h-give) 40%, transparent), transparent 55%),
+        radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--h-take) 22%, transparent), transparent 45%),
+        var(--h-footer);
+    color: var(--h-on-footer);
+    text-align: center;
+    box-shadow: var(--h-shadow-lift);
 }
 
 body.home .cta-title {
     font-family: var(--h-serif);
     font-weight: 400;
-    font-size: clamp(2rem, 4.2vw, 3.2rem);
-    line-height: 1.04;
+    font-size: clamp(2.1rem, 4.4vw, 3.3rem);
+    line-height: 1.05;
     letter-spacing: -0.015em;
-    color: var(--h-ink);
+    color: var(--h-on-footer);
     margin-bottom: 0.9rem;
 }
 
 body.home .cta-text {
-    font-size: 1rem;
+    max-width: 50ch;
+    margin: 0 auto 2.1rem;
+    font-size: 1.02rem;
     line-height: 1.7;
-    color: var(--h-ink-soft);
-    max-width: 52ch;
-    margin-bottom: 2rem;
+    color: color-mix(in srgb, var(--h-on-footer) 75%, transparent);
 }
 
 body.home .cta-buttons {
@@ -590,6 +667,30 @@ body.home .cta-buttons {
     flex-wrap: wrap;
     gap: 0.75rem;
     justify-content: center;
+}
+
+/* On the dark panel the primary button inverts to the panel's light ink,
+   and the secondary becomes a quiet outline. */
+body.home .cta-panel .btn-primary {
+    background: var(--h-on-footer);
+    border-color: var(--h-on-footer);
+    color: var(--h-footer);
+}
+
+body.home .cta-panel .btn-primary:hover {
+    background: #ffffff;
+    border-color: #ffffff;
+}
+
+body.home .cta-panel .btn-secondary {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--h-on-footer) 35%, transparent);
+    color: var(--h-on-footer);
+}
+
+body.home .cta-panel .btn-secondary:hover {
+    border-color: var(--h-on-footer);
+    background: color-mix(in srgb, var(--h-on-footer) 8%, transparent);
 }
 
 /* ------------------------------------------------------------------------- *
@@ -612,131 +713,6 @@ body.home #contactForm .btn-primary {
     width: 100%;
 }
 
-
-/* ------------------------------------------------------------------------- *
- * The span
- *
- * A pixel bridge on the same square cells as the match matrix, built from both
- * ends inward while the page scrolls past it.
- *
- * The track is the scroll distance; the stage is what stays on screen while
- * that distance is covered. Sticky rather than fixed, so the section releases
- * the page on its own at both ends and nothing has to be positioned or torn
- * down at a scroll offset.
- * ------------------------------------------------------------------------- */
-
-body.home .bridge-track {
-    /* How long the build takes, in screens. The stage occupies one of them, so
-       this leaves a little over a screen of scrolling to close the span. */
-    height: 220vh;
-}
-
-body.home .bridge-stage {
-    position: sticky;
-    top: 0;
-    min-height: 100vh;
-    min-height: 100svh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: clamp(1.75rem, 4vh, 3rem);
-    /* Clears the fixed header, which the sticky top: 0 would otherwise put
-       the heading under. */
-    padding: clamp(6rem, 11vh, 8rem) clamp(1.25rem, 5vw, 6rem) clamp(3rem, 6vh, 5rem);
-}
-
-body.home .bridge-head,
-body.home .bridge-grid,
-body.home .bridge-foot {
-    width: 100%;
-    max-width: 78rem;
-    margin-inline: auto;
-}
-
-body.home .bridge-title {
-    font-family: var(--h-serif);
-    font-weight: 400;
-    font-size: clamp(1.9rem, 3.6vw, 3rem);
-    line-height: 1.06;
-    letter-spacing: -0.02em;
-    color: var(--h-ink);
-    max-width: 20ch;
-    margin-top: 1.15rem;
-}
-
-body.home .bridge-title em {
-    font-style: italic;
-    color: var(--h-give);
-}
-
-/* The cells. Only the bridge's own are in the DOM -- pp.js places each one by
-   grid line, so the empty lattice around it is the page's dot texture rather
-   than a few hundred blank divs. */
-body.home .bridge-grid {
-    display: grid;
-    gap: 2px;
-}
-
-body.home .bridge-cell {
-    aspect-ratio: 1;
-    /* The plan, before it is built. Faint enough to read as a drawing of what
-       is coming rather than as part of the structure. */
-    background: var(--h-cell);
-    transform: scale(0.55);
-    opacity: 0.55;
-    transition:
-        background 0.35s ease,
-        transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1),
-        opacity 0.35s ease;
-}
-
-body.home .bridge-cell.built {
-    transform: none;
-    opacity: 1;
-}
-
-/* Each half is the direction it comes from, the same two colors the matrix
-   uses. They meet in the middle, which is the whole point of the thing. */
-body.home .bridge-cell.built.give { background: var(--h-give); }
-body.home .bridge-cell.built.take { background: var(--h-take); }
-
-/* The last column to land. Sealed rather than either side's color: what
-   closes a span is the agreement, not either party. */
-body.home .bridge-cell.built.keystone { background: var(--h-seal); }
-
-/* Once the span is closed there is nothing left for the extra scroll distance
-   to reveal, so the section gives it back and behaves like any other block on
-   the page. Without this, every later pass down the page -- and every scroll
-   back up to re-read the heading -- pinned the stage for a screen and a half
-   in front of a finished picture. pp.js only makes the swap while the section
-   is off screen, so the height never disappears from under anyone. */
-body.home .bridge-section.released .bridge-track {
-    height: auto;
-}
-
-/* The stage keeps its height. Only the track's extra scroll distance goes,
-   so the swap changes nothing about the box the reader is looking at -- and
-   what follows the section stays on the pixel it was already on. Dropping the
-   min-height here as well shrank the stage to its contents in the same frame,
-   which pulled the next section up by the difference. */
-body.home .bridge-section.released .bridge-stage {
-    position: static;
-}
-
-body.home .bridge-foot {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-top: 0.9rem;
-    padding-top: 0.85rem;
-    border-top: 1px solid var(--h-rule);
-    font-family: var(--h-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--h-dim);
-}
 
 /* ------------------------------------------------------------------------- *
  * The arrival
@@ -766,6 +742,7 @@ body.home .bridge-foot {
 body.home .hero-badge,
 body.home .hero-sub,
 body.home .hero-buttons,
+body.home .hero-trust,
 body.home .hero-visual {
     animation: hero-rise 0.85s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
@@ -777,6 +754,7 @@ body.home .hero-badge { animation-delay: 0.05s; }
 body.home .hero-visual { animation-delay: 0.34s; }
 body.home .hero-sub { animation-delay: 0.44s; }
 body.home .hero-buttons { animation-delay: 0.52s; }
+body.home .hero-trust { animation-delay: 0.6s; }
 
 /* The headline goes word by word. pp.js wraps each word and numbers it, so
    the delay is a multiplication here rather than a rule per word; a headline
@@ -811,18 +789,6 @@ body.home .hero-title .rise-word > span {
     }
 }
 
-/* The lede is under the fold, so it is revealed on the way in like the
-   sections below it rather than on load. pp.js observes it with the same
-   observer. */
-body.home .hero-lede .lede-text {
-    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-body.home .hero-lede.pending .lede-text {
-    opacity: 0;
-    transform: translateY(1.25rem);
-}
-
 /* ------------------------------------------------------------------------- *
  * Responsive
  *
@@ -832,24 +798,31 @@ body.home .hero-lede.pending .lede-text {
  * ------------------------------------------------------------------------- */
 
 @media (max-width: 62em) {
-    body.home .hero-inner,
-    body.home .scroll-content {
+    body.home .hero-inner {
         grid-template-columns: 1fr;
     }
 
-    body.home .section-description,
-    body.home .cta-text {
-        max-width: none;
+    body.home .stats-inner,
+    body.home .steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* Two across: the second row's first figure starts a new line, so it
+       takes the rule on top instead of on its left. */
+    body.home .stat:nth-child(3) {
+        border-left: none;
+    }
+
+    body.home .stat:nth-child(n + 3) {
+        border-top: 1px solid var(--h-rule);
+    }
+
+    body.home .audience {
+        grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 34em) {
-    /* Two screens of scrolling for one graphic is a long way to ask someone
-       to drag a thumb. The build is the same, over less distance. */
-    body.home .bridge-track {
-        height: 170vh;
-    }
-
     /* Fourteen columns of matrix on a 320px screen is a 20px cell with a
        3px gutter -- the gutter stops reading and the whole thing turns into
        a smear. Half the columns, same shape. */
@@ -858,9 +831,19 @@ body.home .hero-lede.pending .lede-text {
     }
 
     body.home .hero-buttons .btn-primary,
-    body.home .hero-buttons .btn-secondary {
+    body.home .hero-buttons .btn-secondary,
+    body.home .cta-buttons .btn-primary,
+    body.home .cta-buttons .btn-secondary {
         flex: 1 1 100%;
         justify-content: center;
+    }
+
+    body.home .steps {
+        grid-template-columns: 1fr;
+    }
+
+    body.home .stat {
+        padding: 1.6rem 1rem;
     }
 }
 
@@ -868,47 +851,29 @@ body.home .hero-lede.pending .lede-text {
    move here, and both are decorative. Everything lands in its final state. */
 @media (prefers-reduced-motion: reduce) {
     body.home .scroll-section,
-    body.home .scroll-section.pending {
+    body.home .scroll-section.pending,
+    body.home .stats-band,
+    body.home .stats-band.pending {
         opacity: 1;
         transform: none;
         transition: none;
     }
 
-    body.home .lattice-cell {
+    body.home .lattice-cell,
+    body.home .step,
+    body.home .audience-card {
         animation: none;
-    }
-
-    /* The span is built already, and the track collapses to the height of
-       what it holds -- there is no scroll distance to spend on an animation
-       that is not going to play. */
-    body.home .bridge-track {
-        height: auto;
-    }
-
-    body.home .bridge-stage {
-        position: static;
-        min-height: 0;
-    }
-
-    body.home .bridge-cell {
         transition: none;
     }
 
-    /* The hero's arrival, the word stagger and the lede's reveal. All three
-       are decorative, and all three land where they were going. */
+    /* The hero's arrival and the word stagger land where they were going. */
     body.home .hero-badge,
     body.home .hero-sub,
     body.home .hero-buttons,
+    body.home .hero-trust,
     body.home .hero-visual,
     body.home .hero-title .rise-word > span {
         animation: none;
-    }
-
-    body.home .hero-lede .lede-text,
-    body.home .hero-lede.pending .lede-text {
-        opacity: 1;
-        transform: none;
-        transition: none;
     }
 
     body.home .modal-container {
