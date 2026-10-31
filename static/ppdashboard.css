@@ -1632,7 +1632,7 @@ body.ink .edit-grid > .form-group:last-child .category-chip.checked {
 .requests-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0.25rem 1.25rem 0.5rem;
 }
 
 .requests-list li {
@@ -1684,6 +1684,7 @@ body.ink .edit-grid > .form-group:last-child .category-chip.checked {
 
 .requests-list li.requests-empty {
     display: block;
+    padding: 1rem 0;
     color: var(--h-dim);
     border-bottom: none;
 }

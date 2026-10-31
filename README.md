@@ -54,6 +54,14 @@ pip install -r requirements.txt
 Copy `.env.example` to `.env` and fill in `DATABASE_URL` and `SECRET_KEY`.
 The app refuses to start without a database URL.
 
+Point `DATABASE_URL` at the Neon **development** branch, not production.
+The tests and `alembic upgrade` run against whatever it names, and the
+development branch is a copy of production that can be thrown away and
+re-made from it at any time. Leave `RESEND_API_KEY` unset locally: the copy
+holds real organizations' addresses, and without the key mail is written to
+the log instead of sent. Production's own `DATABASE_URL` lives in the Render
+dashboard, which also runs migrations on deploy.
+
 Create the schema:
 
 ```bash
