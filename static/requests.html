@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Every stylesheet and font on this page is served from here.
+         The Google Fonts and unpkg <link>s that used to sit at the end
+         of this head, and the three preconnects that existed to warm
+         them, are gone -- see fonts.css and boxicons.css. -->
+    <title>Requests | PartnerPortal</title>
+    <!-- Public, and meant to be found: this is the one signed-out view of the
+         directory, and the reason the home page's "Browse partners" leads
+         somewhere now. Individual profiles stay out of the index until there
+         is a per-organization opt-in -- see robots_txt in app.py. -->
+    <meta name="description" content="Specific, dated asks and offers from organizations on PartnerPortal. Answer one with a proposal, or post what your organization needs right now.">
+    <!-- SVG first for anything modern (one file, sharp at every size); the
+         .ico is the legacy fallback and is also what a bare /favicon.ico
+         request gets. -->
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <!-- Applied before the first stylesheet so the page never paints in one
+         theme and then switches. Light unless this browser chose otherwise in
+         Settings: 'dark', or 'system' to follow the device. The listener keeps
+         'system' honest if the OS flips while the page is open. -->
+    <script>
+      (function () {
+        var mq = window.matchMedia
+          && window.matchMedia('(prefers-color-scheme: dark)');
+        function chosen() {
+          try {
+            return localStorage.getItem('partnerPortalTheme');
+          } catch (e) {
+            return null; /* storage disabled; light */
+          }
+        }
+        function apply() {
+          var v = chosen();
+          document.documentElement.setAttribute('data-theme',
+            v === 'dark' || (v === 'system' && mq && mq.matches)
+              ? 'dark' : 'light');
+        }
+        apply();
+        if (mq && mq.addEventListener) {
+          mq.addEventListener('change', function () {
+            if (chosen() === 'system') apply();
+          });
+        }
+      })();
+    </script>
+    <!-- The four Latin faces every page paints with, fetched from the head
+         rather than discovered after the stylesheet bundle has downloaded
+         and been parsed. fonts.css is the last sheet in the bundle, so
+         without this the hero serif and the mono labels arrived a full
+         round trip after the layout did and swapped in over the fallback.
+         crossorigin because font fetches are always CORS-mode; a preload
+         without it is a different request the browser will not reuse. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/instrumentserif-1dee6305.woff2">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/instrumentserif-c6f79bf3.woff2">
+    <link rel="stylesheet" href="tokens.css">
+    <link rel="stylesheet" href="ink.css">
+    <link rel="stylesheet" href="directory.css">
+    <link rel="stylesheet" href="requests.css">
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="forms.css">
+    <link rel="stylesheet" href="nav.css">
+    <link rel="stylesheet" href="boxicons.css">
+    <link rel="stylesheet" href="fonts.css">
+</head>
+<body class="ink">
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <header class="header">
+        <a href="index.html" class="logo" aria-label="Partner Portal"><img src="wordmark.svg" alt="Partner Portal" width="187" height="34"></a>
+        <button type="button" class="bx bx-menu" id="menu-icon"
+                aria-label="Menu" aria-expanded="false"></button>
+        <nav class="navbar">
+            <a href="index.html">Home</a>
+            <a href="directory.html" id="navConnect">Connect</a>
+            <a href="requests.html" class="active">Requests</a>
+            <a href="ppdashboard.html" id="navDashboard">Dashboard</a>
+            <div class="nav-account" id="navAccount" data-state="loading">
+                <span class="nav-auth-cta"><a href="pplogin.html">Login</a><span class="cta-sep">|</span><a href="pplogin.html#signup">Create Account</a></span>
+                <div class="account-menu">
+                    <button type="button" class="avatar-button" id="accountToggle"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
+                            aria-label="Account menu">
+                        <span class="avatar-initials" id="accountInitials" aria-hidden="true"></span>
+                        <span class="avatar-label" id="accountLabel"></span>
+                    </button>
+                    <div class="account-dropdown" id="accountDropdown" hidden>
+                        <div class="account-identity">
+                            <span class="account-name" id="accountName"></span>
+                            <span class="account-email" id="accountEmail"></span>
+                        </div>
+                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="analytics.html"><i class='bx bx-line-chart'></i> Analytics</a>
+                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
+                        <a href="pphelp.html"><i class='bx bx-help-circle'></i> Help</a>
+                        <button type="button" class="account-signout" id="accountSignOut">
+                            <i class='bx bx-log-out'></i> Log out
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dir-main" id="main" tabindex="-1">
+        <div class="dir-head req-head">
+            <div>
+                <p class="eyebrow">Requests</p>
+                <h1>What organizations need right now</h1>
+                <p class="dir-lede">
+                    Specific, dated asks and offers. Answer one and it becomes
+                    a proposal; the terms start from the request.
+                </p>
+            </div>
+            <a class="btn-primary req-post" id="reqPostBtn" href="pplogin.html?next=requests.html#signup">
+                <i class='bx bx-plus' aria-hidden="true"></i> Post a request
+            </a>
+        </div>
+
+        <!-- One request opened from a link: a notification, or a share. -->
+        <section class="req-focus" id="reqFocus" hidden aria-live="polite"></section>
+
+        <form class="dir-controls" id="reqControls" aria-label="Filter requests">
+            <div class="req-kind" role="radiogroup" aria-label="Show">
+                <label class="segment"><input type="radio" name="kind" value="" checked><span>All</span></label>
+                <label class="segment"><input type="radio" name="kind" value="need"><span>Needs</span></label>
+                <label class="segment"><input type="radio" name="kind" value="have"><span>Offers</span></label>
+            </div>
+            <div class="dir-filters req-filters">
+                <label class="sr-only" for="reqCategory">Category</label>
+                <select id="reqCategory" name="category">
+                    <option value="">Any category</option>
+                </select>
+                <label class="dir-remote">
+                    <input type="checkbox" id="reqRemote" name="remote">
+                    <span>Open to remote</span>
+                </label>
+            </div>
+        </form>
+
+        <p class="dir-count" id="reqCount" role="status" aria-live="polite"></p>
+
+        <div class="dir-grid" id="reqGrid" aria-busy="true"></div>
+
+        <nav class="dir-pager" id="reqPager" aria-label="Request pages" hidden>
+            <button type="button" class="btn-ghost" id="reqPrev">
+                <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span id="reqPageIndicator"></span>
+            <button type="button" class="btn-ghost" id="reqNext">
+                Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+        </nav>
+    </main>
+
+    <!-- Post a request. Signed-in only; the button links to signup otherwise. -->
+    <div id="reqModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true" aria-labelledby="reqModalTitle">
+            <div class="modal-header">
+                <h2 id="reqModalTitle">Post a request</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="reqForm" novalidate>
+                    <p class="form-message hidden" id="reqFormMessage" role="alert"></p>
+                    <div class="form-group">
+                        <span class="req-label">This is something we</span>
+                        <div class="req-kind req-kind-form" role="radiogroup" aria-label="Kind">
+                            <label class="segment"><input type="radio" name="postKind" value="need" checked><span>Need</span></label>
+                            <label class="segment"><input type="radio" name="postKind" value="have"><span>Can offer</span></label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reqPostCategory">Category</label>
+                        <select id="reqPostCategory" required></select>
+                        <p class="req-hint" id="reqProfileHint" hidden></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="reqTitle">Title</label>
+                        <input type="text" id="reqTitle" maxlength="120" required
+                               placeholder="10 volunteers for our Nov 15 food drive">
+                    </div>
+                    <div class="req-row">
+                        <div class="form-group">
+                            <label for="reqAmount">Amount <span class="optional">optional</span></label>
+                            <input type="number" id="reqAmount" min="0.01" step="any" inputmode="decimal">
+                        </div>
+                        <div class="form-group">
+                            <label for="reqUnit">Unit</label>
+                            <select id="reqUnit"></select>
+                        </div>
+                        <div class="form-group" id="reqUnitDetailGroup" hidden>
+                            <label for="reqUnitDetail">Measured in</label>
+                            <input type="text" id="reqUnitDetail" maxlength="40">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reqNeededBy">Needed by <span class="optional">optional, stays up 30 days without one</span></label>
+                        <input type="date" id="reqNeededBy">
+                    </div>
+                    <div class="form-group">
+                        <label for="reqDetails">Details <span class="optional">optional</span></label>
+                        <textarea id="reqDetails" rows="3" maxlength="1000"
+                                  placeholder="When, where, and anything a helper should know."></textarea>
+                    </div>
+                    <label class="dir-remote req-remote">
+                        <input type="checkbox" id="reqRemoteOk">
+                        <span>Can be done remotely</span>
+                    </label>
+                    <div class="req-actions">
+                        <button type="button" class="btn-secondary" id="reqCancel">Cancel</button>
+                        <button type="submit" class="btn-primary">Post request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer class="site-footer compact">
+        <div class="footer-bottom">
+            <span>&copy; 2026 PartnerPortal</span>
+            <nav class="footer-links" aria-label="Footer">
+                <a href="directory.html">Find Partners</a>
+                <a href="pphelp.html">Help</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
+        </div>
+    </footer>
+
+    <script src="base.js"></script>
+
+    <script src="common.js"></script>
+    <script src="notifications.js"></script>
+    <script src="requests.js"></script>
+</body>
+</html>

@@ -81,6 +81,7 @@
         <nav class="navbar">
             <a href="index.html">Home</a>
             <a href="ppsearch.html">Connect</a>
+            <a href="requests.html">Requests</a>
             <a href="ppdashboard.html" class="active">Dashboard</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
@@ -325,6 +326,21 @@
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Open requests this organization has on the board, with how
+                 many organizations have answered each. Filled from
+                 /api/requests/mine by ppdashboard.js. -->
+            <div class="dashboard-card requests-card" id="requestsCard">
+                <div class="card-header">
+                    <h3>Your requests</h3>
+                    <div class="card-header-actions">
+                        <a class="btn-action small" href="requests.html">
+                            <i class='bx bx-plus'></i> Post a request
+                        </a>
+                    </div>
+                </div>
+                <ul class="requests-list" id="requestsList" aria-busy="true"></ul>
             </div>
         </div>
     </section>

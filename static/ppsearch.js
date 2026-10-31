@@ -1171,10 +1171,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Terms are drawn from what each side can actually supply: your own offers
     // for your column, theirs for theirs. Anything outside that is not a thing
     // that organization has said it can provide.
+    // A request from the board this proposal is answering, if it opened from
+    // one (requests.html links here with ?request=). Set only for the open
+    // that the link asked for, and cleared after, so an ordinary proposal to
+    // the same organization later is not quietly attached to it.
+    let pendingRequest = null;
+    let answeringRequest = null;
+    const DEFAULT_PROPOSE_INTRO = (
+        proposeModal && proposeModal.querySelector('.propose-intro')
+            ? proposeModal.querySelector('.propose-intro').textContent.trim() : '');
+
     function buildProposePickers(target) {
+        // Answering a need for something you do not list yet: the chip is
+        // offered anyway, and the server adds it to your offers on send.
+        const mine = new Set(me ? me.offers : []);
+        if (answeringRequest && answeringRequest.kind === 'need') {
+            mine.add(answeringRequest.category);
+        }
         const columns = [
             ['proposerGives', document.getElementById('proposerGivesPicker'),
-             new Set(me ? me.offers : [])],
+             mine],
             ['recipientGives', document.getElementById('recipientGivesPicker'),
              new Set(target.offers || [])]
         ];
@@ -1407,6 +1423,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateProposeCounts();
     }
 
+    // The request's category, ticked on the side it belongs to, with its
+    // amount carried into the terms. The intro line says what is going on,
+    // and what sending will add to the profile when that applies.
+    function prefillFromRequest(req) {
+        const side = req.kind === 'need' ? 'proposerGives' : 'recipientGives';
+        const box = document.getElementById(`prop-${side}-${req.category}`);
+        if (box) {
+            box.checked = true;
+            box.closest('.category-chip').classList.add('checked');
+            proposeSelected[side].add(req.category);
+        }
+        if (req.quantity) proposeQuantities[side][req.category] = { ...req.quantity };
+        updateProposeCounts();
+        proposeTitle.textContent = `Respond to "${req.title}"`;
+        const intro = proposeModal.querySelector('.propose-intro');
+        if (intro) {
+            const adds = req.kind === 'need' && !(me.offers || []).includes(req.category);
+            intro.textContent = `Answering ${req.organization.name}'s request. `
+                + `${req.category_label} is already in the terms.`
+                + (adds ? ` Sending adds it to your profile's offers.` : '');
+        }
+    }
+
     if (proposeBtn) {
         proposeBtn.addEventListener('click', () => {
             if (!detailTarget || !me) return;
@@ -1423,8 +1462,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dateError = document.getElementById('proposeDates-error');
             if (dateError) dateError.textContent = '';
             if (proposeTimeline) proposeTimeline.value = 'three_months';
+            answeringRequest = pendingRequest
+                && pendingRequest.organization.id === detailTarget.id
+                ? pendingRequest : null;
+            pendingRequest = null;
             buildProposePickers(detailTarget);
             prefillFromMatch(detailTarget);
+            const intro = proposeModal.querySelector('.propose-intro');
+            if (intro) intro.textContent = DEFAULT_PROPOSE_INTRO;
+            if (answeringRequest) prefillFromRequest(answeringRequest);
             renderProposeAmounts();
             document.getElementById('proposeMessage').value = '';
             setProposeMessage('');
@@ -1492,9 +1538,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         timeline: proposeTimeline.value,
                         starts_on: document.getElementById('proposeStartsOn').value,
                         ends_on: document.getElementById('proposeEndsOn').value,
-                        message: document.getElementById('proposeMessage').value.trim()
+                        message: document.getElementById('proposeMessage').value.trim(),
+                        request_id: answeringRequest ? answeringRequest.id : undefined
                     }
                 });
+                if (answeringRequest && answeringRequest.kind === 'need'
+                        && !(me.offers || []).includes(answeringRequest.category)) {
+                    me.offers = [...(me.offers || []), answeringRequest.category];
+                }
+                answeringRequest = null;
                 closeModal(proposeModal, { force: true });
                 // Stay here. This used to redirect to the dashboard, which
                 // threw away the search, the filters and the page somebody
@@ -1903,9 +1955,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         paintFilterButton();
 
         const org = parseInt(params.get('org'), 10);
+        const answering = parseInt(params.get('request'), 10);
         return {
             org: org > 0 ? org : null,
             propose: params.get('propose') === '1',
+            request: answering > 0 ? answering : null,
         };
     }
 
@@ -1914,7 +1968,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // list already loaded when it is there; fetched on its own when it is
     // not, so a link to a match on page 30, or to an organization that does
     // not match at all, still opens rather than silently doing nothing.
-    async function openOrg(id, { propose = false } = {}) {
+    async function openOrg(id, { propose = false, answering = null } = {}) {
         let m = [...displayed, ...allMatches, ...savedList]
             .find((x) => x.id === id);
         if (!m) {
@@ -1936,6 +1990,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (!m.match_detail) m.match_detail = {};
         showDetail(m);
+        if (propose && answering) {
+            try {
+                pendingRequest = (await window.api(
+                    `/api/requests/${encodeURIComponent(answering)}`)).request;
+                if (pendingRequest.status !== 'open') {
+                    window.toast('That request is no longer open, so this '
+                        + 'is an ordinary proposal.', 'error');
+                    pendingRequest = null;
+                }
+            } catch (error) {
+                window.toast(error.message || 'Could not load that request.', 'error');
+                pendingRequest = null;
+            }
+        }
         if (propose && proposeBtn && me) proposeBtn.click();
     }
 
@@ -1951,5 +2019,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         restorePage = 0;
         await loadMatches();
     }
-    if (arrival.org) await openOrg(arrival.org, { propose: arrival.propose });
+    if (arrival.org) {
+        await openOrg(arrival.org,
+            { propose: arrival.propose, answering: arrival.request });
+    }
 });

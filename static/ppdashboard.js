@@ -2156,3 +2156,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     await migrateLocalEvents();
     if (events.length !== before) renderSavedEvents();
 });
+
+// ---------------------------------------------------------------------------
+// Your requests
+// The organization's own requests from the board, newest first, with how many
+// organizations have answered each. Its own request so a slow or failed
+// answer here never holds up the rest of the dashboard.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', async () => {
+    const list = document.getElementById('requestsList');
+    if (!list) return;
+    const esc = window.escapeHtml;
+    try {
+        const data = await window.api('/api/requests/mine');
+        const rows = data.requests.slice(0, 6);
+        list.innerHTML = rows.length ? rows.map((r) => {
+            const answered = r.response_count === 1
+                ? '1 response' : `${r.response_count} responses`;
+            const state = r.status === 'open' ? answered
+                : r.status.charAt(0).toUpperCase() + r.status.slice(1);
+            return `
+                <li class="${r.status === 'open' ? '' : 'done'}">
+                    <span class="request-kind ${esc(r.kind)}">${
+                        r.kind === 'need' ? 'Need' : 'Offer'}</span>
+                    <a href="requests.html?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
+                    <span class="request-state">${esc(state)}</span>
+                </li>`;
+        }).join('') : `
+            <li class="requests-empty">
+                Need something specific, or have something to give right now?
+                <a href="requests.html">Post it on the board</a> and matching
+                organizations hear about it.
+            </li>`;
+    } catch (error) {
+        list.innerHTML = `<li class="requests-empty">${esc(
+            error.message || 'Could not load your requests.')}</li>`;
+    } finally {
+        list.setAttribute('aria-busy', 'false');
+    }
+});

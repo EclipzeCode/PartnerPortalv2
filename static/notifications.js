@@ -78,6 +78,13 @@
                     icon: 'bx-calendar-event',
                     text: `${who} proposed a meeting — accept, suggest a time, or decline`,
                 };
+            case 'request_match':
+                return {
+                    icon: 'bx-notepad',
+                    text: item.request_kind === 'have'
+                        ? `${who} is offering ${item.category_label}, which you need`
+                        : `${who} needs ${item.category_label}, which you offer`,
+                };
             case 'message':
                 return {
                     icon: 'bx-message-dots',

@@ -616,3 +616,51 @@ body {
         display: none;
     }
 }
+
+/* --- Open requests ---------------------------------------------------------- */
+
+.org-request-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.org-request-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--h-rule);
+}
+
+.org-request-list li:last-child { border-bottom: none; }
+
+.org-request-list a {
+    color: var(--h-ink);
+    font-weight: 500;
+}
+
+.org-request-list a:hover { color: var(--h-give); }
+
+.org-request-kind {
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: color-mix(in srgb, var(--h-give) 12%, transparent);
+    color: var(--h-give);
+}
+
+.org-request-kind.need {
+    background: color-mix(in srgb, var(--h-take) 13%, transparent);
+    color: var(--h-take);
+}
+
+.org-request-cat {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--h-dim);
+}

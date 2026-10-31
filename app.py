@@ -51,8 +51,8 @@ from matching import (
 from moderation import screen_name
 from models import (
     Admin, AdminAction, Block, ContactMessage, Event, EventException,
-    Message, Organization, Partnership, ProfileView, RateLimitAttempt,
-    SavedLead, ThreadReport,
+    Message, Organization, PartnerRequest, Partnership, ProfileView,
+    RateLimitAttempt, SavedLead, ThreadReport,
 )
 from notifications import (
     notify_profile_hidden,
@@ -1978,8 +1978,8 @@ def html_page(page):
 # nobody has been asked. The page is paged and carries no contact details, so
 # what a crawler gets is what a visitor gets.
 _SITEMAP_PAGES = (
-    "index.html", "directory.html", "pphelp.html", "privacy.html",
-    "pplogin.html",
+    "index.html", "directory.html", "requests.html", "pphelp.html",
+    "privacy.html", "pplogin.html",
 )
 
 
@@ -5723,6 +5723,289 @@ def _profile_view_stats(db, org, days=VIEW_SERIES_DAYS, zone="UTC"):
     return total, recent, series, prior
 
 
+# --- Open requests ----------------------------------------------------------
+# A board of specific, dated asks and offers. A profile says what an
+# organization generally has; a request says what it needs right now. Answering
+# one is an ordinary proposal carrying request_id (see create_proposal), so
+# nothing after the click is new. See models.PartnerRequest.
+
+REQUEST_DEFAULT_DAYS = 30        # how long a request with no date stays up
+REQUEST_MAX_DAYS = 180           # the furthest out a date may be
+MAX_OPEN_REQUESTS = 5            # per organization, so the board stays specific
+MAX_REQUEST_TITLE = 120
+MAX_REQUEST_DETAILS = 1000
+REQUESTS_PER_DAY = 10
+REQUEST_PAGE_SIZE = 24
+
+
+def _live_requests(db, today=None):
+    """Open, in date, from an organization that is listed."""
+    today = today or datetime.now(timezone.utc).date()
+    return db.query(PartnerRequest).join(
+        Organization, PartnerRequest.organization_id == Organization.id
+    ).filter(
+        PartnerRequest.status == PartnerRequest.OPEN,
+        PartnerRequest.expires_on >= today,
+        Organization.onboarding_complete.is_(True),
+        Organization.hidden_at.is_(None),
+    )
+
+
+def _response_counts(db, request_ids):
+    """{request id: proposals that answered it}, withdrawn ones excluded."""
+    if not request_ids:
+        return {}
+    rows = db.query(Partnership.request_id, func.count(Partnership.id)).filter(
+        Partnership.request_id.in_(request_ids),
+        Partnership.status != Partnership.WITHDRAWN,
+    ).group_by(Partnership.request_id).all()
+    return dict(rows)
+
+
+def _request_responses(db, req):
+    """Who answered `req`, for its poster only."""
+    rows = db.query(Partnership).options(*_party_names_only()).filter(
+        Partnership.request_id == req.id,
+    ).order_by(Partnership.created_at.desc()).all()
+    return [{
+        "proposal_id": p.id,
+        "status": p.status,
+        "organization": p.counterpart_party(req.organization_id).get("name"),
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    } for p in rows]
+
+
+def _request_with_counts(req, counts, viewer):
+    data = req.to_dict(viewer=viewer)
+    data["response_count"] = counts.get(req.id, 0)
+    return data
+
+
+@app.route("/api/requests", methods=["GET"])
+def list_requests():
+    """The board. Public, like the directory: no contact details on a request.
+
+    Signed in, the viewer's own blocks apply and requests they could answer
+    from their own profile come first.
+    """
+    db = get_db()
+    try:
+        viewer = current_org(db)
+        query = _live_requests(db)
+
+        kind = (request.args.get("kind") or "").strip()
+        if kind in PartnerRequest.KINDS:
+            query = query.filter(PartnerRequest.kind == kind)
+        category = (request.args.get("category") or "").strip()
+        if category:
+            query = query.filter(PartnerRequest.category == category)
+        if request.args.get("remote") == "1":
+            query = query.filter(PartnerRequest.remote_ok.is_(True))
+        try:
+            org_id = int(request.args.get("org") or 0)
+        except ValueError:
+            org_id = 0
+        if org_id and valid_id(org_id):
+            query = query.filter(PartnerRequest.organization_id == org_id)
+
+        order = [PartnerRequest.created_at.desc(), PartnerRequest.id.desc()]
+        if viewer is not None:
+            query = query.filter(
+                PartnerRequest.organization_id.notin_(_blocked_ids(viewer.id)))
+            fits = case(
+                (and_(PartnerRequest.kind == PartnerRequest.NEED,
+                      PartnerRequest.category.in_(viewer.offers or [""])), 0),
+                (and_(PartnerRequest.kind == PartnerRequest.HAVE,
+                      PartnerRequest.category.in_(viewer.needs or [""])), 0),
+                else_=1,
+            )
+            order.insert(0, fits)
+
+        try:
+            page = max(1, int(request.args.get("page") or 1))
+        except ValueError:
+            page = 1
+        total = query.count()
+        rows = query.order_by(*order).offset(
+            (page - 1) * REQUEST_PAGE_SIZE).limit(REQUEST_PAGE_SIZE).all()
+        counts = _response_counts(db, [r.id for r in rows])
+        return jsonify({
+            "requests": [_request_with_counts(r, counts, viewer) for r in rows],
+            "total": total,
+            "page": page,
+            "pages": max(1, math.ceil(total / REQUEST_PAGE_SIZE)),
+            "signed_in": viewer is not None,
+        })
+    finally:
+        db.close()
+
+
+@app.route("/api/requests/<int:request_id>", methods=["GET"])
+def get_request(request_id):
+    """One request. The poster also gets who answered it; nobody else does."""
+    db = get_db()
+    try:
+        viewer = current_org(db)
+        req = db.get(PartnerRequest, request_id)
+        org = req.organization if req is not None else None
+        mine = viewer is not None and req is not None and (
+            req.organization_id == viewer.id)
+        if (req is None or org is None
+                or ((not org.onboarding_complete or org.hidden_at) and not mine)
+                or (viewer is not None and not mine
+                    and _blocked_between(db, viewer.id, org.id))):
+            return jsonify({"error": "That request is not on the board."}), 404
+        counts = _response_counts(db, [req.id])
+        data = _request_with_counts(req, counts, viewer)
+        if mine:
+            data["responses"] = _request_responses(db, req)
+        return jsonify({"request": data})
+    finally:
+        db.close()
+
+
+@app.route("/api/requests/mine", methods=["GET"])
+@login_required
+def my_requests(org, db):
+    """The poster's own requests: everything open, and the last few closed."""
+    rows = db.query(PartnerRequest).filter(
+        PartnerRequest.organization_id == org.id,
+    ).order_by(PartnerRequest.created_at.desc()).limit(50).all()
+    counts = _response_counts(db, [r.id for r in rows])
+    live = [r for r in rows if r.is_live()]
+    done = [r for r in rows if not r.is_live()][:10]
+    return jsonify({
+        "requests": [_request_with_counts(r, counts, org) for r in live + done],
+        "open": len(live),
+        "limit": MAX_OPEN_REQUESTS,
+    })
+
+
+@app.route("/api/requests", methods=["POST"])
+@login_required
+def create_request(org, db):
+    """Post a need or a have.
+
+    The category goes onto the poster's profile if it is not there already --
+    needs for a need, offers for a have. A request for something the profile
+    does not list would leave matching blind to it, and an offer the profile
+    does not list could not be put into a proposal at all.
+    """
+    if not org.onboarding_complete:
+        return jsonify({"error": "Complete your profile first."}), 409
+
+    data = request.get_json(silent=True) or {}
+    kind = (data.get("kind") or "").strip()
+    if kind not in PartnerRequest.KINDS:
+        return jsonify({"error": "Is this something you need, or something "
+                                 "you have?", "field": "kind"}), 400
+
+    cleaned = clean_categories([data.get("category")])
+    if not cleaned:
+        return jsonify({"error": "Pick a category.", "field": "category"}), 400
+    category = cleaned[0]
+
+    title = " ".join(str(data.get("title") or "").split())
+    if not title:
+        return jsonify({"error": "Give the request a short title.",
+                        "field": "title"}), 400
+    if len(title) > MAX_REQUEST_TITLE:
+        return jsonify({"error": f"Keep the title under {MAX_REQUEST_TITLE} "
+                                 f"characters.", "field": "title"}), 400
+    details = str(data.get("details") or "").strip()
+    if len(details) > MAX_REQUEST_DETAILS:
+        return jsonify({"error": f"Keep the details under "
+                                 f"{MAX_REQUEST_DETAILS} characters.",
+                        "field": "details"}), 400
+    for field, value in (("title", title), ("details", details)):
+        if value and screen_name(value)[0]:
+            return jsonify({"error": "That matched our list of blocked "
+                                     "words. If that is wrong, please get in "
+                                     "touch.", "field": field}), 400
+
+    quantities, problem = _clean_quantities(
+        {category: data["quantity"]} if isinstance(data.get("quantity"), dict)
+        else None, [category])
+    if problem:
+        return jsonify(problem), 400
+    quantity = (quantities or {}).get(category)
+
+    today = datetime.now(timezone.utc).date()
+    needed_by = None
+    raw = str(data.get("needed_by") or "").strip()
+    if raw:
+        try:
+            needed_by = datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "Enter a valid date.",
+                            "field": "needed_by"}), 400
+        if needed_by < today:
+            return jsonify({"error": "That date has already passed.",
+                            "field": "needed_by"}), 400
+        if needed_by > today + timedelta(days=REQUEST_MAX_DAYS):
+            return jsonify({"error": f"Pick a date within "
+                                     f"{REQUEST_MAX_DAYS} days.",
+                            "field": "needed_by"}), 400
+
+    open_now = _live_requests(db, today).filter(
+        PartnerRequest.organization_id == org.id).count()
+    if open_now >= MAX_OPEN_REQUESTS:
+        return jsonify({
+            "error": f"You have {MAX_OPEN_REQUESTS} open requests already. "
+                     f"Close or mark one filled first.",
+        }), 409
+
+    # Metered last, so a refused request costs nothing.
+    wait = rate_limited("requests", str(org.id),
+                        max_attempts=REQUESTS_PER_DAY, window_seconds=86400)
+    if wait:
+        return too_many("You have posted a lot of requests today.", wait)
+
+    listed = "needs" if kind == PartnerRequest.NEED else "offers"
+    current = list(getattr(org, listed) or [])
+    added = category not in current
+    if added:
+        setattr(org, listed, current + [category])
+
+    req = PartnerRequest(
+        organization_id=org.id,
+        kind=kind,
+        category=category,
+        quantity=quantity,
+        title=title,
+        details=details or None,
+        needed_by=needed_by,
+        expires_on=needed_by or today + timedelta(days=REQUEST_DEFAULT_DAYS),
+        remote_ok=bool(data.get("remote_ok")),
+    )
+    db.add(req)
+    db.commit()
+    return jsonify({
+        "request": _request_with_counts(req, {}, org),
+        "added_to_profile": listed if added else None,
+    }), 201
+
+
+@app.route("/api/requests/<int:request_id>/close", methods=["POST"])
+@login_required
+def close_request(org, db, request_id):
+    """Take a request off the board, as filled or simply closed."""
+    req = db.get(PartnerRequest, request_id)
+    if req is None or req.organization_id != org.id:
+        return jsonify({"error": "That request is not yours."}), 404
+    data = request.get_json(silent=True) or {}
+    status = data.get("status") or PartnerRequest.CLOSED
+    if status not in (PartnerRequest.FILLED, PartnerRequest.CLOSED):
+        return jsonify({"error": "Mark it filled or closed."}), 400
+    if req.status != PartnerRequest.OPEN:
+        return jsonify({"error": "That request is already off the board."}), 409
+    req.status = status
+    req.closed_at = datetime.now(timezone.utc)
+    db.commit()
+    return jsonify({"request": _request_with_counts(
+        req, _response_counts(db, [req.id]), org)})
+
+
 # --- Saved leads ------------------------------------------------------------
 # A private shortlist. Matching answers "who could work with me", and that
 # answer moves as either side edits its profile and as the directory grows --
@@ -6817,6 +7100,45 @@ def _notifications_for(db, org):
         add("meeting_proposed", event.created_at, proposal,
             actionable=True, tab=f"messages-{proposal.id}")
 
+    # Requests on the board this organization could answer from its own
+    # profile: a need for something it offers, or a have of something it
+    # needs. News rather than work, so they can be dismissed, and they drop
+    # out once answered or off the board.
+    answered = select(Partnership.request_id).where(
+        Partnership.proposer_id == org.id,
+        Partnership.request_id.isnot(None))
+    blocked_either = select(Block.blocked_id).where(
+        Block.blocker_id == org.id).union(
+        select(Block.blocker_id).where(Block.blocked_id == org.id))
+    matching_requests = _live_requests(db).filter(
+        PartnerRequest.organization_id != org.id,
+        PartnerRequest.created_at >= since,
+        PartnerRequest.id.notin_(answered),
+        PartnerRequest.organization_id.notin_(blocked_either),
+        or_(
+            and_(PartnerRequest.kind == PartnerRequest.NEED,
+                 PartnerRequest.category.in_(org.offers or [""])),
+            and_(PartnerRequest.kind == PartnerRequest.HAVE,
+                 PartnerRequest.category.in_(org.needs or [""])),
+        ),
+    ).order_by(PartnerRequest.created_at.desc()).limit(NOTIFICATION_LIMIT).all()
+    for req in matching_requests:
+        key = _notification_key("request_match", req.id, req.created_at)
+        if key in dismissed:
+            continue
+        items.append({
+            "kind": "request_match",
+            "key": key,
+            "at": req.created_at.isoformat(),
+            "counterpart": req.organization.name,
+            "request_id": req.id,
+            "request_kind": req.kind,
+            "category_label": label_for(req.category),
+            "actionable": False,
+            "seen": bool(seen_at is not None and req.created_at <= seen_at),
+            "href": f"requests.html?id={req.id}",
+        })
+
     by_id = {p.id: p for p in rows}
     for partnership_id, count, latest in unread:
         proposal = by_id.get(partnership_id)
@@ -6883,14 +7205,18 @@ def _notifications_for(db, org):
 # message -- including the entry written for every meeting step, which is
 # how meetings reach the list -- is a higher message id. What the reader
 # has seen or dismissed is on their own row, which the session lookup has
-# already loaded. And the sixty-day window is measured in days, so today's
-# date is in the key too.
+# already loaded. A request posted to the board, or taken off it, moves
+# `posted`. And the sixty-day window is measured in days, so today's date is
+# in the key too.
 _ACTIVITY_WATERMARK = text("""
 SELECT (SELECT max(updated_at) FROM partnerships
          WHERE proposer_id = :org_id OR recipient_id = :org_id) AS moved,
        (SELECT max(m.id) FROM messages m
           JOIN partnerships p ON p.id = m.partnership_id
-         WHERE p.proposer_id = :org_id OR p.recipient_id = :org_id) AS said
+         WHERE p.proposer_id = :org_id OR p.recipient_id = :org_id) AS said,
+       -- Posting moves the id; closing or filling moves closed_at.
+       (SELECT concat(max(id), '/', max(closed_at))
+          FROM partner_requests) AS posted
 """)
 
 
@@ -6900,7 +7226,8 @@ def _activity_etag(db, org):
     Weak, deliberately: two payloads with the same tag are the same answer,
     which is the claim being made, not that they are byte-identical.
     """
-    moved, said = db.execute(_ACTIVITY_WATERMARK, {"org_id": org.id}).one()
+    moved, said, posted = db.execute(
+        _ACTIVITY_WATERMARK, {"org_id": org.id}).one()
     basis = "|".join(str(part) for part in (
         org.id,
         org.updated_at.isoformat() if org.updated_at else "",
@@ -6908,6 +7235,7 @@ def _activity_etag(db, org):
         sorted(org.dismissed_notifications or []),
         moved.isoformat() if moved else "",
         said,
+        posted,
         datetime.now(timezone.utc).date().isoformat(),
     ))
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:32]
@@ -8679,6 +9007,37 @@ def create_proposal(org, db):
     proposer_gives = clean_categories(data.get("proposer_gives"))
     recipient_gives = clean_categories(data.get("recipient_gives"))
 
+    # Answering a request on the board. The proposal must go to the poster and
+    # must include the thing the request is about, on the side it belongs:
+    # the responder gives what a need asks for, and asks for what a have
+    # offers. A responder who does not list the needed category yet gets it
+    # added to their offers here -- that is the one click the board promises,
+    # and it keeps the rule below (commit only to what you list) intact.
+    answered = None
+    if data.get("request_id") is not None:
+        try:
+            answered_id = int(data.get("request_id"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Which request is this answering?"}), 400
+        answered = (db.get(PartnerRequest, answered_id)
+                    if valid_id(answered_id) else None)
+        if (answered is None or answered.organization_id != recipient.id
+                or not answered.is_live(datetime.now(timezone.utc).date())):
+            return jsonify({
+                "error": "That request is no longer open.",
+                "field": "request_id",
+            }), 409
+        side = (proposer_gives if answered.kind == PartnerRequest.NEED
+                else recipient_gives)
+        if answered.category not in side:
+            return jsonify({
+                "error": f"A response to this request has to include "
+                         f"{label_for(answered.category)}.",
+                "field": ("proposer_gives"
+                          if answered.kind == PartnerRequest.NEED
+                          else "recipient_gives"),
+            }), 400
+
     # Both sides must bring something. A proposal where one side gives nothing
     # is a request for a favor, and the whole premise here is the two-way
     # exchange -- so it is rejected rather than quietly stored as a partnership.
@@ -8702,6 +9061,9 @@ def create_proposal(org, db):
     # organization agreed to provide something, and it should never be
     # possible to write one it never said it could.
     my_offers = set(org.offers or [])
+    if (answered is not None and answered.kind == PartnerRequest.NEED
+            and answered.category not in my_offers):
+        my_offers.add(answered.category)
     their_offers = set(recipient.offers or [])
     for gives, offers, whose in (
         (proposer_gives, my_offers, "you"),
@@ -8785,6 +9147,7 @@ def create_proposal(org, db):
         proposer_quantities=proposer_quantities,
         recipient_quantities=recipient_quantities,
         message=message or None,
+        request_id=answered.id if answered is not None else None,
         # Placeholders. Both name columns are NOT NULL, so something has to
         # be here before the flush; snapshot_parties() below re-reads all six
         # from the live rows once the relationships are attached, and is the
@@ -8796,6 +9159,9 @@ def create_proposal(org, db):
         recipient_type=recipient.organization_type,
         recipient_location=recipient.location,
     )
+    if (answered is not None and answered.kind == PartnerRequest.NEED
+            and answered.category not in (org.offers or [])):
+        org.offers = list(org.offers or []) + [answered.category]
     db.add(proposal)
     try:
         # Flushed explicitly so `proposer` and `recipient` resolve before the

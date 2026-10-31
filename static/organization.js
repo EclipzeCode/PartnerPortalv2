@@ -243,6 +243,8 @@
             </section>
         </div>
 
+        <section class="org-section org-requests" id="orgRequests" hidden></section>
+
         ${org.partnership_goals
             ? `<section class="org-section">
                    <h2>What they are looking for in a partner</h2>
@@ -258,6 +260,28 @@
     `;
 
     document.title = `${org.name} | PartnerPortal`;
+
+    // Their open requests on the board, if any. Filled after the card so a
+    // slow answer never holds the profile up, and left hidden when there are
+    // none or the board cannot be reached.
+    window.timedFetch(`/api/requests?org=${encodeURIComponent(org.id)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+            const host = document.getElementById('orgRequests');
+            if (!host || !data || !data.requests.length) return;
+            host.innerHTML = `
+                <h2>Open requests</h2>
+                <ul class="org-request-list">${data.requests.map((r) => `
+                    <li>
+                        <span class="org-request-kind ${esc(r.kind)}">${
+                            r.kind === 'need' ? 'Needs' : 'Offering'}</span>
+                        <a href="requests.html?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
+                        <span class="org-request-cat">${esc(r.category_label)}</span>
+                    </li>`).join('')}
+                </ul>`;
+            host.hidden = false;
+        })
+        .catch(() => {});
 
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn) {

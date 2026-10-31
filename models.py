@@ -715,6 +715,14 @@ class Partnership(Base):
     # The recipient's note when accepting or declining.
     response_message: Mapped[str | None] = mapped_column(Text)
 
+    # The open request this proposal answered, if it started from one. SET
+    # NULL so a partnership outlives the request it came from being deleted
+    # with its organization.
+    request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("partner_requests.id", ondelete="SET NULL"), nullable=True,
+        index=True,
+    )
+
     # Minted on acceptance. Anyone holding it can read the summary without an
     # account, which is what makes the agreement shareable with a board or a
     # funder. Null until accepted, so a pending proposal has no public URL.
@@ -1115,6 +1123,7 @@ class Partnership(Base):
             "timeline_label": TIMELINE_LABELS.get(self.timeline),
             "message": self.message,
             "response_message": self.response_message,
+            "request_id": self.request_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "responded_at": (
                 self.responded_at.isoformat() if self.responded_at else None
@@ -2073,6 +2082,125 @@ class SavedLead(Base):
 
     def __repr__(self):
         return f"<SavedLead {self.organization_id}->{self.saved_organization_id}>"
+
+
+class PartnerRequest(Base):
+    """A specific, dated ask or offer on the requests board.
+
+    A profile says what an organization generally has and needs; a request is
+    one of those right now -- "10 volunteers for the Nov 15 food drive". One
+    category from the shared vocabulary and an optional amount in the same
+    units a proposal term uses, so a request is matchable and countable rather
+    than free text.
+
+    Answering one is an ordinary proposal carrying request_id, so everything
+    after the click -- counters, messages, completion -- is the partnership
+    flow unchanged. A request has no status for "answered": several
+    organizations can respond, and the poster marks it filled when it is.
+
+    Expiry is not a stored status. An open request whose expires_on has
+    passed reads as expired everywhere (see is_live), so nothing has to run
+    on a schedule to retire it.
+    """
+
+    __tablename__ = "partner_requests"
+
+    NEED = "need"
+    HAVE = "have"
+    KINDS = (NEED, HAVE)
+
+    OPEN = "open"
+    FILLED = "filled"
+    CLOSED = "closed"
+    STATUSES = (OPEN, FILLED, CLOSED)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    # {amount, unit, detail} -- the shape of one entry in a proposal's
+    # *_quantities, so a response can carry it straight into the terms.
+    quantity: Mapped[dict | None] = mapped_column(JSONB)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text)
+    # The date the poster gave, if any. expires_on is that date, or the
+    # default window from posting when none was given.
+    needed_by: Mapped[date_type | None] = mapped_column(Date)
+    expires_on: Mapped[date_type] = mapped_column(Date, nullable=False)
+    remote_ok: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default=OPEN
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    organization = relationship("Organization", lazy="joined")
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('need', 'have')", name="ck_partner_requests_kind"),
+        CheckConstraint("status IN ('open', 'filled', 'closed')",
+                        name="ck_partner_requests_status"),
+        # The board: open requests, newest first.
+        Index("ix_partner_requests_board", "status", "created_at"),
+        Index("ix_partner_requests_organization", "organization_id", "status"),
+    )
+
+    def is_live(self, today=None):
+        """Open, and not past its date."""
+        today = today or date_type.today()
+        return self.status == self.OPEN and self.expires_on >= today
+
+    def display_status(self, today=None):
+        if self.status == self.OPEN and not self.is_live(today):
+            return "expired"
+        return self.status
+
+    def to_dict(self, *, responses=None, viewer=None):
+        org = self.organization
+        data = {
+            "id": self.id,
+            "kind": self.kind,
+            "category": self.category,
+            "category_label": label_for(self.category),
+            "quantity": self.quantity,
+            "quantity_label": (
+                format_quantity(self.quantity.get("amount"),
+                                self.quantity.get("unit"),
+                                self.quantity.get("detail"))
+                if self.quantity else None),
+            "title": self.title,
+            "details": self.details,
+            "needed_by": self.needed_by.isoformat() if self.needed_by else None,
+            "expires_on": self.expires_on.isoformat(),
+            "remote_ok": self.remote_ok,
+            "status": self.display_status(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "organization_type": org.organization_type,
+                "location": org.location,
+            } if org is not None else None,
+        }
+        if responses is not None:
+            data["responses"] = responses
+        if viewer is not None:
+            data["mine"] = viewer.id == self.organization_id
+            # Whether the viewer could answer it from their own profile:
+            # they offer what a need asks for, or need what a have offers.
+            listed = viewer.offers if self.kind == self.NEED else viewer.needs
+            data["fits"] = (not data["mine"]
+                            and self.category in (listed or []))
+        return data
+
+    def __repr__(self):
+        return f"<PartnerRequest {self.id} {self.kind} {self.category}>"
 
 
 class ProfileView(Base):

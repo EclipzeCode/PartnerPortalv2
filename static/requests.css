@@ -1,0 +1,231 @@
+/* The requests board. Built on directory.css -- the same main column, filter
+ * row, card grid and pager -- with only what a request adds on top of an
+ * organization card: what kind it is, its date, and what you can do with it.
+ */
+
+.req-head {
+    max-width: none;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.req-head > div { max-width: 46rem; }
+
+.req-post {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+/* --- All / Needs / Offers --------------------------------------------- */
+
+.req-kind {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    border: 1px solid var(--h-rule);
+    border-radius: var(--h-radius-sm);
+    background: var(--h-surface);
+}
+
+.req-kind label { position: relative; }
+
+.req-kind input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.req-kind span {
+    display: block;
+    padding: 0.4rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: var(--h-dim);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.req-kind input:checked + span {
+    background: var(--h-give);
+    color: var(--h-on-give);
+}
+
+.req-kind input:focus-visible + span {
+    outline: 2px solid var(--h-give);
+    outline-offset: 2px;
+}
+
+/* The filter row is a column in directory.css; here the toggle and the
+   filters fit on one line. */
+#reqControls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+}
+
+.req-filters { flex: 1 1 auto; }
+
+/* --- Cards --------------------------------------------------------------- */
+
+.req-card { gap: 0.55rem; }
+
+.req-card.fits { border-color: color-mix(in srgb, var(--h-seal) 45%, var(--h-rule)); }
+
+.req-card.focused {
+    border-color: var(--h-give);
+    box-shadow: 0 0 0 3px var(--h-ring), var(--h-shadow-lift);
+}
+
+.req-focus { margin-bottom: 2rem; max-width: 40rem; }
+
+.req-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+}
+
+.req-kind-tag {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.req-kind-tag.need {
+    background: color-mix(in srgb, var(--h-take) 13%, transparent);
+    color: var(--h-take);
+}
+
+.req-kind-tag.have {
+    background: color-mix(in srgb, var(--h-give) 12%, transparent);
+    color: var(--h-give);
+}
+
+.req-category {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--h-ink-soft);
+}
+
+.req-facts .req-fit {
+    font-weight: 500;
+    color: var(--h-seal);
+}
+
+.req-facts .req-fit.mine { color: var(--h-ink-soft); }
+
+.req-title { font-size: 1.1rem; }
+
+.dir-bio.full { -webkit-line-clamp: unset; display: block; }
+
+.dir-meta a { color: var(--h-ink-soft); text-decoration: none; }
+.dir-meta a:hover { color: var(--h-give); text-decoration: underline; }
+
+.req-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    margin: 0;
+    font-size: 0.83rem;
+    color: var(--h-dim);
+}
+
+.req-facts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.req-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.6rem;
+}
+
+.req-card-actions .btn-primary,
+.req-card-actions .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.req-closed {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--h-dim);
+}
+
+.req-responses {
+    list-style: none;
+    margin: 0;
+    padding: 0.6rem 0 0;
+    border-top: 1px solid var(--h-rule);
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.86rem;
+}
+
+.req-responses li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.req-responses a { color: var(--h-give); }
+
+.req-response-status {
+    font-size: 0.75rem;
+    text-transform: capitalize;
+    color: var(--h-dim);
+}
+
+/* --- The post form -------------------------------------------------------- */
+
+.req-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--h-ink);
+}
+
+.req-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 0 0.75rem;
+}
+
+.req-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.8rem;
+    color: var(--h-seal);
+}
+
+.req-remote { margin: 0.25rem 0 1.25rem; }
+
+.req-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
+@media (max-width: 40em) {
+    #reqControls { flex-direction: column; align-items: stretch; }
+    .req-head { align-items: stretch; }
+    .req-post { justify-content: center; width: 100%; }
+    .req-kind { width: 100%; }
+    .req-kind label { flex: 1; text-align: center; }
+}
