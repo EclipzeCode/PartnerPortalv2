@@ -575,7 +575,7 @@
     background: var(--h-danger);
     color: var(--h-on-danger, #fff);
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     line-height: 1rem;
     text-align: center;
 }
@@ -605,7 +605,7 @@
     padding: 0.7rem 0.9rem;
     border-bottom: 1px solid var(--h-rule);
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--h-label);
@@ -695,7 +695,7 @@
 .notify-when {
     grid-area: when;
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
     color: var(--h-dim);
 }
@@ -764,7 +764,7 @@
    the bell no longer carries. */
 .notify-waiting {
     font-family: var(--h-mono, monospace);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--h-give);

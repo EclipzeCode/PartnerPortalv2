@@ -123,15 +123,6 @@
 
     <!-- Dashboard Section -->
     <section class="dashboard-section" id="main" tabindex="-1">
-        <!-- ppdashboard.js replaces this h2's contents with "Welcome back,
-             <span>Organization</span>" once the dashboard data lands, so both
-             the h2 and a span inside it have to stay. The static text is what
-             shows until then. -->
-        <div class="section-header">
-            <p class="eyebrow">Your organization</p>
-            <h2>Your <span>Dashboard</span></h2>
-        </div>
-
         <div class="dashboard-container">
             <!-- Unverified accounts only; ppdashboard.js unhides it. Says what
                  is blocked and links to Settings, where the resend button
@@ -200,11 +191,7 @@
             </div>
 
             <!-- The counts. Five equal cells on one row: an icon, a number,
-                 and the name of the thing, which is held back until the cell
-                 is pointed at or focused. At rest the row is five readings and
-                 nothing else; the labels are what you go looking for, and they
-                 are in the markup all along so a screen reader and the
-                 keyboard never depend on a hover.
+                 and the name of the thing.
 
                  Each cell still opens the list behind its number -- a number
                  you cannot get into is a dead end. data-stat picks the view. -->
@@ -722,34 +709,14 @@
     </div>
 
     <!-- Footer -->
-    <footer class="site-footer">
-        <div class="footer-grid">
-            <div class="footer-brand">
-                <span class="footer-brand-name">PartnerPortal</span>
-                <p class="footer-tagline">Helping nonprofits, small businesses, and purpose-driven teams find partners who follow through.</p>
-            </div>
-            <div class="footer-col">
-                <h4>Product</h4>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
-                    <li><a href="pplogin.html#signup">Get Started</a></li>
-                    <li><a href="ppsearch.html">Find Partners</a></li>
-                    <li><a href="pphelp.html">Help</a></li>
-                    <li><a href="privacy.html">Privacy</a></li>
-                </ul>
-            </div>
-            <div class="footer-col">
-                <h4>Account</h4>
-                <ul>
-                    <li><a href="pplogin.html">Log In</a></li>
-                    <li><a href="pplogin.html#signup">Create Account</a></li>
-                    <li><a href="ppdashboard.html">Dashboard</a></li>
-                </ul>
-            </div>
-        </div>
+    <footer class="site-footer compact">
         <div class="footer-bottom">
             <span>&copy; 2026 PartnerPortal</span>
-            <span>Built for organizations that lift each other up.</span>
+            <nav class="footer-links" aria-label="Footer">
+                <a href="ppsearch.html">Find Partners</a>
+                <a href="pphelp.html">Help</a>
+                <a href="privacy.html">Privacy</a>
+            </nav>
         </div>
     </footer>
 

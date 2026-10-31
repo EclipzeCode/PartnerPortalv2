@@ -58,7 +58,7 @@ body {
    It names the document before the document names the parties. */
 .agreement-masthead {
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -98,7 +98,7 @@ body {
     background: var(--h-seal);
     color: var(--h-on-seal);
     font-family: var(--h-mono);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -134,7 +134,7 @@ body {
 
 .agreement-date {
     font-family: var(--h-mono);
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     line-height: 1.6;
     letter-spacing: 0.06em;
     color: var(--h-dim);
@@ -207,7 +207,7 @@ body {
 .party-meta {
     margin-top: 0.25rem;
     font-family: var(--h-mono);
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--h-dim);
@@ -215,7 +215,7 @@ body {
 
 .party h4 {
     font-family: var(--h-mono);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -287,7 +287,7 @@ body {
     background: var(--h-cell);
     color: var(--h-dim);
     font-family: var(--h-mono);
-    font-size: 0.55rem;
+    font-size: 0.66rem;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -302,7 +302,7 @@ body {
     padding-top: 1.25rem;
     border-top: 1px solid var(--h-rule);
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     line-height: 1.75;
     letter-spacing: 0.03em;
     color: var(--h-dim);
@@ -325,7 +325,7 @@ body {
     margin-top: 1.5rem;
     text-align: center;
     font-family: var(--h-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     letter-spacing: 0.05em;
     color: var(--h-dim);
 }

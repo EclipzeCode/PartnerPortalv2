@@ -78,15 +78,11 @@ def test_saving_is_idempotent_and_never_duplicates(client, login, make_org):
     assert client.get("/api/saved").get_json()["count"] == 0
 
 
-def test_example_organizations_and_self_cannot_be_saved(client, login, make_org):
+def test_self_cannot_be_saved(client, login, make_org):
     me = make_org(needs=["web_development"], offers=["grant_writing"])
-    example = make_org(needs=["grant_writing"], offers=["web_development"],
-                       is_demo=True)
 
     login(me)
     assert client.post("/api/saved", json={"organization_id": me.id}).status_code == 400
-    assert client.post("/api/saved",
-                       json={"organization_id": example.id}).status_code == 400
     assert client.get("/api/saved").get_json()["count"] == 0
 
 

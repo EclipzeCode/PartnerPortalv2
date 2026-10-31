@@ -91,20 +91,14 @@ def test_shared_focus_does_not_create_a_match(session, make_org):
     assert no_trade.name not in names
 
 
-def test_incomplete_and_demo_profiles_stay_out_of_matches(session, make_org):
-    """Half-filled rows say nothing useful, and examples are fictional."""
+def test_incomplete_profiles_stay_out_of_matches(session, make_org):
+    """Half-filled rows say nothing useful."""
     me = make_org(needs=["web_development"], offers=["grant_writing"])
     unfinished = make_org(needs=["grant_writing"], offers=["web_development"],
                           onboarding_complete=False)
-    example = make_org(needs=["grant_writing"], offers=["web_development"],
-                       is_demo=True)
 
     names = [m["name"] for m in find_matches(session, me)[0]]
     assert unfinished.name not in names
-    assert example.name not in names
-    # ...but the examples-only view is exactly how those are surfaced.
-    demo_names = [m["name"] for m in find_matches(session, me, demo_only=True)[0]]
-    assert example.name in demo_names
 
 
 def test_an_org_never_matches_itself(session, make_org):

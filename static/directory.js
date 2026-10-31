@@ -173,11 +173,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return `
             <article class="dir-card">
-                ${org.is_demo ? `
-                    <p class="dir-demo">
-                        <i class='bx bx-info-circle' aria-hidden="true"></i>
-                        Example organization
-                    </p>` : ''}
                 <h2 class="dir-name">
                     <a href="organization.html?id=${encodeURIComponent(org.id)}">${esc(org.name)}</a>
                 </h2>

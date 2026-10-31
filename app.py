@@ -45,7 +45,7 @@ from units import (
     default_unit_for,
 )
 from matching import (
-    MATCH_LIMIT, find_matches_with_examples, hydrate_in_order,
+    MATCH_LIMIT, find_matches, hydrate_in_order,
     match_overview, rank_directory_order, score_pair,
 )
 from moderation import screen_name
@@ -2198,7 +2198,6 @@ def sitemap_xml():
                 Organization.searchable.is_(True),
                 Organization.onboarding_complete.is_(True),
                 Organization.hidden_at.is_(None),
-                Organization.is_demo.is_(False),
             ).order_by(Organization.id)
         ).scalars().all()
     finally:
@@ -2512,7 +2511,7 @@ def start_email_delivery():
     """Make sure this process is delivering mail, not only accepting it.
 
     On the first request rather than at import, because importing this module
-    is something alembic, seed.py and the test suite all do without ever
+    is something alembic and the test suite both do without ever
     wanting a pair of threads polling a table. Render health-checks
     /api/categories, so "the first request" arrives on its own within
     seconds of a deploy whether or not anybody is using the site.
@@ -2769,7 +2768,7 @@ def organization_page():
                 profile = org.public_profile()
                 title = f"{profile['name']} | PartnerPortal"
                 description = _org_og_description(profile)
-                searchable = bool(org.searchable and not org.is_demo)
+                searchable = bool(org.searchable)
         finally:
             db.close()
     html = _render_og_page("organization.html", title, description)
@@ -3251,8 +3250,8 @@ def login():
             return invalid
         if org is None or not org.password_hash:
             # Same work as a wrong password, so the clock does not say which
-            # -- see _DECOY_PASSWORD_HASH. Unclaimed invitations and seeded
-            # examples have no hash and take this path too.
+            # -- see _DECOY_PASSWORD_HASH. Unclaimed invitations have no
+            # hash and take this path too.
             bcrypt.checkpw(password.encode("utf-8"), _DECOY_PASSWORD_HASH)
             return invalid
         if not bcrypt.checkpw(
@@ -3415,7 +3414,6 @@ def _admin_summarize(org):
         "name_flagged": org.name_flagged,
         "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
         "hidden_reason": org.hidden_reason,
-        "is_demo": org.is_demo,
     }
 
 
@@ -3943,11 +3941,9 @@ def forgot_password():
         # -- it is the only way back in for a row that lost its hash, and
         # the reset handler already writes a fresh one. What is still turned
         # away silently: an unclaimed invitation, which has its own link and
-        # whose placeholder address cannot receive mail anyway, and a seeded
-        # example, which nobody owns. Silence keeps both indistinguishable
-        # from "no such account".
-        if (org is not None and org.claim_token_hash is None
-                and not org.is_demo):
+        # whose placeholder address cannot receive mail anyway. Silence keeps
+        # it indistinguishable from "no such account".
+        if org is not None and org.claim_token_hash is None:
             reset_raw, org.password_reset_token_hash = issue_token()
             org.password_reset_sent_at = datetime.now(timezone.utc)
             db.commit()
@@ -4939,22 +4935,12 @@ def get_matches(org, db):
 
     mutual_only = request.args.get("mutual") == "1"
 
-    # While the real directory is small a new org can have no real matches at
-    # all. Rather than show an empty page, surface the seeded examples --
-    # clearly flagged as examples by the client -- so there is something to
-    # look at. They are never mixed into `matches`.
-    #
-    # Both cohorts from one scan: asking for them separately meant ranking
-    # the whole overlapping directory twice for precisely the accounts that
-    # have nothing yet, which is every account on its first visit here.
-    matches, total, mutual_total, examples = find_matches_with_examples(
+    matches, total, mutual_total = find_matches(
         db, org, mutual_only=mutual_only)
 
     # So the star on each card starts in the right state. Sent as one list of
     # ids rather than a flag per match: the client already holds the matches
-    # and only needs to know which of them are on the shortlist, and this way
-    # the answer stays correct for the examples too without touching either
-    # list.
+    # and only needs to know which of them are on the shortlist.
     saved_ids = _saved_ids(db, org)
 
     return jsonify({
@@ -4969,8 +4955,6 @@ def get_matches(org, db):
         # does not have to work out whether it is looking at everything.
         "truncated": total > len(matches),
         "limit": MATCH_LIMIT,
-        "examples": examples,
-        "example_count": len(examples),
         "saved_ids": sorted(saved_ids),
     })
 
@@ -5055,12 +5039,6 @@ def _directory_filters(args, exclude_id=None, viewer_id=None):
     if viewer_id is not None:
         conditions.append(Organization.id.notin_(_blocked_ids(viewer_id)))
 
-    # Seeded examples are excluded by default, exactly as they are from
-    # matches -- they have no owner and nothing to follow up on. Available on
-    # request so the directory can still demonstrate itself while it is small.
-    if args.get("include_examples") != "1":
-        conditions.append(Organization.is_demo.is_(False))
-
     term = (args.get("q") or "").strip()
     if term:
         # Name, location and description: the three things someone types into
@@ -5130,7 +5108,7 @@ def _directory_paging(args, max_page_size=None):
 FIT_ORDER_TTL = 30
 FIT_ORDER_CACHE_MAX = 256
 _FIT_ORDER_ARGS = frozenset({"q", "offers", "needs", "type", "location",
-                             "remote", "focus", "include_examples"})
+                             "remote", "focus"})
 _fit_order_cache = {}
 _fit_order_lock = threading.Lock()
 
@@ -5421,12 +5399,6 @@ def public_directory():
     one side, the public view sorts by name and says nothing about fit. That
     is also the honest pitch -- what fit looks like is what an account is
     for.
-
-    Demo organizations are included rather than excluded. The signed-in
-    listing hides them by default because a real account has real matches to
-    look at and seeded examples are noise; a stranger looking at an empty
-    directory learns nothing at all. They carry is_demo so the page can label
-    them, which it does.
     """
     wait = read_limited("public_directory", client_ip(),
                         max_attempts=DIRECTORY_READS_PER_HOUR,
@@ -5445,11 +5417,6 @@ def public_directory():
         requested = DIRECTORY_PAGE_SIZE
     args["per_page"] = str(min(max(1, requested),
                                PUBLIC_DIRECTORY_MAX_PAGE_SIZE))
-    # The shared builder hides seeded examples unless asked; here the default
-    # is the other way round, for the reason in the docstring. setdefault, so
-    # ?include_examples=0 still turns them off -- the default is an opinion
-    # about the common case, not a rule.
-    args.setdefault("include_examples", "1")
 
     db = get_db()
     try:
@@ -5843,13 +5810,6 @@ def create_saved(org, db):
     other = db.get(Organization, target_id)
     if other is None or not other.onboarding_complete or other.hidden_at:
         return jsonify({"error": "Organization not found."}), 404
-    if other.is_demo:
-        # Same line create_proposal draws: example organizations have no owner
-        # and nothing to follow up on, so a shortlist of them leads nowhere.
-        return jsonify({
-            "error": "Example organizations cannot be saved. They are here to "
-                     "show how matching works.",
-        }), 400
 
     # A bookmark is cheap and nobody is emailed, so this is only a ceiling on
     # how fast one account can write rows. Well above anything a person
@@ -5983,7 +5943,7 @@ def create_block(org, db):
     if not valid_id(target_id):
         return jsonify({"error": "Organization not found."}), 404
     other = db.get(Organization, target_id)
-    if other is None or other.is_demo or other.claim_token_hash is not None:
+    if other is None or other.claim_token_hash is not None:
         return jsonify({"error": "Organization not found."}), 404
 
     wait = rate_limited("blocks", str(org.id), max_attempts=WRITES_PER_HOUR,
@@ -7342,7 +7302,7 @@ def _inviter_pointer(db, org, partnerships):
     """
     inviter = org.invited_by
     if (inviter is None or not inviter.onboarding_complete
-            or inviter.hidden_at or inviter.is_demo):
+            or inviter.hidden_at):
         return None
     if any(p.counterpart(org.id) is not None
            and p.counterpart(org.id).id == inviter.id
@@ -8665,13 +8625,6 @@ def create_proposal(org, db):
     if (recipient is None or not recipient.onboarding_complete
             or recipient.hidden_at):
         return jsonify({"error": "Organization not found."}), 404
-    if recipient.is_demo:
-        # Example organizations have no owner and cannot accept or decline, so
-        # a proposal to one would sit pending forever.
-        return jsonify({
-            "error": "This is an example organization, shown to illustrate how "
-                     "matching works. You can only propose to real organizations."
-        }), 400
     if _blocked_between(db, org.id, recipient.id):
         # Either direction, in words that do not say which. A blocked
         # organization is not told it was blocked; see models.Block.

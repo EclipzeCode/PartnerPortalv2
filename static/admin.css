@@ -129,7 +129,7 @@
 
 .admin-count-label {
     font-family: var(--h-mono);
-    font-size: .68rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--h-dim);
@@ -353,17 +353,6 @@
 }
 
 .admin-dim a { color: var(--h-give); }
-
-.admin-tag {
-    font-family: var(--h-mono);
-    font-size: .62rem;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--h-dim);
-    border: 1px solid var(--h-rule);
-    border-radius: 3px;
-    padding: .1rem .35rem;
-}
 
 .admin-row-actions {
     display: flex;

@@ -46,8 +46,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showAll = false;
 
     let allMatches = [];
-    let exampleMatches = [];
-    let showingExamples = false;
     let displayed = [];
     let currentPage = 1;
     // A page number read from the URL on arrival, spent by the first render.
@@ -168,7 +166,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `/api/matches${mutualOnly ? '?mutual=1' : ''}`
             );
             allMatches = data.matches || [];
-            exampleMatches = data.examples || [];
             // How many there were, as opposed to how many came back. The two
             // used to be the same number by construction, which is how the
             // list could stop at fifty without anybody being told.
@@ -383,7 +380,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (viewMode === 'saved') {
-            showingExamples = false;
             displayed = q
                 ? savedList.filter((m) =>
                     norm(m.name).includes(q) ||
@@ -397,10 +393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // No real matches yet, but seeded examples exist: show those instead
-        // of an empty page. They are visibly flagged and cannot be proposed to.
-        showingExamples = allMatches.length === 0 && exampleMatches.length > 0;
-        let source = showingExamples ? exampleMatches : allMatches;
+        let source = allMatches;
 
         // Only the match list. The shortlist is what someone chose to keep,
         // and quietly hiding part of it behind a search filter would be a
@@ -433,8 +426,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function render() {
         partnersGrid.innerHTML = '';
-        const banner = document.getElementById('exampleBanner');
-        if (banner) banner.classList.toggle('hidden', !showingExamples);
 
         const browsing = viewMode === 'browse';
         const size = pageSize();
@@ -513,8 +504,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         slice.forEach((m, offset) => {
             const card = document.createElement('div');
             card.className = 'partner-card'
-                + (m.match_detail.mutual ? ' mutual' : '')
-                + (m.is_demo ? ' is-example' : '');
+                + (m.match_detail.mutual ? ' mutual' : '');
             // The whole card is a click target for a mouse, but the thing
             // the keyboard and a screen reader land on is the name, which is
             // a real <button> inside the <h3>. The card itself used to be
@@ -523,11 +513,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // which assistive tech is entitled to flatten or ignore.
             card.dataset.index = String(start + offset);
 
-            const badge = m.is_demo
-                ? '<span class="example-tag">Example</span>'
-                : (m.match_detail.mutual
-                    ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
-                    : '');
+            const badge = m.match_detail.mutual
+                ? '<span class="mutual-badge"><i class="bx bx-transfer"></i> Two-way match</span>'
+                : '';
 
             // Browse lists organizations that have nothing to exchange with
             // you, which matches never did. A bare "0" in the score badge
@@ -557,10 +545,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 || '<li class="none">Nothing either of you has listed lines '
                    + 'up yet.</li>';
 
-            // Examples have no owner and nothing to follow up on, so they get
-            // no bookmark -- the same line the Propose button draws.
             const isSaved = savedIds.has(m.id);
-            const saveBtn = m.is_demo ? '' : `
+            const saveBtn = `
                 <button type="button" class="card-save${isSaved ? ' saved' : ''}"
                         data-save-id="${m.id}"
                         aria-pressed="${isSaved}"
@@ -685,8 +671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // the database rather than in this page's memory.
     function paintTruncationNote() {
         let note = document.getElementById('matchTruncation');
-        const relevant = viewMode === 'matches' && matchTruncation
-            && !showingExamples;
+        const relevant = viewMode === 'matches' && matchTruncation;
         if (!relevant) {
             if (note) note.remove();
             return;
@@ -797,9 +782,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // of them, and the endpoint is a database round trip.
     const contactCache = new Map();
 
-    // Example organizations are deliberately not skipped: their sample
-    // addresses are part of what the example cards are demonstrating, and
-    // the endpoint resolves them like any other finished profile.
     async function fillContactDetails(m, set) {
         // Match entries no longer carry the description either (see _entry
         // in matching.py); the same fetch that brings the contact details
@@ -896,17 +878,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }${esc(label)}</span>`).join('');
         }
 
-        // Examples cannot be proposed to (they have no owner), so the button is
-        // hidden and a short note takes its place. Saving one leads nowhere
-        // for the same reason, so that goes too.
-        const proposeBtn = document.getElementById('proposeBtn');
-        const exampleNote = document.getElementById('detailExampleNote');
-        if (proposeBtn) proposeBtn.classList.toggle('hidden', Boolean(m.is_demo));
-        if (exampleNote) exampleNote.classList.toggle('hidden', !m.is_demo);
-        if (detailSaveBtn) {
-            detailSaveBtn.classList.toggle('hidden', Boolean(m.is_demo));
-            paintDetailSave(savedIds.has(m.id));
-        }
+        if (detailSaveBtn) paintDetailSave(savedIds.has(m.id));
         paintDetailNote(m.id);
 
         // The shareable profile, for sending to someone without an account.
@@ -1943,7 +1915,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // not, so a link to a match on page 30, or to an organization that does
     // not match at all, still opens rather than silently doing nothing.
     async function openOrg(id, { propose = false } = {}) {
-        let m = [...displayed, ...allMatches, ...exampleMatches, ...savedList]
+        let m = [...displayed, ...allMatches, ...savedList]
             .find((x) => x.id === id);
         if (!m) {
             try {
@@ -1964,7 +1936,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (!m.match_detail) m.match_detail = {};
         showDetail(m);
-        if (propose && proposeBtn && !m.is_demo && me) proposeBtn.click();
+        if (propose && proposeBtn && me) proposeBtn.click();
     }
 
     const arrival = readUrl();

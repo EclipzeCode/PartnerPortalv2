@@ -171,16 +171,6 @@ def test_sorting(client, login, directory):
         f"/api/organizations?{SCOPE}&sort=nonsense").get_json()["sort"] == "name"
 
 
-def test_examples_are_excluded_unless_asked_for(client, login, directory, make_org):
-    make_org(name="pytest-dir Example Org", is_demo=True,
-             needs=["legal"], offers=["legal"])
-    login(directory)
-    assert "pytest-dir Example Org" not in _names(
-        client.get(f"/api/organizations?{SCOPE}&per_page=48"))
-    assert "pytest-dir Example Org" in _names(
-        client.get(f"/api/organizations?{SCOPE}&include_examples=1&per_page=48"))
-
-
 def test_each_row_carries_its_match_score(client, login, directory):
     """Browsing should still show fit, even though the list is not ranked
     by it."""
@@ -273,19 +263,6 @@ def test_it_clamps_the_page_size_harder_than_the_signed_in_one(client, directory
 def test_an_unfinished_profile_is_not_in_it(client, make_org):
     make_org(name="pytest-dirhalf Unfinished", onboarding_complete=False)
     assert _names(client.get("/api/directory?q=pytest-dirhalf")) == []
-
-
-def test_examples_show_by_default_and_can_be_turned_off(client, make_org):
-    """An empty directory teaches a stranger nothing, so the seeded examples
-    are in by default here -- labeled, and refusable."""
-    make_org(name="pytest-dirdemo Sample", is_demo=True)
-    shown = client.get("/api/directory?q=pytest-dirdemo").get_json()
-    assert [o["name"] for o in shown["organizations"]] == ["pytest-dirdemo Sample"]
-    assert shown["organizations"][0]["is_demo"] is True
-
-    hidden = client.get(
-        "/api/directory?q=pytest-dirdemo&include_examples=0").get_json()
-    assert hidden["organizations"] == []
 
 
 # --- The rate limit -------------------------------------------------------

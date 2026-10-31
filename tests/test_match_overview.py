@@ -80,7 +80,7 @@ OFFERS = ["event_space", "volunteers", "mentors"]
 # Counts are asserted as deltas, never as absolutes.
 #
 # These tests run against the project's real database, alongside whatever
-# organizations already live in it -- the seeded examples and any real
+# organizations already live in it -- any real
 # signups. An assertion that `total == 4` is really an assertion about the
 # contents of that directory, and it fails the day somebody registers an
 # organization that happens to offer web development. What this file is
@@ -261,12 +261,10 @@ def test_hidden_unfinished_and_demo_orgs_are_not_counted(session, make_org):
     hidden.hidden_at = datetime.now(timezone.utc)
     make_org(name="pytest unfinished", offers=["web_development"],
              needs=["event_space"], onboarding_complete=False)
-    make_org(name="pytest demo", offers=["web_development"],
-             needs=["event_space"], is_demo=True)
     session.commit()
 
     total, mutual, best = _check(session, me)
-    # Four added, one of them eligible.
+    # Three added, one of them eligible.
     assert total - base_total == 1
     assert mutual - base_mutual == 1
     ids = [o["id"] for o in best]

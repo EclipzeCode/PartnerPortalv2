@@ -20,18 +20,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const EXAMPLES = [
         {
             score: 92,
-            a: { initials: 'CB', name: 'Coders Over Borders', type: 'Non-profit', offer: 'Web Development' },
-            b: { initials: 'RT', name: 'Riverside Tech', type: 'Small Business', offer: 'Student Internships' }
+            a: { initials: 'CN', name: 'A coding nonprofit', type: 'Non-profit', offer: 'Web Development' },
+            b: { initials: 'TF', name: 'A local tech firm', type: 'Small Business', offer: 'Student Internships' }
         },
         {
             score: 88,
-            a: { initials: 'GE', name: 'Green Earth Initiative', type: 'NGO', offer: 'Volunteer Network' },
-            b: { initials: 'LC', name: 'Lakeside Community Center', type: 'Community Org', offer: 'Event Space' }
+            a: { initials: 'EG', name: 'An environmental group', type: 'NGO', offer: 'Volunteer Network' },
+            b: { initials: 'CC', name: 'A community center', type: 'Community Org', offer: 'Event Space' }
         },
         {
             score: 85,
-            a: { initials: 'AP', name: 'APEERS', type: 'Non-profit', offer: 'Youth Audience' },
-            b: { initials: 'SM', name: 'Studio Meridian', type: 'Design Studio', offer: 'Brand & Design Help' }
+            a: { initials: 'YP', name: 'A youth program', type: 'Non-profit', offer: 'Youth Audience' },
+            b: { initials: 'DS', name: 'A design studio', type: 'Design Studio', offer: 'Brand & Design Help' }
         }
     ];
 
@@ -39,8 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     //
     // Rows are categories one organization offers, columns are categories the
     // other needs; a filled cell is one both of them named. It is an
-    // illustration rather than live data -- these three pairings are
-    // fictional -- but it is drawn under the same rules the real thing
+    // illustration rather than live data -- these three pairings describe
+    // kinds of organization, not real ones -- but it is drawn under the same rules the real thing
     // follows, which is the point of showing it at all.
     //
     // Two properties matter and both are easy to get wrong:

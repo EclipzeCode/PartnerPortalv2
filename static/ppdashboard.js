@@ -87,12 +87,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const org = dashboard.organization;
     const stats = dashboard.stats;
 
-    // Greeting
-    const heading = document.querySelector('.section-header h2');
-    if (heading) {
-        heading.innerHTML = `Welcome back, <span>${esc(org.name)}</span>`;
-    }
-
     const viewProfileBtn = document.getElementById('viewProfileBtn');
     if (viewProfileBtn) {
         viewProfileBtn.href = `organization.html?id=${encodeURIComponent(org.id)}`;
