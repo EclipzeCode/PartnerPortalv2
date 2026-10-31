@@ -342,6 +342,13 @@ class Organization(Base):
         DateTime(timezone=True)
     )
 
+    # When the last "requests that fit you" email went out. At most one a
+    # day, and the next one lists what was posted since this -- see
+    # _email_matching_requests in app.py.
+    requests_emailed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # Individual entries this organization has dismissed from the list.
     #
     # The list is derived, not stored (see _notifications_for in app.py), so
@@ -426,6 +433,7 @@ class Organization(Base):
         "proposals": "Proposals sent to you, and answers to yours",
         "messages": "Messages in a partnership conversation",
         "partnerships": "Partnerships completing, ending, or their shared link changing",
+        "requests": "New requests on the board that fit what you offer or need",
     }
 
     def wants_email(self, category):

@@ -217,3 +217,77 @@ def test_a_matching_request_reaches_the_bell(client, login, poster, helper):
                        json={"key": key}).status_code == 200
     items = client.get("/api/notifications").get_json()["notifications"]
     assert not [i for i in items if i["kind"] == "request_match"]
+
+
+# --- The requests email --------------------------------------------------------
+
+def _emailed(outbox):
+    """{organization id: [request ids]} for each requests email sent."""
+    return {args[0].id: [r.id for r in args[1]]
+            for kind, args, _ in outbox if kind == "notify_matching_requests"}
+
+
+def test_a_new_request_emails_the_organizations_it_fits(
+        client, login, poster, helper, make_org, outbox):
+    bystander = make_org(needs=["volunteers"], offers=["mentors"])
+    login(poster)
+    rid = _post(client).get_json()["request"]["id"]
+    sent = _emailed(outbox)
+    # The helper offers event space; the bystander does not, and the
+    # poster never hears about their own request.
+    assert sent.get(helper.id) == [rid]
+    assert bystander.id not in sent
+    assert poster.id not in sent
+
+
+def test_at_most_one_email_a_day_and_the_next_catches_up(
+        client, login, poster, helper, session, outbox):
+    login(poster)
+    first = _post(client, title="First").get_json()["request"]["id"]
+    second = _post(client, title="Second").get_json()["request"]["id"]
+    # One email to the helper, for the first; the second waits.
+    to_helper = [args for kind, args, _ in outbox
+                 if kind == "notify_matching_requests" and args[0].id == helper.id]
+    assert [[r.id for r in args[1]] for args in to_helper] == [[first]]
+
+    # A day later, the next post's email lists everything since the last one.
+    org = session.get(Organization, helper.id)
+    from datetime import datetime, timezone
+    org.requests_emailed_at = datetime.now(timezone.utc) - timedelta(days=2)
+    session.commit()
+    outbox.clear()
+    third = _post(client, title="Third").get_json()["request"]["id"]
+    assert set(_emailed(outbox)[helper.id]) == {first, second, third}
+
+
+def test_the_requests_email_can_be_switched_off(
+        client, login, poster, helper, session, outbox):
+    org = session.get(Organization, helper.id)
+    org.email_preferences = {"requests": False}
+    session.commit()
+    login(poster)
+    _post(client)
+    assert helper.id not in _emailed(outbox)
+
+
+def test_blocked_organizations_are_not_emailed(
+        client, login, poster, helper, outbox):
+    login(helper)
+    client.post("/api/blocks", json={"organization_id": poster.id})
+    login(poster)
+    _post(client)
+    assert helper.id not in _emailed(outbox)
+
+
+# --- Sorting ---------------------------------------------------------------------
+
+def test_ending_soon_sorts_by_date(client, login, poster):
+    login(poster)
+    late = _post(client, title="Late",
+                 needed_by=(date.today() + timedelta(days=60)).isoformat())
+    soon = _post(client, title="Soon",
+                 needed_by=(date.today() + timedelta(days=3)).isoformat())
+    ids = [r["id"] for r in client.get(
+        f"/api/requests?org={poster.id}&sort=soon").get_json()["requests"]]
+    assert ids.index(soon.get_json()["request"]["id"]) < ids.index(
+        late.get_json()["request"]["id"])

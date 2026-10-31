@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controls = document.getElementById('reqControls');
     const categorySelect = document.getElementById('reqCategory');
     const remoteBox = document.getElementById('reqRemote');
+    const sortSelect = document.getElementById('reqSort');
+    const fitOption = document.getElementById('reqSortFit');
     const postBtn = document.getElementById('reqPostBtn');
 
     const modal = document.getElementById('reqModal');
@@ -40,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let units = [];
     let defaultUnits = {};
     let generation = 0;
+    let sortPainted = false;
 
     // --- Vocabulary ---------------------------------------------------------
 
@@ -69,6 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (box) box.checked = true;
         categorySelect.value = params.get('category') || '';
         remoteBox.checked = params.get('remote') === '1';
+        // Best fit needs a viewer; it is offered once load() knows there is
+        // one, and is what a signed-in visitor gets by default.
+        state.sort = params.get('sort') || '';
+        sortSelect.value = state.sort || 'newest';
         const page = parseInt(params.get('page'), 10);
         state.page = page > 1 ? page : 1;
         const id = parseInt(params.get('id'), 10);
@@ -80,7 +87,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             kind: controls.querySelector('input[name="kind"]:checked').value,
             category: categorySelect.value,
             remote: remoteBox.checked ? '1' : '',
+            sort: sortSelect.value === defaultSort() ? '' : sortSelect.value,
         };
+    }
+
+    function defaultSort() {
+        return state.signedIn ? 'fit' : 'newest';
+    }
+
+    // The option list depends on whether there is a viewer, so it is set
+    // once the first answer says, from what the URL asked for.
+    function paintSort() {
+        fitOption.hidden = !state.signedIn;
+        fitOption.disabled = !state.signedIn;
+        const wanted = state.sort || defaultSort();
+        sortSelect.value = (wanted === 'fit' && !state.signedIn) ? 'newest' : wanted;
     }
 
     function writeUrl(focusId) {
@@ -200,7 +221,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const data = await window.api(`/api/requests?${params}`);
             if (mine !== generation) return;
-            state.signedIn = data.signed_in;
+            if (state.signedIn !== data.signed_in || !sortPainted) {
+                state.signedIn = data.signed_in;
+                sortPainted = true;
+                paintSort();
+            }
             state.pages = data.pages;
             if (data.page > data.pages && data.pages >= 1 && state.page !== data.pages) {
                 state.page = data.pages;
@@ -239,6 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function refilter() {
+        state.sort = sortSelect.value;
         state.page = 1;
         focusBox.hidden = true;
         writeUrl();

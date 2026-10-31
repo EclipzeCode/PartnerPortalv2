@@ -38,6 +38,9 @@ from datetime import timedelta
 from html import escape
 from threading import Event, Lock, Thread
 
+from categories import label_for
+from units import format_quantity
+
 log = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
@@ -1092,6 +1095,65 @@ def notify_message_received(proposal, sender, message):
         f"PartnerPortal.\n\n"
         f"{message.body}\n\n"
         f"Reply here: {thread_url}\n"
+    )
+    _dispatch(to_addr, subject, html, text, preferences=True)
+
+
+def notify_matching_requests(org, requests):
+    """New requests on the board this organization could answer.
+
+    Sent at most once a day per organization, listing everything that fits
+    it posted since the last one -- the caller decides when and what (see
+    _email_matching_requests in app.py). Optional, under "requests".
+    """
+    if not requests or not org.wants_email("requests"):
+        return
+    cfg = _config()
+    to_addr = org.contact_email or org.email
+    board_url = f"{cfg['app_url']}/requests.html"
+
+    def line(req):
+        poster = req.organization.name if req.organization else "An organization"
+        verb = "needs" if req.kind == "need" else "is offering"
+        amount = ""
+        if req.quantity:
+            amount = format_quantity(req.quantity.get("amount"),
+                                     req.quantity.get("unit"),
+                                     req.quantity.get("detail"))
+        what = label_for(req.category) + (f" ({amount})" if amount else "")
+        return poster, verb, what, req
+
+    lines = [line(r) for r in requests]
+    count = len(lines)
+    subject = (f"{lines[0][0]} {lines[0][1]} {lines[0][2]}" if count == 1
+               else f"{count} new requests fit your organization")
+
+    items_html = "".join(
+        f'<li><strong>{escape(poster)}</strong> {verb} '
+        f'{escape(what)}: <a href="{escape(board_url)}?id={req.id}">'
+        f'{escape(req.title)}</a></li>'
+        for poster, verb, what, req in lines)
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(subject)}</h1>
+  <p class="meta">Posted on the PartnerPortal requests board, matching what
+  {escape(org.name)} offers or needs.</p>
+
+  <div class="terms"><ul>{items_html}</ul></div>
+
+  <a class="cta" href="{escape(board_url)}">See the board</a>
+
+  <p class="foot">You get at most one of these a day.</p>
+</div></body></html>
+"""
+    text = (
+        f"{subject}\n\n"
+        + "".join(f"  • {poster} {verb} {what}: {req.title}\n"
+                  f"    {board_url}?id={req.id}\n"
+                  for poster, verb, what, req in lines)
+        + f"\nSee the board: {board_url}\n"
+          f"You get at most one of these a day.\n"
     )
     _dispatch(to_addr, subject, html, text, preferences=True)
 

@@ -253,6 +253,20 @@
 
     <div class="about" id="about">
 
+        <!-- What is on the requests board right now. Filled by pp.js from
+             the public /api/requests, and left hidden until there are at
+             least three to show -- one lonely card reads as an empty board. -->
+        <section class="scroll-section latest-requests" id="latestRequests" hidden>
+            <div class="section-head">
+                <p class="eyebrow">Happening now</p>
+                <h2 class="section-title">Organizations asking for help <span>right now</span></h2>
+            </div>
+            <div class="latest-grid" id="latestGrid"></div>
+            <p class="latest-more">
+                <a href="requests.html">See every open request <i class='bx bx-right-arrow-alt'></i></a>
+            </p>
+        </section>
+
         <!-- How it works. One sequence, so the cards are numbered and read
              left to right. -->
         <section class="scroll-section">

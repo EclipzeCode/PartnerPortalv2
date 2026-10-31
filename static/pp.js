@@ -314,3 +314,32 @@ document.addEventListener('DOMContentLoaded', () => {
         node.parentNode.replaceChild(frag, node);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Latest requests
+// The three newest open requests from the board, under the figures. Hidden
+// unless there are at least three: a strip with one card in it advertises an
+// empty board.
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', async () => {
+    const section = document.getElementById('latestRequests');
+    const grid = document.getElementById('latestGrid');
+    if (!section || !grid) return;
+    const esc = window.escapeHtml;
+    try {
+        const res = await fetch('/api/requests?sort=newest', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.requests.length < 3) return;
+        grid.innerHTML = data.requests.slice(0, 3).map((r) => `
+            <a class="latest-card" href="requests.html?id=${encodeURIComponent(r.id)}">
+                <span class="latest-kind ${esc(r.kind)}">${r.kind === 'need' ? 'Needs' : 'Offering'}</span>
+                <span class="latest-title">${esc(r.title)}</span>
+                <span class="latest-meta">${esc(r.organization ? r.organization.name : '')}
+                    &middot; ${esc(r.category_label)}</span>
+            </a>`).join('');
+        section.hidden = false;
+    } catch (error) {
+        // The strip is extra; the page is complete without it.
+    }
+});

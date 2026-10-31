@@ -59,7 +59,7 @@ from notifications import (
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
     notify_email_change_notice, notify_email_change_requested,
     notify_email_verification, notify_invitation, notify_meeting_update,
-    notify_message_received,
+    notify_matching_requests, notify_message_received,
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
     notify_proposal_responded, notify_proposal_updated,
@@ -5808,10 +5808,17 @@ def list_requests():
         if org_id and valid_id(org_id):
             query = query.filter(PartnerRequest.organization_id == org_id)
 
+        # fit (the default signed in) puts what the viewer could answer
+        # first; soon is by closing date; newest is the default signed out,
+        # and what fit falls back to without a viewer.
+        sort = (request.args.get("sort") or "").strip()
         order = [PartnerRequest.created_at.desc(), PartnerRequest.id.desc()]
+        if sort == "soon":
+            order.insert(0, PartnerRequest.expires_on.asc())
         if viewer is not None:
             query = query.filter(
                 PartnerRequest.organization_id.notin_(_blocked_ids(viewer.id)))
+        if viewer is not None and sort in ("", "fit"):
             fits = case(
                 (and_(PartnerRequest.kind == PartnerRequest.NEED,
                       PartnerRequest.category.in_(viewer.offers or [""])), 0),
@@ -5980,10 +5987,74 @@ def create_request(org, db):
     )
     db.add(req)
     db.commit()
+    _email_matching_requests(db, req)
     return jsonify({
         "request": _request_with_counts(req, {}, org),
         "added_to_profile": listed if added else None,
     }), 201
+
+
+# How far back the first email reaches for an organization never sent one,
+# and how many recipients one post may fan out to.
+REQUEST_EMAIL_LOOKBACK = timedelta(days=7)
+REQUEST_EMAIL_FANOUT = 200
+
+
+def _email_matching_requests(db, req):
+    """Email the organizations a new request fits, at most once a day each.
+
+    Triggered by a post rather than by a schedule, since nothing here runs
+    on one. Each recipient's email lists every live request that fits them
+    posted since their last one, so a request that arrives while somebody is
+    inside their day is not lost -- it rides along with the next email they
+    get. The stamp is written before the email is queued, so two posts
+    landing together cannot both send.
+    """
+    # ponytail: one query per recipient and synchronous in the post request;
+    # move to the outbox worker if fan-out grows past a few hundred.
+    now = datetime.now(timezone.utc)
+    listed = (Organization.offers if req.kind == PartnerRequest.NEED
+              else Organization.needs)
+    blocked_either = select(Block.blocked_id).where(
+        Block.blocker_id == req.organization_id).union(
+        select(Block.blocker_id).where(Block.blocked_id == req.organization_id))
+    recipients = db.query(Organization).filter(
+        Organization.id != req.organization_id,
+        Organization.onboarding_complete.is_(True),
+        Organization.hidden_at.is_(None),
+        listed.any(req.category),
+        Organization.id.notin_(blocked_either),
+        or_(Organization.requests_emailed_at.is_(None),
+            Organization.requests_emailed_at < now - timedelta(days=1)),
+    ).limit(REQUEST_EMAIL_FANOUT).all()
+
+    outgoing = []
+    for org in recipients:
+        if not org.wants_email("requests"):
+            continue
+        since = max(org.requests_emailed_at or now - REQUEST_EMAIL_LOOKBACK,
+                    now - REQUEST_EMAIL_LOOKBACK)
+        blocked_by = select(Block.blocked_id).where(
+            Block.blocker_id == org.id).union(
+            select(Block.blocker_id).where(Block.blocked_id == org.id))
+        fits = _live_requests(db).filter(
+            PartnerRequest.organization_id != org.id,
+            PartnerRequest.created_at > since,
+            PartnerRequest.organization_id.notin_(blocked_by),
+            or_(
+                and_(PartnerRequest.kind == PartnerRequest.NEED,
+                     PartnerRequest.category.in_(org.offers or [""])),
+                and_(PartnerRequest.kind == PartnerRequest.HAVE,
+                     PartnerRequest.category.in_(org.needs or [""])),
+            ),
+        ).order_by(PartnerRequest.created_at.desc()).limit(10).all()
+        if not fits:
+            continue
+        org.requests_emailed_at = now
+        outgoing.append((org, fits))
+    db.commit()
+    for org, fits in outgoing:
+        notify_matching_requests(org, fits)
 
 
 @app.route("/api/requests/<int:request_id>/close", methods=["POST"])
