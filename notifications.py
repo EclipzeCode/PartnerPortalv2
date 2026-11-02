@@ -747,7 +747,14 @@ def notify_proposal_created(proposal):
     to_addr = proposal.recipient.contact_email or proposal.recipient.email
     proposer = proposal.proposer.name
 
-    subject = f"{proposer} proposed a partnership with you"
+    # A recorded partnership is the same email asking a different question:
+    # did this happen, rather than will you do this.
+    recorded = proposal.origin == "recorded"
+    did = "recorded a partnership" if recorded else "proposed a partnership"
+    they_title, you_title = (("They provided", "You provided") if recorded
+                             else ("They would provide", "You would provide"))
+    subject = (f"{proposer} recorded a partnership with you — confirm it"
+               if recorded else f"{proposer} proposed a partnership with you")
     review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
 
     # Both sides through term_lines, so a quantity shows on what they would
@@ -769,26 +776,26 @@ def notify_proposal_created(proposal):
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
 <body><div class="card">
-  <h1>{escape(proposer)} proposed a partnership</h1>
-  <p class="meta">On PartnerPortal — accept, decline, or ignore.</p>
+  <h1>{escape(proposer)} {did}</h1>
+  <p class="meta">On PartnerPortal — {"confirm it, correct the details, or say you did not partner" if recorded else "accept, decline, or ignore"}.</p>
 
-  {_terms_block("They would provide", they_give_labels)}
-  {_terms_block("You would provide", you_give_labels)}
+  {_terms_block(they_title, they_give_labels)}
+  {_terms_block(you_title, you_give_labels)}
   {quote_html}
 
-  <a class="cta" href="{escape(review_url)}">Review proposal</a>
+  <a class="cta" href="{escape(review_url)}">{"Review partnership" if recorded else "Review proposal"}</a>
 
   <p class="foot">You are receiving this because {escape(proposer)}
-  proposed a partnership with {escape(proposal.recipient.name)} on
-  PartnerPortal. Sign in to accept or decline.</p>
+  {did} with {escape(proposal.recipient.name)} on PartnerPortal. Nothing is
+  shown to anyone else unless you {"confirm it" if recorded else "accept"}.</p>
 </div></body></html>
 """
 
     text = (
-        f"{proposer} proposed a partnership with {proposal.recipient.name} "
+        f"{proposer} {did} with {proposal.recipient.name} "
         f"on PartnerPortal.\n\n"
-        + _terms_text("They would provide", they_give_labels)
-        + _terms_text("You would provide", you_give_labels)
+        + _terms_text(they_title, they_give_labels)
+        + _terms_text(you_title, you_give_labels)
         + quote_text
         + f"\nReview it here: {review_url}\n"
     )
@@ -894,11 +901,16 @@ def notify_proposal_responded(proposal, responder_org):
     cfg = _config()
     to_addr = other.contact_email or other.email
     responder = responder_org.name
-    accepted = proposal.status == "accepted"
+    accepted = proposal.status in ("accepted", "completed")
 
-    subject = (f"{responder} accepted your partnership proposal"
-               if accepted
-               else f"{responder} declined your partnership proposal")
+    if proposal.origin == "recorded":
+        subject = (f"{responder} confirmed the partnership you recorded"
+                   if accepted else
+                   f"{responder} did not confirm the partnership you recorded")
+    else:
+        subject = (f"{responder} accepted your partnership proposal"
+                   if accepted
+                   else f"{responder} declined your partnership proposal")
 
     quote_html = (
         f'<div class="quote">{escape(proposal.response_message)}</div>'
@@ -914,7 +926,7 @@ def notify_proposal_responded(proposal, responder_org):
         cta_label = "View the agreement"
         cta_url = share_url or f"{cfg['app_url']}/ppdashboard.html#agreed"
         text_body = (
-            f"{responder} accepted your partnership proposal on PartnerPortal.\n"
+            f"{subject} on PartnerPortal.\n"
             f"You can now share the agreement summary with anyone: {cta_url}\n"
         )
     else:
@@ -922,7 +934,7 @@ def notify_proposal_responded(proposal, responder_org):
         cta_label = "See details"
         cta_url = f"{cfg['app_url']}/ppdashboard.html#closed"
         text_body = (
-            f"{responder} declined your partnership proposal on PartnerPortal.\n"
+            f"{subject} on PartnerPortal.\n"
             f"You can propose again to them later, or find other partners: "
             f"{cta_url}\n"
         )
@@ -1269,7 +1281,7 @@ def notify_meeting_update(event, proposal, actor, what):
     _dispatch(to_addr, subject, html, text, preferences=True)
 
 
-def notify_invitation(inviter, invited, to_addr, token):
+def notify_invitation(inviter, invited, to_addr, token, proposal=None):
     """An invitation, sent to an address the inviter typed.
 
     The link is the same one the inviter can copy from the dashboard; this
@@ -1286,12 +1298,34 @@ def notify_invitation(inviter, invited, to_addr, token):
     claim_url = f"{cfg['app_url']}/claim.html?token={token}"
     reply_to = inviter.contact_email or inviter.email
 
+    # When the invitation comes from recording a partnership, that
+    # partnership is the reason to open it, so it leads.
+    they_gave = you_gave = []
+    if proposal is not None:
+        they_gave = proposal.term_lines(proposal.proposer_gives,
+                                        proposal.proposer_quantities)
+        you_gave = proposal.term_lines(proposal.recipient_gives,
+                                       proposal.recipient_quantities)
+    recorded_html = (
+        f"<p>{escape(inviter.name)} recorded a partnership with "
+        f"{escape(invited.name)}. Claim your profile to confirm it.</p>"
+        + _terms_block("They provided", they_gave)
+        + _terms_block("You provided", you_gave)
+    ) if proposal is not None else ""
+    recorded_text = (
+        f"{inviter.name} recorded a partnership with {invited.name}. Claim "
+        f"your profile to confirm it.\n"
+        + _terms_text("They provided", they_gave)
+        + _terms_text("You provided", you_gave) + "\n"
+    ) if proposal is not None else ""
+
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
 <body><div class="card">
   <h1>{escape(inviter.name)} invited {escape(invited.name)} to PartnerPortal</h1>
   <p class="meta">A profile is waiting for you to claim.</p>
 
+  {recorded_html}
   <p>PartnerPortal matches nonprofits, community organizations and small
   businesses on what they need and what they can offer, so both sides gain.
   {escape(inviter.name)} thinks {escape(invited.name)} has something to trade
@@ -1305,15 +1339,17 @@ def notify_invitation(inviter, invited, to_addr, token):
   Replying reaches {escape(inviter.name)} directly.</p>
 </div></body></html>
 """
-    text = (
+    text = recorded_text + (
         f"{inviter.name} invited {invited.name} to PartnerPortal, which matches "
         f"organizations on what they need and what they can offer.\n\n"
         f"Claim the profile they set up for you: {claim_url}\n\n"
         f"{inviter.name} typed this address in; PartnerPortal has not stored it "
         f"and will not write again. Replying reaches them directly.\n"
     )
-    _dispatch(to_addr, f"{inviter.name} invited you to PartnerPortal",
-              html, text, reply_to=reply_to)
+    subject = (f"{inviter.name} recorded a partnership with you — confirm it"
+               if proposal is not None
+               else f"{inviter.name} invited you to PartnerPortal")
+    _dispatch(to_addr, subject, html, text, reply_to=reply_to)
 
 
 def notify_password_reset(org, token):
@@ -1642,3 +1678,51 @@ def notify_profile_hidden(org, reason, hidden):
     )
     _dispatch(to_addr, subject, html, text,
               reply_to=cfg["contact_to"] or None)
+
+
+def reminder_email(org, items):
+    """The daily reminder: everything waiting on `org`, in one message.
+
+    Returns (to_addr, subject, html, text) rather than dispatching, because
+    reminders.py writes the outbox row in the same transaction as the
+    reminders_sent rows that stop it repeating -- see ReminderSent.
+
+    `items` are dicts with `text` (one sentence) and `actions`, a list of
+    (label, path) pairs. Optional, under "reminders".
+    """
+    app_url = _config()["app_url"]
+    to_addr = org.contact_email or org.email
+    count = len(items)
+    subject = (items[0]["text"] if count == 1
+               else f"{count} things are waiting on you")
+
+    def links_html(item):
+        return " ".join(
+            f'<a class="cta" href="{escape(app_url + path)}">{escape(label)}</a>'
+            for label, path in item["actions"])
+
+    items_html = "".join(
+        f'<div class="terms"><p style="margin:0">{escape(item["text"])}</p>'
+        f'{links_html(item)}</div>'
+        for item in items)
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>{escape(subject)}</h1>
+  <p class="meta">{escape(org.name)} on PartnerPortal</p>
+  {items_html}
+  <p class="foot">You get at most one of these a day, and each reminder
+  only once.</p>
+</div></body></html>
+"""
+    text = (
+        f"{subject}\n\n"
+        + "".join(
+            f"  • {item['text']}\n"
+            + "".join(f"    {label}: {app_url}{path}\n"
+                      for label, path in item["actions"])
+            for item in items)
+        + "\nYou get at most one of these a day, and each reminder only once.\n"
+    )
+    html, text = _preferences_note(html, text)
+    return to_addr, subject, html, text

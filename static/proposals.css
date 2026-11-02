@@ -821,3 +821,15 @@
     opacity: 0.6;
     cursor: default;
 }
+
+/* "Add a past partnership" (recorded.js). The rest of the dialog reuses the
+   invite and edit dialogs' classes. */
+.record-results { list-style: none; margin: 6px 0 0; padding: 0; }
+.record-results li { margin: 2px 0; }
+.record-picked { margin: 8px 0 0; }
+.record-absent { display: flex; gap: 8px; align-items: center; margin: 0 0 16px; }
+/* More fields than the edit dialog, so the picker grid must not be the part
+   that shrinks: it keeps its height and the dialog body scrolls instead. */
+#recordModal .modal-body { overflow-y: auto; }
+#recordModal .propose-grid { flex: 0 0 auto; }
+#recordModal .category-picker { flex: 0 0 auto; max-height: 10rem; }

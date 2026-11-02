@@ -4,6 +4,7 @@
     python manage.py list-admins
     python manage.py reset-admin-password <email>
     python manage.py remove-admin <email> [--force]
+    python manage.py send-reminders [--dry-run]
 
 There is no admin signup route and there will not be one. That is not an
 omission to be filled in later: an admin is somebody who can act on other
@@ -155,6 +156,20 @@ def remove_admin(email, force=False):
         db.close()
 
 
+def send_reminders(dry_run=False):
+    """The daily reminder emails. Run by the Render cron job; see reminders.py."""
+    import reminders
+
+    db = SessionLocal()
+    try:
+        sent = reminders.run(db, dry_run=dry_run)
+        print(f"{'Would send' if dry_run else 'Queued'} "
+              f"{len(sent)} reminder email(s).")
+        return 0
+    finally:
+        db.close()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="manage.py", description=__doc__,
@@ -175,6 +190,10 @@ def main(argv=None):
     remove.add_argument("--force", action="store_true",
                         help="remove even if it is the only admin")
 
+    reminders = sub.add_parser("send-reminders")
+    reminders.add_argument("--dry-run", action="store_true",
+                           help="print who would get what, and send nothing")
+
     args = parser.parse_args(argv)
     if args.command == "create-admin":
         return create_admin(args.email, args.name)
@@ -184,6 +203,8 @@ def main(argv=None):
         return reset_admin_password(args.email)
     if args.command == "remove-admin":
         return remove_admin(args.email, args.force)
+    if args.command == "send-reminders":
+        return send_reminders(args.dry_run)
     parser.print_help()
     return 1
 

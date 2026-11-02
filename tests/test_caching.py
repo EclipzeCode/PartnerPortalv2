@@ -157,7 +157,8 @@ def test_scripts_are_bundled_into_one_request(client):
 
     members = re.findall(r'/\* --- (\S+) --- \*/', body)
     assert members == ["base.js", "common.js", "notifications.js",
-                       "ppdashboard.js", "proposals.js", "invites.js"], members
+                       "ppdashboard.js", "proposals.js", "invites.js",
+                       "recorded.js"], members
 
     # Named by its contents, so it can be kept for a year.
     assert "immutable" in response.headers["Cache-Control"]

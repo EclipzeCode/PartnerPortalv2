@@ -139,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <button type="button" class="btn-secondary" data-close="${req.id}" data-as="filled">
                     <i class='bx bx-check' aria-hidden="true"></i> Mark filled
                 </button>
+                <button type="button" class="btn-ghost" data-extend="${req.id}">Extend 30 days</button>
                 <button type="button" class="btn-ghost" data-close="${req.id}" data-as="closed">Close</button>`;
         }
         const label = req.kind === 'need' ? 'I can help' : 'Request this';
@@ -274,6 +275,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     controls.addEventListener('change', refilter);
     prevBtn.addEventListener('click', () => { state.page -= 1; writeUrl(); load(); });
     nextBtn.addEventListener('click', () => { state.page += 1; writeUrl(); load(); });
+
+    // Extend, from a card or the focused request -- what the "your request
+    // is ending" reminder links here for.
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-extend]');
+        if (!btn) return;
+        try {
+            await window.api(`/api/requests/${btn.dataset.extend}/extend`, { method: 'POST' });
+            window.toast('Extended 30 days.');
+            if (!focusBox.hidden) showFocus(btn.dataset.extend);
+            load();
+        } catch (error) {
+            window.toast(error.message || 'Could not extend that request.', 'error');
+        }
+    });
 
     // Mark filled / close, from a card or the focused request.
     document.addEventListener('click', async (e) => {

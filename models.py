@@ -434,6 +434,7 @@ class Organization(Base):
         "messages": "Messages in a partnership conversation",
         "partnerships": "Partnerships completing, ending, or their shared link changing",
         "requests": "New requests on the board that fit what you offer or need",
+        "reminders": "Reminders about things waiting on you",
     }
 
     def wants_email(self, category):
@@ -806,6 +807,19 @@ class Partnership(Base):
         default=RECIPIENT_SIDE,
     )
 
+    # How this partnership came to be here. "proposed" is the flow above;
+    # "recorded" is one an organization entered after the fact -- a
+    # partnership that already happened, or is already running -- which
+    # starts pending on the partner exactly as a proposal does. Until the
+    # partner confirms it, it is visible to the two of them and counts for
+    # nothing, for the same reason a proposal does not: one side cannot make
+    # claims about the other alone. See record_partnership in app.py.
+    PROPOSED = "proposed"
+    RECORDED = "recorded"
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=PROPOSED, default=PROPOSED,
+    )
+
     # When the terms were last handed back as a counter-offer. Written by
     # that one act and nothing else, which is what the "suggested different
     # terms" notification needs to be dated by: updated_at, which it used,
@@ -869,6 +883,10 @@ class Partnership(Base):
         CheckConstraint(
             "awaiting_side IN ('proposer', 'recipient')",
             name="ck_partnerships_awaiting_side",
+        ),
+        CheckConstraint(
+            "origin IN ('proposed', 'recorded')",
+            name="ck_partnerships_origin",
         ),
         # At most one live proposal in a given direction. Without this, a
         # double-clicked submit button creates two pending proposals and the
@@ -1125,6 +1143,7 @@ class Partnership(Base):
         data = {
             "id": self.id,
             "status": self.status,
+            "origin": self.origin,
             "timeline": self.timeline,
             "starts_on": self.starts_on.isoformat() if self.starts_on else None,
             "ends_on": self.ends_on.isoformat() if self.ends_on else None,
@@ -2745,3 +2764,36 @@ class EmailOutbox(Base):
 
     def __repr__(self):
         return f"<EmailOutbox {self.id} {self.status} to={self.to_addr!r}>"
+
+
+class ReminderSent(Base):
+    """One reminder that has gone out, so it never goes out again.
+
+    The daily reminder job (reminders.py) writes these in the same
+    transaction as the email it queues, and the unique constraint is what
+    makes "once" true: a second run, or a run restarted after a crash,
+    tries the same insert and gets nothing back, so that item is left out
+    of the email.
+
+    `item` identifies the thing reminded about, including whatever would
+    make a fresh reminder fair -- a request's expiry date, a proposal's
+    current turn -- so extending a request or countering a proposal starts
+    its clock again instead of being silenced for good.
+    """
+
+    __tablename__ = "reminders_sent"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    item: Mapped[str] = mapped_column(String(64), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "kind", "item",
+                         name="uq_reminders_sent_once"),
+    )

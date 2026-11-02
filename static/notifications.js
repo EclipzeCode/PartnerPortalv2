@@ -53,6 +53,8 @@
         switch (item.kind) {
             case 'proposal_received':
                 return { icon: 'bx-envelope', text: `${who} proposed a partnership` };
+            case 'partnership_recorded':
+                return { icon: 'bx-history', text: `${who} recorded a partnership with you — confirm it` };
             case 'proposal_countered':
                 return {
                     icon: 'bx-transfer-alt',

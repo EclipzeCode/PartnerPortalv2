@@ -103,3 +103,32 @@ services:
       # see the note in app.py.
       - key: REQUIRE_EMAIL_VERIFICATION
         value: "true"
+
+  # The daily reminder emails (reminders.py). A separate cron job rather than
+  # a thread in the web service, which runs two processes and would send
+  # every reminder twice. It only writes to the email outbox; the web
+  # service's email workers deliver from there, so it needs the database and
+  # the base URL for links, and no mail key. Billed by the minute it runs.
+  - type: cron
+    name: partnerportal-reminders
+    runtime: python
+    plan: starter
+    region: ohio
+    schedule: "0 15 * * *"   # 15:00 UTC, morning across the US
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py send-reminders
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.15"
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: partnerportal
+          envVarKey: DATABASE_URL
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: partnerportal
+          envVarKey: SECRET_KEY
+      - key: APP_BASE_URL
+        value: https://partnerportal.tech

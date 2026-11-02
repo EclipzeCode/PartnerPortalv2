@@ -109,6 +109,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Rendering ------------------------------------------------------
+    // Whether the other side delivered: asked when marking complete, and
+    // when confirming a recorded partnership that has already ended.
+    function deliveryAsk(proposal) {
+        return `<fieldset class="delivery-ask">
+
+                       <legend>Did ${esc(proposal.counterpart.name)} provide
+                       what they committed to?</legend>
+                       <label><input type="radio" name="delivered" value="yes">
+                           <span>Yes</span></label>
+                       <label><input type="radio" name="delivered" value="no">
+                           <span>No</span></label>
+                       <label><input type="radio" name="delivered" value=""
+                           checked><span>Rather not say</span></label>
+                       <p class="delivery-note">Your answer is shown to
+                       ${esc(proposal.counterpart.name)} and to no one else. It
+                       never appears on the public summary, on either profile,
+                       or in any total.</p>
+                   </fieldset>`;
+    }
+
     function termsBlock(p) {
         const give = (p.you_give_labels || []).map(
             (l) => `<li>${esc(l)}</li>`).join('') || '<li class="none">Nothing listed</li>';
@@ -258,9 +278,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : '';
 
             const actions = [];
+            // A recorded partnership asks whether something happened, not
+            // whether it will: the same three answers, said that way.
+            const recorded = p.origin === 'recorded';
             if (p.can_respond) {
-                actions.push('<button class="btn-primary" data-act="accept">Accept</button>');
-                actions.push('<button class="btn-ghost" data-act="decline">Decline</button>');
+                actions.push(`<button class="btn-primary" data-act="accept">${
+                    recorded ? 'Confirm' : 'Accept'}</button>`);
+                actions.push(`<button class="btn-ghost" data-act="decline">${
+                    recorded ? 'We didn’t partner' : 'Decline'}</button>`);
             }
             if (p.can_edit) {
                 // Before Withdraw, because correcting a term is the lighter
@@ -270,7 +295,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // answering a counter -- is countering: the same dialog,
                 // but their change is their answer.
                 actions.push(`<button class="btn-ghost" data-act="edit">${
-                    p.awaiting_you ? 'Counter' : 'Edit terms'}</button>`);
+                    recorded ? 'Edit details'
+                        : p.awaiting_you ? 'Counter' : 'Edit terms'}</button>`);
             }
             if (p.can_withdraw) {
                 actions.push('<button class="btn-ghost" data-act="withdraw">Withdraw</button>');
@@ -321,7 +347,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }</h3>
                         <p class="proposal-meta">${esc(other.organization_type || '')}${
                             other.location ? ' · ' + esc(other.location) : ''
-                        } · ${esc(when)}</p>
+                        } · ${esc(when)}${recorded
+                            ? ` · Recorded by ${esc(p.direction === 'incoming' ? other.name : 'you')}`
+                            : ''}</p>
                     </div>
                     <span class="status-pill status-${p.status}">${
                         esc(p.status === 'pending' && p.countered ? 'countered' : p.status)
@@ -1168,11 +1196,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // actual sides happens once, on submit. `you_give` and `you_receive`
     // are already from the viewer's point of view.
     function buildEditPickers(proposal) {
+        // A recorded partnership is history, not an offer, so any category
+        // may be on either side -- the server does not hold it to the lists.
+        const all = proposal.origin === 'recorded'
+            ? new Set(editGroups.flatMap((g) => (g.categories || []).map((c) => c.slug)))
+            : null;
         const columns = [
             ['proposer', document.getElementById('editProposerGives'),
-             new Set((editMe && editMe.offers) || []), proposal.you_give || []],
+             all || new Set((editMe && editMe.offers) || []), proposal.you_give || []],
             ['recipient', document.getElementById('editRecipientGives'),
-             new Set((proposal.counterpart && proposal.counterpart.offers) || []),
+             all || new Set((proposal.counterpart && proposal.counterpart.offers) || []),
              proposal.you_receive || []],
         ];
         columns.forEach(([side, container, allowed, chosen]) => {
@@ -1548,9 +1581,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         // other one.
         const hadLink = Boolean(proposal.share_token);
         pending = { id, action: act, name: proposal.counterpart.name, hadLink };
+        const recorded = proposal.origin === 'recorded';
+        // Confirming a recorded partnership that has already ended closes
+        // it as complete, so it asks the completion question too.
+        const endedAlready = recorded && proposal.ends_on
+            && proposal.ends_on < new Date().toISOString().slice(0, 10);
         respondTitle.textContent = {
-            accept: `Accept partnership with ${proposal.counterpart.name}?`,
-            decline: proposal.countered && proposal.direction === 'outgoing'
+            accept: recorded
+                ? `Confirm your partnership with ${proposal.counterpart.name}?`
+                : `Accept partnership with ${proposal.counterpart.name}?`,
+            decline: recorded
+                ? `Tell ${proposal.counterpart.name} you did not partner?`
+                : proposal.countered && proposal.direction === 'outgoing'
                 ? `Decline ${proposal.counterpart.name}'s counter-offer?`
                 : `Decline proposal from ${proposal.counterpart.name}?`,
             withdraw: `Withdraw your proposal to ${proposal.counterpart.name}?`,
@@ -1564,7 +1606,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Every branch says something: withdrawing used to leave a blank gap
         // between the title and the buttons.
-        if (act === 'accept') {
+        if (act === 'accept' && endedAlready) {
+            respondTerms.innerHTML = termsBlock(proposal) +
+                '<p class="respond-note">It ended already, so confirming '
+                + 'marks it complete for both of you.</p>' + deliveryAsk(proposal);
+        } else if (act === 'accept') {
             respondTerms.innerHTML = termsBlock(proposal) +
                 '<p class="respond-note">Accepting creates a shareable summary ' +
                 'that anyone with the link can read. It contains both ' +
@@ -1577,21 +1623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `<p class="respond-note">This closes once `
                 + `${esc(proposal.counterpart.name)} confirms too. The shared `
                 + `summary stays available and will say the partnership is `
-                + `complete.</p>`
-                + `<fieldset class="delivery-ask">
-                       <legend>Did ${esc(proposal.counterpart.name)} provide
-                       what they committed to?</legend>
-                       <label><input type="radio" name="delivered" value="yes">
-                           <span>Yes</span></label>
-                       <label><input type="radio" name="delivered" value="no">
-                           <span>No</span></label>
-                       <label><input type="radio" name="delivered" value=""
-                           checked><span>Rather not say</span></label>
-                       <p class="delivery-note">Your answer is shown to
-                       ${esc(proposal.counterpart.name)} and to no one else. It
-                       never appears on the public summary, on either profile,
-                       or in any total.</p>
-                   </fieldset>`;
+                + `complete.</p>` + deliveryAsk(proposal);
         } else if (act === 'end') {
             respondTerms.innerHTML =
                 `<p class="respond-note">This stops the partnership now, `
@@ -1689,13 +1721,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             // silently dropped, which is how a note someone typed goes
             // missing without anything saying so.
             let body;
-            if (action === 'complete') {
+            if (action === 'complete' || respondTerms.querySelector('.delivery-ask')) {
                 const picked = respondTerms.querySelector(
                     'input[name="delivered"]:checked');
                 const value = picked ? picked.value : '';
                 // "Rather not say" is an empty value and stays absent, so
                 // "no answer" is distinguishable from "no".
                 body = value ? { delivered: value === 'yes' } : {};
+                if (action === 'accept') body.message = respondMessage.value.trim();
             } else if (action === 'end') {
                 body = { reason: respondMessage.value.trim() };
             } else {

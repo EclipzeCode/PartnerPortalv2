@@ -6073,6 +6073,37 @@ def close_request(org, db, request_id):
         req, _response_counts(db, [req.id]), org)})
 
 
+REQUEST_EXTEND_DAYS = 30
+
+
+@app.route("/api/requests/<int:request_id>/extend", methods=["POST"])
+@login_required
+def extend_request(org, db, request_id):
+    """Keep a request up another 30 days, no further out than a new one may go.
+
+    The other answer to the "your request is ending" reminder. An open
+    request that has already expired can be extended too: it reads as
+    expired, but nobody has said it is filled.
+    """
+    req = db.get(PartnerRequest, request_id)
+    if req is None or req.organization_id != org.id:
+        return jsonify({"error": "That request is not yours."}), 404
+    if req.status != PartnerRequest.OPEN:
+        return jsonify({"error": "That request is already off the board."}), 409
+    today = datetime.now(timezone.utc).date()
+    latest = today + timedelta(days=REQUEST_MAX_DAYS)
+    if req.expires_on >= latest:
+        return jsonify({
+            "error": f"A request can stay up at most {REQUEST_MAX_DAYS} days "
+                     f"ahead.",
+        }), 409
+    req.expires_on = min(max(req.expires_on, today)
+                         + timedelta(days=REQUEST_EXTEND_DAYS), latest)
+    db.commit()
+    return jsonify({"request": _request_with_counts(
+        req, _response_counts(db, [req.id]), org)})
+
+
 # --- Saved leads ------------------------------------------------------------
 # A private shortlist. Matching answers "who could work with me", and that
 # answer moves as either side edits its profile and as the directory grows --
@@ -6617,18 +6648,6 @@ def create_invite(org, db):
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
 
-    if len(name) < 2:
-        return jsonify({
-            "error": "Enter the name of the organization you are inviting.",
-            "field": "name",
-        }), 400
-    problem, name_flagged = screened_name(name)
-    if problem:
-        return jsonify({"error": problem, "field": "name"}), 400
-    problem = length_problem("name", name)
-    if problem:
-        return jsonify({"error": problem, "field": "name"}), 400
-
     # Optional. The link is always returned to be copied; an address here
     # additionally has it mailed, with the inviter's contact address as the
     # reply-to. Not stored anywhere -- the profile keeps its placeholder
@@ -6639,15 +6658,46 @@ def create_invite(org, db):
         return jsonify({"error": "Please enter a valid email address.",
                         "field": "email"}), 400
 
+    invited, token, refusal = _new_invited(db, org, name)
+    if refusal:
+        return refusal
+    db.commit()
+
+    if email:
+        notify_invitation(org, invited, email, token)
+
+    return jsonify({
+        "message": "Invitation sent" if email else "Invitation created",
+        "invite": _invite_dict(invited, raw_token=token),
+        "emailed_to": email or None,
+    }), 201
+
+
+def _new_invited(db, org, name):
+    """(invited, token, None), or (None, None, refusal): an unclaimed profile.
+
+    Added to the session, not committed. Shared by inviting and by recording
+    a partnership with an organization that is not here yet.
+    """
+    if len(name) < 2:
+        return None, None, (jsonify({
+            "error": "Enter the name of the organization you are inviting.",
+            "field": "name",
+        }), 400)
+    problem, name_flagged = screened_name(name)
+    problem = problem or length_problem("name", name)
+    if problem:
+        return None, None, (jsonify({"error": problem, "field": "name"}), 400)
+
     # A ceiling rather than a rate limit, because the cost here is rows that
     # sit unclaimed rather than work done per request. Somebody recruiting
     # partners sends a handful; a script fills the table.
     outstanding = _outstanding_invites(db, org)
     if len(outstanding) >= MAX_OUTSTANDING_INVITES:
-        return jsonify({
+        return None, None, (jsonify({
             "error": f"You have {MAX_OUTSTANDING_INVITES} invitations waiting "
                      f"to be claimed. Revoke one before sending another.",
-        }), 429
+        }), 429)
 
     # The outstanding-invitation cap above is a ceiling on rows, not on
     # requests: create-and-revoke is two calls, and each create writes an
@@ -6656,8 +6706,8 @@ def create_invite(org, db):
     wait = rate_limited("invites", str(org.id), max_attempts=INVITES_PER_HOUR,
                         window_seconds=3600)
     if wait:
-        return too_many("You have created a lot of invitations recently.",
-                        wait)
+        return None, None, too_many(
+            "You have created a lot of invitations recently.", wait)
 
     # No address is collected. See the note on Organization.claim_token_hash: the
     # email column is NOT NULL and unique, so an unclaimed row needs
@@ -6677,16 +6727,7 @@ def create_invite(org, db):
         invited_by_id=org.id,
     )
     db.add(invited)
-    db.commit()
-
-    if email:
-        notify_invitation(org, invited, email, token)
-
-    return jsonify({
-        "message": "Invitation sent" if email else "Invitation created",
-        "invite": _invite_dict(invited, raw_token=token),
-        "emailed_to": email or None,
-    }), 201
+    return invited, token, None
 
 
 @app.route("/api/invites/<int:invite_id>", methods=["DELETE"])
@@ -6706,6 +6747,12 @@ def revoke_invite(org, db, invite_id):
     if invited is None:
         return jsonify({"error": "Invitation not found."}), 404
 
+    # A recorded partnership waiting on this profile goes with it; there is
+    # nobody left to confirm it.
+    for p in db.query(Partnership).filter(
+            Partnership.recipient_id == invited.id,
+            Partnership.status == Partnership.PENDING):
+        db.delete(p)
     db.delete(invited)
     db.commit()
     return jsonify({"message": "Invitation revoked"})
@@ -6761,6 +6808,13 @@ def read_invite(token):
                          "used.",
             }), 404
         inviter = invited.invited_by
+        # The partnership the inviter recorded with them, if that is how the
+        # invitation came about -- the reason to sign up, said first.
+        recorded = db.query(Partnership).filter(
+            Partnership.recipient_id == invited.id,
+            Partnership.origin == Partnership.RECORDED,
+            Partnership.status == Partnership.PENDING,
+        ).first()
         return jsonify({
             "invite": {
                 "name": invited.name,
@@ -6769,6 +6823,17 @@ def read_invite(token):
                 # link, so it says who is inviting and nothing else about them.
                 "invited_by": (inviter.name if inviter is not None
                                and inviter.onboarding_complete else None),
+                "recorded": {
+                    "by": recorded.proposer_name,
+                    "they_gave": recorded.term_lines(
+                        recorded.proposer_gives, recorded.proposer_quantities),
+                    "you_gave": recorded.term_lines(
+                        recorded.recipient_gives, recorded.recipient_quantities),
+                    "starts_on": (recorded.starts_on.isoformat()
+                                  if recorded.starts_on else None),
+                    "ends_on": (recorded.ends_on.isoformat()
+                                if recorded.ends_on else None),
+                } if recorded is not None else None,
             },
         })
     finally:
@@ -7127,7 +7192,9 @@ def _notifications_for(db, org):
             # which moves on every read marker and would make a seen
             # counter new again. The fallback covers a row countered
             # before the column existed and not backfilled.
-            add("proposal_countered" if not incoming else "proposal_received",
+            add("proposal_countered" if not incoming
+                else "partnership_recorded"
+                if p.origin == Partnership.RECORDED else "proposal_received",
                 (p.countered_at or p.updated_at) if not incoming
                 else p.created_at, p,
                 actionable=True, tab="incoming")
@@ -8974,43 +9041,21 @@ PROPOSALS_PER_HOUR = 20
 PROPOSALS_PER_PAIR_PER_HOUR = 3
 
 
-@app.route("/api/proposals", methods=["POST"])
-@login_required
-def create_proposal(org, db):
-    """Propose a partnership with structured terms on both sides."""
-    if not org.onboarding_complete:
-        return jsonify({"error": "Complete your profile first."}), 409
+def _partner_for(db, org, recipient_id):
+    """(recipient, None) or (None, refusal) for a partnership with `org`.
 
-    # The one thing an unverified account cannot do, when the gate is on (see
-    # REQUIRE_EMAIL_VERIFICATION). Sending a proposal is what puts this org's name, and an
-    # email, in front of a stranger who did not ask for it, so it is the
-    # action worth holding back until the address behind the account is known
-    # to be real. Everything else stays open either way: an unverified org can
-    # sign in, finish its profile, appear in search, and receive and answer
-    # proposals, because none of those reach anyone who has not already
-    # chosen to engage.
-    if REQUIRE_EMAIL_VERIFICATION and not org.email_verified:
-        return jsonify({
-            "error": "Verify your email address before proposing a "
-                     "partnership. Open Settings to send a new "
-                     "verification link.",
-            "needs_verification": True,
-        }), 403
-
-    data = request.get_json(silent=True) or {}
-
-    try:
-        recipient_id = int(data.get("recipient_id"))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Which organization is this for?"}), 400
+    Shared by proposing and recording: the same organization must exist, be
+    listed, not be blocked either way, and not already have a live
+    partnership with `org`.
+    """
 
     if recipient_id == org.id:
-        return jsonify({"error": "You cannot propose a partnership with yourself."}), 400
+        return None, (jsonify({"error": "You cannot propose a partnership with yourself."}), 400)
 
     # As in create_saved: out of range is answered as not found rather than
     # left to become a DataError. See valid_id.
     if not valid_id(recipient_id):
-        return jsonify({"error": "Organization not found."}), 404
+        return None, (jsonify({"error": "Organization not found."}), 404)
 
     recipient = db.get(Organization, recipient_id)
     # Hidden counts as absent here as it does everywhere a profile is read:
@@ -9018,14 +9063,14 @@ def create_proposal(org, db):
     # proposals from anyone who kept its id.
     if (recipient is None or not recipient.onboarding_complete
             or recipient.hidden_at):
-        return jsonify({"error": "Organization not found."}), 404
+        return None, (jsonify({"error": "Organization not found."}), 404)
     if _blocked_between(db, org.id, recipient.id):
         # Either direction, in words that do not say which. A blocked
         # organization is not told it was blocked; see models.Block.
-        return jsonify({
+        return None, (jsonify({
             "error": "This organization is not taking proposals from you "
                      "right now.",
-        }), 403
+        }), 403)
 
     # One live partnership per pair, in either direction.
     #
@@ -9068,7 +9113,43 @@ def create_proposal(org, db):
             error = ("You already have a live partnership with this "
                      "organization. Complete or end it before agreeing "
                      "another.")
-        return jsonify({"error": error, "existing_status": live.status}), 409
+        return None, (jsonify({"error": error, "existing_status": live.status}), 409)
+    return recipient, None
+
+
+@app.route("/api/proposals", methods=["POST"])
+@login_required
+def create_proposal(org, db):
+    """Propose a partnership with structured terms on both sides."""
+    if not org.onboarding_complete:
+        return jsonify({"error": "Complete your profile first."}), 409
+
+    # The one thing an unverified account cannot do, when the gate is on (see
+    # REQUIRE_EMAIL_VERIFICATION). Sending a proposal is what puts this org's name, and an
+    # email, in front of a stranger who did not ask for it, so it is the
+    # action worth holding back until the address behind the account is known
+    # to be real. Everything else stays open either way: an unverified org can
+    # sign in, finish its profile, appear in search, and receive and answer
+    # proposals, because none of those reach anyone who has not already
+    # chosen to engage.
+    if REQUIRE_EMAIL_VERIFICATION and not org.email_verified:
+        return jsonify({
+            "error": "Verify your email address before proposing a "
+                     "partnership. Open Settings to send a new "
+                     "verification link.",
+            "needs_verification": True,
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+
+    try:
+        recipient_id = int(data.get("recipient_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Which organization is this for?"}), 400
+
+    recipient, refusal = _partner_for(db, org, recipient_id)
+    if refusal:
+        return refusal
 
     proposer_gives = clean_categories(data.get("proposer_gives"))
     recipient_gives = clean_categories(data.get("recipient_gives"))
@@ -9256,6 +9337,163 @@ def create_proposal(org, db):
         "message": "Proposal sent",
         "proposal": proposal.to_dict(viewer_id=org.id),
     }), 201
+
+
+# Recorded partnerships waiting on their partner, per recorder. The same
+# ceiling as unclaimed invitations: each one is a row, and often an email, in
+# front of somebody who did not ask for it.
+MAX_PENDING_RECORDED = 25
+
+
+@app.route("/api/partnerships/recorded", methods=["POST"])
+@login_required
+def record_partnership(org, db):
+    """Record a partnership that already happened, or is already running.
+
+    It is a proposal in every way that matters: pending, waiting on the
+    partner, who confirms it (accept), corrects it (counter) or says it never
+    happened (decline). Until they confirm, it is visible to the two of them
+    and counts for nothing. What differs is the "commit only to what you
+    list" rule, which does not apply -- this is history, not an offer.
+
+    The partner is either an organization here (`partner_id`) or one that is
+    not (`partner_name`, optional `partner_email`), in which case this makes
+    an invitation the same way /api/invites does, and the partnership is
+    waiting for them when they claim it.
+    """
+    if not org.onboarding_complete:
+        return jsonify({"error": "Complete your profile first."}), 409
+    if REQUIRE_EMAIL_VERIFICATION and not org.email_verified:
+        return jsonify({
+            "error": "Verify your email address before recording a "
+                     "partnership. Open Settings to send a new "
+                     "verification link.",
+            "needs_verification": True,
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+
+    proposer_gives = clean_categories(data.get("proposer_gives"))
+    recipient_gives = clean_categories(data.get("recipient_gives"))
+    if not proposer_gives or not recipient_gives:
+        return jsonify({
+            "error": "Pick at least one thing each side gave.",
+        }), 400
+
+    starts_on, ends_on, problem = _partnership_dates(data)
+    if problem:
+        return jsonify(problem), 400
+    if starts_on is None or starts_on > datetime.now(timezone.utc).date():
+        return jsonify({
+            "error": "Enter when it started. A partnership you record has to "
+                     "have started already.",
+            "field": "starts_on",
+        }), 400
+
+    proposer_quantities, problem = _clean_quantities(
+        data.get("proposer_quantities"), proposer_gives)
+    if problem:
+        return jsonify(problem), 400
+    recipient_quantities, problem = _clean_quantities(
+        data.get("recipient_quantities"), recipient_gives)
+    if problem:
+        return jsonify(problem), 400
+
+    # Whether the partner delivered. The recorder answers for the partner
+    # only; the partner answers for the recorder when confirming.
+    delivered = data.get("delivered")
+    if delivered is not None and not isinstance(delivered, bool):
+        return jsonify({"error": "Delivered must be true or false.",
+                        "field": "delivered"}), 400
+
+    message = (data.get("message") or "").strip()
+    if len(message) > MAX_PROPOSAL_MESSAGE:
+        return jsonify({
+            "error": f"Keep your message under {MAX_PROPOSAL_MESSAGE} "
+                     f"characters.",
+            "field": "message",
+        }), 400
+
+    waiting = db.query(func.count(Partnership.id)).filter(
+        Partnership.proposer_id == org.id,
+        Partnership.origin == Partnership.RECORDED,
+        Partnership.status == Partnership.PENDING,
+    ).scalar()
+    if waiting >= MAX_PENDING_RECORDED:
+        return jsonify({
+            "error": f"You have {MAX_PENDING_RECORDED} recorded partnerships "
+                     f"waiting to be confirmed. Wait for some answers before "
+                     f"recording more.",
+        }), 429
+
+    token = email = None
+    if data.get("partner_id") is not None:
+        try:
+            partner_id = int(data.get("partner_id"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Which organization was it?"}), 400
+        partner, refusal = _partner_for(db, org, partner_id)
+        if refusal:
+            return refusal
+    else:
+        email = (data.get("partner_email") or "").strip().lower()
+        if email and (not is_valid_email(email)
+                      or length_problem("contact_email", email)):
+            return jsonify({"error": "Please enter a valid email address.",
+                            "field": "partner_email"}), 400
+        partner, token, refusal = _new_invited(
+            db, org, (data.get("partner_name") or "").strip())
+        if refusal:
+            return refusal
+
+    # The proposals bucket, after every refusal, as create_proposal meters it:
+    # this puts a name and usually an email in front of somebody too.
+    wait = rate_limited("proposals", str(org.id),
+                        max_attempts=PROPOSALS_PER_HOUR, window_seconds=3600)
+    if wait:
+        db.rollback()
+        return too_many("You have sent a lot of proposals recently.", wait)
+
+    proposal = Partnership(
+        proposer_id=org.id,
+        recipient=partner,
+        status=Partnership.PENDING,
+        origin=Partnership.RECORDED,
+        proposer_gives=proposer_gives,
+        recipient_gives=recipient_gives,
+        proposer_quantities=proposer_quantities,
+        recipient_quantities=recipient_quantities,
+        starts_on=starts_on,
+        ends_on=ends_on,
+        recipient_delivered=delivered,
+        message=message or None,
+        proposer_name=org.name,
+        recipient_name=partner.name,
+    )
+    db.add(proposal)
+    try:
+        db.flush()
+        proposal.snapshot_parties()
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return jsonify({
+            "error": "You already have a pending proposal with this organization."
+        }), 409
+
+    if token is None:
+        notify_proposal_created(proposal)
+    elif email:
+        notify_invitation(org, partner, email, token, proposal=proposal)
+
+    body = {
+        "message": "Partnership recorded",
+        "proposal": proposal.to_dict(viewer_id=org.id),
+    }
+    if token is not None:
+        body["invite"] = _invite_dict(partner, raw_token=token)
+        body["emailed_to"] = email or None
+    return jsonify(body), 201
 
 
 # How much of the archive tab to send on a first load. The three live tabs
@@ -9555,7 +9793,9 @@ def update_proposal(org, db, proposal_id):
                 "error": "A partnership needs something from both sides.",
                 "field": key,
             }), 400
-        unlisted = [slug for slug in gives if slug not in offers]
+        # Not for a recorded partnership: that is history, not an offer.
+        unlisted = ([] if proposal.origin == Partnership.RECORDED
+                    else [slug for slug in gives if slug not in offers])
         if unlisted:
             named = ", ".join(labels_for(unlisted))
             return jsonify({
@@ -9685,9 +9925,31 @@ def accept_proposal(org, db, proposal_id):
             "field": "message",
         }), 400
 
+    delivered = data.get("delivered")
+    if delivered is not None and not isinstance(delivered, bool):
+        return jsonify({
+            "error": "Delivered must be true or false.",
+            "field": "delivered",
+        }), 400
+
+    now = datetime.now(timezone.utc)
     proposal.status = Partnership.ACCEPTED
-    proposal.responded_at = datetime.now(timezone.utc)
+    proposal.responded_at = now
     proposal.response_message = response_message or None
+    # A recorded partnership whose end date has passed is confirmed as
+    # finished: both sides agreeing it happened is both sides marking it
+    # complete. The confirmer says whether the other side delivered, as
+    # complete_proposal asks.
+    if (proposal.origin == Partnership.RECORDED and proposal.ends_on
+            and proposal.ends_on < now.date()):
+        proposal.status = Partnership.COMPLETED
+        proposal.proposer_completed_at = proposal.recipient_completed_at = now
+        proposal.completed_at = now
+        if delivered is not None:
+            if proposal.proposer_id == org.id:
+                proposal.recipient_delivered = delivered
+            else:
+                proposal.proposer_delivered = delivered
     # Re-recorded here, not just at creation: this is the moment the proposal
     # becomes an agreement, and the names on an agreement should be the ones
     # each side was using when it agreed.
@@ -9700,7 +9962,9 @@ def accept_proposal(org, db, proposal_id):
     notify_proposal_responded(proposal, org)
 
     return jsonify({
-        "message": "Partnership agreed",
+        "message": ("Partnership confirmed"
+                    if proposal.origin == Partnership.RECORDED
+                    else "Partnership agreed"),
         "proposal": proposal.to_dict(viewer_id=org.id),
         "share_url": f"/partnership.html?token={proposal.share_token}",
     })

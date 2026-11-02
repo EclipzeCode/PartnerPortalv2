@@ -30,7 +30,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Who sent it, said first. An invitation from nobody in particular is
         // just a signup form that arrived by surprise, and the name is the
         // whole reason the person opened the link.
-        const from = invite.invited_by
+        const rec = invite.recorded;
+        const list = (items) => items.map((x) => `<li>${esc(x)}</li>`).join('');
+        // A recorded partnership is the stronger reason to join, so it goes
+        // first: what happened, and that it is waiting on them to confirm.
+        const from = rec
+            ? `<p class="reset-sub"><strong>${esc(rec.by)}</strong> recorded a
+               partnership with you. Claim your profile to confirm it.</p>
+               <div class="reset-sub">
+                   <p>They provided:</p><ul>${list(rec.they_gave)}</ul>
+                   <p>You provided:</p><ul>${list(rec.you_gave)}</ul>
+               </div>`
+            : invite.invited_by
             ? `<p class="reset-sub"><strong>${esc(invite.invited_by)}</strong>
                invited you to partner with them on PartnerPortal.</p>`
             : `<p class="reset-sub">You have been invited to join

@@ -170,6 +170,9 @@
                     <button type="button" class="btn-action ghost" id="inviteBtn">
                         <i class='bx bx-user-plus'></i> Invite an organization
                     </button>
+                    <button type="button" class="btn-action ghost" id="recordBtn">
+                        <i class='bx bx-history'></i> Add a past partnership
+                    </button>
                     <a href="analytics.html" class="btn-action ghost" id="analyticsBtn">
                         <i class='bx bx-line-chart'></i> Analytics
                     </a>
@@ -867,6 +870,102 @@
         </div>
     </div>
 
+    <!-- Recording a partnership that already happened. It goes to the
+         partner to confirm; nothing is shown to anyone else until they do.
+         Built by recorded.js. -->
+    <div id="recordModal" class="modal">
+        <div class="modal-container" role="dialog" aria-modal="true"
+             aria-labelledby="recordModalTitle">
+            <div class="modal-header">
+                <h2 id="recordModalTitle">Add a past partnership</h2>
+                <button type="button" class="close-modal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">
+                    Record a partnership that already happened, or is still
+                    running. Your partner confirms it, and nothing is shown
+                    to anyone else until they do.
+                </p>
+
+                <form id="recordForm" novalidate>
+                    <p class="field-error" id="recordError" role="alert" hidden></p>
+
+                    <div class="form-group" id="recordSearchGroup">
+                        <label for="recordSearch">Who did you partner with?</label>
+                        <input type="search" id="recordSearch" autocomplete="off"
+                               placeholder="Search organizations">
+                        <ul class="record-results" id="recordResults"></ul>
+                        <p class="record-picked" id="recordPicked" hidden></p>
+                    </div>
+                    <label class="record-absent">
+                        <input type="checkbox" id="recordAbsent">
+                        They’re not on PartnerPortal yet
+                    </label>
+                    <div id="recordInviteFields" hidden>
+                        <div class="form-group">
+                            <label for="recordName">Their name</label>
+                            <input type="text" id="recordName" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label for="recordEmail">Their email <span class="optional">optional</span></label>
+                            <input type="email" id="recordEmail" autocomplete="off">
+                        </div>
+                    </div>
+
+                    <div class="propose-grid edit-grid">
+                        <div class="form-group">
+                            <label><i class='bx bx-up-arrow-alt'></i> You gave</label>
+                            <div class="category-picker compact" id="recordProposerGives"></div>
+                        </div>
+                        <div class="form-group">
+                            <label><i class='bx bx-down-arrow-alt'></i> They gave</label>
+                            <div class="category-picker compact" id="recordRecipientGives"></div>
+                        </div>
+                    </div>
+                    <div class="propose-amounts" id="recordAmounts" hidden></div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="recordStartsOn">Started</label>
+                            <input type="date" id="recordStartsOn">
+                        </div>
+                        <div class="form-group">
+                            <label for="recordEndsOn">Ended <span class="optional">blank if still running</span></label>
+                            <input type="date" id="recordEndsOn">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recordDelivered">Did they provide what they said they would?</label>
+                        <select id="recordDelivered">
+                            <option value="">Rather not say</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recordMessage">Note to them <span class="optional">optional</span></label>
+                        <textarea id="recordMessage" class="textarea-sm" rows="2"
+                                  maxlength="2000"></textarea>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-primary" id="recordSubmit">Send to confirm</button>
+                    </div>
+                </form>
+
+                <div class="invite-result" id="recordResult" hidden>
+                    <p class="invite-sent" id="recordSentNote"></p>
+                    <label for="recordLink">Send them this link to confirm it</label>
+                    <div class="invite-link-row">
+                        <input type="text" id="recordLink" readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="base.js"></script>
 
     <script src="common.js"></script>
@@ -874,5 +973,6 @@
     <script src="ppdashboard.js"></script>
     <script src="proposals.js"></script>
     <script src="invites.js"></script>
+    <script src="recorded.js"></script>
 </body>
 </html>

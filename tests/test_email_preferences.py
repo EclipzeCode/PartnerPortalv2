@@ -63,6 +63,7 @@ def test_a_category_can_be_turned_off(client, login, make_org, session):
     assert response.get_json()["organization"]["email_preferences"] == {
         "proposals": True, "messages": False, "partnerships": True,
         "requests": True,
+        "reminders": True,
     }
     session.refresh(org)
     assert org.wants_email("messages") is False
@@ -80,7 +81,8 @@ def test_saving_one_category_leaves_the_others_alone(client, login, make_org):
     })
     prefs = response.get_json()["organization"]["email_preferences"]
     assert prefs == {"proposals": False, "messages": False,
-                     "partnerships": True, "requests": True}
+                     "partnerships": True, "requests": True,
+                     "reminders": True}
 
 
 def test_a_category_can_be_turned_back_on(client, login, make_org):
@@ -114,7 +116,8 @@ def test_the_payload_resolves_the_defaults(client, login, make_org):
     login(make_org(email_preferences={}))
     prefs = client.get("/api/me").get_json()["organization"]["email_preferences"]
     assert prefs == {"proposals": True, "messages": True,
-                     "partnerships": True, "requests": True}
+                     "partnerships": True, "requests": True,
+                     "reminders": True}
 
 
 # --- What actually gets sent -----------------------------------------------
