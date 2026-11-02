@@ -80,7 +80,7 @@ services:
       # recipient's own machine, and none of them work. Declared here so it is
       # part of the blueprint rather than something to remember.
       - key: APP_BASE_URL
-        value: https://partnerportal-j6x1.onrender.com
+        value: https://partnerportal.tech
 
       # Outbound mail. Without RESEND_API_KEY the app logs what it would have
       # sent instead of sending it, which is the right behavior locally and
@@ -88,12 +88,11 @@ services:
       # so the key is entered once and stored as a secret.
       - key: RESEND_API_KEY
         sync: false
-      # Must be a verified sender at resend.com/domains. Until a domain is
-      # verified, Resend's sandbox sender only delivers to the address that
-      # owns the Resend account -- which is why REQUIRE_EMAIL_VERIFICATION
-      # below stays off.
+      # Must be on a domain verified at resend.com/domains -- partnerportal.tech,
+      # whose DNS records live at Porkbun. Resend refuses to send from it
+      # until the domain shows Verified there.
       - key: EMAIL_FROM
-        value: PartnerPortal <onboarding@resend.dev>
+        value: PartnerPortal <hello@partnerportal.tech>
       # Where the homepage contact form is delivered. Unset, those messages
       # are written to the logs rather than sent anywhere.
       - key: CONTACT_EMAIL
