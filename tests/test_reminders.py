@@ -16,6 +16,16 @@ from models import Block, EmailOutbox, PartnerRequest, Partnership
 NOW = datetime.now(timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def fresh_now():
+    """Re-read the clock per test. Rows are stamped by the database's now(),
+    so a NOW taken when the module was imported falls further behind them
+    with every minute the suite has been running, and the 5-day and 2-day
+    thresholds stop being crossed."""
+    global NOW
+    NOW = datetime.now(timezone.utc)
+
+
 def _partnership(session, proposer, recipient, **extra):
     p = Partnership(**{
         "proposer_id": proposer.id, "recipient_id": recipient.id,
