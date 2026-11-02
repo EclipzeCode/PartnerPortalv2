@@ -16,13 +16,14 @@ would send its own copy.
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.dialects.postgresql import insert
 
 from models import (
     Block, EmailOutbox, Organization, PartnerRequest, Partnership,
     ReminderSent,
 )
+from matching import _candidates, _rank, score_pair
 from notifications import reminder_email
 
 PROPOSAL_WAITING = timedelta(days=5)
@@ -142,6 +143,46 @@ def due(db, now):
     return found
 
 
+def _send(db, org, items, dry_run, out, **email):
+    """Claim `items` for `org` and queue one email for those not sent before.
+
+    Returns the entries that went (or would go, in a dry run). `email` is
+    passed through to reminder_email.
+    """
+    if dry_run:
+        already = {(r.kind, r.item) for r in db.query(ReminderSent).filter(
+            ReminderSent.organization_id == org.id)}
+        fresh = [e for k, i, e in items if (k, i) not in already]
+    else:
+        # The insert is the claim: whatever comes back was not sent
+        # before, and nothing else is included.
+        claimed = db.execute(
+            insert(ReminderSent)
+            .values([{"organization_id": org.id, "kind": k, "item": i}
+                     for k, i, _ in items])
+            .on_conflict_do_nothing(constraint="uq_reminders_sent_once")
+            .returning(ReminderSent.kind, ReminderSent.item)
+        ).all()
+        claimed = {(r.kind, r.item) for r in claimed}
+        fresh = [e for k, i, e in items if (k, i) in claimed]
+
+    if not fresh:
+        db.rollback()
+        return []
+
+    to_addr, subject, html, text = reminder_email(org, fresh, **email)
+    if dry_run:
+        out(f"{org.name} <{to_addr}>: {subject}")
+        for e in fresh:
+            out(f"    - {e['text']}")
+    else:
+        db.add(EmailOutbox(
+            to_addr=to_addr, subject=subject, html=html, body_text=text,
+            optional=True, status=EmailOutbox.QUEUED))
+        db.commit()
+    return fresh
+
+
 def run(db, now=None, dry_run=False, out=print):
     """Send what is due. Returns {org_id: [entry text, ...]} for what went."""
     now = now or datetime.now(timezone.utc)
@@ -149,37 +190,81 @@ def run(db, now=None, dry_run=False, out=print):
     for org, items in due(db, now).values():
         if not org.wants_email("reminders"):
             continue
-
-        if dry_run:
-            already = {(r.kind, r.item) for r in db.query(ReminderSent).filter(
-                ReminderSent.organization_id == org.id)}
-            fresh = [e for k, i, e in items if (k, i) not in already]
-        else:
-            # The insert is the claim: whatever comes back was not sent
-            # before, and nothing else is included.
-            claimed = db.execute(
-                insert(ReminderSent)
-                .values([{"organization_id": org.id, "kind": k, "item": i}
-                         for k, i, _ in items])
-                .on_conflict_do_nothing(constraint="uq_reminders_sent_once")
-                .returning(ReminderSent.kind, ReminderSent.item)
-            ).all()
-            claimed = {(r.kind, r.item) for r in claimed}
-            fresh = [e for k, i, e in items if (k, i) in claimed]
-
-        if not fresh:
-            db.rollback()
-            continue
-
-        to_addr, subject, html, text = reminder_email(org, fresh)
-        if dry_run:
-            out(f"{org.name} <{to_addr}>: {subject}")
-            for e in fresh:
-                out(f"    - {e['text']}")
-        else:
-            db.add(EmailOutbox(
-                to_addr=to_addr, subject=subject, html=html, body_text=text,
-                optional=True, status=EmailOutbox.QUEUED))
-            db.commit()
-        sent[org.id] = [e["text"] for e in fresh]
+        fresh = _send(db, org, items, dry_run, out)
+        if fresh:
+            sent[org.id] = [e["text"] for e in fresh]
     return sent
+
+
+# --- New matches, weekly ----------------------------------------------------
+# Organizations that joined recently and match this one, at most once a week
+# and each one only ever once. The same reminders_sent table does both jobs:
+# one row per (organization, match) is "never twice", and the newest of them
+# is when the last email went.
+MATCHES_EVERY = timedelta(days=7)
+# How recently an organization must have joined to count as new. Longer than
+# the weekly gap, so a run that was skipped does not lose anybody.
+MATCHES_LOOKBACK = timedelta(days=30)
+MATCHES_PER_EMAIL = 5
+
+
+def run_matches(db, now=None, dry_run=False, out=print):
+    """Send the weekly new-matches email. Returns {org_id: [entry text, ...]}."""
+    now = now or datetime.now(timezone.utc)
+    listed = and_(Organization.onboarding_complete.is_(True),
+                  Organization.hidden_at.is_(None))
+    newcomers = {row.id for row in db.query(Organization.id).filter(
+        listed, Organization.created_at >= now - MATCHES_LOOKBACK)}
+    if not newcomers:
+        return {}
+
+    last_sent = dict(db.query(ReminderSent.organization_id,
+                              func.max(ReminderSent.sent_at))
+                     .filter(ReminderSent.kind == "match")
+                     .group_by(ReminderSent.organization_id))
+
+    sent = {}
+    # ponytail: one candidate query per organization a week; batch the
+    # overlap test in SQL if the directory grows into the thousands.
+    for org in db.query(Organization).filter(
+            listed, Organization.password_hash.isnot(None),
+            Organization.claim_token_hash.is_(None)):
+        if not org.wants_email("matches"):
+            continue
+        if org.id in last_sent and now - last_sent[org.id] < MATCHES_EVERY:
+            continue
+        already = {item for (item,) in db.query(ReminderSent.item).filter(
+            ReminderSent.organization_id == org.id,
+            ReminderSent.kind == "match")}
+        candidates = [c for c in _candidates(db, org)
+                      if c.id in newcomers and str(c.id) not in already]
+        ranked, _ = _rank(org, candidates)
+        items = []
+        for mutual, _score, _name, them in ranked:
+            _, reasons, _ = score_pair(org, them)
+            # The specific reason first -- what they offer or need -- since
+            # "two-way match" alone does not say what the match is.
+            why = next(r["text"] for r in reasons if r["kind"] != "mutual")
+            where = f" ({them.location})" if them.location else ""
+            items.append(("match", str(them.id), {
+                "text": f"{them.name}{where}: {why}."
+                        + (" A two-way match." if mutual else ""),
+                "actions": [("See their profile",
+                             f"/organization.html?id={them.id}")],
+            }))
+        if not items:
+            continue
+        # Only what will be shown is claimed, so a match that did not fit
+        # this week can still appear next week.
+        fresh = _send(db, org, items[:MATCHES_PER_EMAIL], dry_run, out,
+                      subject=_matches_subject, foot="You get at most one "
+                      "of these a week, and each organization only once.")
+        if fresh:
+            sent[org.id] = [e["text"] for e in fresh]
+    return sent
+
+
+def _matches_subject(entries):
+    n = len(entries)
+    return ("A new organization matches yours" if n == 1
+            else f"{n} new organizations match yours")

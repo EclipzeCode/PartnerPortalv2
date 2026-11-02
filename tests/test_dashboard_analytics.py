@@ -288,7 +288,11 @@ def test_everything_dismissable_can_go_at_once(client, login, make_org, session)
     """The panel's Clear: every piece of news in one request, and the work
     exactly where it was."""
     from datetime import datetime, timedelta, timezone
-    from models import Partnership
+    from models import Partnership, PartnerRequest
+    # Requests already on the board would be news too ("a request fits
+    # you"), and the shared development database has real ones. Closed
+    # inside this test's transaction, which is rolled back afterward.
+    session.query(PartnerRequest).update({"status": PartnerRequest.CLOSED})
     me = make_org(offers=["mentors"], needs=["web_development"])
     them = make_org(offers=["web_development"], needs=["mentors"])
     other = make_org(offers=["web_development"], needs=["mentors"])

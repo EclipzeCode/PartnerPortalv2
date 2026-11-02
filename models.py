@@ -445,6 +445,7 @@ class Organization(Base):
         "partnerships": "Partnerships completing, ending, or their shared link changing",
         "requests": "New requests on the board that fit what you offer or need",
         "reminders": "Reminders about things waiting on you",
+        "matches": "New organizations that match yours, once a week",
     }
 
     def wants_email(self, category):

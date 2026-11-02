@@ -157,14 +157,20 @@ def remove_admin(email, force=False):
 
 
 def send_reminders(dry_run=False):
-    """The daily reminder emails. Run by the Render cron job; see reminders.py."""
+    """The daily reminder emails and the weekly new-matches emails.
+
+    Run by the Render cron job daily; each organization's matches email
+    decides for itself whether a week has passed. See reminders.py.
+    """
     import reminders
 
     db = SessionLocal()
     try:
         sent = reminders.run(db, dry_run=dry_run)
+        matches = reminders.run_matches(db, dry_run=dry_run)
         print(f"{'Would send' if dry_run else 'Queued'} "
-              f"{len(sent)} reminder email(s).")
+              f"{len(sent)} reminder email(s) and {len(matches)} new-matches "
+              f"email(s).")
         return 0
     finally:
         db.close()

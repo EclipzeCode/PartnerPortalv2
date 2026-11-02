@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         partnerships: 'Partnership update emails are',
         requests: 'Request emails are',
         reminders: 'Reminder emails are',
+        matches: 'New match emails are',
     };
     const status = document.getElementById('settingStatus');
     const container = document.querySelector('.settings-container');

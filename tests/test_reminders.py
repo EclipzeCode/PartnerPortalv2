@@ -176,3 +176,56 @@ def test_extending_a_request(client, login, make_org, session):
     other = make_org()
     login(other)
     assert client.post(f"/api/requests/{req.id}/extend").status_code == 404
+
+
+# --- The weekly new-matches email -------------------------------------------
+
+@pytest.fixture
+def only_ours(session):
+    """Hide every organization that exists before the test, inside its
+    transaction, so real recent signups on the shared database cannot match."""
+    from models import Organization
+    session.query(Organization).update({"hidden_at": NOW})
+    session.commit()
+
+
+def _matches_to(session, org):
+    return [m for m in _outbox_to(session, org) if "match" in m.subject]
+
+
+def test_a_new_match_is_sent_once(session, make_org, only_ours):
+    me = make_org(needs=["mentors"], offers=["volunteers"])
+    them = make_org(offers=["mentors"])
+    make_org(offers=["legal"])                  # no overlap: never listed
+
+    sent = reminders.run_matches(session, now=NOW)
+    assert len(sent[me.id]) == 1 and them.name in sent[me.id][0]
+    assert _matches_to(session, me)[0].subject == \
+        "A new organization matches yours"
+
+    # Not again this week, and not ever for the same organization.
+    assert me.id not in reminders.run_matches(session, now=NOW)
+    assert me.id not in reminders.run_matches(session, now=NOW + timedelta(days=8))
+
+
+def test_at_most_five_and_the_rest_next_week(session, make_org, only_ours):
+    me = make_org(needs=["mentors"])
+    for _ in range(7):
+        make_org(offers=["mentors"])
+
+    assert len(reminders.run_matches(session, now=NOW)[me.id]) == 5
+    assert me.id not in reminders.run_matches(session, now=NOW + timedelta(days=3))
+    assert len(reminders.run_matches(
+        session, now=NOW + timedelta(days=7, minutes=1))[me.id]) == 2
+
+
+def test_matches_respect_the_switch_and_blocks(session, make_org, only_ours):
+    me = make_org(needs=["mentors"])
+    blocked = make_org(offers=["mentors"])
+    session.add(Block(blocker_id=me.id, blocked_id=blocked.id))
+    quiet = make_org(needs=["mentors"])
+    quiet.email_preferences = {"matches": False}
+    session.commit()
+
+    sent = reminders.run_matches(session, now=NOW)
+    assert me.id not in sent and quiet.id not in sent

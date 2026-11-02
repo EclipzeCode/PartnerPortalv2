@@ -1680,7 +1680,9 @@ def notify_profile_hidden(org, reason, hidden):
               reply_to=cfg["contact_to"] or None)
 
 
-def reminder_email(org, items):
+def reminder_email(org, items, subject=None,
+                   foot="You get at most one of these a day, and each "
+                        "reminder only once."):
     """The daily reminder: everything waiting on `org`, in one message.
 
     Returns (to_addr, subject, html, text) rather than dispatching, because
@@ -1688,13 +1690,18 @@ def reminder_email(org, items):
     reminders_sent rows that stop it repeating -- see ReminderSent.
 
     `items` are dicts with `text` (one sentence) and `actions`, a list of
-    (label, path) pairs. Optional, under "reminders".
+    (label, path) pairs. Optional, under "reminders". The weekly matches
+    email uses the same layout with its own `subject` (a function of the
+    items) and `foot`.
     """
     app_url = _config()["app_url"]
     to_addr = org.contact_email or org.email
     count = len(items)
-    subject = (items[0]["text"] if count == 1
-               else f"{count} things are waiting on you")
+    if subject is not None:
+        subject = subject(items)
+    else:
+        subject = (items[0]["text"] if count == 1
+                   else f"{count} things are waiting on you")
 
     def links_html(item):
         return " ".join(
@@ -1711,8 +1718,7 @@ def reminder_email(org, items):
   <h1>{escape(subject)}</h1>
   <p class="meta">{escape(org.name)} on PartnerPortal</p>
   {items_html}
-  <p class="foot">You get at most one of these a day, and each reminder
-  only once.</p>
+  <p class="foot">{escape(foot)}</p>
 </div></body></html>
 """
     text = (
@@ -1722,7 +1728,7 @@ def reminder_email(org, items):
             + "".join(f"    {label}: {app_url}{path}\n"
                       for label, path in item["actions"])
             for item in items)
-        + "\nYou get at most one of these a day, and each reminder only once.\n"
+        + f"\n{foot}\n"
     )
     html, text = _preferences_note(html, text)
     return to_addr, subject, html, text
