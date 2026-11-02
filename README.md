@@ -267,12 +267,12 @@ terms; inviting an organization that has no account yet and letting it claim
 the profile later; an analytics page for an organization's own numbers; and
 transactional email for all of it.
 
-Two things are switched off rather than missing, both waiting on a verified
-sending domain:
+`REQUIRE_EMAIL_VERIFICATION` is on in production: an account must verify its
+email address before it can send a proposal. Mail comes from the verified
+`partnerportal.tech` domain.
 
-- `REQUIRE_EMAIL_VERIFICATION` is off. The gate is only fair once verification
-  mail reliably arrives; on Resend's sandbox sender it reaches nobody but the
-  account owner, so enforcing would stop signups rather than spam.
+One thing is still switched off rather than missing:
+
 - Signup still answers "that email is already registered". Hiding it means
   answering a taken address exactly as a new one and mailing the existing
   address to say somebody tried — which needs that same working channel. What

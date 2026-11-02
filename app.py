@@ -4041,15 +4041,11 @@ EMAIL_VERIFY_TOKEN_LIFETIME = timedelta(days=7)
 # Whether an unverified org is actually stopped from proposing a partnership.
 #
 # Off by default, and deliberately so. The gate is only fair if the
-# verification email reliably arrives, and right now it does not: Resend is
-# on its sandbox sender (onboarding@resend.dev), which refuses any recipient
-# except the address owning the Resend account --
-#
-#   403 "You can only send testing emails to your own email address"
-#
-# so every signup but one would be told to check an inbox that never receives
-# anything, with no way past it. Enforcing under those conditions does not
-# stop spam, it stops signups.
+# verification email reliably arrives. On Resend's sandbox sender it did not
+# -- that sender refuses any recipient except the Resend account's owner --
+# so every signup but one would have been told to check an inbox that never
+# received anything. Production now sends from the verified
+# partnerportal.tech domain and sets this on in render.yaml.
 #
 # Read from the environment rather than edited here, so turning it on once a
 # domain is verified at resend.com/domains (and EMAIL_FROM points at that
@@ -8986,8 +8982,7 @@ def create_proposal(org, db):
         return jsonify({"error": "Complete your profile first."}), 409
 
     # The one thing an unverified account cannot do, when the gate is on (see
-    # REQUIRE_EMAIL_VERIFICATION -- currently off until outbound email is
-    # reliable). Sending a proposal is what puts this org's name, and an
+    # REQUIRE_EMAIL_VERIFICATION). Sending a proposal is what puts this org's name, and an
     # email, in front of a stranger who did not ask for it, so it is the
     # action worth holding back until the address behind the account is known
     # to be real. Everything else stays open either way: an unverified org can

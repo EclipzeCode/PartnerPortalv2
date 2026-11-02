@@ -98,8 +98,8 @@ services:
       - key: CONTACT_EMAIL
         sync: false
 
-      # Turn on once EMAIL_FROM is a verified domain and verification mail
-      # actually reaches people. Enforcing before that does not stop spam, it
-      # stops signups -- see the note in app.py.
+      # An unverified account cannot send a proposal. On now that mail comes
+      # from the verified partnerportal.tech domain and actually arrives --
+      # see the note in app.py.
       - key: REQUIRE_EMAIL_VERIFICATION
-        value: "false"
+        value: "true"
