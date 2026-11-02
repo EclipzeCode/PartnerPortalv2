@@ -118,7 +118,8 @@ def test_settings_still_saves_what_it_does_understand(client, make_org, login):
     response = client.patch("/api/settings", json={"email_notifications": False})
     assert response.status_code == 200
     prefs = response.get_json()["organization"]["email_preferences"]
-    assert prefs == {"proposals": False, "messages": False, "partnerships": False}
+    assert prefs == {"proposals": False, "messages": False, "partnerships": False,
+                     "requests": False}
 
 
 def test_the_view_salt_is_independent_of_the_secret_key(client, make_org):
