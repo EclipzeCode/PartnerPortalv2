@@ -9,7 +9,7 @@ services:
   - type: web
     name: partnerportal
     runtime: python
-    plan: free
+    plan: starter       # 0.5 CPU, 512 MB, $7/month
     region: ohio          # closest to the Neon project (aws-us-east-2)
 
     # Migrations run in the build step, not a separate pre-deploy step: the
