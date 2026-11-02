@@ -389,6 +389,26 @@
                     </label>
                 </div>
                 <p class="setting-status" id="searchableStatus" role="status" hidden></p>
+
+                <!-- Off until chosen: the totals are made from what partners
+                     said about this organization, so publishing them is its
+                     decision. Nothing shows below three confirming partners
+                     whatever this says. -->
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <label for="statsPublicToggle">Show verified contributions on my profile</label>
+                        <p>
+                            What you delivered in completed partnerships, as your
+                            partners confirmed it. Shown to anyone who opens your
+                            profile once at least three partners have confirmed.
+                        </p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="statsPublicToggle" disabled>
+                        <span class="switch-track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <p class="setting-status" id="statsPublicStatus" role="status" hidden></p>
             </div>
 
             <!-- Blocked ---------------------------------------------------- -->

@@ -126,6 +126,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         inviterBanner.hidden = false;
     }
 
+    // Partners have confirmed what this organization delivered, and its
+    // profile does not show it yet -- either it has not opted in, or it is
+    // short of the minimum. Says which.
+    const verified = dashboard.verified;
+    const verifiedBanner = document.getElementById('verifiedBanner');
+    if (verifiedBanner && verified && verified.partners > 0
+            && !(dashboard.organization.stats_public
+                 && verified.partners >= verified.min_partners)) {
+        const n = verified.partners;
+        const confirmed = `${n} partner${n === 1 ? ' has' : 's have'} confirmed `
+            + `what you delivered.`;
+        document.getElementById('verifiedBannerText').textContent =
+            !dashboard.organization.stats_public
+                ? `${confirmed} Turn on verified contributions in Settings to show `
+                  + `it on your profile${n < verified.min_partners
+                      ? ` once ${verified.min_partners} have` : ''}.`
+                : `${confirmed} It appears on your profile once `
+                  + `${verified.min_partners} have.`;
+        verifiedBanner.hidden = false;
+    }
+
     setStat('statMatches', stats.total_matches);
     setStat('statProfileTags', stats.needs_count + stats.offers_count);
     setStat('savedLeadsCount', stats.saved || 0);

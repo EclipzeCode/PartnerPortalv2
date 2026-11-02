@@ -41,8 +41,8 @@ from categories import (
 from db import SessionLocal
 from links import LinkError, parse_links
 from units import (
-    DEFAULT_UNITS, MAX_AMOUNT, MAX_UNIT_DETAIL, UNITS, clean_unit,
-    default_unit_for,
+    DEFAULT_UNITS, MAX_AMOUNT, MAX_UNIT_DETAIL, UNIT_DIMENSIONS, UNITS,
+    clean_unit, default_unit_for, format_quantity, to_base,
 )
 from matching import (
     MATCH_LIMIT, find_matches, hydrate_in_order,
@@ -4241,7 +4241,7 @@ def update_settings(org, db):
     # where "saved" is exactly the wrong answer.
     if not any(field in data
                for field in ("email_notifications", "email_preferences",
-                             "searchable")):
+                             "searchable", "stats_public")):
         return jsonify({
             "error": "No known setting was included in that request.",
         }), 400
@@ -4301,6 +4301,15 @@ def update_settings(org, db):
                 "field": "searchable",
             }), 400
         org.searchable = value
+
+    if "stats_public" in data:
+        value = data["stats_public"]
+        if not isinstance(value, bool):
+            return jsonify({
+                "error": "Stats public must be true or false.",
+                "field": "stats_public",
+            }), 400
+        org.stats_public = value
 
     org.email_preferences = prefs
     # Still written, and never read. See the column: a rollback that found
@@ -6498,6 +6507,81 @@ def get_organization(org, db, org_id):
     return jsonify({"organization": data})
 
 
+# Verified contributions: what an organization delivered, totaled.
+#
+# Only completed partnerships, and only where the *partner* recorded that
+# this organization delivered -- the delivered flags are named for the side
+# being judged, and only the other side can write them. So a total is never
+# a number an organization reported about itself.
+#
+# Shown publicly only when the organization opts in (stats_public) and at
+# least MIN_VERIFIED_PARTNERS different partners have confirmed. With one,
+# the total next to that partnership's public agreement page identifies the
+# partner and what they said; three makes that much harder.
+MIN_VERIFIED_PARTNERS = 3
+
+# The unit each dimension is totaled in: the one whose to_base is 1.
+_BASE_UNITS = {}
+for _slug, _s, _p, _dimension, _base in UNITS:
+    if _dimension and _base == 1:
+        _BASE_UNITS.setdefault(_dimension, _slug)
+
+
+def verified_contributions(db, org):
+    """{partners, partnerships, delivered, totals} for `org`.
+
+    `delivered` names every category confirmed delivered, with or without an
+    amount; `totals` sums the amounts, per category and dimension, in the
+    dimension's base unit. `other` has no dimension and drops out.
+    """
+    rows = db.query(Partnership).options(*_party_names_only()).filter(
+        Partnership.status == Partnership.COMPLETED,
+        or_(and_(Partnership.proposer_id == org.id,
+                 Partnership.proposer_delivered.is_(True)),
+            and_(Partnership.recipient_id == org.id,
+                 Partnership.recipient_delivered.is_(True))),
+    ).all()
+
+    partners, delivered, sums = set(), set(), {}
+    for p in rows:
+        other = p.recipient_id if p.proposer_id == org.id else p.proposer_id
+        # A partner who has since left still confirmed it; counted once per
+        # partnership, since there is no id left to tell them apart by.
+        partners.add(other if other is not None else f"gone-{p.id}")
+        quantities = p.quantities_for(org.id) or {}
+        for slug in p.gives_for(org.id):
+            delivered.add(slug)
+            q = quantities.get(slug) or {}
+            base = to_base(q.get("amount"), q.get("unit"))
+            if base is None:
+                continue
+            key = (slug, UNIT_DIMENSIONS[q["unit"]])
+            sums[key] = sums.get(key, 0) + base
+
+    totals = sorted((
+        {"category": slug, "label": label_for(slug),
+         "amount": amount, "unit": _BASE_UNITS[dimension],
+         "text": format_quantity(amount, _BASE_UNITS[dimension])}
+        for (slug, dimension), amount in sums.items()
+    ), key=lambda t: t["label"])
+    return {
+        "partners": len(partners),
+        "partnerships": len(rows),
+        "delivered": sorted(labels_for(sorted(delivered))),
+        "totals": totals,
+    }
+
+
+def _public_contributions(db, org):
+    """The totals as a profile shows them, or None when they are not shown."""
+    if not org.stats_public:
+        return None
+    verified = verified_contributions(db, org)
+    if verified["partners"] < MIN_VERIFIED_PARTNERS:
+        return None
+    return verified
+
+
 # How many public profiles one caller may read in an hour.
 #
 # Lower than the directory's, and for a reason rather than by feel: a
@@ -6575,7 +6659,11 @@ def public_organization(org_id):
         # Twitter) request the HTML and never run its script, so an unfurled
         # link cannot inflate the number.
         _record_profile_view(db, other)
-        return jsonify({"organization": other.public_profile()})
+        data = other.public_profile()
+        verified = _public_contributions(db, other)
+        if verified is not None:
+            data["verified"] = verified
+        return jsonify({"organization": data})
     finally:
         db.close()
 
@@ -7699,10 +7787,16 @@ def get_dashboard(org, db):
             found.append({"id": other.id, "name": other.name, "note": label})
         partners.extend(sorted(found, key=lambda item: item["name"].casefold()))
 
+    # The organization's own totals, always -- including below the minimum
+    # and before it opts in, which is what the dashboard nudge is made from.
+    verified = verified_contributions(db, org)
+    verified["min_partners"] = MIN_VERIFIED_PARTNERS
+
     return jsonify({
         "organization": org.private_dict(),
         "needs_onboarding": False,
         "verification_required": REQUIRE_EMAIL_VERIFICATION,
+        "verified": verified,
         "stats": {
             "total_matches": total_matches,
             "mutual_matches": mutual_matches,

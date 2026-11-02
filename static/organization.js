@@ -243,6 +243,20 @@
             </section>
         </div>
 
+        ${org.verified
+            ? `<section class="org-section org-verified">
+                   <h2><i class='bx bx-check-shield'></i> Verified contributions</h2>
+                   <p>Confirmed by ${org.verified.partners} partner organizations
+                   across ${org.verified.partnerships} completed partnerships.</p>
+                   ${org.verified.totals.length
+                       ? `<ul>${org.verified.totals.map((t) => `
+                             <li><strong>${esc(t.text)}</strong> ${esc(t.label.toLowerCase())}</li>`).join('')}
+                          </ul>`
+                       : ''}
+                   <p class="org-note">Delivered: ${esc(org.verified.delivered.join(', '))}</p>
+               </section>`
+            : ''}
+
         <section class="org-section org-requests" id="orgRequests" hidden></section>
 
         ${org.partnership_goals

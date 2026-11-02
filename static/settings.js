@@ -335,6 +335,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // --- Verified contributions ---------------------------------------------
+    const statsPublic = document.getElementById('statsPublicToggle');
+    const statsPublicStatus = document.getElementById('statsPublicStatus');
+    if (statsPublic) {
+        statsPublic.checked = Boolean(me.stats_public);
+        statsPublic.disabled = false;
+        statsPublic.addEventListener('change', async () => {
+            const wanted = statsPublic.checked;
+            statsPublic.disabled = true;
+            try {
+                await window.api('/api/settings', {
+                    method: 'PATCH', body: { stats_public: wanted },
+                });
+                statsPublicStatus.textContent = wanted
+                    ? 'Your verified contributions will show on your profile '
+                      + 'once three partners have confirmed.'
+                    : 'Your verified contributions are hidden from your profile.';
+                statsPublicStatus.className = 'setting-status ok';
+            } catch (error) {
+                statsPublic.checked = !wanted;
+                statsPublicStatus.textContent =
+                    error.message || 'Could not save that. Please try again.';
+                statsPublicStatus.className = 'setting-status error';
+            } finally {
+                statsPublicStatus.hidden = false;
+                statsPublic.disabled = false;
+            }
+        });
+    }
+
     // --- Blocked organizations ---------------------------------------------
     const blockedList = document.getElementById('blockedList');
 

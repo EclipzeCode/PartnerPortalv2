@@ -152,6 +152,16 @@ class Organization(Base):
         Boolean, nullable=False, server_default="false"
     )
 
+    # Whether this organization's verified contribution totals appear on its
+    # profile -- what it delivered in completed partnerships, as confirmed by
+    # the partner. Off by default, like links_public: a total is a public
+    # claim made from other organizations' answers, so publishing it is the
+    # organization's choice. Even when on, nothing shows below the minimum
+    # number of confirming partners; see verified_contributions in app.py.
+    stats_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+
     # --- State -------------------------------------------------------------
     # Only completed profiles are matchable; a half-filled row would pollute
     # everyone else's results.
@@ -581,6 +591,7 @@ class Organization(Base):
             # showing the old address with no sign anything is in flight.
             "pending_email": self.pending_email,
             "searchable": self.searchable,
+            "stats_public": self.stats_public,
         })
         return data
 
