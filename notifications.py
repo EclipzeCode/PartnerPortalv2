@@ -677,6 +677,10 @@ def _dispatch(to_addr, subject, html, text, reply_to=None, preferences=False):
     if not to_addr:
         log.warning("email not queued: no recipient for %r", subject)
         return None
+    # An unclaimed invitation's placeholder (RFC 2606, undeliverable). One an
+    # admin listed early can be proposed to; that waits in the app instead.
+    if to_addr.endswith("@invite.invalid"):
+        return None
     if preferences:
         html, text = _preferences_note(html, text)
 

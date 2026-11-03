@@ -37,6 +37,7 @@ ADMIN_ROUTES = [
     ("post", "/api/admin/organizations/1/hidden"),
     ("get", "/api/admin/organizations/1"),
     ("patch", "/api/admin/organizations/1"),
+    ("post", "/api/admin/organizations/1/listed"),
 ]
 
 
@@ -508,6 +509,36 @@ def test_an_unclaimed_invitation_can_be_edited_while_incomplete(
     overview = client.get("/api/admin/overview").get_json()
     row = next(o for o in overview["organizations"] if o["id"] == invite.id)
     assert row["invited"] is True
+
+
+def test_an_invitation_is_listed_once_its_profile_is_complete(
+        client, make_admin, admin_login, make_org, session):
+    invite = make_org(name="pytest Listed Invite", onboarding_complete=False,
+                      organization_type=None,
+                      claim_token_hash="pytest-" + "2" * 57)
+    invite.email = "invite-pytest2@invite.invalid"
+    session.commit()
+    admin_login(make_admin())
+    url = f"/api/admin/organizations/{invite.id}/listed"
+
+    assert client.post(url, json={"listed": True}).status_code == 400
+    session.refresh(invite)
+    assert invite.onboarding_complete is False      # still incomplete
+
+    client.patch(f"/api/admin/organizations/{invite.id}",
+                 json={"organization_type": "Non-profit",
+                       "needs": ["volunteers"], "offers": ["event_space"]})
+    response = client.post(url, json={"listed": True})
+    assert response.status_code == 200, response.get_json()
+    session.refresh(invite)
+    assert invite.onboarding_complete is True
+    assert client.get(f"/api/organizations/{invite.id}/public").status_code == 200
+
+    assert client.post(url, json={"listed": False}).status_code == 200
+    # A claimed account is not listed this way.
+    other = make_org()
+    assert client.post(f"/api/admin/organizations/{other.id}/listed",
+                       json={"listed": False}).status_code == 409
 
 
 def test_a_reordered_list_or_an_empty_contact_is_not_an_edit(

@@ -3975,6 +3975,46 @@ def admin_set_hidden(admin, db, org_id):
     })
 
 
+@app.route("/api/admin/organizations/<int:org_id>/listed", methods=["POST"])
+@admin_required
+def admin_set_listed(admin, db, org_id):
+    """Put an unclaimed invitation in the directory before it is claimed.
+
+    Listing is onboarding_complete, so the profile has to meet the onboarding
+    minimum first; an admin fills it in with Edit. Until it is claimed nobody
+    reads its mail -- proposals and messages wait for whoever claims it, and
+    _dispatch drops what would go to its placeholder address. Only for
+    invitations: a claimed account lists itself, and is taken down with Hide.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+    if org.claim_token_hash is None:
+        return jsonify({"error": "Only unclaimed invitations are listed "
+                                 "here."}), 409
+
+    listed = (request.get_json(silent=True) or {}).get("listed")
+    if not isinstance(listed, bool):
+        return jsonify({"error": "Listed must be true or false.",
+                        "field": "listed"}), 400
+    if listed == org.onboarding_complete:
+        return jsonify({"error": "Nothing changed."}), 409
+    if listed:
+        # Re-applying the profile as it stands is the onboarding check.
+        refusal = _apply_profile(org, _admin_profile(org))
+        if refusal:
+            db.rollback()
+            return refusal
+    org.onboarding_complete = listed
+
+    record_admin_action(
+        db, admin, "list_invitation" if listed else "unlist_invitation",
+        target_type="organization", target_id=org.id, name=org.name)
+    db.commit()
+    return jsonify({"message": "Listed" if listed else "Unlisted",
+                    "organization": _admin_profile(org)})
+
+
 @app.route("/logout", methods=["POST"])
 def logout():
     """Sign the organization out, and only the organization.
@@ -6803,7 +6843,8 @@ def public_organization(org_id):
 # An invited profile is invisible until it is claimed -- it has no password,
 # and onboarding_complete is false, which is the filter the directory and
 # matching already apply. So this cannot be used to put a name into the
-# directory that nobody agreed to put there.
+# directory that nobody agreed to put there. Only an admin can list one
+# early (admin_set_listed).
 MAX_OUTSTANDING_INVITES = 25
 # Invitations one account may create in an hour, claimed or not.
 INVITES_PER_HOUR = 20

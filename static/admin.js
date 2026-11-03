@@ -153,7 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // which for a hidden organization now 404s -- so hidden rows link to
         // nothing and say so instead of offering a dead link.
         const link = org.invited
-            ? '<span class="admin-dim">invitation, not claimed yet</span>'
+            ? `<span class="admin-dim">invitation, not claimed yet${
+                  org.onboarding_complete ? ', listed' : ''}</span>`
             : org.hidden_at || !org.onboarding_complete
             ? `<span class="admin-dim">profile not listed</span>`
             : `<a href="organization.html?id=${encodeURIComponent(org.id)}"
@@ -166,7 +167,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<button type="button" class="btn-ghost" data-clear="${org.id}">Name is fine</button>${hideBtn}`
             : org.hidden_at
                 ? `<button type="button" class="btn-ghost" data-unhide="${org.id}">List again</button>`
-                : org.invited ? '' : hideBtn);
+                : org.invited
+                    ? `<button type="button" class="btn-ghost" data-listed="${org.id}"
+                         data-to="${!org.onboarding_complete}">${
+                         org.onboarding_complete ? 'Unlist' : 'List publicly'}</button>`
+                    : hideBtn);
 
         return `
             <article class="admin-row">
@@ -630,6 +635,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             return act(() => call(
                 `/api/admin/organizations/${unhide.dataset.unhide}/hidden`,
                 { method: 'POST', body: { hidden: false } }));
+        }
+
+        const listed = e.target.closest('[data-listed]');
+        if (listed) {
+            return act(() => call(
+                `/api/admin/organizations/${listed.dataset.listed}/listed`,
+                { method: 'POST', body: { listed: listed.dataset.to === 'true' } }));
         }
 
         const editBtn = e.target.closest('[data-edit]');
