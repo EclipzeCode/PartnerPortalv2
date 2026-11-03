@@ -3414,6 +3414,10 @@ def _admin_summarize(org):
         "name_flagged": org.name_flagged,
         "hidden_at": org.hidden_at.isoformat() if org.hidden_at else None,
         "hidden_reason": org.hidden_reason,
+        # An invitation nobody has claimed: its email is a placeholder, and
+        # it has no profile page until it is claimed and finished.
+        "invited": org.claim_token_hash is not None,
+        "onboarding_complete": org.onboarding_complete,
     }
 
 
@@ -3444,6 +3448,13 @@ def _admin_sections():
         "flagged": {
             "query": lambda db: db.query(Organization).filter(
                 Organization.name_flagged.is_(True)),
+            "order": (Organization.created_at.desc(),),
+            "serialize": _admin_summarize,
+            "search": (Organization.name, Organization.email,
+                       Organization.location),
+        },
+        "organizations": {
+            "query": lambda db: db.query(Organization),
             "order": (Organization.created_at.desc(),),
             "serialize": _admin_summarize,
             "search": (Organization.name, Organization.email,
@@ -3549,6 +3560,7 @@ def admin_overview(admin, db):
         "reports": sections["reports"]["rows"],
         "flagged": sections["flagged"]["rows"],
         "hidden": sections["hidden"]["rows"],
+        "organizations": sections["organizations"]["rows"],
         "actions": sections["actions"]["rows"],
         # ...and the paging that goes with each, beside it rather than mixed
         # into it.
@@ -3805,6 +3817,97 @@ def admin_clear_flags(admin, db):
         "changed": [org.id for org in rows],
         "requested": len(ids),
     })
+
+
+# The profile fields an admin may edit, by the key onboarding takes them
+# under. Not the sign-in address, the password, or any of the organization's
+# own choices about publishing (links_public, searchable, stats_public).
+_ADMIN_PROFILE_FIELDS = {
+    "organization_name": "name", "organization_type": "organization_type",
+    "location": "location", "remote_friendly": "remote_friendly",
+    "description": "description", "needs": "needs", "offers": "offers",
+    "focus_areas": "focus_areas", "needs_note": "needs_note",
+    "offers_note": "offers_note", "partnership_goals": "partnership_goals",
+    "contact_email": "contact_email", "contact_phone": "contact_phone",
+    "website_url": "website_url", "instagram_url": "instagram_url",
+    "x_url": "x_url", "linkedin_url": "linkedin_url",
+}
+
+
+def _admin_profile(org):
+    data = {key: getattr(org, column)
+            for key, column in _ADMIN_PROFILE_FIELDS.items()}
+    data.update({"id": org.id, "email": org.email,
+                 "invited": org.claim_token_hash is not None,
+                 "onboarding_complete": org.onboarding_complete})
+    return data
+
+
+@app.route("/api/admin/organizations/<int:org_id>", methods=["GET"])
+@admin_required
+def admin_read_organization(admin, db, org_id):
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+    return jsonify({"organization": _admin_profile(org)})
+
+
+@app.route("/api/admin/organizations/<int:org_id>", methods=["PATCH"])
+@admin_required
+def admin_edit_organization(admin, db, org_id):
+    """Correct an organization's profile on its behalf.
+
+    Held to exactly the rules onboarding is (see _apply_profile), with the
+    fields sent laid over the profile as it stands, so a form that sends only
+    what it shows changes nothing else. The onboarding minimum applies only
+    to a profile that has met it already: an unclaimed invitation may still
+    be missing its type or its needs, and the business fills those in itself.
+
+    Recorded in the audit log with the fields that changed.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+
+    sent = request.get_json(silent=True) or {}
+    unknown = set(sent) - set(_ADMIN_PROFILE_FIELDS)
+    if unknown:
+        return jsonify({
+            "error": f"Not editable here: {', '.join(sorted(unknown))}.",
+        }), 400
+
+    before = _admin_profile(org)
+    merged = {key: before[key] for key in _ADMIN_PROFILE_FIELDS}
+    merged.update(sent)
+    refusal = _apply_profile(org, merged,
+                             require_complete=org.onboarding_complete)
+    if refusal:
+        db.rollback()
+        return refusal
+    # _apply_profile fills an empty contact address with the sign-in one, as
+    # onboarding should. An admin who did not touch it has not chosen that.
+    if "contact_email" not in sent:
+        org.contact_email = before["contact_email"]
+
+    after = _admin_profile(org)
+    # The category lists compare as sets: a reordered list is the same
+    # profile, and should neither count as an edit nor be logged as one.
+    same = lambda key: (sorted(before[key] or []) == sorted(after[key] or [])
+                        if key in ("needs", "offers", "focus_areas")
+                        else before[key] == after[key])
+    changed = sorted(key for key in _ADMIN_PROFILE_FIELDS if not same(key))
+    if not changed:
+        db.rollback()
+        return jsonify({"error": "Nothing changed."}), 400
+
+    # The old values too, so an edit can be put back by hand.
+    record_admin_action(db, admin, "edit_organization",
+                        target_type="organization", target_id=org.id,
+                        name=org.name, fields=changed,
+                        before={key: before[key] for key in changed})
+    db.commit()
+    return jsonify({"message": "Profile updated",
+                    "organization": _admin_profile(org), "changed": changed})
 
 
 @app.route("/api/admin/organizations/<int:org_id>/hidden", methods=["POST"])
@@ -4788,7 +4891,30 @@ def save_onboarding(org, db):
     what makes an onboarded org actually appear in other orgs' matches.
     """
     data = request.get_json(silent=True) or {}
+    refusal = _apply_profile(org, data)
+    if refusal:
+        return refusal
+    # Opt-in, so a missing key means "not public" rather than leaving a
+    # previous true in place: an older client that does not send the field
+    # should not be able to keep links published by omission.
+    org.links_public = bool(data.get("links_public"))
+    org.onboarding_complete = True
 
+    db.commit()
+    return jsonify({
+        "message": "Profile saved",
+        "organization": org.private_dict(),
+    }), 200
+
+
+def _apply_profile(org, data, *, require_complete=True):
+    """Check a whole profile and write it to `org`, or return the refusal.
+
+    Shared by onboarding and by an admin editing a profile, so both are held
+    to the same rules. `require_complete` is the onboarding minimum -- type,
+    location, needs and offers -- which an admin editing a profile nobody has
+    claimed yet may not have the answers to. Nothing is committed.
+    """
     name = (data.get("organization_name") or "").strip()
     organization_type = (data.get("organization_type") or "").strip()
     location = (data.get("location") or "").strip()
@@ -4815,7 +4941,8 @@ def save_onboarding(org, db):
         if problem:
             return jsonify({"error": problem, "field": "organization_name"}), 400
     if not organization_type:
-        problems.append("an organization type")
+        if require_complete:
+            problems.append("an organization type")
     elif organization_type not in ORGANIZATION_TYPES:
         # The form is a <select> over this same list, so only a crafted
         # request gets here -- but a value outside it is one the directory's
@@ -4825,12 +4952,13 @@ def save_onboarding(org, db):
             "error": "That is not one of the organization types on the list.",
             "field": "organization_type",
         }), 400
-    if len(location) < 2:
-        problems.append("a location")
-    if not needs:
-        problems.append("at least one thing you need")
-    if not offers:
-        problems.append("at least one thing you can offer")
+    if require_complete:
+        if len(location) < 2:
+            problems.append("a location")
+        if not needs:
+            problems.append("at least one thing you need")
+        if not offers:
+            problems.append("at least one thing you can offer")
 
     description = (data.get("description") or "").strip()
     if description and len(description) < 20:
@@ -4899,8 +5027,8 @@ def save_onboarding(org, db):
 
     org.name = name
     org.name_flagged = name_flagged
-    org.organization_type = organization_type
-    org.location = location
+    org.organization_type = organization_type or None
+    org.location = location or None
     org.remote_friendly = bool(data.get("remote_friendly"))
     org.needs = needs
     org.offers = offers
@@ -4909,23 +5037,16 @@ def save_onboarding(org, db):
     org.offers_note = (data.get("offers_note") or "").strip() or None
     org.partnership_goals = (data.get("partnership_goals") or "").strip() or None
     org.description = description or None
-    org.contact_email = contact_email or org.email
+    # An unclaimed invitation's sign-in address is a .invalid placeholder,
+    # which is no address to be contacted on.
+    org.contact_email = contact_email or (
+        None if org.claim_token_hash else org.email)
     org.contact_phone = contact_phone or None
     org.website_url = links["website_url"]
     org.instagram_url = links["instagram_url"]
     org.x_url = links["x_url"]
     org.linkedin_url = links["linkedin_url"]
-    # Opt-in, so a missing key means "not public" rather than leaving a
-    # previous true in place: an older client that does not send the field
-    # should not be able to keep links published by omission.
-    org.links_public = bool(data.get("links_public"))
-    org.onboarding_complete = True
-
-    db.commit()
-    return jsonify({
-        "message": "Profile saved",
-        "organization": org.private_dict(),
-    }), 200
+    return None
 
 
 # --- Matching ---------------------------------------------------------------

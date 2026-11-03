@@ -458,3 +458,36 @@
     font-weight: 600;
     margin-right: 0.5rem;
 }
+
+/* The edit dialog (admin.js). Long, so it scrolls; the category lists are
+   two columns of plain checkboxes. */
+.admin-edit { max-height: 85vh; overflow-y: auto; }
+.admin-edit form { display: grid; gap: 6px; }
+.admin-edit fieldset { border: 0; padding: 0; margin: 8px 0 0; }
+.admin-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px;
+               max-height: 10rem; overflow-y: auto; font-size: 0.9em; }
+
+/* The card both admin dialogs sit in. forms.css styles .modal-container,
+   which the site's dialogs use; these two use .modal-content, which had no
+   rule at all, so they drew straight onto the dimmed page. */
+.modal .modal-content {
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    width: 100%;
+    max-width: 36rem;
+}
+
+.admin-edit input[type="text"], .admin-edit input[type="email"],
+.admin-edit select, .admin-edit textarea {
+    width: 100%;
+    font: inherit;
+    font-size: .9rem;
+    color: var(--h-ink);
+    background: var(--h-surface);
+    border: 1px solid var(--h-rule);
+    border-radius: 6px;
+    padding: .5rem .65rem;
+}
+.admin-edit label { font-size: .85rem; margin-top: 4px; }

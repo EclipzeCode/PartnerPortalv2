@@ -1,7 +1,9 @@
 // The admin panel.
 //
-// Two queues and two powers, and both powers are reversible. Nothing here can
-// suspend an account, edit a profile, act as somebody, or delete anything.
+// Two queues, and three powers: hiding a profile, clearing a flagged name,
+// and correcting a profile's details. Nothing here can suspend an account,
+// change a sign-in or a password, act as somebody, or delete anything, and
+// every power is recorded in the action log.
 //
 // The page ships holding a login form and nothing else. Everything drawn
 // below arrives from /api/admin/overview, which answers 404 without an admin
@@ -150,16 +152,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         // without seeing what it is attached to. It opens the public profile,
         // which for a hidden organization now 404s -- so hidden rows link to
         // nothing and say so instead of offering a dead link.
-        const link = org.hidden_at
-            ? '<span class="admin-dim">profile not listed</span>'
+        const link = org.invited
+            ? '<span class="admin-dim">invitation, not claimed yet</span>'
+            : org.hidden_at || !org.onboarding_complete
+            ? `<span class="admin-dim">profile not listed</span>`
             : `<a href="organization.html?id=${encodeURIComponent(org.id)}"
                   target="_blank" rel="noopener">Open profile</a>`;
 
-        const actions = kind === 'flagged'
-            ? `<button type="button" class="btn-ghost" data-clear="${org.id}">Name is fine</button>
-               <button type="button" class="btn-danger" data-hide="${org.id}"
-                       data-name="${esc(org.name)}">Hide</button>`
-            : `<button type="button" class="btn-ghost" data-unhide="${org.id}">List again</button>`;
+        const editBtn = `<button type="button" class="btn-ghost" data-edit="${org.id}">Edit</button>`;
+        const hideBtn = `<button type="button" class="btn-danger" data-hide="${org.id}"
+                       data-name="${esc(org.name)}">Hide</button>`;
+        const actions = editBtn + (kind === 'flagged'
+            ? `<button type="button" class="btn-ghost" data-clear="${org.id}">Name is fine</button>${hideBtn}`
+            : org.hidden_at
+                ? `<button type="button" class="btn-ghost" data-unhide="${org.id}">List again</button>`
+                : org.invited ? '' : hideBtn);
 
         return `
             <article class="admin-row">
@@ -174,7 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${org.hidden_reason
                     ? `<p class="admin-reason">Told: ${esc(org.hidden_reason)}</p>` : ''}
                 <p class="admin-dim">
-                  ${esc(org.email)} &middot;
+                  ${org.invited ? '' : `${esc(org.email)} &middot;`}
                   ${esc(org.hidden_at ? `hidden ${when(org.hidden_at)}`
                                       : `joined ${when(org.created_at)}`)}
                   &middot; ${link}
@@ -285,6 +292,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             row: (o) => orgRow(o, 'flagged'),
             noun: 'name',
             blank: 'No names are flagged.',
+        },
+        {
+            name: 'organizations',
+            key: 'organizations',
+            host: 'adminOrganizations',
+            search: 'searchOrganizations',
+            pager: 'pagerOrganizations',
+            count: 'countOrganizations',
+            row: (o) => orgRow(o, 'all'),
+            noun: 'organization',
+            blank: 'No organizations yet.',
         },
         {
             name: 'hidden',
@@ -614,6 +632,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { method: 'POST', body: { hidden: false } }));
         }
 
+        const editBtn = e.target.closest('[data-edit]');
+        if (editBtn) {
+            openEdit(editBtn.dataset.edit);
+            return;
+        }
+
         const hide = e.target.closest('[data-hide]');
         if (hide) {
             pendingHideId = hide.dataset.hide;
@@ -650,6 +674,90 @@ document.addEventListener('DOMContentLoaded', async () => {
             await load();
         } catch (error) {
             showError(hideError, error.message || 'That did not work.');
+        }
+    });
+
+    // --- Editing a profile ------------------------------------------------
+    // Only the fields on the form are sent, and only when they changed, so
+    // the log names what was actually edited.
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editError = document.getElementById('editError');
+    const editInputs = {
+        organization_name: document.getElementById('editName'),
+        organization_type: document.getElementById('editType'),
+        location: document.getElementById('editLocation'),
+        description: document.getElementById('editDescription'),
+        website_url: document.getElementById('editWebsite'),
+        contact_email: document.getElementById('editContactEmail'),
+        contact_phone: document.getElementById('editContactPhone'),
+    };
+    let editing = null;     // the profile as it was loaded
+    let vocab = null;
+
+    function chips(host, chosen) {
+        host.innerHTML = vocab.groups.flatMap((g) => g.categories).map((c) => `
+            <label><input type="checkbox" value="${esc(c.slug)}"${
+                chosen.includes(c.slug) ? ' checked' : ''}> ${esc(c.label)}</label>`).join('');
+    }
+    const picked = (host) => [...host.querySelectorAll('input:checked')].map((i) => i.value);
+
+    async function openEdit(id) {
+        try {
+            vocab = vocab || await call('/api/categories');
+            editing = (await call(`/api/admin/organizations/${id}`)).organization;
+        } catch (error) {
+            window.toast(error.message || 'Could not load that organization.', 'error');
+            return;
+        }
+        document.getElementById('editWho').textContent = editing.invited
+            ? 'Invitation, not claimed yet. They can change all of this when they claim it.'
+            : editing.email;
+        editInputs.organization_type.innerHTML = '<option value="">Not set</option>'
+            + vocab.organization_types.map((t) => `<option>${esc(t)}</option>`).join('');
+        Object.entries(editInputs).forEach(([key, input]) => {
+            input.value = editing[key] || '';
+        });
+        chips(document.getElementById('editOffers'), editing.offers || []);
+        chips(document.getElementById('editNeeds'), editing.needs || []);
+        showError(editError, '');
+        editModal.hidden = false;
+        window.showDialog(editModal, editInputs.organization_name, closeEdit);
+    }
+
+    function closeEdit() {
+        window.hideDialog(editModal);
+        editModal.hidden = true;
+        editing = null;
+    }
+    document.getElementById('editCancel').addEventListener('click', closeEdit);
+
+    editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {};
+        Object.entries(editInputs).forEach(([key, input]) => {
+            const value = input.value.trim();
+            if (value !== (editing[key] || '')) body[key] = value;
+        });
+        [['offers', 'editOffers'], ['needs', 'editNeeds']].forEach(([key, host]) => {
+            const now = picked(document.getElementById(host));
+            // As sets: the boxes come back in vocabulary order, the profile
+            // keeps the order they were chosen in.
+            if (now.slice().sort().join() !== (editing[key] || []).slice().sort().join()) {
+                body[key] = now;
+            }
+        });
+        if (!Object.keys(body).length) {
+            showError(editError, 'Nothing has changed.');
+            return;
+        }
+        try {
+            await call(`/api/admin/organizations/${editing.id}`, { method: 'PATCH', body });
+            closeEdit();
+            window.toast('Profile updated.');
+            await load();
+        } catch (error) {
+            showError(editError, error.message || 'That did not work.');
         }
     });
 

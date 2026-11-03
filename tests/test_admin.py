@@ -35,6 +35,8 @@ ADMIN_ROUTES = [
     ("get", "/api/admin/reports/1/thread"),
     ("delete", "/api/admin/organizations/1/flag"),
     ("post", "/api/admin/organizations/1/hidden"),
+    ("get", "/api/admin/organizations/1"),
+    ("patch", "/api/admin/organizations/1"),
 ]
 
 
@@ -445,3 +447,83 @@ def test_a_report_on_a_deleted_conversation_says_so(
     session.expire_all()
     response = client.get(f"/api/admin/reports/{report.id}/thread")
     assert response.status_code == 410
+
+
+# --- Editing a profile -----------------------------------------------------
+
+def test_an_admin_edits_only_what_was_sent_and_it_is_logged(
+        client, make_admin, admin_login, make_org, session):
+    # contact_email set, as onboarding always leaves it.
+    org = make_org(name="pytest Before", offers=["volunteers"],
+                   needs=["mentors"], website_url="https://before.example",
+                   contact_email="hello@before.example")
+    admin_login(make_admin())
+
+    response = client.patch(f"/api/admin/organizations/{org.id}", json={
+        "organization_name": "pytest After", "offers": ["legal"]})
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()["changed"] == ["offers", "organization_name"]
+
+    session.refresh(org)
+    assert org.name == "pytest After" and org.offers == ["legal"]
+    # Everything not sent is untouched.
+    assert org.needs == ["mentors"]
+    assert org.website_url == "https://before.example"
+
+    log = session.query(AdminAction).filter(
+        AdminAction.target_id == org.id).one()
+    assert log.action == "edit_organization"
+    assert log.detail["fields"] == ["offers", "organization_name"]
+
+
+def test_admin_edits_follow_the_onboarding_rules(
+        client, make_admin, admin_login, make_org):
+    org = make_org()
+    admin_login(make_admin())
+    url = f"/api/admin/organizations/{org.id}"
+    # A finished profile keeps the onboarding minimum.
+    assert client.patch(url, json={"needs": []}).status_code == 400
+    assert client.patch(url, json={"website_url": "not a url"}).status_code == 400
+    assert client.patch(url, json={"contact_email": "nope"}).status_code == 400
+    # Sign-in and publishing choices are not editable here.
+    assert client.patch(url, json={"email": "x@example.com"}).status_code == 400
+    assert client.patch(url, json={"links_public": True}).status_code == 400
+    assert client.patch(url, json={}).status_code == 400   # nothing changed
+
+
+def test_an_unclaimed_invitation_can_be_edited_while_incomplete(
+        client, make_admin, admin_login, make_org, session):
+    invite = make_org(name="pytest Invite", onboarding_complete=False,
+                      organization_type=None, location=None,
+                      claim_token_hash="pytest-" + "1" * 57)
+    invite.email = "invite-pytest@invite.invalid"
+    session.commit()
+    admin_login(make_admin())
+    response = client.patch(f"/api/admin/organizations/{invite.id}",
+                            json={"description": "A food pantry in Somerville."})
+    assert response.status_code == 200, response.get_json()
+    session.refresh(invite)
+    assert invite.contact_email is None    # never the placeholder address
+
+    overview = client.get("/api/admin/overview").get_json()
+    row = next(o for o in overview["organizations"] if o["id"] == invite.id)
+    assert row["invited"] is True
+
+
+def test_a_reordered_list_or_an_empty_contact_is_not_an_edit(
+        client, make_admin, admin_login, make_org, session):
+    org = make_org(offers=["volunteers", "legal"], needs=["mentors"])
+    assert org.contact_email is None
+    admin_login(make_admin())
+    url = f"/api/admin/organizations/{org.id}"
+
+    assert client.patch(url, json={"offers": ["legal", "volunteers"]}
+                        ).status_code == 400            # nothing changed
+    response = client.patch(url, json={"location": "Newark, NJ"})
+    assert response.get_json()["changed"] == ["location"]
+    session.refresh(org)
+    assert org.contact_email is None
+
+    log = session.query(AdminAction).filter(
+        AdminAction.target_id == org.id).one()
+    assert log.detail["before"] == {"location": "Testville, TS"}

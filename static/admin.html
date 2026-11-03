@@ -218,6 +218,34 @@
         </section>
 
         <section class="admin-section">
+          <h2><i class='bx bx-building-house' aria-hidden="true"></i> Organizations</h2>
+          <p class="admin-lede">Every organization, newest first, including
+             invitations nobody has claimed. Edit corrects a profile on their
+             behalf; it is recorded below with the fields that changed.</p>
+          <div class="admin-tools">
+            <label class="admin-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <span class="sr-only">Search organizations</span>
+              <input type="search" id="searchOrganizations"
+                     placeholder="Search name, email or location"
+                     autocomplete="off">
+            </label>
+            <p class="admin-result-count" id="countOrganizations"
+               role="status" aria-live="polite"></p>
+          </div>
+          <div id="adminOrganizations"></div>
+          <div class="admin-pager" id="pagerOrganizations" hidden>
+            <button type="button" class="btn-ghost" data-page="prev">
+              <i class='bx bx-chevron-left' aria-hidden="true"></i> Previous
+            </button>
+            <span class="admin-page-indicator"></span>
+            <button type="button" class="btn-ghost" data-page="next">
+              Next <i class='bx bx-chevron-right' aria-hidden="true"></i>
+            </button>
+          </div>
+        </section>
+
+        <section class="admin-section">
           <h2><i class='bx bx-hide' aria-hidden="true"></i> Hidden organizations</h2>
           <p class="admin-lede">Out of the directory, out of matches and off
              their own public URL. They can still sign in and answer proposals,
@@ -288,6 +316,39 @@
           <button type="button" class="btn-ghost" id="hideCancel">Cancel</button>
           <button type="button" class="btn-danger" id="hideConfirm">Hide profile</button>
         </div>
+      </div>
+    </div>
+
+    <!-- The edit dialog. Only the fields shown are sent; the server keeps
+         everything else as it was. -->
+    <div class="modal" id="editModal" role="dialog" aria-modal="true"
+         aria-labelledby="editTitle" hidden>
+      <div class="modal-content admin-edit">
+        <h3 id="editTitle">Edit organization</h3>
+        <p class="modal-note" id="editWho"></p>
+        <form id="editForm" novalidate>
+          <label for="editName">Name</label>
+          <input type="text" id="editName" maxlength="255">
+          <label for="editType">Type</label>
+          <select id="editType"></select>
+          <label for="editLocation">Location</label>
+          <input type="text" id="editLocation" maxlength="255">
+          <label for="editDescription">Description</label>
+          <textarea id="editDescription" rows="4" maxlength="2000"></textarea>
+          <fieldset><legend>Offers</legend><div class="admin-chips" id="editOffers"></div></fieldset>
+          <fieldset><legend>Needs</legend><div class="admin-chips" id="editNeeds"></div></fieldset>
+          <label for="editWebsite">Website</label>
+          <input type="text" id="editWebsite" maxlength="255">
+          <label for="editContactEmail">Contact email</label>
+          <input type="email" id="editContactEmail" maxlength="255">
+          <label for="editContactPhone">Contact phone</label>
+          <input type="text" id="editContactPhone" maxlength="32">
+          <p class="form-banner" id="editError" role="alert" hidden></p>
+          <div class="form-actions">
+            <button type="button" class="btn-ghost" id="editCancel">Cancel</button>
+            <button type="submit" class="btn-primary" id="editSave">Save changes</button>
+          </div>
+        </form>
       </div>
     </div>
 
