@@ -1519,6 +1519,34 @@ def notify_email_change_notice(org):
               html, text)
 
 
+def notify_email_changed_by_admin(org, previous):
+    """Tells the old address that an admin moved the sign-in.
+
+    Done, not requested, so unlike notify_email_change_notice there is nothing
+    to cancel: the way back is a person.
+    """
+    cfg = _config()
+    html = f"""\
+<!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
+<body><div class="card">
+  <h1>Your sign-in email was changed</h1>
+  <p class="meta">A PartnerPortal administrator moved {escape(org.name)} from
+  {escape(previous)} to {escape(org.email)}.</p>
+
+  <p class="foot">If you did not ask for this, contact us right away at
+  {escape(cfg['app_url'])}/pphelp.html.</p>
+</div></body></html>
+"""
+    text = (
+        f"A PartnerPortal administrator moved {org.name} from {previous} to "
+        f"{org.email}.\n\n"
+        f"If you did not ask for this, contact us right away: "
+        f"{cfg['app_url']}/pphelp.html\n"
+    )
+    _dispatch(previous, "Your PartnerPortal sign-in email was changed",
+              html, text)
+
+
 def notify_password_changed(org):
     """Sent by /api/account/password after a successful change.
 

@@ -168,7 +168,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             : org.hidden_at
                 ? `<button type="button" class="btn-ghost" data-unhide="${org.id}">List again</button>`
                 : org.invited
-                    ? `<button type="button" class="btn-ghost" data-listed="${org.id}"
+                    ? `<button type="button" class="btn-ghost" data-link="${org.id}">Claim link</button>
+                       <button type="button" class="btn-ghost" data-listed="${org.id}"
                          data-to="${!org.onboarding_complete}">${
                          org.onboarding_complete ? 'Unlist' : 'List publicly'}</button>`
                     : hideBtn);
@@ -644,6 +645,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { method: 'POST', body: { listed: listed.dataset.to === 'true' } }));
         }
 
+        const link = e.target.closest('[data-link]');
+        if (link) {
+            if (!window.confirm('Make a new claim link? Any earlier link for '
+                                + 'this business stops working.')) return;
+            return act(async () => {
+                const { invite } = await call(
+                    `/api/admin/organizations/${link.dataset.link}/claim-link`,
+                    { method: 'POST' });
+                window.prompt('Copy this link and send it to the business:',
+                              location.origin + invite.claim_url);
+            });
+        }
+
         const editBtn = e.target.closest('[data-edit]');
         if (editBtn) {
             openEdit(editBtn.dataset.edit);
@@ -704,6 +718,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         contact_email: document.getElementById('editContactEmail'),
         contact_phone: document.getElementById('editContactPhone'),
     };
+    const editEmail = document.getElementById('editEmail');
     let editing = null;     // the profile as it was loaded
     let vocab = null;
 
@@ -730,6 +745,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         Object.entries(editInputs).forEach(([key, input]) => {
             input.value = editing[key] || '';
         });
+        // An unclaimed profile has only a placeholder, so this starts empty
+        // and saving an address mails it the claim link.
+        editEmail.value = editing.invited ? '' : editing.email;
+        document.getElementById('editEmailLabel').textContent = editing.invited
+            ? 'Email the claim link to (replaces any earlier link)' : 'Sign-in email';
         chips(document.getElementById('editOffers'), editing.offers || []);
         chips(document.getElementById('editNeeds'), editing.needs || []);
         showError(editError, '');
@@ -759,17 +779,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body[key] = now;
             }
         });
-        if (!Object.keys(body).length) {
+        const email = editEmail.value.trim().toLowerCase();
+        const newEmail = email && email !== (editing.invited ? '' : editing.email);
+        if (!Object.keys(body).length && !newEmail) {
             showError(editError, 'Nothing has changed.');
             return;
         }
         try {
-            await call(`/api/admin/organizations/${editing.id}`, { method: 'PATCH', body });
+            if (Object.keys(body).length) {
+                await call(`/api/admin/organizations/${editing.id}`, { method: 'PATCH', body });
+            }
+            const done = newEmail
+                ? await call(`/api/admin/organizations/${editing.id}/email`,
+                             { method: 'POST', body: { email } })
+                : { message: 'Profile updated.' };
             closeEdit();
-            window.toast('Profile updated.');
+            window.toast(done.message);
             await load();
         } catch (error) {
             showError(editError, error.message || 'That did not work.');
+        }
+    });
+
+    document.getElementById('addBusiness').addEventListener('click', async () => {
+        const name = (window.prompt('Name of the business:') || '').trim();
+        if (!name) return;
+        try {
+            const { organization } = await call('/api/admin/organizations',
+                                                { method: 'POST', body: { name } });
+            await load();
+            openEdit(organization.id);
+        } catch (error) {
+            window.toast(error.message || 'That did not work.', 'error');
         }
     });
 

@@ -38,6 +38,9 @@ ADMIN_ROUTES = [
     ("get", "/api/admin/organizations/1"),
     ("patch", "/api/admin/organizations/1"),
     ("post", "/api/admin/organizations/1/listed"),
+    ("post", "/api/admin/organizations"),
+    ("post", "/api/admin/organizations/1/claim-link"),
+    ("post", "/api/admin/organizations/1/email"),
 ]
 
 
@@ -558,3 +561,70 @@ def test_a_reordered_list_or_an_empty_contact_is_not_an_edit(
     log = session.query(AdminAction).filter(
         AdminAction.target_id == org.id).one()
     assert log.detail["before"] == {"location": "Testville, TS"}
+
+
+def test_a_business_added_without_an_email_can_be_claimed(
+        client, make_admin, admin_login, session):
+    admin_login(make_admin())
+    response = client.post("/api/admin/organizations",
+                           json={"name": "pytest No Email Co"})
+    assert response.status_code == 201, response.get_json()
+    org_id = response.get_json()["organization"]["id"]
+    assert client.post("/api/admin/organizations",
+                       json={"name": "PYTEST no email co"}).status_code == 409
+
+    first = client.post(f"/api/admin/organizations/{org_id}/claim-link")
+    second = client.post(f"/api/admin/organizations/{org_id}/claim-link")
+    old = first.get_json()["invite"]["claim_url"].split("token=")[1]
+    new = second.get_json()["invite"]["claim_url"].split("token=")[1]
+    assert client.get(f"/api/invites/{old}").status_code == 404
+    assert client.get(f"/api/invites/{new}").get_json()["invite"]["invited_by"] is None
+
+    claimed = client.post(f"/api/invites/{new}/claim", json={
+        "email": "pytest-noemail@example.com", "password": "Claim-1234!pass"})
+    assert claimed.status_code == 201, claimed.get_json()
+    assert client.post(f"/api/admin/organizations/{org_id}/claim-link"
+                       ).status_code == 409
+
+
+def test_an_admin_moves_a_claimed_sign_in(
+        client, make_admin, admin_login, make_org, session, outbox):
+    org, other = make_org(), make_org()
+    previous = org.email
+    org.contact_email = previous
+    org.email_verified = True
+    org.password_reset_token_hash = "pytest-" + "3" * 57
+    session.commit()
+    admin_login(make_admin())
+    url = f"/api/admin/organizations/{org.id}/email"
+
+    assert client.post(url, json={"email": "nope"}).status_code == 400
+    assert client.post(url, json={"email": other.email}).status_code == 409
+    assert client.post(url, json={"email": previous}).status_code == 400
+
+    response = client.post(url, json={"email": "Pytest-Moved@Example.com"})
+    assert response.status_code == 200, response.get_json()
+    session.refresh(org)
+    assert org.email == org.contact_email == "pytest-moved@example.com"
+    assert org.email_verified is False
+    assert org.password_reset_token_hash is None
+    sent = {kind: args for kind, args, _ in outbox}
+    assert sent["notify_email_changed_by_admin"][1] == previous
+    assert "notify_email_verification" in sent
+
+
+def test_an_unclaimed_email_gets_a_fresh_link_and_keeps_its_placeholder(
+        client, make_admin, admin_login, make_org, session, outbox):
+    invite = make_org(name="pytest Mail Invite", onboarding_complete=False,
+                      claim_token_hash="pytest-" + "4" * 57)
+    invite.email = "invite-pytest4@invite.invalid"
+    session.commit()
+    admin_login(make_admin())
+    response = client.post(f"/api/admin/organizations/{invite.id}/email",
+                           json={"email": "owner@example.com"})
+    assert response.status_code == 200, response.get_json()
+    session.refresh(invite)
+    assert invite.email == "invite-pytest4@invite.invalid"
+    assert invite.claim_token_hash != "pytest-" + "4" * 57
+    assert [args[2] for kind, args, _ in outbox
+            if kind == "notify_invitation"] == ["owner@example.com"]

@@ -8,6 +8,7 @@ import re
 import secrets
 import threading
 import time
+from types import SimpleNamespace
 from collections import deque
 from datetime import datetime, time as time_type, timedelta, timezone
 from functools import wraps
@@ -58,7 +59,7 @@ from notifications import (
     notify_profile_hidden,
     notify_completion_marked, notify_contact_message, notify_share_link_changed,
     notify_email_change_notice, notify_email_change_requested,
-    notify_email_verification, notify_invitation, notify_meeting_update,
+    notify_email_changed_by_admin, notify_email_verification, notify_invitation, notify_meeting_update,
     notify_matching_requests, notify_message_received,
     notify_partnership_completed, notify_partnership_ended,
     notify_password_changed, notify_password_reset, notify_proposal_created,
@@ -3975,6 +3976,133 @@ def admin_set_hidden(admin, db, org_id):
     })
 
 
+@app.route("/api/admin/organizations", methods=["POST"])
+@admin_required
+def admin_create_organization(admin, db):
+    """An unclaimed profile with no address and no inviter.
+
+    Filled in with Edit, shown with List publicly, and handed over with a
+    claim link or by setting an email. Whoever claims it chooses the sign-in
+    address, as with any invitation.
+    """
+    name = ((request.get_json(silent=True) or {}).get("name") or "").strip()
+    if len(name) < 2:
+        return jsonify({"error": "Enter the name of the business.",
+                        "field": "name"}), 400
+    problem, name_flagged = screened_name(name)
+    problem = problem or length_problem("name", name)
+    if problem:
+        return jsonify({"error": problem, "field": "name"}), 400
+    if db.query(Organization.id).filter(
+            func.lower(Organization.name) == name.lower()).first():
+        return jsonify({"error": "An organization with that name exists.",
+                        "field": "name"}), 409
+
+    org, _ = _invited_row(name, name_flagged, None)
+    db.add(org)
+    db.flush()
+    record_admin_action(db, admin, "create_organization",
+                        target_type="organization", target_id=org.id,
+                        name=org.name)
+    db.commit()
+    return jsonify({"message": "Business added",
+                    "organization": _admin_profile(org)}), 201
+
+
+@app.route("/api/admin/organizations/<int:org_id>/claim-link", methods=["POST"])
+@admin_required
+def admin_claim_link(admin, db, org_id):
+    """A fresh claim link to hand over. The previous one stops working."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+    if org.claim_token_hash is None:
+        return jsonify({"error": "That organization is already claimed."}), 409
+
+    token, org.claim_token_hash = issue_token()
+    record_admin_action(db, admin, "reissue_claim_link",
+                        target_type="organization", target_id=org.id,
+                        name=org.name)
+    db.commit()
+    return jsonify({"message": "New link created. The previous one no longer "
+                               "works.",
+                    "invite": _invite_dict(org, raw_token=token)})
+
+
+@app.route("/api/admin/organizations/<int:org_id>/email", methods=["POST"])
+@admin_required
+def admin_change_email(admin, db, org_id):
+    """Change where a business signs in, or where its invitation goes.
+
+    Claimed: takes effect at once, without the confirmation link the owner's
+    own change needs, because the usual reason to come here is that they have
+    lost the old inbox. The new address still has to verify, the old one is
+    told, and a reset link already mailed to the old one stops working.
+
+    Unclaimed: there is no sign-in address to change, so this mails a fresh
+    claim link to the address and retires the old link. Like every invitation
+    the address is not kept on the profile; the audit log has it.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        return jsonify({"error": "Organization not found."}), 404
+
+    email = ((request.get_json(silent=True) or {}).get("email") or "").strip().lower()
+    if not is_valid_email(email) or length_problem("contact_email", email):
+        return jsonify({"error": "Please enter a valid email address.",
+                        "field": "email"}), 400
+
+    if org.claim_token_hash is not None:
+        token, org.claim_token_hash = issue_token()
+        record_admin_action(db, admin, "send_claim_link",
+                            target_type="organization", target_id=org.id,
+                            name=org.name, email=email)
+        db.commit()
+        # The invitation names whoever typed the address, and they are who a
+        # reply should reach.
+        notify_invitation(
+            SimpleNamespace(name=admin.name, contact_email=None,
+                            email=admin.email),
+            org, email, token)
+        return jsonify({"message": f"Claim link sent to {email}.",
+                        "organization": _admin_profile(org)})
+
+    previous = org.email
+    if email == previous:
+        return jsonify({"error": "Nothing changed."}), 400
+    if db.query(Organization.id).filter(Organization.email == email,
+                                        Organization.id != org.id).first():
+        return jsonify({"error": "Another account uses that address.",
+                        "field": "email"}), 409
+
+    org.email = email
+    # As confirm_email_change: a contact address typed in deliberately stays.
+    if not org.contact_email or org.contact_email.lower() == previous.lower():
+        org.contact_email = email
+    org.email_verified = False
+    verify_raw, org.email_verify_token_hash = issue_token()
+    org.email_verify_sent_at = datetime.now(timezone.utc)
+    org.pending_email = None
+    org.pending_email_token_hash = None
+    org.pending_email_sent_at = None
+    org.password_reset_token_hash = None
+    org.password_reset_sent_at = None
+    record_admin_action(db, admin, "change_email",
+                        target_type="organization", target_id=org.id,
+                        name=org.name, before=previous, after=email)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return jsonify({"error": "Another account uses that address.",
+                        "field": "email"}), 409
+
+    notify_email_verification(org, verify_raw)
+    notify_email_changed_by_admin(org, previous)
+    return jsonify({"message": f"Sign-in email changed to {email}.",
+                    "organization": _admin_profile(org)})
+
+
 @app.route("/api/admin/organizations/<int:org_id>/listed", methods=["POST"])
 @admin_required
 def admin_set_listed(admin, db, org_id):
@@ -6965,8 +7093,15 @@ def _new_invited(db, org, name):
     # guaranteed never to resolve) cannot collide with anybody's real one or
     # be mistaken for a deliverable address by anything downstream. The
     # claimer replaces it with their own on the way in.
+    invited, token = _invited_row(name, name_flagged, org.id)
+    db.add(invited)
+    return invited, token, None
+
+
+def _invited_row(name, name_flagged, invited_by_id):
+    """(row, token): an unclaimed profile, not yet added to the session."""
     token, digest = issue_token()
-    invited = Organization(
+    return Organization(
         email=f"invite-{secrets.token_hex(8)}@invite.invalid",
         name=name,
         name_flagged=name_flagged,
@@ -6974,10 +7109,8 @@ def _new_invited(db, org, name):
         onboarding_complete=False,
         claim_token_hash=digest,
         invited_at=datetime.now(timezone.utc),
-        invited_by_id=org.id,
-    )
-    db.add(invited)
-    return invited, token, None
+        invited_by_id=invited_by_id,
+    ), token
 
 
 @app.route("/api/invites/<int:invite_id>", methods=["DELETE"])
