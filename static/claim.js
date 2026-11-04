@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.innerHTML = `
             <h1>${esc(title)}</h1>
             <p class="reset-sub">${esc(body)}</p>
-            ${cta || '<a class="btn-primary" href="index.html">Go to PartnerPortal</a>'}
+            ${cta || '<a class="btn-primary" href="/">Go to PartnerPortal</a>'}
         `;
     }
 
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button type="submit" class="btn-primary" id="submitBtn">Create my account</button>
             </form>
 
-            <a href="pplogin.html" class="reset-back-link">Already have an account? Sign in</a>
+            <a href="/login" class="reset-back-link">Already have an account? Sign in</a>
         `;
         wireForm();
     }
@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // which is the whole point of the invitation, and the only thing
             // that puts this organization in front of the one that invited it.
             submitBtn.textContent = 'Redirecting...';
-            window.location.href = 'onboarding.html';
+            window.location.href = '/onboarding';
         });
     }
 
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'This invitation is no longer valid',
                 (data && data.error)
                 || 'It may already have been used, or been withdrawn.',
-                '<a class="btn-primary" href="pplogin.html">Create an account instead</a>');
+                '<a class="btn-primary" href="/login">Create an account instead</a>');
             return;
         }
 

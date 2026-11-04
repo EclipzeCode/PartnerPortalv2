@@ -825,23 +825,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   // referrer, and Search only when neither names a page. Both are checked
   // against the same shape the login page accepts, so the destination is
   // always a page on this site.
-  const NEXT_RE = /^[a-z0-9_-]+\.html(\?[^#\s]*)?(#[a-z0-9_-]*)?$/i;
+  const NEXT_RE = /^\/?[a-z0-9_-]+(\.html)?(\?[^#\s]*)?(#[a-z0-9_-]*)?$/i;
 
   function afterSaveDestination() {
-    if (!editing) return 'ppsearch.html';
+    if (!editing) return '/search';
     const next = new URLSearchParams(location.search).get('next') || '';
-    if (NEXT_RE.test(next) && !next.startsWith('onboarding.html')) return next;
+    if (NEXT_RE.test(next) && !/^\/?onboarding/.test(next)) return next;
     try {
       const from = new URL(document.referrer);
       const page = from.pathname.replace(/^\//, '') + from.search + from.hash;
       if (from.origin === location.origin && NEXT_RE.test(page)
-          && !/^(onboarding|pplogin)\.html/.test(page)) {
+          && !/^(onboarding|login)\b/.test(page)) {
         return page;
       }
     } catch {
       // No referrer, or not a URL.
     }
-    return 'ppsearch.html';
+    return '/search';
   }
 
   onboardingForm.addEventListener('submit', async (e) => {
@@ -859,7 +859,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       clearDraft();
       const destination = afterSaveDestination();
       showSuccess(editing
-        ? (destination === 'ppsearch.html'
+        ? (destination === '/search'
             ? 'Profile updated. Refreshing your matches...'
             : 'Profile updated. Taking you back...')
         : 'Profile saved. Finding your matches...');

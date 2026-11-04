@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             list.innerHTML =
                 `<p class="empty-state">${esc(messages[activeTab])}` +
                 (activeTab === 'outgoing'
-                    ? '<br><br><a class="btn-primary" href="ppsearch.html">Find partners</a>'
+                    ? '<br><br><a class="btn-primary" href="/search">Find partners</a>'
                     : '') + '</p>';
             return;
         }
@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (p.share_token) {
                 actions.push(
                     `<a class="btn-primary" target="_blank" rel="noopener"
-                        href="partnership.html?token=${encodeURIComponent(p.share_token)}">
+                        href="/partnership?token=${encodeURIComponent(p.share_token)}">
                         View agreement</a>`);
                 actions.push('<button class="btn-ghost" data-act="copy">Copy link</button>');
                 // The link used to be permanent, so anyone ever sent it kept
@@ -1551,7 +1551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (act === 'copy') {
-            const url = `${location.origin}/partnership.html?token=${
+            const url = `${location.origin}/partnership?token=${
                 encodeURIComponent(proposal.share_token)}`;
             try {
                 await navigator.clipboard.writeText(url);
@@ -1855,7 +1855,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Deep link into a tab, e.g. ppdashboard.html#agreed, or straight into
+    // Deep link into a tab, e.g. /dashboard#agreed, or straight into
     // one conversation: #messages-<proposal id>, which is what the "you have
     // a new message" email and the notification bell link to. Without this
     // the link landed on whichever tab happened to be first and left the
@@ -1911,7 +1911,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (threadMatch) openThreadFromHash(Number(threadMatch[1]));
 
     // The same links, followed while already on this page. The bell in the
-    // nav points at ppdashboard.html#incoming and #messages-<id>; from the
+    // nav points at /dashboard#incoming and #messages-<id>; from the
     // dashboard itself those are same-document navigations, which fire no
     // load and, until this, changed nothing but the address bar. A thread
     // link is preceded by a reload, because the notification that led here

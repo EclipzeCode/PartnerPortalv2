@@ -80,7 +80,7 @@ def create_admin(email, name):
                 password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
         ))
         db.commit()
-        print("Created. Sign in at /admin.html")
+        print("Created. Sign in at /admin")
         return 0
     finally:
         db.close()
@@ -335,7 +335,7 @@ def import_invites(path, inviter_email, dry_run=False):
                 print(f"  invited {invited.name!r}: emailed {email}")
             else:
                 print(f"  invited {invited.name!r}: "
-                      f"{base}/claim.html?token={token}")
+                      f"{base}/claim?token={token}")
         print(f"Invited {len(made)}, skipped {len(skipped)}.")
         return 0
     finally:

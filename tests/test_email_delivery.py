@@ -512,7 +512,7 @@ def test_an_optional_message_carries_a_list_unsubscribe_header(monkeypatch):
     assert notifications._send("a@example.com", "s", "<p>h</p>", "t",
                                optional=True) is True
     assert seen[0]["headers"] == {
-        "List-Unsubscribe": "<https://pp.example.org/settings.html>"}
+        "List-Unsubscribe": "<https://pp.example.org/settings>"}
 
 
 def test_a_transactional_message_does_not(monkeypatch):

@@ -56,7 +56,7 @@ def test_a_link_preview_cannot_inflate_the_count(client, login, make_org):
     me = make_org(needs=["web_development"], offers=["grant_writing"])
 
     for _ in range(5):
-        client.get(f"/organization.html?id={me.id}",
+        client.get(f"/organization?id={me.id}",
                    headers={"User-Agent": "Slackbot-LinkExpanding 1.0"})
 
     login(me)

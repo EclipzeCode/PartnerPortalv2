@@ -98,7 +98,7 @@ def test_an_id_too_large_for_the_column_is_not_found_rather_than_a_500(
     # Unauthenticated, which is the one a crawler reaches.
     assert client.get(f"/api/organizations/{huge}/public").status_code == 404
     # The page behind it falls back to its generic link preview.
-    assert client.get(f"/organization.html?id={huge}").status_code == 200
+    assert client.get(f"/organization?id={huge}").status_code == 200
 
     me = make_org(needs=["web_development"], offers=["grant_writing"])
     login(me)

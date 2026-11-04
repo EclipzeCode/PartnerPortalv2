@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 If an account exists for <strong>${escapeHtml(email)}</strong>,
                 a password reset link is on its way. It expires in 1 hour.
             </p>
-            <a class="btn-primary" href="pplogin.html">Back to sign in</a>
+            <a class="btn-primary" href="/login">Back to sign in</a>
         `;
     }
 

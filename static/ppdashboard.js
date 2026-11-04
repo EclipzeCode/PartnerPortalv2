@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const viewProfileBtn = document.getElementById('viewProfileBtn');
     if (viewProfileBtn) {
-        viewProfileBtn.href = `organization.html?id=${encodeURIComponent(org.id)}`;
+        viewProfileBtn.href = `/organization?id=${encodeURIComponent(org.id)}`;
     }
 
     // Only surfaced once the profile is finished. Before that, "verify your
@@ -120,9 +120,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inviterBanner && inviter && !dashboard.needs_onboarding) {
         document.getElementById('inviterName').textContent = inviter.name;
         document.getElementById('inviterProfile').href =
-            `organization.html?id=${encodeURIComponent(inviter.id)}`;
+            `/organization?id=${encodeURIComponent(inviter.id)}`;
         document.getElementById('inviterPropose').href =
-            `ppsearch.html?org=${encodeURIComponent(inviter.id)}&propose=1`;
+            `/search?org=${encodeURIComponent(inviter.id)}&propose=1`;
         inviterBanner.hidden = false;
     }
 
@@ -1879,11 +1879,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <dl class="stat-detail-grid is-spaced" id="statContact"></dl>
             <div class="stat-detail-actions">
-                <a class="btn-primary" href="organization.html?id=${encodeURIComponent(m.id)}"
+                <a class="btn-primary" href="/organization?id=${encodeURIComponent(m.id)}"
                    target="_blank" rel="noopener">
                     <i class='bx bx-id-card'></i> View public profile
                 </a>
-                <a class="btn-ghost" href="ppsearch.html?org=${
+                <a class="btn-ghost" href="/search?org=${
                     encodeURIComponent(m.id)}&propose=1">Propose a partnership</a>
             </div>`;
     }
@@ -1947,7 +1947,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 in, so there is no one to name.
             </p>
             <div class="stat-detail-actions">
-                <a class="btn-ghost" href="analytics.html">
+                <a class="btn-ghost" href="/analytics">
                     <i class='bx bx-line-chart'></i> Day by day, in Analytics
                 </a>
             </div>`;
@@ -2200,13 +2200,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <li class="${r.status === 'open' ? '' : 'done'}">
                     <span class="request-kind ${esc(r.kind)}">${
                         r.kind === 'need' ? 'Need' : 'Offer'}</span>
-                    <a href="requests.html?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
+                    <a href="/requests?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
                     <span class="request-state">${esc(state)}</span>
                 </li>`;
         }).join('') : `
             <li class="requests-empty">
                 Need something specific, or have something to give right now?
-                <a href="requests.html">Post it on the board</a> and matching
+                <a href="/requests">Post it on the board</a> and matching
                 organizations hear about it.
             </li>`;
     } catch (error) {

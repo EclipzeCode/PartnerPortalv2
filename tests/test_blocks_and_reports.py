@@ -154,9 +154,9 @@ def test_only_a_party_can_report(client, login, pair, make_org):
 
 def test_search_indexing_is_opt_in(client, login, make_org):
     org = make_org(name="pytest searchable")
-    page = client.get(f"/organization.html?id={org.id}").get_data(as_text=True)
+    page = client.get(f"/organization?id={org.id}").get_data(as_text=True)
     assert 'content="noindex, nofollow"' in page
-    assert f"organization.html?id={org.id}" not in client.get(
+    assert f"/organization?id={org.id}" not in client.get(
         "/sitemap.xml").get_data(as_text=True)
 
     login(org)
@@ -167,10 +167,10 @@ def test_search_indexing_is_opt_in(client, login, make_org):
     assert response.get_json()["organization"]["searchable"] is True
     client.post("/logout")
 
-    page = client.get(f"/organization.html?id={org.id}").get_data(as_text=True)
+    page = client.get(f"/organization?id={org.id}").get_data(as_text=True)
     assert 'content="index, follow"' in page
     assert 'content="noindex' not in page
-    assert f"organization.html?id={org.id}" in client.get(
+    assert f"/organization?id={org.id}" in client.get(
         "/sitemap.xml").get_data(as_text=True)
 
 

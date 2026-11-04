@@ -25,7 +25,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 from flask import (
-    Flask, jsonify, request, session
+    Flask, jsonify, redirect, request, session
 )
 
 from sqlalchemy import and_, case, func, or_, select, text
@@ -1943,19 +1943,59 @@ def _pages():
     return _PAGES
 
 
+# The address each page goes by. The files keep their names; these are what a
+# visitor sees. /login and /forgot-password are also POST routes, which is fine:
+# the rules here answer GET.
+PAGE_URLS = {
+    "/": "index.html",
+    "/admin": "admin.html",
+    "/analytics": "analytics.html",
+    "/claim": "claim.html",
+    "/confirm-email": "confirm-email.html",
+    "/dashboard": "ppdashboard.html",
+    "/directory": "directory.html",
+    "/forgot-password": "forgot-password.html",
+    "/help": "pphelp.html",
+    "/login": "pplogin.html",
+    "/onboarding": "onboarding.html",
+    "/organization": "organization.html",
+    "/partnership": "partnership.html",
+    "/privacy": "privacy.html",
+    "/requests": "requests.html",
+    "/reset-password": "reset-password.html",
+    "/search": "ppsearch.html",
+    "/settings": "settings.html",
+    "/verify-email": "verify-email.html",
+}
+_PAGE_ADDRESSES = {filename: url for url, filename in PAGE_URLS.items()}
+
+
 @app.route("/<page>.html")
 def html_page(page):
-    """Serve any frontend page, stamped.
+    """Send an old .html address to the page's real one.
 
-    Registered explicitly rather than left to Flask's static route, which
-    would answer the conditional request itself using the file's mtime --
-    see serve_page. organization.html and partnership.html have their own
-    routes above this one and are unaffected.
+    Mail already sent links here, so these stay for good; the browser carries
+    the #fragment across the redirect, and the query is carried here. Only the
+    error pages have no other address, and are served as they are.
     """
     filename = f"{page}.html"
     if filename not in _pages():
         return not_found(None)
-    return serve_page(filename)
+    url = _PAGE_ADDRESSES.get(filename)
+    if url is None:
+        return serve_page(filename)
+    query = request.query_string.decode()
+    return redirect(f"{url}?{query}" if query else url, code=301)
+
+
+def _page_view(filename):
+    return lambda: serve_page(filename)
+
+
+for _url, _filename in PAGE_URLS.items():
+    # These two have routes of their own, above.
+    if _url not in ("/organization", "/partnership", "/"):
+        app.add_url_rule(_url, _url, _page_view(_filename))
 
 
 # The pages worth offering a crawler: public, meaningful without an account,
@@ -2136,23 +2176,23 @@ def robots_txt():
         "Disallow: /api/",
         # Signed out, these render an empty shell and a redirect to login.
         # Indexed, that shell is what a search result would show.
-        "Disallow: /analytics.html",
-        "Disallow: /onboarding.html",
-        "Disallow: /ppdashboard.html",
-        "Disallow: /ppsearch.html",
-        "Disallow: /settings.html",
+        "Disallow: /analytics",
+        "Disallow: /onboarding",
+        "Disallow: /dashboard",
+        "Disallow: /search",
+        "Disallow: /settings",
         # Not a page anybody but an operator has business fetching. It
         # answers 404 without an admin session, so this is not what keeps it
         # private -- it saves a crawler the request, and says out loud that
         # the page is not for them.
-        "Disallow: /admin.html",
+        "Disallow: /admin",
         # Reached only from a link in an email, and single-use. They carry
         # noindex too; this saves the fetch that would read it.
-        "Disallow: /claim.html",
-        "Disallow: /confirm-email.html",
-        "Disallow: /forgot-password.html",
-        "Disallow: /reset-password.html",
-        "Disallow: /verify-email.html",
+        "Disallow: /claim",
+        "Disallow: /confirm-email",
+        "Disallow: /forgot-password",
+        "Disallow: /reset-password",
+        "Disallow: /verify-email",
         "",
         f"Sitemap: {request.url_root.rstrip('/')}/sitemap.xml",
         "",
@@ -2176,7 +2216,7 @@ def sitemap_xml():
     root = request.url_root.rstrip("/")
     urls = []
     for name in _SITEMAP_PAGES:
-        loc = root + "/" + name
+        loc = root + _PAGE_ADDRESSES[name]
         try:
             mtime = os.path.getmtime(os.path.join(STATIC_DIR, name))
         except OSError:
@@ -2205,7 +2245,7 @@ def sitemap_xml():
         db.close()
     for org_id in ids:
         urls += ["  <url>",
-                 f"    <loc>{escape(root)}/organization.html?id={org_id}</loc>",
+                 f"    <loc>{escape(root)}/organization?id={org_id}</loc>",
                  "  </url>"]
 
     body = "\n".join([
@@ -2735,7 +2775,7 @@ _NOINDEX_TAG = '<meta name="robots" content="noindex, nofollow">'
 _INDEX_TAG = '<meta name="robots" content="index, follow">'
 
 
-@app.route("/organization.html")
+@app.route("/organization")
 def organization_page():
     """Same file static/organization.html serves, with real og: tags on top.
 
@@ -2782,7 +2822,7 @@ def organization_page():
     return serve_page("organization.html", html=html)
 
 
-@app.route("/partnership.html")
+@app.route("/partnership")
 def partnership_page():
     """Same file static/partnership.html serves, with real og: tags on top.
 
@@ -6992,7 +7032,7 @@ def _invite_dict(row, raw_token=None, base_url=""):
         "invited_at": row.invited_at.isoformat() if row.invited_at else None,
     }
     if raw_token:
-        data["claim_url"] = f"{base_url}/claim.html?token={raw_token}"
+        data["claim_url"] = f"{base_url}/claim?token={raw_token}"
     return data
 
 
@@ -7559,7 +7599,7 @@ def _notifications_for(db, org):
             # reads as a badge that does not work rather than as work that
             # is still waiting.
             "seen": bool(seen_at is not None and at <= seen_at),
-            "href": f"ppdashboard.html#{tab}",
+            "href": f"/dashboard#{tab}",
         }
         if count is not None:
             entry["count"] = count
@@ -7653,7 +7693,7 @@ def _notifications_for(db, org):
             "category_label": label_for(req.category),
             "actionable": False,
             "seen": bool(seen_at is not None and req.created_at <= seen_at),
-            "href": f"requests.html?id={req.id}",
+            "href": f"/requests?id={req.id}",
         })
 
     by_id = {p.id: p for p in rows}
@@ -10355,7 +10395,7 @@ def accept_proposal(org, db, proposal_id):
                     if proposal.origin == Partnership.RECORDED
                     else "Partnership agreed"),
         "proposal": proposal.to_dict(viewer_id=org.id),
-        "share_url": f"/partnership.html?token={proposal.share_token}",
+        "share_url": f"/partnership?token={proposal.share_token}",
     })
 
 
@@ -10632,7 +10672,7 @@ def rotate_share_link(org, db, proposal_id):
     return jsonify({
         "message": "New link created. The previous one no longer works.",
         "share_token": proposal.share_token,
-        "share_url": f"/partnership.html?token={proposal.share_token}",
+        "share_url": f"/partnership?token={proposal.share_token}",
     })
 
 

@@ -32,7 +32,7 @@ def test_a_server_error_serves_the_500_page_not_a_traceback(client, monkeypatch)
 
     # A route that actually reaches for a session -- /api/categories serves
     # from constants and would never notice the database was gone.
-    response = client.get("/organization.html?id=1")
+    response = client.get("/organization?id=1")
     assert response.status_code == 500
     body = response.get_data(as_text=True)
     assert "Something went wrong on our end" in body
@@ -62,13 +62,13 @@ def test_shareable_pages_carry_real_open_graph_tags(client, make_org):
                    offers=["grant_writing"],
                    description="A description that should reach the preview.")
 
-    body = client.get(f"/organization.html?id={org.id}").get_data(as_text=True)
+    body = client.get(f"/organization?id={org.id}").get_data(as_text=True)
     assert 'property="og:title"' in body
     assert "pytest OG org" in body
     assert "A description that should reach the preview." in body
 
     # An unknown id still previews, rather than 404ing the page itself.
-    fallback = client.get("/organization.html?id=999999999")
+    fallback = client.get("/organization?id=999999999")
     assert fallback.status_code == 200
     assert 'property="og:title"' in fallback.get_data(as_text=True)
 
@@ -84,7 +84,7 @@ def test_the_preview_image_is_absolute(client):
     """
     import re
 
-    body = client.get("/organization.html?id=1",
+    body = client.get("/organization?id=1",
                       base_url="https://example.test").get_data(as_text=True)
     image = re.search(r'<meta property="og:image" content="([^"]+)"', body)
     assert image, "no og:image tag"
@@ -98,3 +98,14 @@ def test_the_preview_image_is_absolute(client):
     # summary, the default, crops a 1200x630 card to a square thumbnail.
     assert 'name="twitter:card" content="summary_large_image"' in body
     assert '<meta property="og:image:width" content="1200">' in body
+
+
+def test_old_page_addresses_redirect_and_keep_their_query(client):
+    moved = client.get("/ppsearch.html?org=5")
+    assert moved.status_code == 301
+    assert moved.headers["Location"] == "/search?org=5"
+    assert client.get("/index.html").headers["Location"] == "/"
+    assert client.get("/search").status_code == 200
+    assert client.get("/login").status_code == 200
+    # The error pages have no other address.
+    assert client.get("/404.html").status_code == 200

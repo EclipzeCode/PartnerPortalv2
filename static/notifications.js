@@ -192,7 +192,7 @@
         // this, and it never was.
         //
         // Today every href here is built by the server as
-        // "ppdashboard.html#<tab>" (see app.py), which is why this has been
+        // "/dashboard#<tab>" (see app.py), which is why this has been
         // fine. That is a fact about one f-string, not a property of the
         // endpoint, and the fix belongs at the sink either way: this is the
         // one place in the codebase where a URL reaches an href without a
@@ -350,7 +350,7 @@
             toggle.focus();
         });
 
-        // Every item links to ppdashboard.html#<tab or thread>. From the
+        // Every item links to /dashboard#<tab or thread>. From the
         // dashboard itself that is a same-document navigation, which the
         // dashboard handles through `hashchange` -- except that the browser
         // fires none when the hash is already what the link names, so a

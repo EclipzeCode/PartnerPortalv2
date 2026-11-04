@@ -6,7 +6,7 @@
 // their profile first.
 //
 // Answering does not happen here. It opens the proposal form on the matches
-// page with the request attached (ppsearch.html?org=&propose=1&request=), so
+// page with the request attached (/search?org=&propose=1&request=), so
 // the terms, counters and messages are the ones every partnership uses.
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -122,10 +122,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function respondHref(req) {
-        const target = `ppsearch.html?org=${encodeURIComponent(req.organization.id)}`
+        const target = `/search?org=${encodeURIComponent(req.organization.id)}`
             + `&propose=1&request=${encodeURIComponent(req.id)}`;
         return state.signedIn ? target
-            : `pplogin.html?next=${encodeURIComponent(target)}`;
+            : `/login?next=${encodeURIComponent(target)}`;
     }
 
     function actions(req) {
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <ul class="req-responses">
                 ${req.responses.map((r) => `
                     <li>
-                        <a href="ppdashboard.html#incoming">${esc(r.organization || 'An organization')}</a>
+                        <a href="/dashboard#incoming">${esc(r.organization || 'An organization')}</a>
                         <span class="req-response-status">${esc(r.status)}</span>
                     </li>`).join('')}
             </ul>` : '';
@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <h2 class="dir-name req-title">${esc(req.title)}</h2>
                 <p class="dir-meta">
-                    <a href="organization.html?id=${encodeURIComponent(org.id)}">${esc(org.name || '')}</a>${
+                    <a href="/organization?id=${encodeURIComponent(org.id)}">${esc(org.name || '')}</a>${
                         meta ? ` &middot; ${meta}` : ''}
                 </p>
                 ${req.details ? `<p class="dir-bio${focused ? ' full' : ''}">${esc(req.details)}</p>` : ''}
@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.showDialog(modal, document.getElementById('reqTitle'));
     }
 
-    // Not the plain "pplogin.html#signup": common.js rewrites that exact
+    // Not the plain "/login#signup": common.js rewrites that exact
     // link for signed-in visitors into "Go to your dashboard".
     postBtn.addEventListener('click', (e) => {
         if (!state.signedIn) return; // the href goes to signup

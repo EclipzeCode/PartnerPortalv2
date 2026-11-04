@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `
             <article class="dir-card">
                 <h2 class="dir-name">
-                    <a href="organization.html?id=${encodeURIComponent(org.id)}">${esc(org.name)}</a>
+                    <a href="/organization?id=${encodeURIComponent(org.id)}">${esc(org.name)}</a>
                 </h2>
                 ${meta ? `<p class="dir-meta">${meta}</p>` : ''}
                 ${org.remote_friendly ? `
@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
                 <a class="dir-open"
-                   href="organization.html?id=${encodeURIComponent(org.id)}">
+                   href="/organization?id=${encodeURIComponent(org.id)}">
                     See full profile <i class='bx bx-right-arrow-alt' aria-hidden="true"></i>
                 </a>
             </article>`;
@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ${filtered
                     ? '<button type="button" class="btn-ghost" id="dirEmptyClear">'
                       + 'Clear filters</button>'
-                    : '<a class="btn-primary" href="pplogin.html#signup">'
+                    : '<a class="btn-primary" href="/login#signup">'
                       + 'Be the first</a>'}
             </div>`;
         const btn = document.getElementById('dirEmptyClear');

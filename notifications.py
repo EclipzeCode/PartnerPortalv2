@@ -501,7 +501,7 @@ def _config():
         # Where the "View proposal" links point. Defaults to localhost so
         # local development stays self-contained.
         #
-        # Every proposal link below is built against /ppdashboard.html, and
+        # Every proposal link below is built against /dashboard, and
         # NOT /proposals.html. There is no proposals.html -- proposals.js
         # renders the partnership list and the message threads inside the
         # dashboard page. The links pointed at the old filename long after it
@@ -537,7 +537,7 @@ def _send_via_resend(cfg, to_addr, subject, html, text, reply_to=None,
     # category and a click on a header cannot say which.
     if optional:
         payload["headers"] = {
-            "List-Unsubscribe": f"<{cfg['app_url']}/settings.html>",
+            "List-Unsubscribe": f"<{cfg['app_url']}/settings>",
         }
     # Only the contact form sets this. The From address has to stay a verified
     # sender -- putting a visitor's address there is what gets a domain
@@ -644,7 +644,7 @@ def _preferences_note(html, text):
     Spliced in ahead of the closing tags rather than written into eight
     templates, so the eight cannot drift.
     """
-    url = f"{_config()['app_url']}/settings.html"
+    url = f"{_config()['app_url']}/settings"
     note_html = (f'<p class="foot">Change which emails you get: '
                  f'<a href="{escape(url)}">notification settings</a>.</p>\n')
     html = html.replace("</div></body></html>", note_html + "</div></body></html>", 1)
@@ -759,7 +759,7 @@ def notify_proposal_created(proposal):
                              else ("They would provide", "You would provide"))
     subject = (f"{proposer} recorded a partnership with you — confirm it"
                if recorded else f"{proposer} proposed a partnership with you")
-    review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
+    review_url = f"{cfg['app_url']}/dashboard#incoming"
 
     # Both sides through term_lines, so a quantity shows on what they would
     # provide as well as on what the reader would. This used to format the
@@ -837,7 +837,7 @@ def notify_proposal_updated(proposal, editor, countered=None):
     subject = (f"{editor.name} proposed changes to your partnership proposal"
                if countered
                else f"{editor.name} updated their partnership proposal")
-    review_url = f"{cfg['app_url']}/ppdashboard.html#incoming"
+    review_url = f"{cfg['app_url']}/dashboard#incoming"
 
     they_give_labels = proposal.term_lines(
         proposal.gives_for(editor.id), proposal.quantities_for(editor.id))
@@ -924,11 +924,11 @@ def notify_proposal_responded(proposal, responder_org):
                   if proposal.response_message else "")
 
     if accepted:
-        share_url = (f"{cfg['app_url']}/partnership.html?"
+        share_url = (f"{cfg['app_url']}/partnership?"
                      f"token={proposal.share_token}") if proposal.share_token else None
         headline = "Both sides confirmed. You have a partnership."
         cta_label = "View the agreement"
-        cta_url = share_url or f"{cfg['app_url']}/ppdashboard.html#agreed"
+        cta_url = share_url or f"{cfg['app_url']}/dashboard#agreed"
         text_body = (
             f"{subject} on PartnerPortal.\n"
             f"You can now share the agreement summary with anyone: {cta_url}\n"
@@ -936,7 +936,7 @@ def notify_proposal_responded(proposal, responder_org):
     else:
         headline = f"{responder} said no this time."
         cta_label = "See details"
-        cta_url = f"{cfg['app_url']}/ppdashboard.html#closed"
+        cta_url = f"{cfg['app_url']}/dashboard#closed"
         text_body = (
             f"{subject} on PartnerPortal.\n"
             f"You can propose again to them later, or find other partners: "
@@ -975,7 +975,7 @@ def notify_completion_marked(proposal, actor):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    review_url = f"{cfg['app_url']}/ppdashboard.html#agreed"
+    review_url = f"{cfg['app_url']}/dashboard#agreed"
 
     subject = f"{actor.name} marked your partnership complete"
     html = f"""\
@@ -1007,9 +1007,9 @@ def notify_partnership_completed(proposal, other):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    url = (f"{cfg['app_url']}/partnership.html?token={proposal.share_token}"
+    url = (f"{cfg['app_url']}/partnership?token={proposal.share_token}"
            if proposal.share_token
-           else f"{cfg['app_url']}/ppdashboard.html#agreed")
+           else f"{cfg['app_url']}/dashboard#agreed")
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1042,7 +1042,7 @@ def notify_partnership_ended(proposal, actor):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    url = f"{cfg['app_url']}/ppdashboard.html#closed"
+    url = f"{cfg['app_url']}/dashboard#closed"
 
     reason_html = (f'<div class="quote">{escape(proposal.end_reason)}</div>'
                    if proposal.end_reason else "")
@@ -1088,7 +1088,7 @@ def notify_message_received(proposal, sender, message):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    thread_url = f"{cfg['app_url']}/ppdashboard.html#messages-{proposal.id}"
+    thread_url = f"{cfg['app_url']}/dashboard#messages-{proposal.id}"
 
     subject = f"{sender.name} sent you a message"
     html = f"""\
@@ -1126,7 +1126,7 @@ def notify_matching_requests(org, requests):
         return
     cfg = _config()
     to_addr = org.contact_email or org.email
-    board_url = f"{cfg['app_url']}/requests.html"
+    board_url = f"{cfg['app_url']}/requests"
 
     def line(req):
         poster = req.organization.name if req.organization else "An organization"
@@ -1190,7 +1190,7 @@ def notify_email_verification(org, token):
     could otherwise never verify, and never find out why.
     """
     cfg = _config()
-    verify_url = f"{cfg['app_url']}/verify-email.html?token={token}"
+    verify_url = f"{cfg['app_url']}/verify-email?token={token}"
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1228,7 +1228,7 @@ def notify_meeting_update(event, proposal, actor, what):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    thread_url = f"{cfg['app_url']}/ppdashboard.html#messages-{proposal.id}"
+    thread_url = f"{cfg['app_url']}/dashboard#messages-{proposal.id}"
 
     day = event.date.strftime("%A, %B %d").replace(" 0", " ")
     if event.all_day:
@@ -1299,7 +1299,7 @@ def notify_invitation(inviter, invited, to_addr, token, proposal=None):
     so a reply goes to the person who actually knows them.
     """
     cfg = _config()
-    claim_url = f"{cfg['app_url']}/claim.html?token={token}"
+    claim_url = f"{cfg['app_url']}/claim?token={token}"
     reply_to = inviter.contact_email or inviter.email
 
     # When the invitation comes from recording a partnership, that
@@ -1374,7 +1374,7 @@ def notify_password_reset(org, token):
     good.
     """
     cfg = _config()
-    reset_url = f"{cfg['app_url']}/reset-password.html?token={token}"
+    reset_url = f"{cfg['app_url']}/reset-password?token={token}"
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1413,7 +1413,7 @@ def notify_share_link_changed(proposal, actor, revoked):
         return
     cfg = _config()
     to_addr = other.contact_email or other.email
-    url = f"{cfg['app_url']}/ppdashboard.html#agreed"
+    url = f"{cfg['app_url']}/dashboard#agreed"
 
     what = ("revoked the public link for" if revoked
             else "created a new public link for")
@@ -1454,7 +1454,7 @@ def notify_email_change_requested(org, token):
     a change it had started.
     """
     cfg = _config()
-    confirm_url = f"{cfg['app_url']}/confirm-email.html?token={token}"
+    confirm_url = f"{cfg['app_url']}/confirm-email?token={token}"
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1489,7 +1489,7 @@ def notify_email_change_notice(org):
     it. This is the only warning that lands somewhere they still read.
     """
     cfg = _config()
-    settings_url = f"{cfg['app_url']}/settings.html"
+    settings_url = f"{cfg['app_url']}/settings"
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1534,14 +1534,14 @@ def notify_email_changed_by_admin(org, previous):
   {escape(previous)} to {escape(org.email)}.</p>
 
   <p class="foot">If you did not ask for this, contact us right away at
-  {escape(cfg['app_url'])}/pphelp.html.</p>
+  {escape(cfg['app_url'])}/help.</p>
 </div></body></html>
 """
     text = (
         f"A PartnerPortal administrator moved {org.name} from {previous} to "
         f"{org.email}.\n\n"
         f"If you did not ask for this, contact us right away: "
-        f"{cfg['app_url']}/pphelp.html\n"
+        f"{cfg['app_url']}/help\n"
     )
     _dispatch(previous, "Your PartnerPortal sign-in email was changed",
               html, text)
@@ -1565,7 +1565,7 @@ def notify_password_changed(org):
     are about other people's activity, not about your own account.
     """
     cfg = _config()
-    reset_url = f"{cfg['app_url']}/forgot-password.html"
+    reset_url = f"{cfg['app_url']}/forgot-password"
 
     html = f"""\
 <!doctype html><html><head><meta charset="utf-8">{_EMAIL_STYLE}</head>
@@ -1662,7 +1662,7 @@ def notify_profile_hidden(org, reason, hidden):
     """
     cfg = _config()
     to_addr = org.email
-    settings_url = f"{cfg['app_url']}/settings.html"
+    settings_url = f"{cfg['app_url']}/settings"
 
     if hidden:
         subject = "Your PartnerPortal profile is not currently listed"

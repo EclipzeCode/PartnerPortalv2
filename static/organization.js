@@ -57,7 +57,7 @@
     // Signed-in extras. A 401 here is the normal case for a public visitor,
     // so it is swallowed rather than surfaced.
     // Also decides where "Find partners like this" goes below. This page has
-    // no navbar, so common.js's routing of ppsearch.html vs directory.html
+    // no navbar, so common.js's routing of /search vs /directory
     // never runs here; a signed-out visitor following a shared link used to
     // click it and land on the sign-in wall instead of the public directory.
     let viewer = null;
@@ -141,8 +141,8 @@
                 <p class="org-contact-locked-inline">
                     <i class='bx bx-lock-alt'></i>
                     Contact details are shown to signed-in organizations.
-                    <a href="pplogin.html">Sign in</a> or
-                    <a href="pplogin.html#signup">create a profile</a> to get in touch.
+                    <a href="/login">Sign in</a> or
+                    <a href="/login#signup">create a profile</a> to get in touch.
                 </p>
             </section>`;
     } else {
@@ -151,8 +151,8 @@
                 <p>
                     <i class='bx bx-lock-alt'></i>
                     Contact details are shown to signed-in organizations.
-                    <a href="pplogin.html">Sign in</a> or
-                    <a href="pplogin.html#signup">create a profile</a> to get in touch.
+                    <a href="/login">Sign in</a> or
+                    <a href="/login#signup">create a profile</a> to get in touch.
                 </p>
             </section>`;
     }
@@ -183,7 +183,7 @@
         `<button type="button" class="btn-share" id="shareBtn">
             <i class='bx bx-link'></i> Copy link to this profile
         </button>`,
-        self ? `<a class="btn-find" href="onboarding.html">
+        self ? `<a class="btn-find" href="/onboarding">
                     <i class='bx bx-edit'></i> Edit your profile
                 </a>` : '',
         other ? `
@@ -192,11 +192,11 @@
                 <i class='bx ${viewer.shortlisted ? 'bxs-bookmark' : 'bx-bookmark'}'></i>
                 <span>${viewer.shortlisted ? 'Saved' : 'Save for later'}</span>
             </button>
-            <a class="btn-find" href="ppsearch.html?org=${encodeURIComponent(org.id)}&propose=1">
+            <a class="btn-find" href="/search?org=${encodeURIComponent(org.id)}&propose=1">
                 <i class='bx bx-handshake'></i> Propose a partnership
             </a>` : '',
         self ? '' : `<a class="${other ? 'btn-share' : 'btn-find'}"
-               href="${viewer ? 'ppsearch.html' : 'directory.html'}">Find partners like this</a>`,
+               href="${viewer ? '/search' : '/directory'}">Find partners like this</a>`,
     ].join('');
 
     card.innerHTML = `
@@ -289,7 +289,7 @@
                     <li>
                         <span class="org-request-kind ${esc(r.kind)}">${
                             r.kind === 'need' ? 'Needs' : 'Offering'}</span>
-                        <a href="requests.html?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
+                        <a href="/requests?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>
                         <span class="org-request-cat">${esc(r.category_label)}</span>
                     </li>`).join('')}
                 </ul>`;

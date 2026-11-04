@@ -370,9 +370,9 @@ def test_the_record_outlives_the_admin(client, session, make_admin,
 # --- Crawlers --------------------------------------------------------------
 
 def test_the_panel_is_kept_out_of_every_index(client):
-    assert "Disallow: /admin.html" in client.get("/robots.txt").get_data(as_text=True)
-    assert "admin.html" not in client.get("/sitemap.xml").get_data(as_text=True)
-    assert 'content="noindex' in client.get("/admin.html").get_data(as_text=True)
+    assert "Disallow: /admin" in client.get("/robots.txt").get_data(as_text=True)
+    assert "/admin" not in client.get("/sitemap.xml").get_data(as_text=True)
+    assert 'content="noindex' in client.get("/admin").get_data(as_text=True)
 
 
 # --- Reading a reported conversation -----------------------------------------

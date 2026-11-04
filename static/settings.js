@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         : 'Not finished';
 
     const publicLink = document.getElementById('viewPublicProfile');
-    publicLink.href = `organization.html?id=${encodeURIComponent(me.id)}`;
+    publicLink.href = `/organization?id=${encodeURIComponent(me.id)}`;
 
     // --- Changing the sign-in email ----------------------------------------
     // Nothing moves here. The request holds the new address on the account
@@ -539,7 +539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // The session is already cleared server-side. replace() rather
             // than href so Back cannot return to a settings page for an
             // account that no longer exists.
-            location.replace('index.html?deleted=1');
+            location.replace('/?deleted=1');
         } catch (error) {
             // The server says which field is at fault when one is; anything
             // else (rate limiting, a server error) is not about the password

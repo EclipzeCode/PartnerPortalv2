@@ -202,12 +202,12 @@ window.api = async function api(path, options = {}) {
     // of being sent to sign in.
     if (result.status === 401 && !opts.allowUnauthenticated) {
         // The whole address, not just the page: every email links to a tab
-        // or a thread (ppdashboard.html#incoming, #messages-12), and a
+        // or a thread (/dashboard#incoming, #messages-12), and a
         // recipient who is signed out used to land on the default tab with
         // the hash gone. pplogin.js checks the shape before following it.
         const here = encodeURIComponent(
             location.pathname.replace(/^\//, '') + location.search + location.hash);
-        location.href = `pplogin.html?next=${here}`;
+        location.href = `/login?next=${here}`;
         // Never resolves; the navigation is already underway.
         return new Promise(() => {});
     }
@@ -702,7 +702,7 @@ window.forgetSession = function forgetSession() {
 // Where "Connect" and "Find partners" go, and whether "Dashboard" is offered
 // at all.
 //
-// Both used to be one hardcoded answer -- ppsearch.html -- on every page,
+// Both used to be one hardcoded answer -- /search -- on every page,
 // which for a signed-out visitor was a link to a login form wearing the name
 // of the thing they wanted. The home page's own "Browse partners" button was
 // the worst of them: the directory is what this product has to show, and the
@@ -715,9 +715,9 @@ window.forgetSession = function forgetSession() {
 // signed in is what upgrades it.
 function routeSessionLinks(signedIn, me = null) {
     document.querySelectorAll(
-        'a[href="ppsearch.html"], a[href="directory.html"]'
+        'a[href="/search"], a[href="/directory"]'
     ).forEach((link) => {
-        link.href = signedIn ? 'ppsearch.html' : 'directory.html';
+        link.href = signedIn ? '/search' : '/directory';
     });
 
     // Offered only when it leads somewhere. Signed out it redirects to the
@@ -732,7 +732,7 @@ function routeSessionLinks(signedIn, me = null) {
     // a pointer to be followed, and signed out it lands on the login page
     // with ?next= set, which is the right answer there.
     document.querySelectorAll(
-        '.navbar a[href="ppdashboard.html"], footer a[href="ppdashboard.html"]'
+        '.navbar a[href="/dashboard"], footer a[href="/dashboard"]'
     ).forEach((link) => {
             const item = link.closest('li');
             (item || link).hidden = !signedIn;
@@ -744,7 +744,7 @@ function routeSessionLinks(signedIn, me = null) {
     // The footer's "Log In" is the same dead end signed in as the nav's
     // was, and it stayed put after the nav's copy learned to hide. Its list
     // item goes with it, as the dashboard's does above.
-    document.querySelectorAll('footer a[href="pplogin.html"]').forEach((link) => {
+    document.querySelectorAll('footer a[href="/login"]').forEach((link) => {
         const item = link.closest('li');
         (item || link).hidden = signedIn;
     });
@@ -758,9 +758,9 @@ function routeSessionLinks(signedIn, me = null) {
     // The footer's copies are hidden instead, since the same column
     // already carries Dashboard.
     const done = Boolean(me && me.onboarding_complete);
-    const destination = done ? 'ppdashboard.html' : 'onboarding.html';
+    const destination = done ? '/dashboard' : '/onboarding';
     const label = done ? 'Go to your dashboard' : 'Finish your profile';
-    document.querySelectorAll('a[href="pplogin.html#signup"]').forEach((link) => {
+    document.querySelectorAll('a[href="/login#signup"]').forEach((link) => {
         if (!signedIn) return;
         const item = link.closest('footer li');
         if (item) {
@@ -1029,7 +1029,7 @@ function wireAccountMenu() {
             // on after signing out does not briefly draw an avatar for an
             // account that just signed out of it.
             window.forgetSession();
-            location.href = 'index.html';
+            location.href = '/';
         });
     }
 }

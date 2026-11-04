@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await res.json();
         if (data.requests.length < 3) return;
         grid.innerHTML = data.requests.slice(0, 3).map((r) => `
-            <a class="latest-card" href="requests.html?id=${encodeURIComponent(r.id)}">
+            <a class="latest-card" href="/requests?id=${encodeURIComponent(r.id)}">
                 <span class="latest-kind ${esc(r.kind)}">${r.kind === 'need' ? 'Needs' : 'Offering'}</span>
                 <span class="latest-title">${esc(r.title)}</span>
                 <span class="latest-meta">${esc(r.organization ? r.organization.name : '')}

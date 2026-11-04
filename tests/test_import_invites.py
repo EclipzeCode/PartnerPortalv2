@@ -57,7 +57,7 @@ def test_the_example_imports_prefilled_and_claimable(
     # Mailed when the row had an address, printed when it did not.
     assert [args[2] for args in run.mailed] == ["hello@riversidetrust.example"]
     printed = capsys.readouterr().out
-    token = printed.split("claim.html?token=", 1)[1].split()[0]
+    token = printed.split("/claim?token=", 1)[1].split()[0]
 
     claimed = client.post(f"/api/invites/{token}/claim", json={
         "email": "pytest-printshop@example.com", "password": "Claim-1234!pass"})

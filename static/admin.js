@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // hide control lives on the flagged/hidden rows for what follows.
     function reportRow(r) {
         const profile = r.reported_id
-            ? `<a href="organization.html?id=${encodeURIComponent(r.reported_id)}"
+            ? `<a href="/organization?id=${encodeURIComponent(r.reported_id)}"
                   target="_blank" rel="noopener">Open ${esc(r.reported_name)}'s profile</a>`
             : '<span class="admin-dim">reported organization has closed its account</span>';
         return `
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   org.onboarding_complete ? ', listed' : ''}</span>`
             : org.hidden_at || !org.onboarding_complete
             ? `<span class="admin-dim">profile not listed</span>`
-            : `<a href="organization.html?id=${encodeURIComponent(org.id)}"
+            : `<a href="/organization?id=${encodeURIComponent(org.id)}"
                   target="_blank" rel="noopener">Open profile</a>`;
 
         const editBtn = `<button type="button" class="btn-ghost" data-edit="${org.id}">Edit</button>`;

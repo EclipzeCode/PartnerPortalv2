@@ -87,7 +87,7 @@ def due(db, now):
                     f"answer for {(now - started).days} days.")
         add(waiting_on, "proposal", f"{p.id}:{started:%Y%m%d%H%M%S}", text,
             [("Review partnership" if p.origin == Partnership.RECORDED
-              else "Review proposal", f"/ppdashboard.html#messages-{p.id}")])
+              else "Review proposal", f"/dashboard#messages-{p.id}")])
 
     # Requests about to come off the board. The expiry date is part of the
     # item, so extending one makes the next expiry remindable.
@@ -100,8 +100,8 @@ def due(db, now):
         add(r.organization, "request_ending", f"{r.id}:{r.expires_on}",
             f'Your request "{r.title}" comes off the board on '
             f"{r.expires_on:%B} {r.expires_on.day}.",
-            [("Extend 30 days", f"/requests.html?id={r.id}"),
-             ("Close it", f"/requests.html?id={r.id}")])
+            [("Extend 30 days", f"/requests?id={r.id}"),
+             ("Close it", f"/requests?id={r.id}")])
 
     # Agreed partnerships past their end date, to each side that has not
     # marked them complete: once at three days, again at fourteen. A run
@@ -118,7 +118,7 @@ def due(db, now):
                 f"Your partnership with {other['name']} ended on "
                 f"{p.ends_on:%B} {p.ends_on.day}. Mark it complete once "
                 f"you are done.",
-                [("Mark complete", f"/ppdashboard.html#messages-{p.id}")])
+                [("Mark complete", f"/dashboard#messages-{p.id}")])
 
     recent = Organization.created_at >= now - ACCOUNT_LOOKBACK
     claimed = and_(Organization.password_hash.isnot(None),
@@ -130,7 +130,7 @@ def due(db, now):
         add(org, "profile", "1",
             "Your profile is not finished, so nobody can find you or "
             "propose a partnership yet.",
-            [("Finish your profile", "/onboarding.html")])
+            [("Finish your profile", "/onboarding")])
     for org in db.query(Organization).filter(
             claimed, recent,
             Organization.email_verified.is_(False),
@@ -138,7 +138,7 @@ def due(db, now):
         add(org, "verify", "1",
             "Your email address is not verified yet, so you cannot send "
             "proposals.",
-            [("Send a new link", "/settings.html")])
+            [("Send a new link", "/settings")])
 
     return found
 
@@ -250,7 +250,7 @@ def run_matches(db, now=None, dry_run=False, out=print):
                 "text": f"{them.name}{where}: {why}."
                         + (" A two-way match." if mutual else ""),
                 "actions": [("See their profile",
-                             f"/organization.html?id={them.id}")],
+                             f"/organization?id={them.id}")],
             }))
         if not items:
             continue

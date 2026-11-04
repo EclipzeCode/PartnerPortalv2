@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="reset-icon ${esc(tone)}"><i class='bx ${esc(icon)}'></i></div>
             <h1>${esc(title)}</h1>
             <p class="reset-body">${body}</p>
-            <a class="btn-primary" href="forgot-password.html">Request a new link</a>
+            <a class="btn-primary" href="/forgot-password">Request a new link</a>
         `;
     }
 
@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button type="submit" class="btn-primary" id="submitBtn">Reset password</button>
             </form>
 
-            <a href="pplogin.html" class="reset-back-link">&larr; Back to sign in</a>
+            <a href="/login" class="reset-back-link">&larr; Back to sign in</a>
         `;
         wireForm();
     }
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // stop, not a second trip through the login form.
                 setBanner("Password reset. Signing you in...", 'success');
                 submitBtn.textContent = 'Redirecting...';
-                setTimeout(() => { window.location.href = 'ppdashboard.html'; }, 1200);
+                setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
             } catch {
                 setBanner('Could not reach PartnerPortal. Check your connection and try again.', 'error');
                 submitBtn.disabled = false;

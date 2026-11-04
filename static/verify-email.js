@@ -16,7 +16,7 @@
             <div class="verify-icon ${esc(tone)}"><i class='bx ${esc(icon)}'></i></div>
             <h1>${esc(title)}</h1>
             <p class="verify-body">${body}</p>
-            <a class="btn-primary" href="ppdashboard.html">Go to dashboard</a>
+            <a class="btn-primary" href="/dashboard">Go to dashboard</a>
         `;
     }
 

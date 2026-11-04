@@ -209,7 +209,7 @@ def test_a_matching_request_reaches_the_bell(client, login, poster, helper):
     items = client.get("/api/notifications").get_json()["notifications"]
     match = [i for i in items if i["kind"] == "request_match"]
     assert [i["request_id"] for i in match] == [rid]
-    assert match[0]["href"] == f"requests.html?id={rid}"
+    assert match[0]["href"] == f"/requests?id={rid}"
 
     # Dismissable, since it is news rather than work.
     key = match[0]["key"]

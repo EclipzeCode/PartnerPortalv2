@@ -68,19 +68,19 @@
     <a class="skip-link" href="#main">Skip to main content</a>
     <!-- Navigation Bar -->
     <header class="header">
-        <a href="index.html" class="logo" aria-label="Partner Portal"><img src="wordmark.svg" alt="Partner Portal" width="187" height="34"></a>
+        <a href="/" class="logo" aria-label="Partner Portal"><img src="wordmark.svg" alt="Partner Portal" width="187" height="34"></a>
         <button type="button" class="bx bx-menu" id="menu-icon"
                 aria-label="Menu" aria-expanded="false"></button>
         <nav class="navbar">
-            <a href="index.html">Home</a>
-            <a href="ppsearch.html">Connect</a>
-            <a href="requests.html">Requests</a>
-            <a href="ppdashboard.html">Dashboard</a>
+            <a href="/">Home</a>
+            <a href="/search">Connect</a>
+            <a href="/requests">Requests</a>
+            <a href="/dashboard">Dashboard</a>
             <!-- Account slot. Both states ship in the markup and share one grid
                  cell (nav.css), so the bar reserves the CTA's width either way and
                  signing in never shifts the links. common.js picks the state. -->
             <div class="nav-account" id="navAccount" data-state="loading">
-                <span class="nav-auth-cta"><a href="pplogin.html">Login</a><span class="cta-sep">|</span><a href="pplogin.html#signup">Create Account</a></span>
+                <span class="nav-auth-cta"><a href="/login">Login</a><span class="cta-sep">|</span><a href="/login#signup">Create Account</a></span>
                 <div class="account-menu">
                     <button type="button" class="avatar-button" id="accountToggle"
                             aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"
@@ -93,10 +93,10 @@
                             <span class="account-name" id="accountName"></span>
                             <span class="account-email" id="accountEmail"></span>
                         </div>
-                        <a href="onboarding.html"><i class='bx bx-edit'></i> Edit profile</a>
-                        <a href="analytics.html" class="active"><i class='bx bx-line-chart'></i> Analytics</a>
-                        <a href="settings.html"><i class='bx bx-cog'></i> Settings</a>
-                        <a href="pphelp.html"><i class='bx bx-help-circle'></i> Help</a>
+                        <a href="/onboarding"><i class='bx bx-edit'></i> Edit profile</a>
+                        <a href="/analytics" class="active"><i class='bx bx-line-chart'></i> Analytics</a>
+                        <a href="/settings"><i class='bx bx-cog'></i> Settings</a>
+                        <a href="/help"><i class='bx bx-help-circle'></i> Help</a>
                         <button type="button" class="account-signout" id="accountSignOut">
                             <i class='bx bx-log-out'></i> Log out
                         </button>
@@ -117,7 +117,7 @@
                  the browser's own button is a page you have been dropped
                  into. -->
             <div class="analytics-bar">
-                <a href="ppdashboard.html" class="btn-action ghost">
+                <a href="/dashboard" class="btn-action ghost">
                     <i class='bx bx-chevron-left'></i> Back to dashboard
                 </a>
                 <p class="analytics-note" id="analyticsNote"></p>
@@ -241,9 +241,9 @@
         <div class="footer-bottom">
             <span>&copy; 2026 PartnerPortal</span>
             <nav class="footer-links" aria-label="Footer">
-                <a href="ppsearch.html">Find Partners</a>
-                <a href="pphelp.html">Help</a>
-                <a href="privacy.html">Privacy</a>
+                <a href="/search">Find Partners</a>
+                <a href="/help">Help</a>
+                <a href="/privacy">Privacy</a>
             </nav>
         </div>
     </footer>

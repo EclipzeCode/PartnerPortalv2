@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 partnersGrid.innerHTML =
                     '<p class="empty-state">Tell us about your organization first — ' +
                     'matches are built from what you need and what you offer.<br><br>' +
-                    '<a class="btn-primary" href="onboarding.html">Complete your profile</a></p>';
+                    '<a class="btn-primary" href="/onboarding">Complete your profile</a></p>';
                 updatePagination(0);
                 return;
             }
@@ -480,7 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 message = 'No matches yet. Every match is built from what you '
                     + 'need and what you can offer, so the quickest way to '
                     + 'widen this is to list more of either.';
-                action = '<a class="btn-primary" href="onboarding.html">'
+                action = '<a class="btn-primary" href="/onboarding">'
                     + 'Add to your profile</a>';
             }
 
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // The shareable profile, for sending to someone without an account.
         const profileLink = document.getElementById('viewProfileBtn');
         if (profileLink) {
-            profileLink.href = `organization.html?id=${encodeURIComponent(m.id)}`;
+            profileLink.href = `/organization?id=${encodeURIComponent(m.id)}`;
         }
 
         openModal(detailModal);
@@ -1172,7 +1172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // for your column, theirs for theirs. Anything outside that is not a thing
     // that organization has said it can provide.
     // A request from the board this proposal is answering, if it opened from
-    // one (requests.html links here with ?request=). Set only for the open
+    // one (/requests links here with ?request=). Set only for the open
     // that the link asked for, and cleared after, so an ordinary proposal to
     // the same organization later is not quietly attached to it.
     let pendingRequest = null;

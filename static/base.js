@@ -99,11 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!data || !data.organization) return;
             const cta = bar.querySelector('.public-cta');
             if (cta) {
-                cta.href = 'ppdashboard.html';
+                cta.href = '/dashboard';
                 cta.textContent = 'Dashboard';
             }
-            bar.querySelectorAll('a[href="directory.html"]').forEach((link) => {
-                link.href = 'ppsearch.html';
+            bar.querySelectorAll('a[href="/directory"]').forEach((link) => {
+                link.href = '/search';
             });
         })
         .catch(() => {});

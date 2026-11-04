@@ -56,7 +56,7 @@ def _js_bundle(html):
 
 def test_html_is_always_revalidated(client):
     """The page carries the hashes, so a stale copy points at stale assets."""
-    for path in ("/", "/index.html", "/pplogin.html", "/organization.html?id=1"):
+    for path in ("/", "/login", "/organization?id=1"):
         response = client.get(path)
         assert response.status_code == 200, path
         assert response.headers["Cache-Control"] == "no-cache", path
@@ -75,7 +75,7 @@ def test_local_asset_references_are_stamped(client):
     by this page: it is what a page with a single script gets, and
     organization.html is that page (see test_a_lone_script_is_stamped_not_bundled).
     """
-    html = client.get("/ppdashboard.html").get_data(as_text=True)
+    html = client.get("/dashboard").get_data(as_text=True)
     # The dashboard is the heaviest page and pulls the most files: six
     # scripts and fourteen stylesheets, now two requests between them.
     assert _bundle(html), "the dashboard's stylesheets were not bundled"
@@ -100,7 +100,7 @@ def test_stylesheets_are_bundled_into_one_request(client):
     -- so a bundle that concatenated them in any other order would restyle
     the site while every individual file stayed correct.
     """
-    html = client.get("/ppdashboard.html").get_data(as_text=True)
+    html = client.get("/dashboard").get_data(as_text=True)
     name = _bundle(html)
     assert name, "the dashboard's stylesheets were not bundled"
 
@@ -126,7 +126,7 @@ def test_a_bundle_keeps_font_urls_resolvable(client):
     subdirectory those become /bundle/fonts/... and every glyph on the site
     silently disappears.
     """
-    name = _bundle(client.get("/index.html").get_data(as_text=True))
+    name = _bundle(client.get("/").get_data(as_text=True))
     assert name and "/" not in name, name
     body = client.get("/" + name).get_data(as_text=True)
     assert "url(fonts/" in body
@@ -146,7 +146,7 @@ def test_scripts_are_bundled_into_one_request(client):
     any other order would be a ReferenceError on load rather than a styling
     difference somebody notices later.
     """
-    html = client.get("/ppdashboard.html").get_data(as_text=True)
+    html = client.get("/dashboard").get_data(as_text=True)
     name = _js_bundle(html)
     assert name, "the dashboard's scripts were not bundled"
 
@@ -190,7 +190,7 @@ def test_a_deferred_run_keeps_its_defer(client):
     dropping the attribute while merging would move this page's code to
     before its own markup had parsed.
     """
-    html = client.get("/pplogin.html").get_data(as_text=True)
+    html = client.get("/login").get_data(as_text=True)
     name = _js_bundle(html)
     assert name, "pplogin's scripts were not bundled"
     assert re.search(r'<script defer src="' + re.escape(name) + r'">', html), (
@@ -215,7 +215,7 @@ def test_only_real_scripts_are_served(client):
 
 def test_absolute_urls_are_left_alone(client):
     """Stamping a URL on someone else's host would simply break it."""
-    html = client.get("/pplogin.html").get_data(as_text=True)
+    html = client.get("/login").get_data(as_text=True)
     for url in re.findall(r'https://[^"\']+', html):
         assert "?v=" not in url, url
 
@@ -232,18 +232,18 @@ def test_editing_a_file_changes_what_the_page_asks_for(client, tmp_path):
     # nav.css is inside index.html's bundle, so the URL that has to move is
     # the bundle's. The digest covers every member's content hash precisely
     # so that editing any one of them is a different URL for all of them.
-    before = _bundle(client.get("/index.html").get_data(as_text=True))
+    before = _bundle(client.get("/").get_data(as_text=True))
     assert before
     try:
         open(path, "ab").write(b"\n/* pytest cache probe */\n")
-        after = _bundle(client.get("/index.html").get_data(as_text=True))
+        after = _bundle(client.get("/").get_data(as_text=True))
         assert after != before
     finally:
         open(path, "wb").write(original)
 
     # Content-addressed, not mtime-addressed: putting the bytes back gives
     # the original stamp, so a revert does not strand anyone on a third URL.
-    restored = _bundle(client.get("/index.html").get_data(as_text=True))
+    restored = _bundle(client.get("/").get_data(as_text=True))
     assert restored == before
 
 
@@ -264,16 +264,16 @@ def test_a_changed_stylesheet_reaches_someone_who_already_has_the_page(client):
     path = os.path.join(app_module.STATIC_DIR, "nav.css")
     original = open(path, "rb").read()
 
-    first = client.get("/index.html")
+    first = client.get("/")
     etag = first.headers["ETag"]
 
     # Nothing has changed: revalidating costs a 304 and no body.
-    assert client.get("/index.html", headers={"If-None-Match": etag}).status_code == 304
+    assert client.get("/", headers={"If-None-Match": etag}).status_code == 304
 
     before = _bundle(first.get_data(as_text=True))
     try:
         open(path, "ab").write(b"\n/* pytest: a real change */\n")
-        again = client.get("/index.html", headers={"If-None-Match": etag})
+        again = client.get("/", headers={"If-None-Match": etag})
         assert again.status_code == 200, "returning visitor was fobbed off with a 304"
         # ...and the page they now hold points at the new stylesheet. The
         # bundled sheets are deliberately part of the page's cache key even
@@ -305,10 +305,10 @@ def test_the_page_itself_is_not_re_stamped_on_every_request(client):
 
     app_module._stamp_asset_refs = counted
     try:
-        client.get("/index.html")
+        client.get("/")
         after_first = len(calls)
-        client.get("/index.html")
-        client.get("/index.html")
+        client.get("/")
+        client.get("/")
         assert len(calls) == after_first, "the page was rebuilt on an unchanged file"
     finally:
         app_module._stamp_asset_refs = real
@@ -326,7 +326,7 @@ def test_editing_the_page_itself_is_noticed_too(client):
     path = os.path.join(app_module.STATIC_DIR, "pphelp.html")
     original = open(path, "rb").read()
 
-    first = client.get("/pphelp.html")
+    first = client.get("/help")
     etag = first.headers["ETag"]
     assert "pytest cache probe" not in first.get_data(as_text=True)
 
@@ -334,14 +334,14 @@ def test_editing_the_page_itself_is_noticed_too(client):
         open(path, "wb").write(
             original.replace(b"</body>", b"<!-- pytest cache probe --></body>")
         )
-        again = client.get("/pphelp.html", headers={"If-None-Match": etag})
+        again = client.get("/help", headers={"If-None-Match": etag})
         assert again.status_code == 200, "returning visitor was fobbed off with a 304"
         assert "pytest cache probe" in again.get_data(as_text=True)
         assert again.headers["ETag"] != etag
     finally:
         open(path, "wb").write(original)
 
-    assert client.get("/pphelp.html").headers["ETag"] == etag
+    assert client.get("/help").headers["ETag"] == etag
 
 
 def test_only_a_versioned_request_is_immutable(client):
@@ -518,7 +518,7 @@ def test_a_stylesheet_bundle_is_served_without_comments(client):
     """The stylesheets are mostly prose. A bundle drops the comments, which
     the browser would otherwise parse and discard; the member markers stay
     so a rule can still be traced to its file in devtools."""
-    page = client.get("/ppdashboard.html").get_data(as_text=True)
+    page = client.get("/dashboard").get_data(as_text=True)
     name = re.search(r'href="(bundle-[0-9a-f]+\.css)"', page).group(1)
     body = client.get("/" + name).get_data(as_text=True)
     comments = re.findall(r"/\*.*?\*/", body, re.DOTALL)
@@ -539,7 +539,7 @@ def test_a_script_bundle_is_served_without_comments(client):
     import subprocess
     import tempfile
 
-    page = client.get("/ppdashboard.html").get_data(as_text=True)
+    page = client.get("/dashboard").get_data(as_text=True)
     name = re.search(r'src="(bundle-[0-9a-f]+\.js)"', page).group(1)
     body = client.get("/" + name).get_data(as_text=True)
     assert "/* --- ppdashboard.js --- */" in body
@@ -566,7 +566,7 @@ def test_the_category_count_in_the_copy_is_the_real_one(client):
     only one of them was being filled in."""
     import re
     from categories import CATEGORY_TOTAL
-    for path in ("/index.html", "/pphelp.html"):
+    for path in ("/", "/help"):
         html = client.get(path).get_data(as_text=True)
         found = re.findall(r"<span data-category-total>(\d+)</span>", html)
         assert found, path
