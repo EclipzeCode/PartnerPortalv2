@@ -538,9 +538,18 @@ def test_an_invitation_is_listed_once_its_profile_is_complete(
     assert client.get(f"/api/organizations/{invite.id}/public").status_code == 200
 
     assert client.post(url, json={"listed": False}).status_code == 200
-    # A claimed account is not listed this way.
-    other = make_org()
-    assert client.post(f"/api/admin/organizations/{other.id}/listed",
+    # A claimed account that stalled in onboarding can be listed, keeping its
+    # contact address empty; it is taken down with Hide, not unlisted.
+    stalled = make_org(onboarding_complete=False, needs=["volunteers"],
+                       offers=["event_space"])
+    assert stalled.contact_email is None
+    response = client.post(f"/api/admin/organizations/{stalled.id}/listed",
+                           json={"listed": True})
+    assert response.status_code == 200, response.get_json()
+    session.refresh(stalled)
+    assert stalled.onboarding_complete is True
+    assert stalled.contact_email is None
+    assert client.post(f"/api/admin/organizations/{stalled.id}/listed",
                        json={"listed": False}).status_code == 409
 
 

@@ -4146,20 +4146,22 @@ def admin_change_email(admin, db, org_id):
 @app.route("/api/admin/organizations/<int:org_id>/listed", methods=["POST"])
 @admin_required
 def admin_set_listed(admin, db, org_id):
-    """Put an unclaimed invitation in the directory before it is claimed.
+    """Put a profile in the directory without its owner finishing onboarding.
 
     Listing is onboarding_complete, so the profile has to meet the onboarding
-    minimum first; an admin fills it in with Edit. Until it is claimed nobody
-    reads its mail -- proposals and messages wait for whoever claims it, and
-    _dispatch drops what would go to its placeholder address. Only for
-    invitations: a claimed account lists itself, and is taken down with Hide.
+    minimum first; an admin fills it in with Edit. That covers an account
+    that signed up and stalled as well as an unclaimed invitation. Until an
+    invitation is claimed nobody reads its mail -- proposals and messages wait
+    for whoever claims it, and _dispatch drops what would go to its
+    placeholder address.
+
+    Unlisting is for invitations only. A claimed account is taken down with
+    Hide, which tells it why; clearing onboarding_complete would instead drop
+    it back into onboarding the next time it signed in.
     """
     org = db.get(Organization, org_id)
     if org is None:
         return jsonify({"error": "Organization not found."}), 404
-    if org.claim_token_hash is None:
-        return jsonify({"error": "Only unclaimed invitations are listed "
-                                 "here."}), 409
 
     listed = (request.get_json(silent=True) or {}).get("listed")
     if not isinstance(listed, bool):
@@ -4167,16 +4169,23 @@ def admin_set_listed(admin, db, org_id):
                         "field": "listed"}), 400
     if listed == org.onboarding_complete:
         return jsonify({"error": "Nothing changed."}), 409
+    if not listed and org.claim_token_hash is None:
+        return jsonify({"error": "Use Hide to take a claimed account out of "
+                                 "the directory."}), 409
     if listed:
-        # Re-applying the profile as it stands is the onboarding check.
+        # Re-applying the profile as it stands is the onboarding check. It
+        # would also fill an empty contact address with the sign-in one,
+        # which the owner has not chosen.
+        contact_email = org.contact_email
         refusal = _apply_profile(org, _admin_profile(org))
         if refusal:
             db.rollback()
             return refusal
+        org.contact_email = contact_email
     org.onboarding_complete = listed
 
     record_admin_action(
-        db, admin, "list_invitation" if listed else "unlist_invitation",
+        db, admin, "list_organization" if listed else "unlist_invitation",
         target_type="organization", target_id=org.id, name=org.name)
     db.commit()
     return jsonify({"message": "Listed" if listed else "Unlisted",

@@ -172,7 +172,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                        <button type="button" class="btn-ghost" data-listed="${org.id}"
                          data-to="${!org.onboarding_complete}">${
                          org.onboarding_complete ? 'Unlist' : 'List publicly'}</button>`
-                    : hideBtn);
+                    : org.onboarding_complete ? hideBtn
+                    : `<button type="button" class="btn-ghost" data-listed="${org.id}"
+                         data-to="true">List publicly</button>`);
 
         return `
             <article class="admin-row">
